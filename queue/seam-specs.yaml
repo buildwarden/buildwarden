@@ -3,7 +3,7 @@ title: 'Specs repository and conformance suites: write seams 1, 2, 3, 5 and 6, b
 priority: 71
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/seam-specs.md
 branch: feat/seam-specs
 repos:
@@ -21,7 +21,7 @@ rules_changed:
   - GLOBAL-08
   - EXEC-04
   - PROFILE-01
-declared: ee78534
+declared: 9be9c8c
 alters_relationships: true
 design_review: required
 source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase S1, wave 1. Done when the suites pass against the Go relay and the disk collector. The repository buildwarden/buildwarden-specs (a10) is confirmed with Jeff right before it is created (a11). Jeff, attended session 2026-11-12: go ahead.'
@@ -69,10 +69,26 @@ steps:
   - id: f1-design-r2
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review-r2
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-16T13:01:12.06901169Z
+      claimed_by: ""
+      expires: null
+  - id: f2-plan-r2
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review-r2
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -278,6 +294,51 @@ questions:
       - '(C) a go.mod for each specification, tools/conformance/<directory>/go.mod, each naming one specification: Go builds each command from exactly the modules its release names, the six versions are independent here as they are for the binaries, a mixed set always builds, and tier 1 can be given each seam''s own pin as its contract path. Cost: six small modules where a7''s answer names one file; a harness fix reaches a suite here only through that specification''s release; a7''s text, Decision 7, tier 1''s seam list, the pin job and the proposed wording of TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01 change where they name tools/conformance/go.mod'
     recommended: '(C) a go.mod for each specification, tools/conformance/<directory>/go.mod, each naming one specification: Go builds each command from exactly the modules its release names, the six versions are independent here as they are for the binaries, a mixed set always builds, and tier 1 can be given each seam''s own pin as its contract path. Cost: six small modules where a7''s answer names one file; a harness fix reaches a suite here only through that specification''s release; a7''s text, Decision 7, tier 1''s seam list, the pin job and the proposed wording of TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01 change where they name tools/conformance/go.mod'
     answer: '(C) A go.mod per specification under tools/conformance/<directory>/: each command is built from exactly what its release names. As recommended (the design stood on (A) until answered). Answered 2026-11-15.'
+  - id: a21
+    kind: assumed
+    status: open
+    question: 'Raised in r2 (design: Divergences found, N1, N7, N8, N16). Strict or lenient reading where the documents allow lenient: BOOTCFG-14, CLAIM-18''s MAY paragraph and CLAIM-28''s let a reader accept what a strict reader refuses (names folded in case, duplicates, trailing data, null as absent, a null or tagged CBOR map), and COLLIN-23 leaves such completions unspecified, so the executor, the Go relay and the disk collector conform.'
+    options:
+      - (A) keep the MAY paragraphs in v0.1 as written; the Rust relay reads strictly from the start, S2's item makes bootstrap.Parse strict as its comment says, and a later minor version narrows each MAY to a MUST refuse once no reference relies on it
+      - '(B) narrow now: the documents require a strict reading, the three are recorded as breaking it (class b), and the cases for it wait for their fixes'
+      - (C) make the lenient reading the contract, required of every reader
+    recommended: (A) keep the MAY paragraphs in v0.1 as written; the Rust relay reads strictly from the start, S2's item makes bootstrap.Parse strict as its comment says, and a later minor version narrows each MAY to a MUST refuse once no reference relies on it
+  - id: a22
+    kind: assumed
+    status: open
+    question: 'Raised in r2 (N6). The tunnel is never released: CLAIM-15 makes one tunnel for a relay''s life the contract, and CLAIM-22 lets a claim that selects a closed tunnel spend the relay.'
+    options:
+      - '(A) as written: a relay serves one build, and a claimant that lost its tunnel before its claim discards the relay'
+      - '(B) a relay MUST notice a closed tunnel: a new tunnel is accepted before a claim, and a claim that selects a closed one is a 400 that leaves it claimable; the Go relay is then class (b)'
+      - (C) A in v0.1, and B as a SHOULD in a later version, for the Rust relay
+    recommended: '(A) as written: a relay serves one build, and a claimant that lost its tunnel before its claim discards the relay'
+  - id: a23
+    kind: assumed
+    status: open
+    question: Raised in r2 (N28). On macOS and Windows the executor applies exclusive as append (INIT-23, BOOTCFG-8), a fallback no Defaults and overrides names (GLOBAL-10).
+    options:
+      - (A) S2's item makes the executor refuse exclusive there with an error that names it (GLOBAL-10), and INIT-23 and BOOTCFG-8 say so in their next version
+      - (B) keep the replacement and name it as a fallback in the reference docs and in the Defaults and overrides of the item that next changes the executor
+      - (C) implement exclusive trust on macOS and Windows (EXEC-03) in a later item, keeping the replacement until then
+    recommended: (A) S2's item makes the executor refuse exclusive there with an error that names it (GLOBAL-10), and INIT-23 and BOOTCFG-8 say so in their next version
+  - id: a24
+    kind: assumed
+    status: open
+    question: Raised in r2 (N29). --ip and WARDEN_IP are read on every system and used only on Windows; vz passes --ip and gets neither an effect nor an error (INIT-15, GLOBAL-10).
+    options:
+      - (A) S2's item makes the executor refuse them where it does not use them, INIT-15 says they are Windows-only, and vz stops passing --ip in that item or in K1
+      - (B) INIT-15 states them as accepted and ignored there, named as such
+      - (C) use them on Linux and macOS too, as a static address in place of DHCP
+    recommended: (A) S2's item makes the executor refuse them where it does not use them, INIT-15 says they are Windows-only, and vz stops passing --ip in that item or in K1
+  - id: a25
+    kind: assumed
+    status: open
+    question: 'Raised in r2 (N2, N31). warden-io and the reference claimant (relaycfg.Claim) use Go''s default transport, which honours HTTP_PROXY and NO_PROXY: the executor''s requests, or the claim with its tokens, then go to that proxy and not to the relay (INIT-1, CLAIM-1).'
+    options:
+      - '(A) neither honours a proxy variable: INIT-1 and CLAIM-1 stand as written, and the fixes are S2''s item (the executor''s transport with no proxy) and K1 (the claimant, with the claim connection it takes over from S4)'
+      - (B) as A, but now, as a security fix the freeze exempts
+      - (C) honour them, and INIT-1 and CLAIM-1 allow a proxy, so the relay is no longer the build's one network path
+    recommended: '(A) neither honours a proxy variable: INIT-1 and CLAIM-1 stand as written, and the fixes are S2''s item (the executor''s transport with no proxy) and K1 (the claimant, with the claim connection it takes over from S4)'
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
@@ -453,3 +514,12 @@ history:
   - at: 2026-11-16T11:01:12Z
     by: cloud/20261112T230554Z
     event: claimed f1-design-r2 until 2026-11-16T13:01:12Z
+  - at: 2026-11-16T11:11:07Z
+    by: cloud/20261112T230554Z
+    event: 'declared at 9be9c8c: nothing changed'
+  - at: 2026-11-16T11:11:23Z
+    by: cloud/20261112T230554Z
+    event: done f1-design-r2
+  - at: 2026-11-16T11:11:23Z
+    by: cloud/20261112T230554Z
+    event: entered phase 2 (plan)
