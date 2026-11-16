@@ -1,18 +1,18 @@
 ---
 feature: vz-nocgo-build
 status: draft
-drivers: [vz]            # driver/vz only: the build constraints of vz_stub.go and vz_darwin_arm64.go, and checkPlatform in driver.go; no shared driver/ package, so no other driver is reached (FLOW-02)
+drivers: [vz]            # driver/vz only: the build constraints of vz_stub.go and vz_darwin_arm64.go, vz_darwin.m renamed vz_darwin_arm64.m, and checkPlatform in driver.go; no shared driver/ package, so no other driver is reached (FLOW-02)
 seams: []                # no versioned seam: which file of driver/vz a build compiles is inside the driver
 surfaces: [output]       # the error a warden built without cgo gives for the vz driver (UX-04); no flag, subcommand or config key changes
 security_boundary: none  # a build that has no vz driver starts no VM and no relay; the cgo build compiles the files it compiles today
-alters_relationships: false  # inside the vz driver's existing role: which of its two platform files a build compiles
+alters_relationships: false  # inside the vz driver's existing role: which of its platform files a build compiles
 design_review: required  # blocking native validation on macos-vz (FLOW-19)
 native_validation:
-  - {host: macos-vz, blocking: true, reason: "the change is in driver/vz (FLOW-09): it decides which of the driver's two platform files a build on macOS/arm64 compiles. Only that host can show that the cgo build still has the driver and runs a vz build, and that a warden built there without cgo gives the message for doctor, build and image prepare"}
+  - {host: macos-vz, blocking: true, reason: "the change is in driver/vz (FLOW-09): it decides which of the driver's two platform files a build on macOS/arm64 compiles. Only that host can show that the cgo build still has the driver and runs a vz build, and that a warden built there without cgo gives the message for doctor, build, shell and image prepare"}
 tier2_gaps: []
 rules: [FLOW-01, FLOW-02, FLOW-09, FLOW-14, FLOW-17, FLOW-19, GLOBAL-01, GLOBAL-04, GLOBAL-07, GLOBAL-10, GLOBAL-11, ORCH-01, PROFILE-01, TEST-01, TEST-02, TEST-03, UX-01, UX-04, UX-09]
 rule_changes: []
-concepts: [vz, cgo, build-constraints, platform-stub, release-build, goreleaser, cross-build, ci-build-job, fixable-error]
+concepts: [vz, cgo, build-constraints, platform-stub, objective-c, release-build, goreleaser, cross-build, ci-build-job, fixable-error]
 related: [vm-driver-release-plan.md, vz-image-prepare-refresh.md, ci-path-filters.md, rule-running-line-match.md]
 ---
 
@@ -37,6 +37,23 @@ constraint says. So on darwin/arm64 with cgo off the bindings are left out
 by cgo and the stub by its constraint, and the types and functions `vm.go`
 uses are defined nowhere. Every other target compiles one of the two.
 
+The same pair has a second gap, in the other direction. The Objective-C
+half of the bindings, `vz_darwin.m`, is constrained by its name to darwin
+only, so a build for darwin/amd64 takes it in, where no cgo Go file exists.
+With cgo off the go command drops it silently; with cgo on it refuses the
+package:
+
+```
+$ GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go list ./driver/vz
+package github.com/buildwarden/buildwarden/driver/vz: Objective-C source files not allowed when not using cgo or SWIG: vz_darwin.m
+```
+
+That is a native `make build` on an Intel Mac, where cgo is on by default:
+`warden` does not compile there, on `main` or with the fix as first
+designed (found by the design review's reader). It is not a release target,
+but GLOBAL-07 asks that every target compile, and it is the same fault: a
+platform file set that leaves one build out. The fix covers both.
+
 `.goreleaser.yaml` builds `warden` for linux and darwin, amd64 and arm64,
 with `CGO_ENABLED=0`, on an Ubuntu runner. One of its four builds cannot
 compile, so no release can be cut. Nothing has shown it, because the only
@@ -55,7 +72,9 @@ golangci-lint run ./driver/vz/` fails the same way on Linux.
 - **The two constraints were never complements.** They are as `312e2f4`
   (2026-05-13, "Add driver interface, relay library, and vz driver
   skeleton", on the `vm-drivers` branch) wrote them, and no commit has
-  changed either since.
+  changed either since. The same commit added `vz_darwin.m` under that
+  name, which has not changed either; the darwin/amd64 build with cgo has
+  failed since then.
 - **`main` got the fault with PR #52** (`89f1e25`, 2026-06-01, the merge of
   `vm-drivers`), which brought `driver/vz` and `cmd/warden`'s import of it.
   Built for this design: `cmd/warden` for darwin/arm64 without cgo compiles
@@ -71,7 +90,8 @@ golangci-lint run ./driver/vz/` fails the same way on Linux.
 - `main.yml`'s `build` job runs `make build` on `macos-latest` (arm64) and
   `ubuntu-latest`. The macOS leg is a native build with cgo on, the one
   combination where the bindings compile. No job builds darwin/arm64 with
-  cgo off.
+  cgo off, and none builds darwin/amd64 with cgo on (no runner is an
+  Intel Mac, and a cross-build turns cgo off).
 - `make lint` for another platform is `GOOS=<os> make lint` (FLOW-17). It
   keeps the host's `GOARCH`, so on an amd64 machine `GOOS=darwin` checks
   darwin/amd64, where the stub is compiled. CI's `lint` and `tier1` jobs
@@ -81,7 +101,10 @@ golangci-lint run ./driver/vz/` fails the same way on Linux.
   `goreleaser check` reads the configuration without compiling anything.
 
 What would have caught it: compiling, on every PR that changes code, each
-target a release compiles, the way the release compiles it.
+target a release compiles, the way the release compiles it. What would have
+caught both, on any host and in `make test`: asking `go/build` which files
+of `driver/vz` each target selects, with cgo on and off (**Validation
+plan**, tier 0).
 
 ## Prior art
 
@@ -115,12 +138,20 @@ target a release compiles, the way the release compiles it.
 1. **The stub is compiled wherever the bindings are not.** `vz_stub.go`'s
    constraint becomes `!darwin || !arm64 || !cgo`, and
    `vz_darwin_arm64.go`'s becomes `darwin && arm64 && cgo`, which states
-   what `import "C"` already implies. The two are now complements in the
-   text, so every build compiles exactly one.
+   what `import "C"` already implies. `vz_darwin.m` becomes
+   `vz_darwin_arm64.m`, so its name constrains it to the target its Go half
+   is for, and a darwin/amd64 build with cgo on no longer takes it in. The
+   two Go constraints are now complements in the text, so every build whose
+   `cgo` tag matches `CGO_ENABLED` (every build that does not pass `-tags
+   cgo` by hand) compiles exactly one, and the Objective-C file only beside
+   the Go file that uses it.
    - *Rejected: change the stub only.* It compiles, but the pair still
      reads as "darwin/arm64 or not", which is how the gap was written.
    - *Rejected: a third file for darwin/arm64 without cgo.* It would
      repeat the stub.
+   - *Rejected: leave the `.m` file as it is and hand the darwin/amd64
+     fault on.* It is the same class of fault in the same file set, its fix
+     is a rename, and the tier-0 test this design adds would fail on it.
 
 2. **A released macOS arm64 `warden` stays a build without cgo. It has no
    vz driver, and says so.** This is what the documentation has said since
@@ -158,7 +189,9 @@ target a release compiles, the way the release compiles it.
 
 4. **The guard compiles what a release compiles, in the `build` job.** A
    `make release-build` target and one step that runs it on the job's
-   Linux leg (**The guard**).
+   Linux leg (**The guard**). The file selection of `driver/vz` for every
+   target, with cgo on and off, is checked earlier and on every host by a
+   tier-0 test (**Validation plan**).
    - *Rejected: run goreleaser (`goreleaser build --snapshot`).* It reads
      the targets from the configuration, which a list in the `Makefile`
      does not. But it puts goreleaser on every PR and on every machine
@@ -204,6 +237,7 @@ The item works only in this repository.
 |---|---|
 | `driver/vz/vz_stub.go` | `//go:build !darwin \|\| !arm64 \|\| !cgo`; a constant that says the bindings are not in this build |
 | `driver/vz/vz_darwin_arm64.go` | `//go:build darwin && arm64 && cgo`; the same constant, true |
+| `driver/vz/vz_darwin.m` | renamed `vz_darwin_arm64.m`; content unchanged (`vz_darwin.h` stays: a header is only ever included) |
 | `driver/vz/driver.go` | `checkPlatform` takes its verdict on the platform and the bindings from one function of `(GOOS, GOARCH, bindings)`, then checks the entitlement as today |
 
 The function is pure, so a test on any host covers every row:
@@ -216,17 +250,21 @@ The function is pure, so a test on any host covers every row:
 
 Tried for this design with a build overlay over `3cb0b2b` (nothing of it is
 committed): all six targets of the table below compile `cmd/warden`,
-`cmd/warden-io` and `cmd/relay`; `go build ./...` and `go vet ./...` pass
-for darwin/arm64 and darwin/amd64; `go test ./driver/vz/` passes. What
-`go list` reports for `driver/vz` on darwin/arm64:
+`cmd/warden-io`, `cmd/relay` and `cmd/warden-pause`; `go build ./...` and
+`go vet ./...` pass for darwin/arm64 and darwin/amd64; `go test
+./driver/vz/` passes; for darwin/amd64 with cgo on, `go vet ./...` and `go
+build ./cmd/warden` pass (on `main` both fail on `vz_darwin.m`). What `go
+list` reports for `driver/vz` (Go files, cgo files, M files):
 
 | Build | `main` | With the fix |
 |---|---|---|
-| cgo on | bindings (cgo), `vz_darwin.m`; stub ignored | the same |
-| cgo off | neither file: does not compile | stub; bindings and `vz_darwin.m` ignored |
+| darwin/arm64, cgo on | bindings (cgo), `vz_darwin.m`; stub ignored | the same, with the `.m` file renamed |
+| darwin/arm64, cgo off | neither Go file: does not compile | stub; bindings and `.m` file left out |
+| darwin/amd64, cgo on | stub, and `vz_darwin.m` with no cgo file: refused | stub; bindings and `.m` file ignored |
+| darwin/amd64, cgo off | stub; `.m` file dropped | stub; `.m` file ignored |
 
 So the build people run vz with compiles the files it compiles today, plus
-one constant.
+one constant, and every other darwin build compiles the stub alone.
 
 ### The message
 
@@ -255,22 +293,26 @@ check.
 `Makefile`:
 
 ```make
-# What a release compiles (.goreleaser.yaml): each program, for each target,
-# without cgo. Nothing is kept. A target added there is added here.
+# What a release compiles (.goreleaser.yaml, its hook, release.yml): each
+# program, for each target, without cgo. Nothing is kept. A target or
+# program added there is added here.
 RELEASE_TARGETS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
 release-build:
 	@for t in $(RELEASE_TARGETS); do \
 		echo "== $$t"; \
 		GOOS=$${t%/*} GOARCH=$${t#*/} CGO_ENABLED=0 \
-			go build ./cmd/warden ./cmd/warden-io ./cmd/relay || exit 1; \
+			go build ./cmd/warden ./cmd/warden-io ./cmd/relay ./cmd/warden-pause || exit 1; \
 	done
 ```
 
 `go build` of several packages compiles them and writes nothing.
-The three programs are the one goreleaser builds and the two its hook
-builds. The hook builds `warden-io` and the relay for three of the four
-targets; building them for the fourth costs seconds and keeps one list.
-The whole target takes 1m19s on a cold cache (4 cores) and runs on any
+The four programs are the one goreleaser builds, the two its hook builds,
+and `warden-pause`, which `release.yml`'s support-images job builds for
+linux/amd64 and linux/arm64. The hook builds `warden-io` and the relay for
+three of the four targets, and `warden-pause` is released for two;
+building each for all four costs seconds and keeps one list. The whole
+target takes about 1m20s on a cold cache (4 cores; 1m19s measured with
+three programs, `warden-pause` is a few hundred lines) and runs on any
 machine with Go.
 
 `.github/workflows/main.yml`, last step of the `build` job:
@@ -286,8 +328,11 @@ The job already runs only when a PR changes code, which `Makefile`,
 `.goreleaser.yaml` and every Go file are, and `ci-ok` already needs it.
 
 **What it does not do.** The list is a second copy of
-`.goreleaser.yaml`'s targets, and nothing compares the two: a target added
-to a release and not here is not guarded. That is accepted until the
+`.goreleaser.yaml`'s targets and `release.yml`'s programs, and nothing
+compares them: a target or program added to a release and not here is not
+guarded. It builds without cgo only, as a release does; builds with cgo
+are the tier-0 file test's (for which files are selected) and CI's native
+macOS leg's (for darwin/arm64). That is accepted until the
 snapshot below exists, because it reads the configuration itself.
 
 **How it sits with `prebuilt-artifacts`.** That design adds, in the same
@@ -314,7 +359,7 @@ hunk. They change no other line in common.
 ### The same fault elsewhere
 
 Cross-builds on `main` at `3cb0b2b`, `CGO_ENABLED=0`, go1.26.3 on
-linux/amd64. `R` marks what a release compiles (goreleaser, its hook, or
+linux/amd64. A second sweep with cgo on follows the table. `R` marks what a release compiles (goreleaser, its hook, or
 `release.yml`'s support images).
 
 | Target | `cmd/warden` | `cmd/warden-io` | `cmd/relay` | `cmd/warden-pause` | `cmd/collector` | `go build ./...` | `go vet ./...` |
@@ -328,7 +373,19 @@ linux/amd64. `R` marks what a release compiles (goreleaser, its hook, or
 
 The three failures are one: `driver/vz`, and `cmd/warden` because it
 imports it. With the fix tried as above, the darwin/arm64 row is `ok`
-throughout, so nothing else was hidden behind it. `cmd/warden-vmnet` holds
+throughout.
+
+With cgo on, a cross-build from Linux cannot compile a cgo file (no darwin
+or windows C toolchain here), so the sweep is `go list -e ./...` for the
+same six targets with `CGO_ENABLED=1` and `0`, which reports each
+package's file-selection errors without compiling. On `main` one of the
+twelve fails: darwin/amd64 with cgo on, `driver/vz`, on `vz_darwin.m`
+(**Problem**). With the fix, none does, and for darwin/amd64 with cgo on
+`go vet ./...` and `go build ./cmd/warden` pass, since no cgo file is left
+in that build. `go list` does not type-check, so darwin/arm64 without cgo
+passes it on `main` too; the build table above covers that one. What
+neither sweep can show from here is a cgo build of darwin/arm64, which CI's
+macOS leg and the native step compile. `cmd/warden-vmnet` holds
 one C file and no Go, and nothing builds it. `tools/workflow` and
 `tools/tier1` build for darwin/arm64 and windows/arm64. The only other
 file in the repository that imports `"C"` is a tier-1 analyzer's test
@@ -345,7 +402,8 @@ fixture.
   the released binary is ready for names the vz driver as needing a build
   from source, and points at the first-time setup.
 - `docs/book/src/contributing/structure.md`: `vz_stub.go` is the stub for
-  every build without the bindings.
+  every build without the bindings, and `vz_darwin.m` is listed as
+  `vz_darwin_arm64.m`.
 - `CONTRIBUTING.md`: `make release-build` in the command list and in
   "Cutting a release".
 - `overview.md`: no component's flow changes.
@@ -376,8 +434,10 @@ GLOBAL-11, UX-04).
 
 - **vz**: a build for darwin/arm64 without cgo compiles and reports that it
   has no vz driver. A build with cgo compiles the files it compiles today;
-  its platform check gains a branch that is false at compile time. Builds
-  for other platforms give the error they give today.
+  its platform check gains a branch that is false at compile time. A
+  build for darwin/amd64 with cgo on (an Intel Mac's `make build`)
+  compiles, with the stub. Builds for other platforms give the error they
+  give today.
 - **container, qemu, hyperv, firecracker**: not reached. The change is in
   `driver/vz`'s own files; nothing under the shared `driver/` packages,
   `relay/`, `ledger/` or `collector/` changes (ORCH-01). They gain one
@@ -392,9 +452,22 @@ GLOBAL-11, UX-04).
   error is a `driver.FixableError` with a fix, the darwin/arm64 row without
   bindings carries the message above, and no row without bindings returns
   nil (Decision 3);
-- a test that the constant agrees with the build it runs in: true only on
-  darwin/arm64 with cgo. On Linux it shows false; on the Mac, under `make
-  test`, it shows the bindings are compiled.
+- a file-selection test: for each of darwin, linux and windows on amd64
+  and arm64, with cgo on and off, `go/build`'s `Context.ImportDir` on
+  `driver/vz` (which applies the constraints itself, and compiles nothing)
+  selects exactly one of `vz_stub.go` and `vz_darwin_arm64.go`, and with
+  cgo on selects no `.m` file unless it selects a cgo file. Tried for this
+  design: on `main` it fails for darwin/arm64 without cgo and darwin/amd64
+  with cgo, and passes with the fix, on Linux. It is the check that would
+  have caught both faults, on any host, without a cross-build;
+- a test that the constant agrees with the build it runs in. The oracle is
+  not a build tag (a tagged test file would repeat the constraint): it is
+  the `CGO_ENABLED` setting that `runtime/debug.ReadBuildInfo` reports for
+  the test binary, which `go test` records whether cgo was on (tried: `1`
+  and `0` as set). The test expects the constant true exactly when
+  `runtime.GOOS`/`GOARCH` is darwin/arm64 and that setting is `1`, and
+  skips when the setting is absent. On Linux it shows false; on the Mac,
+  under `make test`, it shows the bindings are compiled.
 
 **The guard**, in CI on every PR that changes code: `make release-build`.
 It fails on `main` today and passes with the fix.
@@ -410,9 +483,9 @@ form misses on an amd64 machine.
 compiles, shows only there. Queue step `f6-validate-macos-vz`, on the
 branch after consolidation:
 
-1. `make build` (cgo on). `go list -f '{{.CgoFiles}} {{.IgnoredGoFiles}}'
-   ./driver/vz/` lists `vz_darwin_arm64.go` as cgo and `vz_stub.go` as
-   ignored. `make test` passes. `warden doctor --driver vz` prints what
+1. `make build` (cgo on). `go list -f '{{.CgoFiles}} {{.MFiles}}
+   {{.IgnoredGoFiles}}' ./driver/vz/` lists `vz_darwin_arm64.go` as cgo,
+   `vz_darwin_arm64.m` as the M file, and `vz_stub.go` as ignored. `make test` passes. `warden doctor --driver vz` prints what
    `main`'s prints. A vz build succeeds and its ledger verifies.
 2. `CGO_ENABLED=0 go build -o <scratch>/warden ./cmd/warden` compiles; on
    `main` it fails with the errors of **Problem** (capture that first).
@@ -425,16 +498,20 @@ branch after consolidation:
    --entitlements entitlements.plist`) gives the same message, not the
    entitlement's and not a VM error (Decision 3).
 4. `make release-build` passes on the Mac.
+5. `GOARCH=amd64 CGO_ENABLED=1 go build -o <scratch>/warden-amd64
+   ./cmd/warden` compiles (Apple clang targets x86_64): the Intel Mac's
+   native build. On `main` it fails on `vz_darwin.m` (capture that first).
 
 **Deferred**: nothing. `tier2_gaps` is empty.
 
 ## Implementation plan
 
-1. `driver/vz`: the two build constraints, the constant in both files, the
+1. `driver/vz`: the two build constraints, the rename of `vz_darwin.m` to
+   `vz_darwin_arm64.m`, the constant in both files, the
    platform function and its use in `checkPlatform`, with doc comments
    (GLOBAL-07, UX-04, GLOBAL-01).
-2. `driver/vz` tests: the table test and the constant's test (GLOBAL-04,
-   TEST-01).
+2. `driver/vz` tests: the table test, the file-selection test and the
+   constant's test (GLOBAL-04, TEST-01).
 3. `Makefile`: `release-build`, in `.PHONY` (GLOBAL-07).
 4. `.github/workflows/main.yml`: the step at the end of the `build` job
    (GLOBAL-07, FLOW-14: `build` is not a rule-running job).
@@ -444,6 +521,28 @@ branch after consolidation:
    GOARCH=arm64 make lint`, `make release-build` (FLOW-17).
 
 ## Design review
+
+**Independent reading before review (2026-11-16).** A reader read the
+design and tried the fix; five findings, each verified here:
+
+1. *should*: darwin/amd64 with cgo on fails on `vz_darwin.m`, on `main`
+   and with the fix as first designed. Confirmed with `go list`. Fixed:
+   the rename is part of **The fix** (Decision 1), the sweep covers cgo on
+   (**The same fault elsewhere**), the claim "nothing else was hidden" is
+   gone, a tier-0 file-selection test catches the class on any host, and
+   the native step gains case 5.
+2. *nit*: `cmd/warden-pause` is released and not guarded. Confirmed.
+   Fixed: `make release-build` builds it.
+3. *nit*: "every build compiles exactly one" does not hold for `-tags
+   cgo` with cgo off. Confirmed. Fixed: the claim is for every build whose
+   `cgo` tag matches `CGO_ENABLED`.
+4. *nit*: the front matter's native-validation reason left out `shell`.
+   Fixed.
+5. *nit*: the constant's test named no oracle. Fixed: `CGO_ENABLED` from
+   `runtime/debug.ReadBuildInfo`, tried on Linux.
+
+None of them is a fork for Jeff, and none changes `design_review`, which
+was already `required`.
 
 ## Consolidation
 
