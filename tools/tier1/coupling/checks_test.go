@@ -75,7 +75,8 @@ func TestSeverities(t *testing.T) {
 		"cmd/warden-io/jks.go": pkg, "relay/x.go": pkg})
 	for _, f := range c.All() {
 		want := map[string]report.Severity{"BOOT-07": report.Hint,
-			"ORCH-01": report.Must, "GLOBAL-04": report.Hint}[f.Rule]
+			"ORCH-01": report.Must, "GLOBAL-04": report.Hint,
+			"GLOBAL-08": report.Must}[f.Rule]
 		if f.Severity != want {
 			t.Errorf("%s: severity %q, want %q", f.Rule, f.Severity, want)
 		}

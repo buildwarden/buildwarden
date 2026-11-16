@@ -122,10 +122,35 @@ schema_doc:
   root: specs/
   prose_only: [build-ledger]
 
-# GLOBAL-08, EXEC-04: versioned seams with a contract document. The relay's
-# claim and collector protocols and the executor's initialize contract have
-# no contract document yet, so they are follow-up and none is listed.
-seams: []
+# GLOBAL-08, EXEC-04: versioned seams, each with the code that defines it
+# and the contract path a change to that code must also touch. For a seam
+# specified in the specs repository that path is the file that pins the
+# release of its specification here (TEST-05). The collector seam has two
+# specifications and so two entries, one for each pin.
+seams:
+  - name: relay-claim
+    code: [relaycfg/relaycfg.go, relaycfg/tunnel.go, relaycfg/buildlink.go]
+    contract: tools/conformance/relay-claim/go.mod
+  - name: collector
+    code: [collector/collector.go, collector/paths.go, collector/store.go,
+           relay/collector_client.go]
+    contract: tools/conformance/collector-outputs/go.mod
+  - name: collector
+    code: [collector/collector.go, collector/paths.go, collector/signals.go,
+           collector/store.go, relay/collector_client.go]
+    contract: tools/conformance/collector-inputs/go.mod
+  - name: relay-guest-api
+    code: [relay/controlplane.go, relay/heartbeat.go, relay/dns.go, cmd/relay/dhcp.go]
+    contract: tools/conformance/relay-guest-api/go.mod
+  - name: executor-initialize
+    code: [cmd/warden-io/main.go, cmd/warden-io/initialize.go,
+           cmd/warden-io/baseline.go, cmd/warden-io/jks.go,
+           cmd/warden-io/platform_darwin.go, cmd/warden-io/platform_linux.go,
+           cmd/warden-io/platform_windows.go, cmd/warden-io/trust_linux.go]
+    contract: tools/conformance/executor-initialize/go.mod
+  - name: bootstrap-config
+    code: [bootstrap/bootstrap.go]
+    contract: tools/conformance/bootstrap-config/go.mod
 
 # UX-01, ORCH-03, UX-03: the user-facing surface and its reference docs.
 surface:
