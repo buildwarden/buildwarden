@@ -627,8 +627,10 @@ gaps:
     host: macos-vz
     status: deferred
     what: >-
-      The specs repository's relay conformance suite (bw-conformance, the release pinned in
-      tools/conformance/go.mod) against the host-mode Go relay on macOS, where vz runs it:
+      The specs repository's relay conformance suites (the bw-conformance-<directory> commands,
+      each at the release pinned in its own pin module tools/conformance/<directory>/go.mod, one
+      per directory: relay-claim, collector-outputs, collector-inputs, relay-guest-api,
+      executor-initialize and bootstrap-config) against the host-mode Go relay on macOS, where vz runs it:
       dist/conformance/relay -mode host on an inherited socketpair, with the harness as claimant,
       collector, build environment and upstream.
     design: docs/design/seam-specs.md
