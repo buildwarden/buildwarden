@@ -360,6 +360,15 @@ callers' error branches.
 
 ## Design review
 
+- **r1, 2026-11-17: approved at `b7619b5`** (Jeff, workflow-human, FLOW-19).
+  Assumptions a1 (`make build` keeps `dist/warden`), a2 (a due refresh that
+  cannot start warns, logs and the build goes on), a3 (the stale
+  `dist/warden.exe` is case 3's file beside, then deleted) and a4 (exempt
+  from FLOW-20 as a fix for a regression on `main`, the follow-up of a
+  security fix) confirmed as drafted, (a) each. No `rule_changes`; no changes
+  folded in. Areas as declared; the area-edges check showed no difference
+  from `main` at 0cd3c02.
+
 ## Consolidation
 
 ## Rollback notes
