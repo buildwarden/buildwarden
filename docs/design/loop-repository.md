@@ -283,9 +283,30 @@ checkout of this repository, with this repository's paths and commands.
    added in an attended session on Jeff's word, as the area map is
    (FLOW-05). The entries for every repository named by an item already in
    the queue (here `buildwarden/buildwarden` and
-   `buildwarden/buildwarden-specs`) are written before the merge, so no
-   item fails at it and no absent entry is read leniently (GLOBAL-11), the
-   queue's own repository's included.
+   `buildwarden/buildwarden-specs`) are written before the merge, each
+   with its `trunk` only, so no item fails at the merge for an absent
+   entry and no absent entry is read leniently (GLOBAL-11), the queue's
+   own repository's included. This repository is no exception to the rule
+   above: this item's pull request is the change that adopts the profile
+   file here, so `buildwarden/buildwarden`'s entry gains `profile:
+   docs/development/loop-profile.yaml` only after that pull request has
+   merged, in the same attended sitting, on Jeff's word, immediately after
+   the merge and before the next run, cloud or native (Implementation plan
+   task 14b). Until then the new `wf` reads this repository as not
+   adopted: it would compute every item homed here as tracked (a6), so
+   `wf validate` fails each one whose round is `feature` ("a tracked
+   item's round is tracked", `queue.go:863-864`); it runs no fast gate or
+   reference-document check here; no path here is a rule path for the
+   clearance; none of the front-matter keys this repository's profile
+   adds is required; and no `native.prepare` is read. That is not
+   acceptable for a run, so no run takes a step in that window: the
+   sitting merges when no run is in progress and writes the `profile`
+   before any run starts. Every branch here whose merge base with `main`
+   predates the merge (every branch open at it), other than a process
+   item's, which is exempt (FLOW-14), has the profile file at neither its merge base nor its
+   head, so once the entry names the file that branch fails the
+   rule-change clearance, naming the file, until it next merges `main`
+   (Decision 5): a one-time cost, accepted by Jeff (2026-11-17).
    *Rejected:* reading the trunk from the remote's default
    branch: a value the loop did not write down, used when nothing is given
    (GLOBAL-10); and reading it from the profile file, which a command that
@@ -368,7 +389,8 @@ checkout of this repository, with this repository's paths and commands.
     machine cleanup), and adds to them: the push script takes an optional
     `<owner>/<repo>` argument for a branch in a clone, worked in a worktree
     at `.scratch/<owner>/<repo>/<name>` that the session makes with `git -C
-    .dev/checkouts/<owner>/<repo> worktree add`, now allowed; the cleanup
+    .dev/checkouts/<owner>/<repo> worktree add` after a `fetch` there,
+    each now allowed by its own narrow allow; the cleanup
     loops over each clone; `wf gate` offers a led item's steps only to a
     machine that lists every repository the item works in; and `wf lead
     -host`, `wf new -lead` and `wf declare` refuse a lead no serving
@@ -597,10 +619,12 @@ checkout of this repository, with this repository's paths and commands.
     (Decisions 4 and 8): `work` absent is no second branch; the root's
     `areas.yaml` and `main.yaml` stay. The new `repositories` entries
     (`buildwarden/buildwarden` and `buildwarden/buildwarden-specs`) are
-    written in `config.yaml` in the attended sitting that merges the PR,
-    before the merge and before the next run (Decision 3; the old `wf`
+    written in `config.yaml`, with their `trunk` only, in the attended
+    sitting that merges the PR, before the merge (Decision 3; the old `wf`
     reads `config.yaml` without strict fields, `queue.go:594`, and ignores
-    them), so items already declared, among them the in-progress
+    them), and `buildwarden/buildwarden`'s `profile` is added in the same
+    sitting immediately after the merge and before the next run, as for
+    any adoption, so items already declared, among them the in-progress
     `relay-collector-failure-fails-open` whose `repos` names
     `buildwarden/buildwarden-specs`, validate unchanged at the merge. A run
     that started before the merge keeps its tools and touches none of the
@@ -691,8 +715,10 @@ checkout of this repository, with this repository's paths and commands.
     argument for a branch in a clone, whose worktree is
     `.scratch/<owner>/<repo>/<name>` in the dedicated checkout (`<name>`
     being the push script's worktree-name argument), made by the session
-    with `git -C .dev/checkouts/<owner>/<repo> worktree add`, which
-    `settings.native.json` gains an allow for; and the wrapper's worktree
+    with `git -C .dev/checkouts/<owner>/<repo> worktree add`, which,
+    with the `fetch` before it, `settings.native.json` gains two narrow
+    allows for (`Bash(git -C .dev/checkouts/* fetch*)` and `Bash(git -C
+    .dev/checkouts/* worktree*)`); and the wrapper's worktree
     cleanup loops over each clone (**The native side**).
   - (b) Host steps in a second repository wait for the move.
   - (c) The wrapper clones a second repository on demand when a host step
@@ -866,7 +892,7 @@ repository: buildwarden/buildwarden      # the queue's own, unchanged
 repositories:
   - name: buildwarden/buildwarden
     trunk: main                          # every entry gives its trunk; wf reads it here only
-    profile: docs/development/loop-profile.yaml
+    profile: docs/development/loop-profile.yaml   # added right after this item's PR merges (task 14b)
   - name: buildwarden/buildwarden-specs  # not adopted: no profile
     trunk: main
   # - name: buildwarden/buildwarden-relay
@@ -884,8 +910,12 @@ records no
 visibility: a private repository's work is published as a public one's
 (q1 (C), Decision 19). The two entries above are
 written in the attended sitting that merges this item's PR, before the
-merge, on Jeff's word (Decision 3, a10), so every item already in the
-queue validates at the merge. An entry absent for the queue's own
+merge, on Jeff's word, with their `trunk` only (Decision 3, a10, task
+14a), so no item already in the queue meets an absent entry at the
+merge. `buildwarden/buildwarden`'s `profile` is added in the same
+sitting immediately after the merge, before the next run, as for any
+adoption (task 14b); until it is, the new `wf` reads this repository as
+not adopted, which no run may meet (Decision 3). An entry absent for the queue's own
 repository fails as any other absent entry does; it is not read as a
 default profile path (Decision 3, GLOBAL-11).
 
@@ -1110,8 +1140,12 @@ dedicated checkout; each gains a form for a clone:
   is relative to the clone). Today `settings.native.json` allows `git
   worktree` only in the session's working directory, the dedicated
   checkout (`Bash(git worktree:*)`, line 24), and `git -C` only in
-  `.dev/workflow` and `.scratch/` (lines 26 and 28), so it gains one
-  allow, `Bash(git -C .dev/checkouts/*)`. The denies stay as
+  `.dev/workflow` and `.scratch/` (lines 26 and 28), so it gains two
+  narrow allows, `Bash(git -C .dev/checkouts/* fetch*)` and `Bash(git -C
+  .dev/checkouts/* worktree*)`, and no broader one: any other git command
+  in a clone (a `commit`, `checkout`, `reset` or `config` there) is not
+  allowed, and the commit is made in the worktree under `.scratch/`,
+  which line 28 already allows. The denies stay as
   approved: `Bash(git -C * push*)` (`loop-native-lead`'s a16) and the
   `git -C * push origin main*`, `--force`, `-f`, `--delete` and
   `--mirror` denies still refuse every push from a clone, so the push
@@ -1145,9 +1179,12 @@ FLOW-08):
 - The later `repositories` entries in `config.yaml`, in an attended
   session: an entry when a repository is first named after this item,
   and a repository's `profile` only after the pull request that adopts it
-  has merged, the relay's included (Decision 3). (The entries for this
-  repository and `buildwarden/buildwarden-specs` are written before this
-  item's merge, Implementation plan task 14a.)
+  has merged, this repository's and the relay's included (Decision 3).
+  (The entries for this repository and `buildwarden/buildwarden-specs`
+  are written before this item's merge with their `trunk` only,
+  Implementation plan task 14a; this repository's `profile` is added in
+  the same sitting immediately after the merge, before the next run,
+  task 14b.)
 - The workers' access to each repository: the cloud environment's GitHub
   access and toolchain (this session's GitHub access did not include
   `buildwarden/buildwarden-relay` on 2026-11-17), and each native
@@ -1215,12 +1252,22 @@ name lists fails and names what to fix
 (GLOBAL-11). The transitions named here: the `repositories` entries for
 every repository an item already in the queue names (this repository and
 `buildwarden/buildwarden-specs`, the latter named by the in-progress
-`relay-collector-failure-fails-open`) are written before the merge
-(Implementation plan task 14a), so `wf validate` passes on that item at the
-merge, unchanged; and an item declared before the merge with `repos`
+`relay-collector-failure-fails-open`) are written before the merge with
+their `trunk` only (Implementation plan task 14a), so no item meets an
+absent entry at the merge; this repository's `profile` is added in the
+same sitting immediately after the merge, before the next run (task 14b),
+since until then the new `wf` reads it as not adopted (Decision 3), and
+once it is, `wf validate` passes on that item unchanged; and an item declared before the merge with `repos`
 beyond its home keeps the `human` merge-recording step it may already have
 until its Close; it is not converted (FLOW-04's old clause binds its branch
 until it merges `main`, LOOP-09).
+
+An accepted cost (Jeff, 2026-11-17): when a repository's entry gains its
+`profile` (this repository's at task 14b, the relay's after its
+adoption), every branch open there that forked before the adoption merged
+fails the rule-change clearance, naming the file, until it merges its
+trunk (Decision 5). A branch before Publish gets no automatic refresh for
+it.
 
 ## Cross-driver impact
 
@@ -2193,13 +2240,17 @@ text change, to `rules.yaml`, not to the rule:
       `repositories`), checked in as a test fixture under
       `tools/workflow/cmd/wf/testdata/`, gives the same `wf next`, `wf
       status -md` and `wf validate` output with the old `wf` and with the
-      new `wf` given the same state plus the pre-merge `repositories`
-      entries (`buildwarden/buildwarden` with `trunk: main` and its
-      `profile`, `buildwarden/buildwarden-specs` with `trunk: main`)
-      (a10). It
+      new `wf` given the same state plus the `repositories` entries as
+      they stand after task 14b (`buildwarden/buildwarden` with `trunk:
+      main` and its `profile`, `buildwarden/buildwarden-specs` with
+      `trunk: main`) (a10). It
       includes the in-progress `relay-collector-failure-fails-open`, whose
       `repos` names `buildwarden/buildwarden-specs`: `wf validate` passes
-      on it with no new error or notice.
+      on it with no new error or notice. With only task 14a's entries
+      (each `trunk` only), the new `wf` reports no absent entry, and reads
+      this repository as not adopted: `wf validate` gives the tracked-round
+      error for each item homed here whose round is `feature`, which is
+      why task 14b comes before the next run (Decision 3).
   11. Under a13 (b): tier 1's report on `main` is byte-for-byte the same
       before and after the move of the three checks' code.
   12. A stub repository with a minimal profile file (no `rules.index`, no
@@ -2236,12 +2287,15 @@ text change, to `rules.yaml`, not to the rule:
   to another clone, when the argument is the queue's own repository, and
   with a third argument; and the one-argument form unchanged.
   `TestNativeSettingsRules` gains cases by its own matcher: `git -C
-  .dev/checkouts/o/r fetch origin` and `git -C .dev/checkouts/o/r
-  worktree add ../../../../.scratch/o/r/x feat/x` are allowed by the new
-  `Bash(git -C .dev/checkouts/*)`; `git -C .dev/checkouts/o/r push origin
-  feat/x`, `... push --force ...` and `... push origin main` are refused
-  by the existing denies (`git -C * push*` and its narrower siblings)
-  despite that allow. If the
+  .dev/checkouts/o/r fetch origin` is allowed by the new `Bash(git -C
+  .dev/checkouts/* fetch*)` and `git -C .dev/checkouts/o/r worktree add
+  ../../../../.scratch/o/r/x feat/x` by the new `Bash(git -C
+  .dev/checkouts/* worktree*)`; other git commands in a clone (`git -C
+  .dev/checkouts/o/r commit -m x`, `... checkout main`, `... reset --hard`,
+  `... config user.name x`) are not allowed; `git -C .dev/checkouts/o/r
+  push origin feat/x`, `... push --force ...` and `... push origin main`
+  are refused by the existing denies (`git -C * push*` and its narrower
+  siblings). If the
   cleanup is factored into a testable function (as `loop-native-lead`
   allows), it gains a case for a done item's worktree in a clone. Each
   machine's owner re-runs the
@@ -2303,9 +2357,11 @@ of the delta only if it differs (a15). Then, on `feat/loop-repository`:
     the profile file, the install checks; `native-push.sh`'s optional
     `<owner>/<repo>` argument and its checks, worktrees at
     `.scratch/<owner>/<repo>/<name>` made with `git -C
-    .dev/checkouts/<owner>/<repo> worktree add`, the allow `Bash(git -C
-    .dev/checkouts/*)` in `tools/workflow/native/settings.native.json`
-    with its `TestNativeSettingsRules` cases, the cleanup's loop over
+    .dev/checkouts/<owner>/<repo> worktree add`, the two narrow allows
+    `Bash(git -C .dev/checkouts/* fetch*)` and `Bash(git -C
+    .dev/checkouts/* worktree*)` in
+    `tools/workflow/native/settings.native.json` with their
+    `TestNativeSettingsRules` cases, the cleanup's loop over
     each clone,
     and the six phase agents' and `workflow-native`'s push sentence (a14,
     **The native side**; the `native_test.go` cases under Validation plan,
@@ -2336,18 +2392,28 @@ of the delta only if it differs (a15). Then, on `feat/loop-repository`:
     text over the predecessors' merged wording (FLOW-14, a15).
 14. Test 10 on the live `workflow` state as well as its fixture; archive
     the design with its summary, and open the PR (FLOW-12). The PR body
-    lists task 14a under "Before the merge".
+    lists task 14a under "Before the merge" and task 14b under "Right
+    after the merge".
 14a. In the attended sitting that merges the PR, before the merge and
     before the next run, on Jeff's word: write `config.yaml`
     `repositories` on the `workflow` branch, with `buildwarden/buildwarden`
-    (`trunk: main`, `profile: docs/development/loop-profile.yaml`) and
-    `buildwarden/buildwarden-specs` (`trunk: main`), and document
+    (`trunk: main`) and `buildwarden/buildwarden-specs` (`trunk: main`),
+    no `profile` in either (Decision 3), and document
     `repositories`, `work`, `repos/`, `hosts.yaml`'s `repositories` and the
     profile file's format in the `workflow` branch's `README.md`. The old
     `wf` ignores the new key. The PR is not listed ready for merge until
     these edits are drafted.
+14b. In the same sitting, on Jeff's word, immediately after the merge and
+    before the next run, cloud or native, as the post-merge state step:
+    add `profile: docs/development/loop-profile.yaml` to
+    `buildwarden/buildwarden`'s entry in `config.yaml` on the `workflow`
+    branch, and run `wf validate` with the merged `wf`. The sitting merges
+    when no run is in progress, so no run meets the window in which this
+    repository reads as not adopted (Decision 3). Branches open here that
+    forked before the merge fail the clearance until they next merge
+    `main` (the cost Jeff accepted, Defaults and overrides).
 
-After the merge, in an attended session and outside the PR, only later
+After that, in an attended session and outside the PR, only later
 repositories' entries are added, and a repository's `profile` once the
 pull request that adopts it has merged, such as the relay's (Decision 3).
 
