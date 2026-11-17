@@ -17,6 +17,9 @@ tier2_gaps:
   - "native-tick.sh, native-push.sh and the new settings on macOS (launchd): exercised by the
     MacBook's first scheduled run after the merge; tracked in the native-gap backlog"
   - "the same under Git Bash on the Windows desktop: its first scheduled run after the merge"
+  - "the cleanup on a machine: a dirty .scratch/ worktree and a squash-merged branch that
+    git branch -d refuses, each shown in native/status/<machine>.yaml after an idle run and
+    after a worked run; exercised on the first runs after the merge"
 rules: [FLOW-03, FLOW-04, FLOW-05, FLOW-06, FLOW-08, FLOW-09, FLOW-13, FLOW-14, FLOW-16,
         FLOW-17, FLOW-18, FLOW-19, FLOW-20, LOOP-01, LOOP-04, LOOP-05, LOOP-06, LOOP-08,
         LOOP-09, PROFILE-01, GLOBAL-09, GLOBAL-10, GLOBAL-11, TEST-01, TEST-02, TEST-03]
@@ -28,6 +31,7 @@ rule_changes:
   - {rule: FLOW-16, change: amend, paths: [docs/development/process.md]}
   - {rule: FLOW-17, change: amend, paths: [docs/development/process.md]}
   - {rule: FLOW-18, change: amend, paths: [docs/development/process.md]}
+  - {rule: PROFILE-01, change: amend, paths: [docs/development/loop-profile.md]}
 concepts: [workflow, native-validation, native-lead, lead, host-names, capability-any, lease,
            lease-renewal, wf-renew, scheduled-sessions, native-wrapper, push-script,
            permission-denies, priority-gate, budgets, worker-identity, componentization, program]
@@ -77,13 +81,15 @@ today, for six reasons.
    the affinity by hand (`.claude/skills/workflow-intake/SKILL.md:85-86`).
    But intake writes only phase 0's step: `f1-design` and every later
    step are seeded at each phase change (`Complete`, `phases.go:609-631`)
-   as `cloud`. The hand edit reaches one step of nine.
+   as `cloud`. The hand edit reaches one of the six steps the machine would
+   need (phases 0 to 5).
 2. **A host's claim starts no item.** `Starts` sets a queued feature in
    progress only on a `cloud` claim (`queue/next.go:130-133`). A host
    worker that claimed an edited `f0-branch-setup` would hold a step of an
    item that stays `queued`: its phase moves when the step is done, and
-   its status does not (loop-contract's first review entry names this as
-   the difference this item closes, `docs/design/loop-contract.md:3135-3142`).
+   its status does not (loop-contract's 2026-11-14 revision entry, in its
+   note on the first entry, names this as the difference this item closes,
+   `docs/design/loop-contract.md:3133-3142`).
 3. **A `<capability>-any` name belongs to one machine.** FLOW-04 says
    `hosts.yaml` "gives each host name to exactly one machine"
    (`process.md:186-188`), `wf validate` rejects a name two machines
@@ -98,7 +104,7 @@ today, for six reasons.
 4. **A lease is 120 minutes for every claim, and nothing renews one.**
    `Claim` sets `lease_minutes`, 120 in `config.yaml`, for every worker
    (`queue/next.go:304-311`); `wf` has no renew command
-   (`cmd/wf/main.go:308`, the command table). A design or implementation
+   (`tools/workflow/cmd/wf/main.go:306-311`, the command table). A design or implementation
    step on a machine can outlast two hours (a VM image build, a native
    test matrix), and the only way to keep it is to claim the step again,
    which counts one more step against the item's budget. A session that
@@ -167,7 +173,8 @@ merge, and allows auto-merge (`allow_auto_merge: true`).
   led item of lower priority wait for a cloud-led one, and this design
   says whether that is wanted (a22); `wf commit` and a digest file per
   run already let a machine and the cloud write state side by side;
-  `QUEUE.md`'s Workers section and a Lead column are left here (a24);
+  `QUEUE.md`'s Workers section and a Lead column are left here (a24), and
+  so is a hold that stops led work (Holds);
   `wf renew` is left here. It amended three clauses of FLOW-04 and left
   "its host-name and lease clauses" to this item
   (`loop-parallel.md:4158-4164`). Its **What this item does not do**
@@ -199,7 +206,9 @@ merge, and allows auto-merge (`allow_auto_merge: true`).
    led feature in phases 0 to 5 whose template affinity is `cloud` gets
    the lead instead; the design review stays `human`, and Publish, Merge
    and Close stay `cloud`. A return (`wf back`) re-seeds with the lead
-   too, since it goes through `Seed`.
+   too, since it goes through `Seed`. A process item's `cloud` hold
+   therefore no longer stops a led item's phases 0-5; one that must stop
+   them holds `host:*` too (Holds).
    - *Rejected: per-phase affinities set by hand, as FLOW-09 says today.*
      They reach phase 0 only (Problem 1).
    - *Rejected: a lead that is a machine name.* Routing is by host name
@@ -218,7 +227,8 @@ merge, and allows auto-merge (`allow_auto_merge: true`).
    the lead. A queued led item is offered only to its lead's machines;
    the guard (`Guard`, `queue/limits.go:177-209`) and the waiting limit
    decide the start exactly as they do for the cloud, because
-   `loop-parallel` already made them every worker's.
+   `loop-parallel` already made them every worker's. A queued process or
+   tracked item still starts on any claim, as today.
 3. **Only a feature may be led, and only the human sets or changes a
    lead** (a4, a5). `wf new -lead host:<name>` at intake, with Jeff, and
    `wf lead -worker human/<name> -feature F -host <name> | -clear` later.
@@ -228,7 +238,9 @@ merge, and allows auto-merge (`allow_auto_merge: true`).
    (`workflow-native` Never list, `.claude/skills/workflow-native/SKILL.md:25-38`);
    a tracked item's steps are all `human`.
 4. **Any host name may be served by several machines; a step goes to
-   whichever serving worker next takes steps** (a6; Jeff's rule). The
+   whichever serving worker next takes steps** (Jeff's rule for
+   `<capability>-any`, loop-contract a15 (b); this design proposes the
+   same for every host name (a6), to be confirmed at the review). The
    one-machine rule leaves FLOW-04 and `validateNative`. `wf validate`
    still requires that every pending host step, open gap and lead names
    a host some machine serves. Nothing else is needed for two machines
@@ -251,11 +263,13 @@ merge, and allows auto-merge (`allow_auto_merge: true`).
    `lease_minutes` for the others. `wf renew` sets a held lease's expiry
    to now plus that length, refuses a worker that does not hold it, and
    counts nothing. The wrapper releases every lease its session still
-   holds when the session ends, and, at its start, every lease an
-   earlier session of the same machine left (the lock shows no session
-   alive). A lease is therefore held for 20 hours only by a session that
-   is running, or by a machine that lost power mid-run until its next
-   scheduled run.
+   holds when the session ends, and, at its start, after it builds `wf`
+   and before the gate, since the gate does not offer a leased step,
+   every lease an earlier session of the same machine left (the lock
+   shows no session alive). A lease is therefore held for 20 hours only
+   by a session that is running, by a machine that lost power mid-run
+   until its next scheduled run, or by an attended session closed
+   without its Close.
    - *Rejected: a short lease renewed often (a heartbeat).* It needs a
      push of the workflow branch every few minutes from a session that
      is busy, and Jeff's word is 20 hours.
@@ -270,7 +284,8 @@ merge, and allows auto-merge (`allow_auto_merge: true`).
    the machine.
 9. **The cloud's guards become every unattended worker's** (a12, a13,
    a14). An open blocking question and a spent runaway budget stop every
-   worker but `human` (`cloudHold` becomes `unattendedHold`; the red-main
+   worker but `human`, in `wf next`'s `wait` and in `wf commit`'s
+   `claimAgain` (`cloudHold` becomes `unattendedHold`; the red-main
    refresh test stays with the refresh, which is `cloud`). `wf gate`
    exits idle, with the reason, while `priority_confirmed` is false, so
    no machine starts an agent then, as the cloud starts none. FLOW-13
@@ -289,7 +304,9 @@ merge, and allows auto-merge (`allow_auto_merge: true`).
     (`native-run.sh:107`), so no branch can change it before it
     reaches `main` by Jeff's merge (FLOW-14). The two push allows go,
     and two denies, `Bash(git push*)` and `Bash(git -C * push*)`, refuse
-    every push the session would run itself. The queue state is pushed
+    every push the session would run itself, and also any `git -C`
+    command whose text contains ` push`. So a machine commits with `-F
+    <file>` (a16). The queue state is pushed
     by `wf commit`, which runs git as a child process and is not seen by
     the matcher (`queue/commit.go:239-253`).
     - *Rejected: more denies, one per bad form.* Every form found so far
@@ -301,12 +318,15 @@ merge, and allows auto-merge (`allow_auto_merge: true`).
       branch, or of `workflow`, loses work nothing else records.
 11. **Each machine cleans up after a done item, at its next run** (a18).
     Close runs on the cloud (`workflow-tick` step 2.4,
-    `SKILL.md:137-146`) and cannot reach a machine's `.scratch/<name>`
+    `SKILL.md:145-152`) and cannot reach a machine's `.scratch/<name>`
     worktrees. The wrapper removes, before the gate, each `.scratch/`
     worktree whose branch belongs to a done item or is gone from
     `origin`, with `git worktree remove` (never `--force` on a dirty
-    tree: a dirty one is reported as a failure, as uncommitted workflow
-    changes are, `native-tick.sh:95-104`). FLOW-16 names it.
+    tree: a dirty one is kept and recorded as `failed` in the machine's
+    status, as uncommitted workflow changes are, `native-tick.sh:95-104`,
+    with the leftover note appended to the reason after the session or
+    idle gate has set it, and passed to the session for its digest).
+    FLOW-16 names it.
 12. **A machine records its sessions as the cloud does, and takes no led
     step when it cannot** (a19). The wrapper already runs the FLOW-18
     check (`native-tick.sh:199-200`). It also runs `entire status`, and
@@ -338,10 +358,10 @@ Each is "proceeding with the recommended option; confirm".
      place of per-phase host affinity), FLOW-13 (every unattended run,
      its budget, the guards, the priority gate), FLOW-16 (a machine's
      worktrees), FLOW-17 (a machine's pushes) and FLOW-18 (a machine's
-     sessions). LOOP-05 and PROFILE-01 are unchanged: LOOP-05 cites
-     FLOW-04 for who takes a step and states no one-machine rule, and
-     PROFILE-01's Native hosts entry names `hosts.yaml`
-     (`docs/development/loop-profile.md:445`). **The contract's
+     sessions), and PROFILE-01's Native hosts entry
+     (`docs/development/loop-profile.md:29`), which an `<os>-any` name
+     would make false (a7). LOOP-05 is unchanged: it cites FLOW-04 for
+     who takes a step and states no one-machine rule. **The contract's
      citations, checked**, under Rule changes, shows each still holds.
   2. As 1 without FLOW-05 and FLOW-17. FLOW-05's "a `human` or
      `host:<name>` step" (`process.md:232`) is then the cloud's view
@@ -355,7 +375,7 @@ Each is "proceeding with the recommended option; confirm".
   2. A machine name. One machine then does the whole item, which keeps
      its scratch worktrees and caches in one place, but a `-any` item
      could not move to the other machine, which is the opposite of
-     Jeff's rule.
+     Jeff's rule for `-any` work.
   3. No field: intake sets affinities by hand and `wf` keeps them. Each
      phase's steps would need a hand edit when seeded (Problem 1).
 - **a3. Which steps a lead takes.**
@@ -388,9 +408,12 @@ Each is "proceeding with the recommended option; confirm".
   1. *(recommended)* Any host name may be listed on several machines.
      `validateNative` drops its "served by both" error and keeps the
      check that every pending host step, open gap and lead has a
-     machine. Nothing changes until Jeff lists a name twice.
-  2. Only `-any` names may be listed twice; `<os>-<driver>` stays one
-     machine's. It keeps a platform-specific validation on the one
+     machine. Nothing changes until Jeff lists a name twice. This goes
+     beyond Jeff's decision, which covers `<capability>-any` names only,
+     by also letting `<os>-<driver>` and `<os>-any` names be shared.
+  2. Only `<capability>-any` names may be listed twice; `<os>-<driver>`
+     and `<os>-any` stay one machine's. This is exactly Jeff's decision
+     (loop-contract a15 (b), a24). It keeps a platform-specific validation on the one
      machine set up for it (the cached relay VHDX on the Windows
      desktop, `native-tick.sh:222-240`), but a second Mac could then not
      share `macos-vz`.
@@ -416,8 +439,9 @@ Each is "proceeding with the recommended option; confirm".
      claim by a `host:` worker, a validation step's included; cloud and
      human claims keep `lease_minutes`. `wf renew -worker W -feature F
      -step S` sets the expiry to now plus that length; it counts nothing
-     against the item's budget and is pushed with `wf commit -claimed
-     F/S`. The skill renews before dispatching a phase agent, and at each
+     against the item's budget and is pushed with `wf commit -renewed
+     F/S`, which on a rejected push renews again on the new state,
+     refused unless the step is still W's, and never claims. The skill renews before dispatching a phase agent, and at each
      checkpoint push, whenever less than half the lease is left.
   2. The 20-hour lease for `-any` steps only. A led `windows-hyperv`
      item's Implement step would have two hours, and be claimed again
@@ -427,13 +451,22 @@ Each is "proceeding with the recommended option; confirm".
   names its machine.**
   1. *(recommended)* The worker is `host:<name>/<machine>.<run>`. The
      wrapper runs `wf release -session <machine>.<run> -why "session
-     ended (exit <rc>)"` after the session, releasing every pending step
-     whose lease that session holds, and, at its start, `wf release
-     -machine <machine> -stale -why "an earlier session on <machine> left
-     it"`, which releases every live lease of a worker whose session
-     names the machine and is not the current run. The lease's own
-     expiry is the fallback when neither runs (the machine never runs
-     again), named under **Defaults and overrides**.
+     ended (exit <rc>)"` from the EXIT path once the session has started,
+     releasing every pending step whose lease that session holds, and, at
+     its start, before the gate, `wf release -machine <machine> -stale
+     -why "an earlier session on <machine> left it"`, which releases
+     every live lease of a worker whose session names the machine and is
+     not the current run. The lease's own expiry is the fallback when
+     neither runs (the machine never runs again), named under **Defaults
+     and overrides**. An attended `/workflow-native <host>` session takes
+     the worker `host:<name>/<machine>.attended-<UTC>`, with the machine
+     from `hosts.yaml` for the host it serves. `wf release -machine <m>
+     -stale` skips sessions whose run starts `attended-`, so a scheduled
+     run never frees the step of a live attended session. The skill's
+     Close runs `wf release -session <machine>.attended-<UTC> -why
+     "attended session closed"`. An attended session closed without its
+     Close keeps its leases until the 20-hour expiry, named under
+     **Defaults and overrides**.
   2. No release; the 20-hour expiry alone. A session that hit its turn
      cap at 04:50 holds its step until 00:50 the next day, past the
      Windows desktop's next three runs.
@@ -444,7 +477,19 @@ Each is "proceeding with the recommended option; confirm".
      `container-any` on `macbook`, which has finch), adds `<os>-any`
      names if a7 stands, sets `host_lease_minutes` if he wants other
      than 1200, and leads the first item. It runs once no live lease
-     predates the merge.
+     predates the merge. The step is not seeded: the process template
+     seeds only `x1-design` to `x4-close` (`queue/phases.go:74-80`). The
+     session that records this design's questions on the workflow branch
+     adds it by hand, as `loop-parallel` did (3c994c4): `x4-state`, phase
+     4, affinity `human`, with a `note` listing its checklist. The
+     checklist: after the PR has merged and once no live lease predates
+     the merge commit and both machines' `native/status/` files show a
+     run after it, not before; `hosts.yaml`'s header and any second
+     machine or `<os>-any` name on Jeff's word; `host_lease_minutes`;
+     README.md; the two native gaps in `backlog/native-gaps.yaml`; the
+     first led item. `x4-close` gets `needs: [x4-state]`. `wf` gates steps
+     of one phase only by `needs` (`queue/next.go:183`), and
+     `loop-parallel`'s `x4-close` had none.
   2. No state change; Jeff edits `hosts.yaml` when he wants. The rule is
      then true and unused until he does.
 - **a12. The priority-confirmation gate.**
@@ -459,7 +504,9 @@ Each is "proceeding with the recommended option; confirm".
   3. It stays the cloud's (hand-off point 5's other option).
 - **a13. The blocking-question and runaway guards.**
   1. *(recommended)* Every worker but `human`. `cloudHold` is renamed
-     `unattendedHold` and applied when `Kind(worker) != "human"`; its
+     `unattendedHold` and applied when `Kind(worker) != "human"` in `wf
+     next` (`wait`) and in `wf commit`'s second claim after a rejected
+     push (`claimAgain`); its
      red-`main` test stays, and only a refresh, which is `cloud`, meets
      it.
   2. Only for a machine's led steps; a validation step of an item with
@@ -471,8 +518,9 @@ Each is "proceeding with the recommended option; confirm".
      (falling back to `run_budget`), counted together over its steps and
      backlog entries as today (`workflow-native`, `SKILL.md:83-87`). A
      led step counts one, like a validation step. The item's work budget
-     counts every claim whoever makes it, so the runaway check is one
-     for all workers. Jeff calibrates `native_budget` once machines lead
+     counts every claim whoever makes it, except a refresh's first claim
+     (loop-parallel a10 (d)), so the runaway check is one for all
+     workers. Jeff calibrates `native_budget` once machines lead
      items.
   2. A separate `lead_budget` per machine session. One more number to
      calibrate, and a session would then split its turn cap
@@ -480,8 +528,8 @@ Each is "proceeding with the recommended option; confirm".
 - **a15. What the push script checks.**
   1. *(recommended)* Run from the checkout root as
      `tools/workflow/native/native-push.sh <name>`: `.scratch/<name>` is
-     a worktree of this repository (the same checks as `native-run.sh`,
-     lines 112-118); its HEAD is the branch `feat/<item>`, by
+     a worktree of this repository (the same checks as
+     `native-run.sh:112-116`); its HEAD is the branch `feat/<item>`, by
      `git symbolic-ref`; `.dev/workflow/queue/<item>.yaml` exists and
      says `status: in_progress`; then it runs `git -C .scratch/<name>
      push origin refs/heads/feat/<item>:refs/heads/feat/<item>` and
@@ -499,8 +547,23 @@ Each is "proceeding with the recommended option; confirm".
      one still leaves the others. `native_test.go`'s rule test
      (`TestNativeSettingsRules`, `native_test.go:20`) gains the two and
      fails on any allow that starts with `git push` or contains ` push `.
+     The second deny also refuses `git -C .dev/workflow push`, which
+     `Bash(git -C .dev/workflow:*)` (line 26) allows today. A mid-pattern
+     `*` spans spaces, so the second deny also matches any `git -C`
+     command whose later text contains ` push`: a commit message (`git -C
+     .scratch/x commit -m "add the push script"`), `log --grep push`, or
+     a pathspec. The workflow-native skill and the phase-agent sentence
+     for a led step therefore require this commit form on a machine:
+     write the message to `.scratch/<name>.msg` and run `git -C
+     .scratch/<name> commit -F .scratch/<name>.msg`. Never `-m`, never
+     `--grep push`. `TestNativeSettingsRules` also records the false
+     positive: the deny matches `git -C .scratch/x commit -m "a push fix"`
+     and does not match `git -C .scratch/x commit -F .scratch/x.msg`.
   2. Keep the allows and add denies for each bad form found (Decision
      10's first rejection).
+  3. Keep `-m` and state as a known limit that a message or argument
+     must not contain ` push`. Rejected: an unattended session cannot
+     tell why it was refused.
 - **a17. The same denies for every other session in this repository.**
   1. *(recommended)* No change to `.claude/settings.json`. Its sessions
      are Jeff's attended ones and the cloud's, which push feature
@@ -530,10 +593,10 @@ Each is "proceeding with the recommended option; confirm".
      would stop for the days the PR waits for Jeff's merge and its
      refreshes.
 - **a21. The cloud tick's start from trunk.**
-  1. *(recommended)* `workflow-tick` step 1 gains one check before it
-     builds `wf`: after `git fetch origin main workflow`, the checkout's
-     HEAD must equal `origin/main`, or the run stops and reports it,
-     pushing nothing. The wrapper already resets to `origin/main`
+  1. *(recommended)* `workflow-tick` step 1 moves `git fetch origin main
+     workflow` above the build and, between them, checks that the
+     checkout's HEAD equals `origin/main`; if it does not, the run stops
+     and reports it, pushing nothing. The wrapper already resets to `origin/main`
      (`native-tick.sh:188-190`). LOOP-09 says an unattended run takes
      the loop's tools from trunk.
   2. Leave the tick as it is (hand-off point 5: "the item that next
@@ -587,11 +650,12 @@ lead: host:windows-hyperv   # optional (FLOW-04, FLOW-09): the host name whose m
   `f.Phase <= 5`, a template step whose affinity is `cloud` gets
   `f.Lead`. `SeedRefresh` is unchanged (`cloud`), and so are added steps
   (`f1-answer-<q>` `human`, `f6-validate-<host>` its host).
-- `Starts` (`queue/next.go:130-133`): a queued feature starts on a claim
-  by a worker whose kind is its lead, or, for an item with no lead, a
-  `cloud` claim, as today. The comment and the README's claim paragraph
-  say so.
-- `wf new -lead host:<name>` (`cmd/wf/main.go`, `newFeature`): sets the
+- `Starts` (`queue/next.go:127-133`): unchanged for a process or tracked
+  item (any claim, since its steps are all `human`). For a feature: a
+  claim whose `Kind` equals `f.Lead` when the feature is led, and
+  otherwise a `cloud` claim, as today. The comment and the README's claim
+  paragraph say so.
+- `wf new -lead host:<name>` (`tools/workflow/cmd/wf/main.go`, `newFeature`): sets the
   field and seeds `f0-branch-setup` with it; refuses with `-kind
   process`, with `-repos` naming another home (a tracked item), and from
   a worker that is not `human/<name>`.
@@ -617,7 +681,13 @@ the push script; and the session takes no led step when the prompt says
 sessions are not recorded (a19). The phase agents (`wf-publish` for
 `f0-branch-setup`, `wf-design`, `wf-plan`, `wf-implement`, `wf-review`,
 `wf-guide`) each gain one sentence: on a machine, a branch is pushed
-only with `tools/workflow/native/native-push.sh <name>`.
+only with `tools/workflow/native/native-push.sh <name>`, and committed
+with `git -C .scratch/<name> commit -F .scratch/<name>.msg`, never `-m`
+(a16). `workflow-native`'s Git on the workflow checkout paragraph
+(`SKILL.md:42-45`) drops `push origin workflow` from its allowed form,
+`git -C .dev/workflow <add|commit|...>`, since a16's `Bash(git -C *
+push*)` deny refuses it: the workflow branch is pushed only by `dist/wf
+commit`, and a feature branch only by `native-push.sh`.
 
 ### Host names and the table
 
@@ -646,43 +716,79 @@ under two machines is how several machines serve it.
 | `cloud/<run>` | `lease_minutes` (120) | claiming again, as today | `wf release`, by the run |
 | `human/<name>` | `lease_minutes` | claiming again | `wf release` |
 | `host:<name>/<machine>.<run>` | `host_lease_minutes` (1200 when unset) | `wf renew`, by the session | the session (`wf release`); the wrapper when the session ends; the machine's next wrapper run |
+| `host:<name>/<machine>.attended-<UTC>` | `host_lease_minutes` | `wf renew`, by the session | the skill's Close (`wf release -session <machine>.attended-<UTC>`); otherwise the expiry |
 
 - `Config.HostLeaseMinutes int` (`yaml:"host_lease_minutes"`);
   `Validate` rejects a value below 0; 0 or unset reads as 1200.
 - `Claim` (`queue/next.go:304-332`) picks the length by `Kind(worker)`.
 - `wf renew -state DIR -worker W -feature F -step S`: refuses unless the
   step is pending and its live lease is W's; sets the expiry; logs
-  "renewed S until T"; changes no budget. `wf commit -claimed F/S` pushes
-  it, and a rejected push asks again (the step must still be W's).
+  "renewed S until T"; changes no budget. `wf commit -renewed F/S` pushes
+  it (a `CommitRequest.Renewed` field, parsed like `Claimed` and mutually
+  exclusive with it). On a rejected push it resets to origin the same
+  way, reloads the state and calls a new `renewAgain` in place of
+  `claimAgain`. `renewAgain` finds F/S and calls `Renew(f, st, worker,
+  now)`, the function `wf renew` uses, which refuses unless the step is
+  still pending and its live lease is W's; on a refusal `wf commit` exits
+  4 ("the renewal of F/S is refused on the new state: ...") and the
+  session stops working on the step. It never calls `Claim`, so
+  `budget.spent.steps` and `runs` are unchanged.
 - `wf release -session <machine>.<run>` and `wf release -machine
   <machine> -stale`: forms of `wf release` that release every pending
   step whose lease matches, each with its own history line. `-stale`
-  skips the current run's session, which the wrapper passes.
-- The wrapper, `native-tick.sh`: the worker session id in the prompt
-  becomes `$machine.$run` (line 248); after the gate and before the
-  session, `dist/wf release -machine "$machine" -stale -current
-  "$machine.$run"`, pushed with `wf commit` when it changed anything;
-  after the session, whatever its exit code, `dist/wf release -session
-  "$machine.$run" -why "session ended (exit $rc)"`, pushed the same way.
-  Both run in the EXIT path before `record_status`, so a crash between
-  them still records the status.
+  skips the current run's session, which the wrapper passes with
+  `-current`, and every session whose run starts `attended-`, so a
+  scheduled run never frees the step of a live attended session.
+- The wrapper, `native-tick.sh`:
+  - The worker session id in the prompt becomes `$machine.$run` (line
+    248).
+  - After `stage="build wf"` builds `dist/wf` (`native-tick.sh:201-203`)
+    and before `stage="gate"`, a new stage `release` runs `dist/wf
+    release -state .dev/workflow -machine "$machine" -stale -current
+    "$machine.$run" -why "an earlier session on $machine left it"`.
+    When it changed anything, it is pushed with `dist/wf commit`. A
+    failure here is a `stop`.
+  - The release goes before the gate because `Gate` asks `Next` as
+    `host:<h>/gate`, and `wait` (`next.go:213`) does not offer a step
+    leased to another worker. A step still held by a dead earlier
+    session would otherwise make the gate exit 3 (idle) at line 217
+    before anything released it, every run, until the lease expires.
+  - `session_started=1` is set immediately before `claude -p`.
+  - Only the `-session` release runs in `on_exit`, before
+    `record_status` and whatever the exit code, guarded by `[ -x dist/wf
+    ] && [ -n "$session_started" ]`: `dist/wf release -session
+    "$machine.$run" -why "session ended (exit $rc)"`, pushed the same
+    way. An exit during skip, sync, build or the gate therefore runs no
+    release, and a failed release or push still records the status.
 - The skill (`workflow-native`, Collect and Work): worker
-  `W=host:<name>/<machine>.<run>` from the prompt; `wf renew` before each
+  `W=host:<name>/<machine>.<run>` from the prompt, or, attended,
+  `W=host:<name>/<machine>.attended-<UTC>` with the machine from
+  `hosts.yaml` for the host it serves; `wf renew` before each
   phase-agent dispatch and at each checkpoint push when less than half
-  the lease is left; `wf release` of a step it stops working.
+  the lease is left; `wf release` of a step it stops working; attended,
+  its Close runs `wf release -session <machine>.attended-<UTC> -why
+  "attended session closed"`, which the wrapper's `-stale` release never
+  does for it.
 
 ### The guards
 
-- `wait` (`queue/next.go:209-226`): the hold test runs for
-  `Kind(worker) != "human"` in place of `== "cloud"`; `cloudHold`
-  becomes `unattendedHold` with the same three tests.
+- `wait` (`queue/next.go:209-226`) and `claimAgain`
+  (`queue/commit.go:323-353`, the test at lines 343-347): the hold test
+  runs for `Kind(worker) != "human"` in place of `== "cloud"`, in both;
+  `cloudHold` becomes `unattendedHold` with the same three tests.
+  `claimAgain`'s doc comment changes from "for a cloud worker" to "for
+  any worker but `human`". Without the second, a host claim whose push
+  was rejected stands past an open blocking question or a spent runaway
+  budget.
 - `Gate` (`queue/hosts.go:196`): first, `if !s.Config.PriorityConfirmed`,
   return `Run: false` with the reason `idle\tthe priority order is not
   confirmed (FLOW-13)`. The wrapper's case 3 (`native-tick.sh:217`) then
   records `idle` with that reason.
 - `workflow-native`'s Never list gains "no step of an item with an open
   blocking question or a spent runaway budget", which `wf next` now
-  enforces; and "no push but by `wf commit` and the push script".
+  enforces; "no push but by `wf commit` and the push script"; and "no
+  `git -C ... commit -m`: a commit message goes in `.scratch/<name>.msg`
+  and is committed with `-F`" (a16).
 
 ### Pushing from a machine
 
@@ -709,7 +815,11 @@ Then it execs `git -C .scratch/<name> push --set-upstream origin
 refs/heads/feat/<item>:refs/heads/feat/<item>`. No `+`, so git refuses a
 non-fast-forward, and one refspec, so nothing else moves. `settings.native.json`
 already allows it through `Bash(tools/workflow/*)` (line 33). In the
-same file the two push allows go and the two denies come (a16).
+same file the two push allows go and the two denies come (a16). Since
+`Bash(git -C * push*)` also matches a commit message that contains
+` push`, a machine commits with `git -C .scratch/<name> commit -F
+.scratch/<name>.msg`, never `-m`, next to the rule of no push but by `wf
+commit` and the push script.
 `native_test.go` gains a table test of the script, as `TestNativeRun`
 (`native_test.go:81`) tests `native-run.sh`: each refusal, a push to a
 bare remote, and a non-fast-forward refused by git.
@@ -727,11 +837,32 @@ lists `git worktree list --porcelain` entries under `.scratch/`. For each
 on a branch `feat/<item>`: when `.dev/workflow/queue/<item>.yaml` says
 `status: done`, or `origin/feat/<item>` is gone after the prune fetch, it
 runs `git worktree remove .scratch/<name>` and `git branch -d
-feat/<item>`. A dirty worktree is not removed: the run records
-`failed` with "leftover worktree .scratch/<name> has changes", as for
-uncommitted workflow changes. `git branch -d` refusing a squash-merged
-branch leaves it (FLOW-16's own rule for `-D`), and the run's digest file
-names it. Test images, VMs and containers stay the skill's, as now.
+feat/<item>`. Test images, VMs and containers stay the skill's, as now.
+
+The wrapper gathers what the cleanup leaves behind in a shell variable
+`leftover`, one `; `-separated note each:
+
+- `leftover worktree .scratch/<name> has changes` for a dirty worktree,
+  which is not removed;
+- `branch feat/<item> not deleted (not merged; FLOW-16)` when `git
+  branch -d` refuses a squash-merged branch, which is kept.
+
+The notes reach the run's records in three places, because the session
+and the gate both overwrite `outcome` and `reason`:
+
+- (a) After line 260 (`reason="claude exited $rc"`, and after the
+  stale-hosts line 261), the wrapper appends `; $leftover` to `reason`.
+  If a dirty worktree was found it also sets `outcome=failed`, whatever
+  claude's exit code was.
+- (b) In the idle case at line 217, it appends the notes to the idle
+  reason. If a worktree is dirty it records `outcome=failed` in place of
+  `idle`.
+- (c) It adds `Leftovers: $leftover.` to the session prompt at line 248,
+  like `$skip`. The session then lists the leftovers in its digest file.
+
+`record_status` already trims `reason` to 120 characters, so the notes
+are kept short. A machine with no session has no digest; `native/status/`
+is its record.
 
 ### Workers in `QUEUE.md`
 
@@ -753,7 +884,13 @@ read (`queue-summary`'s rule): the times are the files'.
 
 ### The cloud tick
 
-- Step 1 gains the start-from-trunk check (a21).
+- Step 1 moves `git fetch origin main workflow` above the `wf` build
+  and, between them, checks that HEAD equals `origin/main`; if it does
+  not, the run stops and reports it, pushing nothing (a21). When this is
+  implemented, the step-1 block becomes, in order: `entire doctor`; `git
+  fetch origin main workflow`; the HEAD == `origin/main` check; `go
+  build ... ./cmd/wf`; the workflow worktree add/reset; `dist/wf
+  validate`.
 - Its Never list and step 2 are unchanged in what the cloud does; the
   cloud now meets a led item's phase 0-5 steps as `host:` steps it
   cannot take, which `wf next` already reports, and the digest's
@@ -762,6 +899,14 @@ read (`queue-summary`'s rule): the times are the files'.
 ### Holds, and what the merge does to running work
 
 This item declares no `holds` (a20).
+
+A hold names workers (FLOW-05; `State.Hold` matches each pattern against
+`Kind(worker)`, `queue/next.go:37-48`). A led item's steps of phases 0-5
+are `host:<name>` steps (Decision 1), so a `cloud` hold does not stop
+them. A process item that must stop all design and implementation holds
+`cloud,host:*` (the workflow README's intake form, `wf new ... -kind
+process -holds cloud,host:*`). That also stops every machine's validation
+while it lasts. No new hold form.
 
 - **Before the merge** nothing changes: the branch's `wf`, wrapper,
   settings and skills are not on `main`.
@@ -778,6 +923,11 @@ This item declares no `holds` (a20).
   that saved a led item's file would drop the lead and the item would
   fall back to the cloud for its next seeded phase: the safe side, and
   visible in the history.
+- **`x4-state`** is a `human` step of a later phase. `wf` offers it
+  early, and the waiting-on-human count does not count it until the item
+  reaches phase 4 (loop-parallel's rule, `loop-parallel.md`, the
+  waiting-on-human count). Its note's first words keep it from being done
+  before the merge, and `x4-close`'s `needs` keeps Close behind it.
 - **`host_lease_minutes`** unset reads as 1200 in the new `wf` and is
   unknown to an old one, which ignores it.
 
@@ -798,7 +948,7 @@ a component's checkout.
 - No change to a repository setting: the rulesets, auto-merge and
   head-branch deletion are Jeff's (a23).
 - No cloud capability worker (a8), and no second cloud run a day.
-- No change to LOOP-05, PROFILE-01, the area map or the limits.
+- No change to LOOP-05, the area map or the limits.
 - No change to what a validation step does, beyond its lease and the
   guards.
 - No change to the installers' scheduling. `install-macos.sh check` and
@@ -813,7 +963,7 @@ a component's checkout.
 | A led item's machine takes phases 0-5; Publish on is `cloud` | Publish needs `gh`, which a machine's settings deny (a3) | None; a design that needs otherwise is a process item |
 | A machine's lease is 1200 minutes | Jeff's 20 hours (loop-contract a15 (b)) | `host_lease_minutes` in `config.yaml` |
 | A cloud or human lease is `lease_minutes`, 120 | Unchanged | `lease_minutes` |
-| A host name may be on several machines | Jeff's rule; nothing changes until Jeff lists one twice | `hosts.yaml`, on Jeff's word |
+| A host name may be on several machines | Jeff's rule for `<capability>-any` (loop-contract a15 (b)); this design proposes the same for every host name (a6), to be confirmed at the review; nothing changes until Jeff lists one twice | `hosts.yaml`, on Jeff's word |
 | No unattended worker works while the order is unconfirmed | The cloud's gate, made every worker's (a12) | `priority_confirmed: true` |
 
 Named fallbacks (GLOBAL-11):
@@ -824,6 +974,13 @@ Named fallbacks (GLOBAL-11):
   the last renew; `QUEUE.md`'s Workers section shows the lease and its
   machine, and the next run of that machine releases it with a history
   line "an earlier session on <machine> left it".
+- **Lease expiry after an attended session closed without its Close.**
+  Trigger: an attended `/workflow-native <host>` session
+  (`host:<name>/<machine>.attended-<UTC>`) ended without running its
+  Close's `wf release -session`. The wrapper's `-stale` release skips
+  `attended-` sessions, so the step is held until its expiry, up to 20
+  hours after the last renew; `QUEUE.md`'s Workers section shows the
+  lease and its machine, and Jeff may release it with `wf release`.
 - **A led item without a recorded session.** Trigger: `entire status`
   does not name the private remote. The machine takes no led step that
   run and its digest file says "sessions not recorded (FLOW-18)" first;
@@ -844,10 +1001,11 @@ host names `<os>-<driver>` keep naming the drivers each machine runs.
 
 ## Rule changes
 
-Seven amendments to `docs/development/process.md`. Severities and checks
+Seven amendments to `docs/development/process.md`, and one to
+`docs/development/loop-profile.md` (PROFILE-01). Severities and checks
 are unchanged. None edits an enforcement path under FLOW-14's rule-change
 paths: the code is in `tools/workflow/queue/`, `tools/workflow/native/`
-and `cmd/wf/`, which are the loop's machinery, and this is a process
+and `tools/workflow/cmd/wf/`, which are the loop's machinery, and this is a process
 item, whose branch is exempt from the clearance (FLOW-14). Each is
 approved by name at the design review (FLOW-19).
 
@@ -877,7 +1035,10 @@ the list (`process.md:183-199`):
 > there, and otherwise it is lost and the worker re-reads state. An
 > expired lease may be reclaimed.
 
-**Proposed wording:**
+**Proposed wording** ("one or more" for every host name stands only if
+a6 option 1 is confirmed at the review; under option 2 the sentence
+says that only a `<capability>-any` name may be served by more than one
+machine):
 
 > - `host:<name>` — work that needs native hardware, for example `host:macos-vz`
 >   (the macOS/arm64 laptop) or `host:windows-hyperv` (the Windows desktop). A
@@ -1023,7 +1184,8 @@ cloud's guards and gate must bind it (Problem 5; a12, a13, a14).
 > its estimated steps escalates to a `human` step, and no unattended run takes
 > more of its steps, nor any step of an item with an open blocking question
 > (FLOW-07). Every claim counts against the work budget, whichever worker makes
-> it; renewing a lease does not (FLOW-04). Runs are counted but never trip it. The
+> it, except the first claim of a refresh (FLOW-10); renewing a lease does not
+> (FLOW-04). Runs are counted but never trip it. The
 > loop posts a periodic
 > digest (what moved, what is blocked on a human, what is waiting on a native host,
 > what open items spent), and notifies when a new blocking question appears. Done
@@ -1038,7 +1200,8 @@ cloud's guards and gate must bind it (Problem 5; a12, a13, a14).
 ### FLOW-16 (amend)
 
 **Why:** Close runs on the cloud and cannot remove a machine's worktrees
-of the item (Decision 11).
+of the item (Decision 11); the new bullet is an explicit exception to
+the lead-in's "the Close phase removes".
 
 **Current wording**, the first bullet (`process.md:632-635`):
 
@@ -1054,9 +1217,11 @@ of the item (Decision 11).
 >   delete head branches" setting); Close confirms it is gone, and escalates to a
 >   `human` step with the exact command if it is not;
 > - on each native machine, the worktrees and local branch its sessions made for
->   the item: the machine removes them at its next scheduled run once the item is
->   done or its branch is gone from the remote, by the safe forms below, and
->   reports a worktree with uncommitted changes instead of removing it;
+>   the item: not by Close, which cannot reach them, but by the machine at its
+>   next scheduled run once the item is done or its branch is gone from the
+>   remote, with `git worktree remove` and `git branch -d` only, reporting a
+>   worktree with uncommitted changes or a branch `-d` refuses instead of
+>   removing it;
 
 **Severity and check:** MUST, `automated + agent-judgment`, unchanged.
 `loop-parallel-rule-wording` (queued, priority 62) amends FLOW-16's merge
@@ -1116,6 +1281,21 @@ of (Decision 12, a19).
 
 **Severity and check:** MUST, `automated + agent-judgment`, unchanged.
 
+### PROFILE-01 (amend)
+
+**Why:** an `<os>-any` name (a7, FLOW-04 as amended) serves platform work
+that has no driver.
+
+**Current wording**, the Native hosts row (`docs/development/loop-profile.md:29`):
+
+> | Native hosts | The host names in the loop's `hosts.yaml`. All of them serve this repository's drivers today. |
+
+**Proposed wording:**
+
+> | Native hosts | The host names in the loop's `hosts.yaml`. All of them serve this repository's drivers or its platform builds today. |
+
+**Severity and check:** MUST, `agent-judgment`, unchanged.
+
 ### The contract's citations, checked
 
 - **LOOP-05**, "Routed by affinity": "One table, kept beside the queue,
@@ -1135,9 +1315,9 @@ of (Decision 12, a19).
   state, as it did.
 - **LOOP-09**: this is a process item; the wrapper still starts from
   trunk, and the cloud tick now checks it does (a21).
-- **PROFILE-01**: the Native hosts entry ("The host names in the loop's
-  `hosts.yaml`. All of them serve this repository's drivers today")
-  stays true; an `<os>-any` name serves this repository's work.
+- **PROFILE-01**: the Native hosts entry (`loop-profile.md:29`) would be
+  made false by an `<os>-any` name, which serves no driver; it is amended
+  under **PROFILE-01 (amend)** above.
 
 ## Validation plan
 
@@ -1146,31 +1326,54 @@ of (Decision 12, a19).
     lead and phases 6-8 `cloud`; the design review stays `human`; `Back`
     to Design re-seeds with the lead; a feature with no lead is
     unchanged (every existing case).
-  - `queue/next_test.go` / `limits_test.go`: a host worker that serves
+  - `queue/queue_test.go` / `limits_test.go` / `process_test.go`: a host worker that serves
     the lead starts a queued led feature, under the guard and the
     waiting limit; the cloud does not start it and reports the host step;
     a host worker that does not serve the lead is not offered it; an open
     blocking question and a runaway budget stop a host worker; a
-    `human/<name>` worker is not stopped by them.
+    `human/<name>` worker is not stopped by them; a `human/<name>` claim
+    still starts a queued process item and a queued tracked item; a
+    `cloud` claim still starts a queued feature with no lead.
+  - `queue/commit_test.go`: a host worker `host:<name>/<machine>.<run>`
+    claims a step. Meanwhile another session pushes an open blocking
+    question on that item, so the claim's push is rejected. `wf commit`
+    refuses the claim on the new state with exit 4 ("the claim of
+    <item>/<step> is refused on the new state: ..."), with a reason
+    naming the hold. A matching case with a spent runaway budget is also
+    refused. A `human` worker in the same situation is claimed again.
   - `queue/hosts_test.go`: two machines serving one name validate; a
     step, gap or lead no machine serves fails; `Gate` is idle while
     `priority_confirmed` is false, with the reason; both machines' gates
-    see the same ready step.
+    see the same ready step; a step pending with `host:h/m.<old>` holding
+    a live lease is not offered by `Gate` (`Run` false, with no gaps),
+    and after `wf release -machine m -stale -current m.<new>` `Gate`
+    offers it (`Run` true, with a `step` reason).
   - `queue/queue_test.go`: `Claim` gives a host worker
     `host_lease_minutes` (1200 unset) and a cloud worker `lease_minutes`;
     `lead` on a process or tracked item fails `Validate`.
-  - `cmd/wf`: `wf renew` (held by W, by another, expired, done), `wf
+  - `tools/workflow/cmd/wf`: `wf renew` (held by W, by another, expired, done), `wf
     release -session` and `-machine -stale` (the current run is spared),
     `wf lead` (human only; leased steps keep their affinity), `wf new
     -lead` (refused on a process item), each pushed through `wf commit`
     against a bare remote as `commit_test.go` does; a rejected renew is
-    asked again.
+    asked again through `-renewed`, leaves `budget.spent.steps` and
+    `runs` unchanged, writes a "renewed" history line and no "claimed"
+    line, keeps the host lease length, and is refused (exit 4) when the
+    step was released or taken by another worker in between; the stale
+    release before the gate end to end: after `wf release -machine M
+    -stale -current M.r2`, a step leased to `host:h/M.r1` is offered by
+    `Gate` for M, and a step leased to `host:h/M.attended-<UTC>` is
+    not released.
   - `queue/summary_test.go`: the Lead column and the Workers section,
     with no clock read.
   - `native/native_test.go`: the denies (`git push*`, `git -C * push*`)
     and no `git push` allow; `native-push.sh`'s refusals and a push to a
-    bare remote, and a non-fast-forward refused; `shellcheck` on the
-    wrapper and the script as today.
+    bare remote, and a non-fast-forward refused; the deny's false
+    positive on a `-m` message containing ` push`; `shellcheck` on the
+    wrapper (covering the `session_started` guard) and the script as
+    today; the wrapper's cleanup cases (a dirty `.scratch/` worktree, a
+    squash-merged branch `git branch -d` refuses) if the cleanup is
+    factored into a testable function.
   - The live queue state, read by the branch's `wf validate`, `wf next`
     for `cloud`, each host, and `wf status -md`, before and after: no
     item has a lead, so the only differences are the Workers section,
@@ -1182,7 +1385,14 @@ of (Decision 12, a19).
   native-gap backlog at Close, as the two `tier2_gaps` above: the
   MacBook's launchd run and the Windows desktop's Git Bash run, each
   checking the `-stale` release, the worktree cleanup, and one
-  `native-push.sh` push of a scratch branch to a throwaway remote.
+  `native-push.sh` push of a scratch branch to a throwaway remote. On
+  each machine, also: a run that is killed while it holds a step leaves
+  that step leased, and the next scheduled run's `-stale` release frees
+  it before the gate, so the gate offers it (not idle) and the new
+  session claims it. And the cleanup (the third `tier2_gaps` entry): a
+  dirty `.scratch/` worktree and a squash-merged branch that `git branch
+  -d` refuses, each shown in `native/status/<machine>.yaml` after an
+  idle run and after a worked run.
 - **The first led item** is Jeff's to choose at `x4-state`; K3 is the
   natural one once it is filed. Until then the lead is exercised by the
   tests alone.
@@ -1192,34 +1402,52 @@ of (Decision 12, a19).
 Each task cites the rules it must satisfy. All on `feat/loop-native-lead`.
 
 1. **Rules.** The seven amendments in `docs/development/process.md`, word
-   for word as approved (FLOW-04, -05, -09, -13, -16, -17, -18; FLOW-14).
-2. **The lead.** `Feature.Lead`, its validation, `Seed`, `Starts`, `wf new
+   for word as approved (FLOW-04, -05, -09, -13, -16, -17, -18; FLOW-14),
+   and PROFILE-01's Native hosts row in `docs/development/loop-profile.md`.
+2. **The lead.** `Feature.Lead`, its validation, `Seed`, `Starts` and
+   `takesStart`'s comment (`queue/limits.go:131-136`), which says only the
+   cloud's claim sets a feature in progress, `wf new
    -lead`, `wf lead`, with tests (FLOW-04, FLOW-09, LOOP-04).
 3. **Host names.** `validateNative` without the one-machine error; the
    lead check (FLOW-04, LOOP-05).
-4. **The lease.** `host_lease_minutes`, `Claim`, `wf renew`, `wf release
-   -session | -machine -stale`, with tests (FLOW-04, FLOW-13).
-5. **The guards.** `unattendedHold`; `Gate` and `priority_confirmed`
-   (FLOW-07, FLOW-13).
+4. **The lease.** `host_lease_minutes`, `Claim`, `wf renew`, `wf commit
+   -renewed` (the `renewRef` path beside `claimRef`, calling `Renew`
+   through `renewAgain` rather than `claimAgain`/`Claim`), `wf release
+   -session | -machine -stale` (skipping `attended-` sessions), with tests
+   (FLOW-04, FLOW-13).
+5. **The guards.** `unattendedHold` in `wait` and in `claimAgain`, with
+   tests; `Gate` and `priority_confirmed` (FLOW-07, FLOW-13).
 6. **`QUEUE.md`.** The Lead column, the Workers section, `wf status`'s
    `lead:` line (FLOW-13, LOOP-06).
 7. **The push script and the settings.** `native-push.sh`;
    `settings.native.json`'s allows and denies; `native_test.go`
    (FLOW-16, FLOW-17).
 8. **The wrapper.** `native-tick.sh`: the session id with the machine,
-   the `-stale` release before the session and the `-session` release
-   after, the worktree cleanup, `entire status` and the prompt line;
+   the `-stale` release after `build wf` and before the gate (stage
+   `release`), and the `-session` release in the EXIT path (`on_exit`)
+   before `record_status`, once the session has started; the worktree
+   cleanup and its `leftover` notes, `entire status` and the prompt line;
    the installers' `check` line (FLOW-09, FLOW-16, FLOW-18, LOOP-05).
-9. **Skills and agents.** `workflow-native` (worker id, worktrees, the
-   push script, `wf renew`, the Never list, sessions not recorded);
+9. **Skills and agents.** `workflow-native` (worker id, the attended
+   worker and its Close release, worktrees, the push script, `wf renew`
+   and `wf commit -renewed`, the Never list, the `commit -F` rule,
+   sessions not recorded, and its Git on the workflow checkout paragraph
+   (`SKILL.md:42-45`) without `push origin workflow`, leaving `git -C
+   .dev/workflow <add|commit|...>` and saying the workflow branch is
+   pushed only by `dist/wf commit` and a feature branch only by
+   `tools/workflow/native/native-push.sh <name>`, since `Bash(git -C *
+   push*)` denies every other push (a16));
    `workflow-tick` (the trunk check; **Waiting on a host** lists leads);
    `workflow-intake` (`-lead` in place of the hand edit); `workflow-human`
    (`wf lead`); one sentence in each of the six phase agents (FLOW-14,
    LOOP-06).
 10. **Archive.** This design archived on the branch with its summary;
     PR opened with CI green (FLOW-03 process phase 2, FLOW-12).
-11. **After the merge** (`x4-state`, attended, on Jeff's word): the
-    workflow branch's `README.md` (`lead`, `wf lead`, `wf renew`,
+11. **After the merge** (`x4-state` (phase 4, `human`, added with its
+    note when the draft's questions are recorded; `x4-close` needs it;
+    a11), attended, on Jeff's word): the
+    workflow branch's `README.md` (`lead`, `wf lead`, `wf renew`, `wf
+    commit -renewed`,
     `host_lease_minutes`, the lease table); `hosts.yaml`'s header and
     any second machine or `<os>-any` name Jeff names (a11); the two
     native gaps in `backlog/native-gaps.yaml`; once both machines have
