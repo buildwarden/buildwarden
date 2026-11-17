@@ -52,8 +52,10 @@ related: [project-config-trust.md, hyperv-relay-per-build-channel.md, runtime-cl
 Two security findings, filed on Jeff's word in `project-config-trust`'s
 design review (its a11 (a); that design's **What this item does not do**).
 Neither is a regression on `main`, and FLOW-20 exempts a security fix from
-the freeze, so this item is not held and is not a program item (it does
-not list `componentization.md` in `related`).
+the freeze, so the freeze does not hold this item and it is not a program
+item (it does not list `componentization.md` in `related`). It waits for
+driver-contract (K1) instead, on Jeff's answer to a1 (**Order with
+driver-contract**).
 
 **1. A work directory inside the build context is served to the build.**
 Every build makes a private work directory, `warden-<driver>-XXXXXXXX`,
@@ -269,7 +271,9 @@ None.
 
 ### Assumed
 
-- **a1. The order with driver-contract (K1).** Proceeding with (a); confirm.
+- **a1. The order with driver-contract (K1).** Answered (b) in the design
+  review (Jeff, 2026-11-17): this item waits for K1; **Order with
+  driver-contract** says how.
   K1 (in Design r3 on `feat/driver-contract`, waiting on its blocking q2)
   rewrites the build sequence: warden stages the script in
   `<tmpdir>/warden-stage-<id>/`, `start` carries `context_dir`, `tmpdir`
@@ -401,11 +405,21 @@ unchanged; no pin moves.
 
 ### Order with driver-contract
 
-As a1. This item merges first unless Jeff answers otherwise; K1's refresh
-(FLOW-10) carries the check into its `newRequest`, its kit's `NewWorkDir`
-and its `baseImage`, and says in its specification that `base_image` has
-passed the translator's check. The area map has the areas this item needs;
-no change to it is asked (FLOW-05).
+As a1 (b), Jeff's answer in the design review: **K1 merges first, and this
+item is built on K1's structure.** This item's Plan starts only after
+driver-contract's PR has merged to `main`. When it has, the item returns
+to Design once (FLOW-06) for the delta K1's structure brings, and that
+delta is reviewed (FLOW-19). The delta is where each check lands:
+`newRequest`'s refusal stays where warden resolves `tmpdir` and the
+context, before it sends either in `start`, and covers K1's stage
+directory under `tmpdir`; `NewWorkDir`'s backstop goes where K1 puts
+`NewWorkDir`, in the kit, on the `context_dir` and `tmpdir` that `start`
+carries; the `FROM` check stays in `driver/script`, which K1's `baseImage`
+(`cmd/warden/stage.go`) calls, and K1's driver contract specification
+says `base_image` has passed it. The Decisions, the messages and the
+Validation plan are unchanged by the order; the Implementation plan below
+was drafted on `main`'s structure and is redone by Plan on K1's. The area
+map has the areas this item needs; no change to it is asked (FLOW-05).
 
 ### What this item does not do
 
