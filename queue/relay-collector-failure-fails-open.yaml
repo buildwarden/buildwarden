@@ -3,13 +3,24 @@ title: 'Relay: a collector failure on build-script, bootstrap or cwd is served a
 priority: 78
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/relay-collector-failure-fails-open.md
 branch: feat/relay-collector-failure-fails-open
+repos:
+  - buildwarden/buildwarden
+  - buildwarden/buildwarden-specs
 areas:
   - relay
   - executor
-alters_relationships: null
+  - specs
+  - book
+  - designs
+seams:
+  - relay-guest-api
+  - bootstrap-config
+declared: 9cdd32b
+alters_relationships: false
+design_review: required
 source: 'seam-specs r2, divergence N24 (docs/design/seam-specs.md, table ''Found during Implement: N1 to N33 (r2)'', branch feat/seam-specs at c6078b7; relay-guest-api GUEST-25, GUEST-34 and the paragraph after GUEST-26; bootstrap-config BOOTCFG-3, BOOTCFG-10). relay/relay.go:719-738 (comment :728-731) and :751-752 serve any collector failure (error or non-200) on build-script, bootstrap and cwd to the build as 404; the executor reads a bootstrap 404 as the empty config, so a bootstrap config the collector failed to serve reads as ''no config'' and a producer''s trust mode exclusive becomes append (GLOBAL-10: the default tried when the provided value fails). Run in seam-specs stage 8e against relay-host, relay-vm and relay-container (a collector''s 500 gives the build 404). Jeff, 2026-11-16, seam-specs r2 design review: filed now as a security fix, exempt from the FLOW-20 freeze; not marked urgent (wf urgent is Jeff''s).'
 steps:
   - id: f0-branch-setup
@@ -22,10 +33,26 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261117T105743Z
-      expires: 2026-11-17T15:41:56.715079395Z
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -33,7 +60,68 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: The status the relay answers when the collector fails to serve build-script, bootstrap or a cwd path (a non-200, non-404 reply, a failed request, or a 200 body cut short). Design, Decision 1 and Questions a1.
+    options:
+      - (a) 502 for all three, with a fixed body naming the input and the reason; nothing recorded
+      - (b) 500, as GUEST-29's storage error
+      - (c) 503
+      - (d) the collector's own status passed through, 502 for unreachable
+    recommended: '(a): the relay is the gateway to the collector for these inputs, as it is to the upstream in GUEST-46; 503 invites a retry this item does not add'
+  - id: a2
+    kind: assumed
+    status: open
+    question: What counts as not there on cwd. Today any non-200 from the collector is 404, as GUEST-34 states. Design, Decision 2 and Questions a2.
+    options:
+      - (a) only the collector's 404 is 404; any other non-200, its 403 included, is 502
+      - (b) the collector's 403 passed through as 403, every other failure 502
+      - (c) cwd left as is; only build-script and bootstrap fixed
+    recommended: '(a): one meaning per status; the relay refuses an unsafe path itself (GUEST-33), so a collector 403 is a disagreement, not an absence; (c) leaves a build script''s own cwd reads failing open'
+  - id: a3
+    kind: assumed
+    status: open
+    question: 'alters_relationships: false. FLOW-02 lists a versioned seam among what alters relationships; here the seam''s requirements change but no role or interaction does (one reply for one failure). relay-leaf-crl changed the same seam under false. Design, Questions a3.'
+    options:
+      - (a) false
+      - (b) true, conservatively, taking an alters_relationships slot at Plan's claim (limit 3)
+    recommended: (a)
+  - id: a4
+    kind: assumed
+    status: open
+    question: The release numbers of the two changed specifications in buildwarden-specs. Design, Decision 7 and Questions a4.
+    options:
+      - (a) relay-guest-api/v0.2.0 and bootstrap-config/v0.2.0
+      - (b) v0.1.1 for both, as a defect fix
+      - (c) fold into the next release another item makes
+    recommended: '(a): a requirement a v0.1.0 relay meets (BOOTCFG-3) is now failed, an incompatible change; (c) holds a security fix for an unscheduled release. No other specification or the harness is released'
+  - id: a5
+    kind: assumed
+    status: open
+    question: 'No executor code change: tests only under cmd/warden-io, since BOOTCFG-11 already stops the executor on a 502 and initialize.go and main.go are in the executor-initialize seam''s code list. Design, Decision 5 and Questions a5.'
+    options:
+      - (a) tests only; the executor-initialize pin does not move
+      - (b) also print the relay's reply body in the executor's error, which needs an executor-initialize release with no spec change, or a Tier1-Allow trailer
+    recommended: (a)
+  - id: a6
+    kind: assumed
+    status: open
+    question: 'The order with driver-contract (K1: undeclared areas, so it collides with this item; its r3 amends TEST-05 and PROFILE-01 to one pin module tools/conformance/go.mod) and workdir-in-context (near: driver-core reaches relay and executor). Design, Questions a6.'
+    options:
+      - (a) no order beyond FLOW-05's; whichever of this item and K1 merges second reconciles the pin in its refresh
+      - (b) wait for K1
+      - (c) ask Jeff to name a collides_with with workdir-in-context
+    recommended: '(a): small, ahead of K1 (78 against 72), a security fix; the PR slot keeps related PRs apart, and near is already covered'
+  - id: a7
+    kind: assumed
+    status: open
+    question: tools/tier1/rules.yaml's relay-guest-api code list lacks relay/relay.go, which holds every artifacts and cwd handler, so the seam-contract check does not see this change. Design, Questions a7.
+    options:
+      - (a) leave the list; Jeff files adding relay/relay.go as its own item if wanted
+      - (b) a GLOBAL-08 rule_changes entry here on tools/tier1/rules.yaml, adding the tier1-config area
+    recommended: '(a): it is an enforcement change, and would make every later relay.go edit move a pin; this item moves the pin anyway'
 history:
   - at: 2026-11-16T17:02:18Z
     by: cloud/20261112T230554Z
@@ -53,3 +141,12 @@ history:
   - at: 2026-11-17T13:41:56Z
     by: cloud/20261117T105743Z
     event: claimed f1-design until 2026-11-17T15:41:56Z
+  - at: 2026-11-17T13:50:25Z
+    by: cloud/20261117T105743Z
+    event: 'declared at 9cdd32b: repos +buildwarden/buildwarden-specs; areas +specs +book +designs; seams +relay-guest-api +bootstrap-config; alters_relationships unset -> false; design_review unset -> required'
+  - at: 2026-11-17T13:51:43Z
+    by: cloud/20261117T105743Z
+    event: done f1-design
+  - at: 2026-11-17T13:51:43Z
+    by: cloud/20261117T105743Z
+    event: entered phase 2 (plan)
