@@ -115,7 +115,7 @@ func TestExtractSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got, want := ids(s), []string{"flag runtime", "flag slots", "key cli",
-		"key relay_image"}; !reflect.DeepEqual(got, want) {
+		"key image_refresh_after", "key relay_image"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("names %v, want %v", got, want)
 	}
 	if n := s.Names["flag slots"]; n.Line != 18 {
@@ -156,6 +156,14 @@ const (
 		"var settings = []drivercmd.Setting{\n\t{Name: \"relay-image\", " +
 		"Key: \"driver.container.relay_image\"},\n\t{Name: \"x\", Flag: \"extra\"},\n}\n"
 	drvEmpty = "package container\n"
+	// The relay image's key moved to a new name, with and without its old
+	// name kept as an alias.
+	drvMovedAlias = "package container\n\nimport \"github.com/buildwarden/buildwarden/driver/drivercmd\"\n\n" +
+		"var settings = []drivercmd.Setting{\n\t{Name: \"relay-image\", " +
+		"Key: \"driver.container.image\", Aliases: []string{\"runtime.relay_image\"}},\n}\n"
+	drvMovedBare = "package container\n\nimport \"github.com/buildwarden/buildwarden/driver/drivercmd\"\n\n" +
+		"var settings = []drivercmd.Setting{\n\t{Name: \"relay-image\", " +
+		"Key: \"driver.container.image\"},\n}\n"
 )
 
 // The drivers' Setting literals are part of the surface at both revisions:
@@ -176,6 +184,9 @@ func TestCheckDrivers(t *testing.T) {
 		{"key removed from a driver", cmdBare, drvBase, cmdBare, drvEmpty, true,
 			[]string{`UX-03 key "relay_image" was removed`}},
 		{"a deeper directory is not read", cmdBare, drvBase, cmdBare, drvBase, false, nil},
+		{"key moved, old name kept", cmdBare, drvBase, cmdBare, drvMovedAlias, true, nil},
+		{"key moved, old name dropped", cmdBare, drvBase, cmdBare, drvMovedBare, true,
+			[]string{`UX-03 key "relay_image" was removed`}},
 	}
 	for _, tc := range cases {
 		files := map[string]string{"cmd/warden/main.go": tc.baseCmd,

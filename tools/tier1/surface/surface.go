@@ -5,7 +5,9 @@
 // The bundled drivers declare their flags and keys as drivercmd.Setting
 // literals in their own packages, so the surface also holds what those
 // declare: a Setting's Flag is a flag, and its Key is a key by the last
-// element of its path, which is the identity a toml tag gives.
+// element of its path, which is the identity a toml tag gives. Each of its
+// Aliases, a key's old names, is a key the same way, so a key moved with its
+// old name kept is not removed.
 package surface
 
 import (
@@ -122,6 +124,10 @@ func (s *Surface) setting(fset *token.FileSet, path string, cl *ast.CompositeLit
 		if !ok {
 			continue
 		}
+		if field.Name == "Aliases" {
+			s.aliases(path, line, kv.Value)
+			continue
+		}
 		v, ok := stringLit(kv.Value)
 		if !ok || v == "" {
 			continue
@@ -130,6 +136,20 @@ func (s *Surface) setting(fset *token.FileSet, path string, cl *ast.CompositeLit
 		case "Flag":
 			s.add("flag", v, path, line)
 		case "Key":
+			s.add("key", lastElement(v), path, line)
+		}
+	}
+}
+
+// aliases adds each string of a Setting's Aliases as a key, by the last
+// element of its path.
+func (s *Surface) aliases(path string, line int, e ast.Expr) {
+	cl, ok := e.(*ast.CompositeLit)
+	if !ok {
+		return
+	}
+	for _, el := range cl.Elts {
+		if v, ok := stringLit(el); ok && v != "" {
 			s.add("key", lastElement(v), path, line)
 		}
 	}
