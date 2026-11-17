@@ -1,0 +1,29 @@
+cd /Users/jeff/src/buildwarden-native/.scratch/pct-qemu/../main && ./dist/warden build --driver qemu --image /Users/jeff/Library/Caches/warden/images/alpine_3_21.qcow2 --output /Users/jeff/src/buildwarden-native/.scratch/pct-qemu/out-tree /Users/jeff/src/buildwarden-native/.scratch/pct-qemu/build.sh; echo "exit=$?"
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+[warden] preparing build environment...
+[warden] starting relay...
+[warden] starting build...
+[warden] running...
+nameserver 100.127.255.253
+fetched 488083 bytes
+warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/pct-qemu/out-tree)
+exit=0
+cd /Users/jeff/src/buildwarden-native/.scratch/pct-qemu/../main && ./dist/warden inspect --verify-disks /Users/jeff/src/buildwarden-native/.scratch/pct-qemu/out-tree; echo "exit=$?"
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+    qemu linux/arm64
+    disk     alpine_3_21.qcow2  197.5 MB  sha256:ebaef97d702d  local  [ok]
+    seed     5 per-build files
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT  (895 bytes)[0m
+[1;32m✅ GET /bootstrap (42 bytes)[0m
+[1;32m✅ GET /build-script (191 bytes)[0m
+✅ GET http://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64/APKINDEX.tar.gz (488083 bytes)
+
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY: 10 records, 4 requests, 478.5 KB audited
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
+════════════════════════════════════════════════════════════════════════════════
+exit=0

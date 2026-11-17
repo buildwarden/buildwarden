@@ -1,0 +1,45 @@
+cd case && /Users/jeff/src/buildwarden-native/.scratch/rcp-finch/../main/dist/warden doctor --driver container; echo "exit=$?"
+config: /Users/jeff/src/buildwarden-native/.scratch/rcp-finch/case/warden.toml (found in the working directory)
+container runtime: finch
+ok
+exit=0
+cd case && /Users/jeff/src/buildwarden-native/.scratch/rcp-finch/../main/dist/warden build --driver container --output /Users/jeff/src/buildwarden-native/.scratch/rcp-finch/out-build .; echo "exit=$?"
+[warden] config: /Users/jeff/src/buildwarden-native/.scratch/rcp-finch/case/warden.toml (found in the working directory)
+[warden] Build ID: skynd9ly
+[warden] Building relay from source...
+[warden] Pulling image: alpine:3.21
+[warden] Allocating network...
+[warden] Starting relay...
+[warden] Starting build container...
+time="2026-11-17T04:44:15-08:00" level=warning msg="failed to remove hosts file for container \"1d4229c8b2fc58aace5df60720f2ea6ca0f12fdf4f5658af46b73a940b1b9554\"" error="hosts-store error\nnot found\nstat /var/lib/nerdctl/1935db59/etchosts/finch/1d4229c8b2fc58aace5df60720f2ea6ca0f12fdf4f5658af46b73a940b1b9554: no such file or directory"
+fetch https://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64/APKINDEX.tar.gz
+[warden] Executing build...
+fetch https://dl-cdn.alpinelinux.org/alpine/v3.21/community/aarch64/APKINDEX.tar.gz
+(1/2) Installing oniguruma (6.9.9-r0)
+(2/2) Installing jq (1.8.2-r0)
+Executing busybox-1.37.0-r14.trigger
+OK: 8 MiB in 17 packages
+jq-1.8.2
+[warden] Tearing down environment...
+warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/rcp-finch/out-build)
+exit=0
+cd case && /Users/jeff/src/buildwarden-native/.scratch/rcp-finch/../main/dist/warden inspect /Users/jeff/src/buildwarden-native/.scratch/rcp-finch/out-build; echo "exit=$?"
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  oci-image/v1  payload verified
+    alpine:3.21 sha256:bc21487101ae47172509130ee1092cc273a831968d64b617776d1f69c81e42ab (not the payload's own hash: the runtime re-serialized the manifest, or the digest names an index)
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT alpine:3.21 (902 bytes)[0m
+[1;32m✅ GET /bootstrap (42 bytes)[0m
+[1;32m✅ GET /build-script (55 bytes)[0m
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64/APKINDEX.tar.gz (488083 bytes)
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.21/community/aarch64/APKINDEX.tar.gz (1974366 bytes)
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64/oniguruma-6.9.9-r0.apk (184236 bytes)
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64/jq-1.8.2-r0.apk (151812 bytes)
+
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY: 22 records, 7 requests, 2.7 MB audited
+  SIGNATURES: ✅ All 23 signatures valid
+  COMPLETENESS: ✅ All channels closed
+════════════════════════════════════════════════════════════════════════════════
+exit=0

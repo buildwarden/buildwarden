@@ -1,0 +1,11 @@
+rm -rf /var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/pct-qemu-copy && mkdir -p /var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/pct-qemu-copy && cp /Users/jeff/src/buildwarden-native/.scratch/pct-qemu/../main/dist/warden /var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/pct-qemu-copy/warden
+cd /Users/jeff/src/buildwarden-native/.scratch/pct-qemu/../main && /var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/pct-qemu-copy/warden build --driver qemu --image /Users/jeff/Library/Caches/warden/images/alpine_3_21.qcow2 --output /Users/jeff/src/buildwarden-native/.scratch/pct-qemu/out-copy /Users/jeff/src/buildwarden-native/.scratch/pct-qemu/build.sh; echo "exit=$?"
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+[warden] preparing build environment...
+warden: build FAILED
+[warden] ERROR: generating cloud-init: warden-io-linux-arm64 not found next to warden, and no source tree to build it from: /var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/pct-qemu-copy/warden (version dev) is not inside a buildwarden source tree
+  To fix: run 'make build' in warden's source tree and use its dist/warden
+exit=1
+ls -d /Users/jeff/src/buildwarden-native/.scratch/pct-qemu/out-copy 2>&1 || true
+/Users/jeff/src/buildwarden-native/.scratch/pct-qemu/out-copy
+rm -rf /var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/pct-qemu-copy

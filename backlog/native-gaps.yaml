@@ -69,6 +69,10 @@ gaps:
       until the timeout, where on 2026-10-31 it powered off within ~2 min, so the guest no longer gives up
       at once. The session cannot see the guest's screen or C:\warden\warden-run.log. The install stage
       was not run (no ISO reachable). Logs: native/macos-qemu/2026-11-13/.
+      2026-11-17 (host:macos-qemu/20261117T124004Z, unattended, main 0cd3c02): not run. Since b903f65 main
+      changed driver/qemu only in a test file (main_test.go, #124) and driver/winguest, tools/relay-vm and
+      tools/build-vm not at all, so a rerun would time out the same way. Still waits on the qemu Windows
+      build-guest fix.
     status: open
   - id: qemu-linux-exclusive-trust
     host: macos-qemu
@@ -227,6 +231,11 @@ gaps:
       SUCCEEDED; `inspect --verify-disks`: ENVIRONMENT vm-disk-chain/v1 payload verified, qemu linux/arm64,
       disk alpine_3_21.qcow2 sha256:ebaef97d702d `local` [ok], 5 seed files, 11 signatures valid, all
       channels closed. Windows half: see qemu-windows-guest-package. Logs: native/qemu-any/2026-11-13/.
+      2026-11-17 (host:qemu-any/20261117T124004Z, unattended, main 0cd3c02, which adds #124's config and
+      source-tree lookup in cmd/warden and driver/; QEMU 11.1.1, relay initramfs rebuilt from main): Linux
+      half re-passed (the project-config-trust-qemu build: SUCCEEDED; vm-disk-chain/v1 payload verified, qemu
+      linux/arm64, disk sha256:ebaef97d702d `local` [ok], 5 seed files, 11 signatures valid, all channels
+      closed). Windows half: see qemu-windows-guest-package. Logs: native/qemu-any/2026-11-17/tree.log.
     status: open
   - id: hyperv-eval-image-verify-disks
     host: windows-hyperv
@@ -472,6 +481,7 @@ gaps:
       Windows builds still fail on main (no code change since 49e5354).
       2026-11-13 (host:macos-qemu/20261113T125117Z, unattended, main b903f65): not run. A qemu Windows
       build on main (default link) still times out with no relay traffic (qemu-windows-guest-package).
+      2026-11-17 (host:macos-qemu/20261117T124004Z, unattended, main 0cd3c02): not run, for the same reason.
     status: open
   - id: hyperv-relay-per-build-channel-qemu-windows
     host: macos-qemu
@@ -489,6 +499,8 @@ gaps:
       hyperv-relay-per-build-channel has merged (#115), so this now runs on main. The qemu Windows
       build run on main for qemu-windows-guest-package timed out without reaching the relay. The
       session could not read warden-run.log, so neither the no---ip initialize nor the lease was seen.
+      2026-11-17 (host:macos-qemu/20261117T124004Z, unattended, main 0cd3c02): not run. qemu Windows builds
+      still fail on main (qemu-windows-guest-package).
     status: open
   - id: security-suite-tier2-macos-vz
     host: macos-vz
@@ -580,6 +592,7 @@ gaps:
       is design-only (f68a8b1), and qemu Windows builds still fail on main.
       2026-11-13 (host:macos-qemu/20261113T125117Z, unattended, main b903f65): not run. The branch has
       not merged, and qemu Windows builds still time out on main (qemu-windows-guest-package).
+      2026-11-17 (host:macos-qemu/20261117T124004Z, unattended, main 0cd3c02): not run, for the same reason.
     status: open
   - id: build-vm-busybox-qemu-direct-boot
     host: qemu-any
@@ -668,6 +681,8 @@ gaps:
       start message. Needs a prepared Windows image and an attended run; see
       qemu-windows-guest-package for the state of Windows builds on this host. Run once
       driver-contract has merged.
+      2026-11-17 (host:macos-qemu/20261117T124004Z, unattended, main 0cd3c02): not run. driver-contract has
+      not merged (in Implement, f3-implement claimed), and qemu Windows builds still fail on main.
   - id: runtime-cli-project-path-windows
     host: container-any
     status: done
@@ -722,7 +737,19 @@ gaps:
       flag for it). Logs, the Makefile and the case files: native/container-any/2026-11-15/.
   - id: runtime-cli-project-path-finch
     host: macos-finch
-    status: open
+    status: done
+    done: 2026-11-17
+    evidence: >-
+      host:macos-finch/20261117T124004Z, unattended, macbook, finch v1.19.0 (/usr/local/bin/finch), main
+      0cd3c02 (runtime-cli-project-path merged as #120), `make build sign` in a .scratch/main worktree. A
+      case directory whose warden.toml holds `[runtime] cli = "finch"`: `warden doctor --driver container`
+      prints "config: <case>/warden.toml (found in the working directory)", "container runtime: finch", ok;
+      `warden build --driver container` of a FROM alpine:3.21 Dockerfile (apk add jq) SUCCEEDED, jq-1.8.2;
+      inspect: oci-image/v1 payload verified, 23 signatures valid, all channels closed. `--runtime
+      /usr/local/bin/finch` on `warden build --driver container` and on `warden clean --driver vz`: each exit
+      1, "--runtime is "/usr/local/bin/finch"; the container runtime is named, not given as a path", "To fix:
+      pass --runtime finch; warden looks finch up on PATH, ...", and the build left no output directory.
+      Logs, the scratch Makefile and the case files: native/macos-finch/2026-11-17/runtime-cli-project-path/.
     what: >-
       A build with cli = "finch" in the project's warden.toml; --runtime with the full path of finch is
       refused on warden build and on warden clean --driver vz, with the fix that names finch.
@@ -862,7 +889,23 @@ gaps:
       that item's to restate.
   - id: project-config-trust-qemu
     host: qemu-any
-    status: open
+    status: done
+    done: 2026-11-17
+    evidence: >-
+      host:qemu-any/20261117T124004Z, unattended, macbook, main 0cd3c02 (project-config-trust merged as
+      #124), QEMU 11.1.1, `make build sign` and `make relay-vm` in a .scratch/main worktree, no warden.toml
+      in the working directory. The development warden run from its tree, `.scratch/main/dist/warden build
+      --driver qemu --image ~/Library/Caches/warden/images/alpine_3_21.qcow2` with the working directory
+      the tree (HTTP fetch of the main APKINDEX, 488083 bytes): "config: none ... defaults apply", SUCCEEDED,
+      the relay VM assets found in the tree; `inspect --verify-disks`: ENVIRONMENT vm-disk-chain/v1 payload
+      verified, qemu linux/arm64, disk alpine_3_21.qcow2 sha256:ebaef97d702d `local` [ok], 5 seed files, 11
+      signatures valid, all channels closed. A copy of that warden in $TMPDIR (outside any source tree), run
+      with the working directory inside the tree, same command: build FAILED, exit 1, "warden-io-linux-arm64
+      not found next to warden, and no source tree to build it from: <copy> (version dev) is not inside a
+      buildwarden source tree", "To fix: run 'make build' in warden's source tree and use its dist/warden";
+      no VM started, the output directory left empty. (The first asset it misses is the guest executor, so
+      the refusal comes before the relay VM lookup; the message is the same ModuleRoot error.) Logs and the
+      scratch Makefile: native/qemu-any/2026-11-17/.
     what: >-
       A development warden run from its tree builds with --driver qemu, the relay VM assets found in
       the tree; a copy of that warden outside the tree, run inside the tree, reports the missing

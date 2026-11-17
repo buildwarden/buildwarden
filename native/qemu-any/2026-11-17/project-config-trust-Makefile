@@ -1,0 +1,17 @@
+# project-config-trust-qemu (qemu-any), host:qemu-any/20261117T124004Z, main 0cd3c02.
+# Run from the checkout root as: make -C .scratch/pct-qemu <target>
+IMG = $(HOME)/Library/Caches/warden/images/alpine_3_21.qcow2
+MAIN = $(CURDIR)/../main
+COPYDIR = $(TMPDIR)pct-qemu-copy
+
+# A: the development warden run from its tree builds with --driver qemu.
+tree:
+	cd $(MAIN) && ./dist/warden build --driver qemu --image $(IMG) --output $(CURDIR)/out-tree $(CURDIR)/build.sh; echo "exit=$$?"
+	cd $(MAIN) && ./dist/warden inspect --verify-disks $(CURDIR)/out-tree; echo "exit=$$?"
+
+# B: a copy of that warden outside any source tree, run inside the tree.
+copy:
+	rm -rf $(COPYDIR) && mkdir -p $(COPYDIR) && cp $(MAIN)/dist/warden $(COPYDIR)/warden
+	cd $(MAIN) && $(COPYDIR)/warden build --driver qemu --image $(IMG) --output $(CURDIR)/out-copy $(CURDIR)/build.sh; echo "exit=$$?"
+	ls -d $(CURDIR)/out-copy 2>&1 || true
+	rm -rf $(COPYDIR)

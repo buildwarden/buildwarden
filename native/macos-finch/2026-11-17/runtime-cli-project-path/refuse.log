@@ -1,0 +1,12 @@
+/Users/jeff/src/buildwarden-native/.scratch/rcp-finch/../main/dist/warden build --driver container --runtime /usr/local/bin/finch --output /Users/jeff/src/buildwarden-native/.scratch/rcp-finch/out-refuse case; echo "exit=$?"
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+[warden] ERROR: --runtime is "/usr/local/bin/finch"; the container runtime is named, not given as a path
+  To fix: pass --runtime finch; warden looks finch up on PATH, so if it is installed outside PATH, add its directory to PATH
+exit=1
+ls -d /Users/jeff/src/buildwarden-native/.scratch/rcp-finch/out-refuse 2>&1 || true
+ls: /Users/jeff/src/buildwarden-native/.scratch/rcp-finch/out-refuse: No such file or directory
+/Users/jeff/src/buildwarden-native/.scratch/rcp-finch/../main/dist/warden clean --driver vz --runtime /usr/local/bin/finch; echo "exit=$?"
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+[warden] ERROR: --runtime is "/usr/local/bin/finch"; the container runtime is named, not given as a path
+  To fix: pass --runtime finch; warden looks finch up on PATH, so if it is installed outside PATH, add its directory to PATH
+exit=1
