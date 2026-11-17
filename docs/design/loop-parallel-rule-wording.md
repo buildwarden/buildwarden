@@ -428,14 +428,19 @@ Jeff accepted it on 2026-11-16.
   Alternative: fold the four deletions in here, since this item's areas
   already include `loop`. Recommendation: leave out; fold in only if
   Jeff prefers one PR.
+  **Changed on Jeff's word, 2026-11-17, after the review: fold in.** The
+  four clauses are deleted here (Implementation plan, task 9), and
+  `skill-areas-yaml-lines`, filed for them, is closed as merged into this
+  item.
 
 ## Design
 
 ### What changes
 
 Four rule changes in `docs/development/process.md`, one comment in
-`docs/design/TEMPLATE.md`, and two printed strings in `wf`
-(queue/relation.go, check/declared.go) with their tests.
+`docs/design/TEMPLATE.md`, two printed strings in `wf`
+(queue/relation.go, check/declared.go) with their tests, and the four
+stale clauses of a12 deleted from the skills and an agent.
 The exact wording is under **Rule changes**. In summary:
 
 | Finding | Where | Before | After |
@@ -529,7 +534,8 @@ text ("`git branch -D`, only once `dist/wf check` has passed on it",
 - No neutral rewording (a10), no edit to an archived design
   (`loop-parallel.md`'s relation table keeps the reason text it was
   approved with), no change to the area map.
-- Not the four stale skill and agent lines of a12, unless Jeff folds them in.
+- The four stale skill and agent lines of a12 are deleted here, Jeff's
+  fold-in of 2026-11-17; nothing else in `.claude/` changes.
 
 ## Defaults and overrides
 
@@ -799,6 +805,7 @@ wording already does; making them neutral is deferred (a10).
   `grep -rn "declares no areas" tools/ docs/development/ .claude/`
   finds nothing; `grep -rn "patch-id" docs/development/` finds nothing;
   `grep -rn "one feature at a time" docs/development/` finds nothing;
+  `grep -rn "expected until \`loop-parallel\`" .claude/` finds nothing;
   each proposed paragraph appears in `process.md` byte for byte as
   approved (FLOW-14's agent part).
 - **Tier 1's `rule-index`** passes: no rule is added, retired or renamed.
@@ -831,9 +838,17 @@ must satisfy.
 7. `process.md`: FLOW-16's third paragraph, as approved (FLOW-16,
    FLOW-14).
 8. `TEMPLATE.md`: the `areas` comment's added line (FLOW-02, FLOW-14).
-9. `make test`, `make lint`, `make enforcement`; the text checks of the
+9. Delete the stale clause, that `wf areas -list` and `-check` "exit 1
+   while the queue state has no `areas.yaml`, which is expected until
+   `loop-parallel`'s `x4-state` writes it", and any sentence that only
+   explains it, from `.claude/agents/wf-review.md`,
+   `.claude/skills/workflow-intake/SKILL.md`,
+   `.claude/skills/workflow-tick/SKILL.md` and
+   `.claude/skills/workflow-human/SKILL.md` (a12, Jeff's fold-in;
+   LOOP-09: a process item's branch). Nothing else in those files changes.
+10. `make test`, `make lint`, `make enforcement`; the text checks of the
    Validation plan (TEST-01, FLOW-17); push.
-10. Archive this design on the branch with its summary, and open the PR
+11. Archive this design on the branch with its summary, and open the PR
     to `main`, with CI green (FLOW-03 process table, FLOW-12, FLOW-08).
 
 ## Design review
@@ -859,6 +874,12 @@ must satisfy.
   rather than that Jeff rejected it as unsafe; seven citations corrected;
   a9's quoted line matches the template block; Decision 5's question
   references; the Validation plan's two `grep` checks take `-r`.
+- **r1 addendum, 2026-11-17** (Jeff, workflow-human): a12 changed from
+  "file separately" to **fold in**, on the out-of-band streamlining
+  assessment's proposal to batch wording-only process items. Task 9 deletes
+  the four stale clauses; `skill-areas-yaml-lines` is closed as merged into
+  this item. No rule wording changes; the approval at `d0b4d46` stands for
+  the rule changes, and this addendum covers the added task.
 
 ## Consolidation
 
