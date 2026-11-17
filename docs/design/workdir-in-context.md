@@ -567,7 +567,15 @@ No already-implemented code of this item is reworked.
 
 ## Design review
 
-None yet.
+- **r1, 2026-11-17: approved at `26f6066`** (Jeff, workflow-human, FLOW-19),
+  read at `a2a80e5`. a1 answered **(b)**, against the recommendation: this
+  item waits for driver-contract's PR to merge and is built on K1's
+  structure, with one return to Design for that delta (folded in at
+  `26f6066`: **Problem**, a1, **Order with driver-contract**; queue hold
+  q1). a2 confirmed (a): `vm-from-host-path` is filed through intake as its
+  own security item. a3 confirmed (a). Decisions 1 to 5 as drafted. No
+  `rule_changes`. Areas as declared; the area-edges check showed no
+  difference from `main` at 0cd3c02.
 
 ## Consolidation
 
