@@ -12,7 +12,7 @@ import (
 
 // Asset resolution for a Hyper-V build. These are pure path/env lookups (no
 // Hyper-V calls), so they live outside the Windows build tag and are testable
-// on any platform. StartBuild composes them, then hands the resolved paths to
+// on any platform. Run composes them, then hands the resolved paths to
 // runBuild.
 
 // hypervCacheDir is where `warden setup --driver hyperv` and `warden image

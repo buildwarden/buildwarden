@@ -56,8 +56,7 @@ type linkedDriver struct {
 		start *driver.Start) error
 	// Run is the driver's run: it starts the relay, reports it through
 	// host, starts the environment once host has claimed it, and tears down
-	// when host.Wait returns. Nil while the driver still builds through
-	// driver.Driver's StartBuild.
+	// when host.Wait returns.
 	Run func(ctx context.Context, cfg *Config, req *driver.BuildRequest,
 		start *driver.Start, host driver.Host) (kept []string, err error)
 }

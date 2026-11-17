@@ -386,23 +386,6 @@ func TestUnusedRuntimeIsNotValidated(t *testing.T) {
 			}
 		})
 	}
-	for _, drv := range vmDrivers {
-		if linkedDrivers[drv].Run != nil {
-			continue // its Run reads no runtime; newDriver does not build it
-		}
-		t.Run("newDriver for "+drv, func(t *testing.T) {
-			inConfigFiles(t, cliFile(unused))
-			flagDriver = drv
-			cfg, err := resolveConfig()
-			if err != nil {
-				t.Fatalf("resolveConfig: %v", err)
-			}
-			d, err := newDriver(cfg)
-			if err != nil || d.Name() != drv {
-				t.Fatalf("newDriver = %v, %v; want the %s driver", d, err, drv)
-			}
-		})
-	}
 	// These two return before the runtime is resolved, after their driver's
 	// own clean. That clean removes what it takes for the leftovers of builds
 	// that are not running, so it is given nothing to find: the user cache
@@ -550,7 +533,7 @@ func addDockerfile(t *testing.T) {
 // The security fix. A build context ships a program and a warden.toml that
 // names it as the container runtime, by path or as an interpreter that runs
 // the file named like warden's first argument. Before the fix clean ran the
-// program, doctor accepted it, and newDriver handed it to the driver, which
+// program, doctor accepted it, and warden handed it to the driver, which
 // build and shell then ran; now each refuses it and nothing is run. The same
 // holds for a program the flag or the variable names.
 func TestUnsupportedRuntimeIsNeverRun(t *testing.T) {

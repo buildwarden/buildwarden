@@ -73,9 +73,6 @@ type build struct {
 	workDir string
 }
 
-// Name returns "container".
-func (d *Driver) Name() string { return "container" }
-
 // Run is the driver's run of one build (specs/driver-contract/v1.md, The
 // build): it starts the relay container with the claim token and reports it
 // through host, and once warden has claimed it isolates the build's network

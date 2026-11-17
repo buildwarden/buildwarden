@@ -254,15 +254,6 @@ func validateGuestOS(guestOS, driverName string) error {
 	return nil
 }
 
-// newDriver constructs the configured driver while it still builds through
-// driver.Driver's StartBuild; it is nil for a driver with a Run (linked.go).
-func newDriver(cfg *Config) (driver.Driver, error) {
-	switch cfg.Runtime.Driver {
-	default:
-		return nil, nil
-	}
-}
-
 // newRequest resolves config and flags into the BuildRequest every driver
 // takes. Precedence everywhere: flag, then the environment variable, then
 // the config file, then the driver's default.
@@ -500,7 +491,6 @@ func buildContext() (context.Context, context.CancelFunc) {
 type prepared struct {
 	cfg    *Config
 	req    *driver.BuildRequest
-	d      driver.Driver
 	linked *linkedDriver
 	id     string
 	live   *liveBuild
@@ -521,11 +511,7 @@ func prepare(args []string) (*prepared, error) {
 	if err != nil {
 		return nil, err
 	}
-	d, err := newDriver(cfg)
-	if err != nil {
-		return nil, err
-	}
-	p := &prepared{cfg: cfg, req: req, d: d, linked: linkedDrivers[driverName(cfg)]}
+	p := &prepared{cfg: cfg, req: req, linked: linkedDrivers[driverName(cfg)]}
 	if p.linked == nil {
 		return nil, fmt.Errorf("driver %q is not linked into warden", driverName(cfg))
 	}
@@ -589,19 +575,7 @@ func runBuild(_ *cobra.Command, args []string) error {
 		return err
 	}
 	defer p.done()
-	if p.linked.Run != nil {
-		return runLinkedBuild(p)
-	}
-	defer p.d.Close()
-	ctx, stop := buildContext()
-	defer stop()
-
-	start := time.Now()
-	if _, err := p.d.StartBuild(ctx, p.req); err != nil {
-		return buildFailed(ctx, err, p.req, time.Since(start))
-	}
-	fmt.Fprintf(os.Stderr, "warden: build SUCCEEDED (output: %s)\n", p.req.OutputDir)
-	return nil
+	return runLinkedBuild(p)
 }
 
 func runShell(_ *cobra.Command, args []string) error {
@@ -647,34 +621,6 @@ const (
 	exitTimedOut    = 124
 	exitInterrupted = 130
 )
-
-// buildFailed reports a failed build. Outcomes of the build itself (its
-// script's non-zero exit, --timeout, Ctrl-C) are reported plainly and warden
-// exits with a matching code; anything else is a warden or environment
-// error, reported with the issue link.
-func buildFailed(
-	ctx context.Context, err error, req *driver.BuildRequest, elapsed time.Duration,
-) error {
-	var ee *driver.ExitError
-	switch {
-	case errors.As(err, &ee):
-		msg := fmt.Sprintf("warden: build FAILED (exit code %d)", ee.Code)
-		if ee.Detail != "" {
-			msg += ": " + ee.Detail
-		}
-		fmt.Fprintln(os.Stderr, msg)
-		return exitStatusError(ee.Code)
-	case req.Timeout > 0 && elapsed >= req.Timeout && errors.Is(err, context.DeadlineExceeded):
-		fmt.Fprintf(os.Stderr,
-			"warden: build FAILED: timed out after %s (--timeout)\n", req.Timeout)
-		return exitStatusError(exitTimedOut)
-	case ctx.Err() != nil:
-		fmt.Fprintln(os.Stderr, "warden: build interrupted")
-		return exitStatusError(exitInterrupted)
-	}
-	fmt.Fprintln(os.Stderr, "warden: build FAILED")
-	return err
-}
 
 // configAge parses a [vm] age setting; empty means the driver default. The
 // key has no flag and no variable, so a value is the config file's.
