@@ -5,9 +5,10 @@
 // The bundled drivers declare their flags and keys as drivercmd.Setting
 // literals in their own packages, so the surface also holds what those
 // declare: a Setting's Flag is a flag, and its Key is a key by the last
-// element of its path, which is the identity a toml tag gives. Each of its
-// Aliases, a key's old names, is a key the same way, so a key moved with its
-// old name kept is not removed.
+// element of its path, which is the identity a toml tag gives. Its Common,
+// a common key the driver honours, is a key by its name. Each of its Aliases,
+// a key's old names, is a key the same way, so a key moved with its old name
+// kept is not removed.
 package surface
 
 import (
@@ -137,6 +138,8 @@ func (s *Surface) setting(fset *token.FileSet, path string, cl *ast.CompositeLit
 			s.add("flag", v, path, line)
 		case "Key":
 			s.add("key", lastElement(v), path, line)
+		case "Common":
+			s.add("key", v, path, line)
 		}
 	}
 }

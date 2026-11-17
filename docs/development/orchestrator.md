@@ -72,7 +72,17 @@ the config file > default`. Defaults are sane and changes are additive. A new
 or changed config key is documented in the same change; this is the config half
 of the docs-coupling rule (UX-01).
 
-The automated part is a config-key diff against a docs diff.
+`warden` reads its own flags and keys. A driver reads its own, from the config
+file `warden` names to it, with the same precedence and before it does any
+work (UX-08): through the kit (`driver/drivercmd`), or as the driver contract
+requires of a driver written without it (GLOBAL-08). A driver run as a
+separate binary does so in its own process. The keys the driver contract
+names as common to drivers live in `[driver]`; a driver's overrides of
+those, and its own keys, live in `[driver.<name>]`, which is read before
+`[driver]`.
+
+The automated part is a config-key diff against a docs diff, over `cmd/warden`
+and the drivers this repository builds.
 
 ---
 

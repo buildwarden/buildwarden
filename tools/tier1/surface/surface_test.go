@@ -115,7 +115,7 @@ func TestExtractSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got, want := ids(s), []string{"flag runtime", "flag slots", "key cli",
-		"key image_refresh_after", "key relay_image"}; !reflect.DeepEqual(got, want) {
+		"key image_min_grace", "key image_refresh_after", "key relay_image"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("names %v, want %v", got, want)
 	}
 	if n := s.Names["flag slots"]; n.Line != 18 {
@@ -161,6 +161,10 @@ const (
 	drvMovedAlias = "package container\n\nimport \"github.com/buildwarden/buildwarden/driver/drivercmd\"\n\n" +
 		"var settings = []drivercmd.Setting{\n\t{Name: \"relay-image\", " +
 		"Key: \"driver.container.image\", Aliases: []string{\"runtime.relay_image\"}},\n}\n"
+	drvCommon = "package container\n\nimport \"github.com/buildwarden/buildwarden/driver/drivercmd\"\n\n" +
+		"var settings = []drivercmd.Setting{\n\t{Name: \"relay-image\", " +
+		"Key: \"driver.container.relay_image\"},\n\t{Name: \"grace\", " +
+		"Common: \"image_min_grace\"},\n}\n"
 	drvMovedBare = "package container\n\nimport \"github.com/buildwarden/buildwarden/driver/drivercmd\"\n\n" +
 		"var settings = []drivercmd.Setting{\n\t{Name: \"relay-image\", " +
 		"Key: \"driver.container.image\"},\n}\n"
@@ -185,6 +189,8 @@ func TestCheckDrivers(t *testing.T) {
 			[]string{`UX-03 key "relay_image" was removed`}},
 		{"a deeper directory is not read", cmdBare, drvBase, cmdBare, drvBase, false, nil},
 		{"key moved, old name kept", cmdBare, drvBase, cmdBare, drvMovedAlias, true, nil},
+		{"common key added, no docs", cmdBare, drvBase, cmdBare, drvCommon, false,
+			[]string{"UX-01 +key image_min_grace"}},
 		{"key moved, old name dropped", cmdBare, drvBase, cmdBare, drvMovedBare, true,
 			[]string{`UX-03 key "relay_image" was removed`}},
 	}
