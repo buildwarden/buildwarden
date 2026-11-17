@@ -1,7 +1,7 @@
 ---
 feature: loop-parallel-rule-wording
 status: draft
-drivers: []              # the loop's rules and one line of its queue code; no driver tree is reached
+drivers: []              # the loop's rules and two printed strings in wf (queue/relation.go, check/declared.go); no driver tree is reached
 seams: []                # no GLOBAL-08 seam changes
 surfaces: []             # `wf` is the loop's tool, not a user-facing surface of the product
 repos: []                # only this repository
@@ -10,11 +10,11 @@ areas: [rules, loop, designs]  # docs/development/process.md; tools/workflow/ (r
 security_boundary: none
 alters_relationships: false  # no product component's role or interaction changes (FLOW-02)
 design_review: required  # a process item's design always gets its review (FLOW-03, FLOW-19)
-native_validation: []    # rule text and one printed string; no host-specific behaviour
+native_validation: []    # rule text and two printed strings; no host-specific behaviour
 tier2_gaps: []
-rules: [FLOW-02, FLOW-03, FLOW-05, FLOW-06, FLOW-08, FLOW-10, FLOW-14, FLOW-15, FLOW-16,
-        FLOW-19, FLOW-20, LOOP-01, LOOP-04, LOOP-08, LOOP-09, GLOBAL-09, GLOBAL-10,
-        GLOBAL-11, TEST-01]
+rules: [FLOW-02, FLOW-03, FLOW-05, FLOW-06, FLOW-08, FLOW-10, FLOW-12, FLOW-14, FLOW-15,
+        FLOW-16, FLOW-17, FLOW-19, FLOW-20, LOOP-01, LOOP-02, LOOP-04, LOOP-08, LOOP-09,
+        GLOBAL-09, GLOBAL-10, GLOBAL-11, TEST-01, TEST-02]
 rule_changes:
   - {rule: FLOW-02, change: amend, paths: [docs/development/process.md,
       docs/design/TEMPLATE.md, tools/workflow/check/declared.go]}
@@ -40,11 +40,14 @@ sent F4, F6 and F5's wording for phases 7 and 8 to one follow-up
 rule-change item, and changed nothing on `loop-parallel`'s branch
 (`docs/design/loop-parallel.md:5604-5606`). The design's archive summary
 adds FLOW-16's merge proof to the same list
-(`docs/design/loop-parallel.md:5717-5719`). It comes before
-`loop-native-lead` and `loop-repository` in P1's order
-(`docs/design/componentization.md:296`), and holds no worker: it changes
-rule text, one printed reason and its tests, and nothing a running worker
-does.
+(`docs/design/loop-parallel.md:5717-5719`). It is a program item outside
+the P1 list at `docs/design/componentization.md:296`, which does not name
+it: a follow-up of `loop-parallel`, it runs before `loop-native-lead` and
+`loop-repository` because the queue ranks it ahead of `loop-native-lead`
+(priority 62 against 63; a11). It adds no item to P1's list, which
+componentization (archived) keeps as approved. It holds no worker: it
+changes rule text, two printed strings and their tests, and nothing a
+running worker does.
 
 Words used throughout. **wf** is the loop's tool, `tools/workflow/`.
 **Undeclared** and **declared-empty** are `wf`'s two readings of an item's
@@ -99,7 +102,7 @@ the one he chose, so the rule is the one that moves (a1).
    untrue of an item that names an area the map lacks, the case
    `TestRelationUnknownArea` checks (`queue/relation_test.go:324-334`). The
    live `QUEUE.md` shows it on every pair with an undeclared item
-   (workflow branch, `QUEUE.md:51-57`). Design's done-when prints
+   (workflow branch at c0b3295, `QUEUE.md:50-94`). Design's done-when prints
    "undeclared: the design declares no areas" for an absent key
    (`check/declared.go:147-149`), the same ambiguity.
 
@@ -151,7 +154,7 @@ the one he chose, so the rule is the one that moves (a1).
    --merge-base=B C^ <ref>`, B the ref's single merge base with C^, writes
    exactly C's tree (Decision 23 and a14 (d), Jeff, 2026-11-16;
    `docs/design/loop-parallel.md:562-645`; `check/check.go:381-485`). No
-   code computes a patch-id any more. `CONTRIBUTING.md:15-17` already
+   code computes a patch-id any more. `CONTRIBUTING.md:17-19` already
    names the merge-tree proof; the rule is the one place left that names
    the old one. Jeff withdrew the patch-id proof because it proved merged
    two refs that are not (`loop-parallel.md:618-629`), so FLOW-16 now
@@ -197,10 +200,10 @@ Nothing in `docs/design/` overlaps otherwise: a search for `declared-empty`,
 
 1. **The rules move to the code, not the code to the rules** (a1). In each
    of the four places Jeff kept the code as built (2026-11-16) and asked
-   for the wording to follow. The one code change is the printed reason
-   for relation row 5 and the matching Design done-when text, which the
-   source names ("relation.go's 'declares no areas' text and its tests
-   move with it").
+   for the wording to follow. The code changes are the printed reason
+   for relation row 5, which the source names ("relation.go's 'declares
+   no areas' text and its tests move with it"); and, beyond the source,
+   the matching Design done-when text in `check/declared.go:148` (a4).
    - *Rejected: make `wf` match the approved wording.* That would read
      `areas: []` as undeclared (dropping a declaration `loop-parallel`'s
      a-questions and tests keep on purpose), run the area checks at Merge
@@ -211,7 +214,8 @@ Nothing in `docs/design/` overlaps otherwise: a search for `declared-empty`,
 2. **`undeclared` is a defined term in FLOW-05, with all three of `wf`'s
    cases** (a2). FLOW-05 defines it once, where the relations are
    defined, and FLOW-02 points at it. The cases are the key absent, a
-   home repository with no map, and an area the map lacks until the map
+   home repository (the first the item names and the one that holds its
+   design; FLOW-02, LOOP-04) with no map, and an area the map lacks until the map
    has it, which are `State.Undeclared`'s three (`relation.go:99-105`).
    - *Rejected: name only the absent key and leave the other two to the
      design's named fallback.* FLOW-05's check is `automated`; a reader
@@ -234,10 +238,12 @@ Nothing in `docs/design/` overlaps otherwise: a search for `declared-empty`,
    "undeclared: the design leaves areas out".
 
 5. **FLOW-03 gives the checks' ranges as the code runs them, and names
-   Merge, Close and the undeclared-before-`wf declare` exemption** (a5,
-   a6). The comparison runs from Plan through Publish and at each
-   refresh; the diff check from Implement through Publish and at each
-   refresh; Merge and Close run neither. An item with no recorded
+   the merge confirmation, Close and the undeclared-before-`wf declare`
+   exemption** (a5, a6). The comparison runs from Plan through Publish
+   and at each refresh of a feature; the diff check from Implement
+   through Publish and at each refresh of a feature; Merge's confirmation
+   and Close run neither; a feature's refresh, at Merge included, runs
+   both. An item with no recorded
    declaration is not compared, and its diff check reads the areas the
    queue records, which for such an item are none.
 
@@ -271,9 +277,9 @@ Jeff accepted it on 2026-11-16.
 ### Assumed
 
 - **a1. Which side moves.** Proceeding with (a); confirm.
-  - (a) *The rules move to the code* in all four places, plus the one
-    printed reason (Decision 1). Consequence: no behaviour changes; the
-    item is rule text, one string, and its golden files.
+  - (a) *The rules move to the code* in all four places, plus the two
+    printed strings (Decision 1). Consequence: no behaviour changes; the
+    item is rule text, two strings, and their tests and golden files.
   - (b) *The code moves to the rules* where it can: `areas: []` becomes
     undeclared, the area checks run at Merge and Close. Consequence: a
     behaviour change to a loop that just went parallel, tests rewritten,
@@ -283,7 +289,8 @@ Jeff accepted it on 2026-11-16.
 
 - **a2. How FLOW-05 defines undeclared.** Proceeding with (a); confirm.
   - (a) *All three of `wf`'s cases*: the `areas` key absent, a home
-    repository with no area map, or an area the map lacks, until the map
+    repository (the first the item names and the one that holds its
+    design; FLOW-02, LOOP-04) with no area map, or an area the map lacks, until the map
     has it (Decision 2).
   - (b) *Only the absent key*, the other two left to `loop-parallel`'s
     named fallback. Shorter, but an agent reading the rule mispredicts
@@ -315,11 +322,18 @@ Jeff accepted it on 2026-11-16.
   - (c) *Leave it*: the rule then defines a term the printed reason does
     not use, and the reason stays untrue of a map-lacks item.
   - Recommendation: (a).
+  - And the Design done-when text: (a) also rewords
+    `check/declared.go:148` to "undeclared: the design leaves areas out"
+    (beyond the source, which names only relation.go), so that both texts
+    use the rule's term; (a′) relation.go only, as the source names, and
+    declared.go keeps "the design declares no areas". Recommendation: (a);
+    Jeff, confirm that this is in scope.
 
 - **a5. FLOW-02's sentence "from Implement on (FLOW-03)".** The source
   names F5 as FLOW-03's wording; FLOW-02's last paragraph repeats the
   same range (`process.md:104-108`). Proceeding with amending it too, to
-  "from Implement through Publish and at each refresh (FLOW-03)", in
+  "from Implement through Publish and at each refresh of a feature
+  (FLOW-03)", in
   FLOW-02's change, which this item makes anyway for F4; confirm.
   Alternative: leave it, and FLOW-02 keeps overclaiming for Merge and
   Close. Recommendation: amend.
@@ -386,21 +400,26 @@ Jeff accepted it on 2026-11-16.
   defer, as before.
 
 - **a11. Holds, and order with `loop-native-lead`.** Proceeding with no
-  holds, and with this item before `loop-native-lead` (priority 62
-  against 63), whose source also names FLOW-16; confirm. If this merges
+  holds, and with this item before `loop-native-lead` by queue priority
+  (62 against 63) and `follows: loop-parallel`, not by P1's list in
+  `componentization.md:296`, which does not name it; `loop-native-lead`'s
+  source also names FLOW-16; confirm. If this merges
   first, `loop-native-lead`'s design quotes FLOW-16 as this item leaves
   it; if it is ever reordered, whichever merges second re-quotes the
   other's wording at its refresh (FLOW-10). Recommendation: as proposed.
 
-- **a12. Two stale skill lines, outside the source's scope.** `wf-review`
-  and `workflow-intake` still say `wf areas -list` and `-check` "exit 1
-  while the queue state has no `areas.yaml`, which is expected until
-  `loop-parallel`'s `x4-state` writes it" (`.claude/agents/wf-review.md:24`,
-  `.claude/skills/workflow-intake/SKILL.md:25`). `x4-state` is done and
+- **a12. Four stale skill and agent lines, outside the source's scope.**
+  `wf-review`, `workflow-intake`, `workflow-tick` and `workflow-human`
+  still say `wf areas -list` and `-check` "exit 1 while the queue state
+  has no `areas.yaml`, which is expected until `loop-parallel`'s
+  `x4-state` writes it" (`.claude/agents/wf-review.md:24`,
+  `.claude/skills/workflow-intake/SKILL.md:25`,
+  `.claude/skills/workflow-tick/SKILL.md:90`,
+  `.claude/skills/workflow-human/SKILL.md:72`). `x4-state` is done and
   `areas.yaml` exists, so the lines describe a past state. Proceeding with
   leaving them out of this item, whose source says "rule text only", and
   filing them as a small process item on Jeff's word; confirm.
-  Alternative: fold the two deletions in here, since this item's areas
+  Alternative: fold the four deletions in here, since this item's areas
   already include `loop`. Recommendation: leave out; fold in only if
   Jeff prefers one PR.
 
@@ -409,7 +428,8 @@ Jeff accepted it on 2026-11-16.
 ### What changes
 
 Four rule changes in `docs/development/process.md`, one comment in
-`docs/design/TEMPLATE.md`, and one printed reason in `wf` with its tests.
+`docs/design/TEMPLATE.md`, and two printed strings in `wf`
+(queue/relation.go, check/declared.go) with their tests.
 The exact wording is under **Rule changes**. In summary:
 
 | Finding | Where | Before | After |
@@ -418,7 +438,7 @@ The exact wording is under **Rule changes**. In summary:
 | F4 | FLOW-05, How two items relate | "an item that declares no areas"; "either declares no areas" | *Undeclared* defined: key absent, home with no map, or an area the map lacks; `[]` changes only its design; "either is undeclared" |
 | F4 | `relation.go` row 5; `declared.go` Design text | `<item> declares no areas`; "the design declares no areas" | `<item> is undeclared`; "the design leaves areas out" |
 | F6 | `process.md` opening | "Publish takes one feature at a time through the PR slot" | The slot by relation; disjoint PRs side by side, merging one at a time with `main` contained; the refresh repeats the pass |
-| F5 | FLOW-03 paragraph after the table; FLOW-02 last paragraph | "From Plan on"; "from Implement on" | "From Plan through Publish, and at each refresh"; "from Implement through Publish, and at each refresh"; Merge and Close run neither; the item with no recorded declaration |
+| F5 | FLOW-03 paragraph after the table; FLOW-02 last paragraph | "From Plan on"; "from Implement on" | "From Plan through Publish, and at each refresh of a feature"; "from Implement through Publish, and at each refresh of a feature"; the merge confirmation and Close run neither; a refresh at Merge runs both; the item with no recorded declaration |
 | F-P2 | FLOW-16 | patch-id `--verbatim`; "the equal tree or change" | `git merge-tree --write-tree --merge-base=B C^ <head>` writes C's tree; "the equal tree or that merge" |
 
 ### What a worker sees
@@ -445,7 +465,12 @@ after:  undeclared: the design leaves areas out, and the item collides with ever
 An old `wf` and a new one compute the same relation; only the reason
 string differs, and nothing parses it.
 
-### Why Merge and Close need neither check (F5)
+### Why the merge confirmation and Close need neither check (F5)
+
+Phase 7's done-when only confirms the merge (`c.merged()`); while the PR
+waits at Merge, the refreshes that keep it current run both checks
+(`Refresh`, check.go:135-150). A process item's refresh runs neither,
+since it has no declaration (`if f.Round != "process"`).
 
 Recorded here, not in the rule (a5). At Merge the pull request is the
 branch Publish checked, kept up to date by refreshes, each of which runs
@@ -484,7 +509,7 @@ text ("`git branch -D`, only once `dist/wf check` has passed on it",
 
 ### Order and other items
 
-- `loop-native-lead` (63) also amends FLOW-16 (its source); it will quote
+- `loop-native-lead` (63, queue priority) also amends FLOW-16 (its source); it will quote
   this wording if this merges first (a11).
 - `driver-contract` (K1) changes no FLOW rule; `loop-parallel` carried its
   FLOW-02 bullets. Nothing here touches them.
@@ -498,23 +523,25 @@ text ("`git branch -D`, only once `dist/wf check` has passed on it",
 - No neutral rewording (a10), no edit to an archived design
   (`loop-parallel.md`'s relation table keeps the reason text it was
   approved with), no change to the area map.
-- Not the two stale skill lines of a12, unless Jeff folds them in.
+- Not the four stale skill and agent lines of a12, unless Jeff folds them in.
 
 ## Defaults and overrides
 
-None added or changed. The rules now state three that `loop-parallel`
+None added or changed. The rules now state five that `loop-parallel`
 already made, without changing them:
 
 | What | Default | Override |
 |---|---|---|
 | `areas` absent | Undeclared: collides with every item it shares a repository with (FLOW-05) | Declare areas, or `[]` |
 | `areas` names an area the map lacks | Undeclared until an attended session adds the area (the named fallback "area not in the map", GLOBAL-11; `QUEUE.md` marks it `*`) | The map changes on Jeff's word |
-| A squash with no single merge base between the ref and C^ | The third proof does not hold; Close's escalation gives Jeff the commands (FLOW-16, GLOBAL-10) | None: Jeff compares and deletes by hand |
+| *Named fallback: "no map".* The item's home repository has no area map | Undeclared: the repository is one exclusive area, and the item collides with every item in it (FLOW-05) | An attended session adds the map on Jeff's word; `QUEUE.md`'s Relations gives the missing map as the reason (GLOBAL-11) |
+| `declared` absent (the item finished Design before `wf declare`) | Not compared with its design; its diff check reads the areas the queue records, so with none it is undeclared (FLOW-03) | A human `wf declare` sets it; the check prints "not declared: finished Design before wf declare" (GLOBAL-11) |
+| *Named fallback: "no single merge base".* A squash with no single merge base between the ref and C^ | The third proof does not hold; Close's escalation gives Jeff the commands (FLOW-16, GLOBAL-10) | None: Jeff compares and deletes by hand |
 
 ## Cross-driver impact
 
 None. No driver tree, driver contract or `driver.Session` is reached; the
-change is loop rule text and one string in the loop's tool.
+change is loop rule text and two strings in the loop's tool.
 
 ## Rule changes
 
@@ -602,13 +629,15 @@ exemption for an item with no recorded declaration is unnamed.
 
 > A transition happens only when the phase's done-when checks pass mechanically
 > (files present, sections filled, commands green), never on an agent's own report
-> that it is done. From Plan through Publish, and at each refresh
-> (FLOW-10), each done-when also checks that the queue still records what
-> the design declares; from Implement through Publish, and at each
-> refresh, that every path the branch changes lies in an area the design
-> declares (FLOW-02). A path outside them is settled by widening the
-> declaration inside the approved design, or by a return to Design
-> (FLOW-06). Merge and Close run neither check. An item the queue records
+> that it is done. From Plan through Publish, and at each refresh of a
+> feature (FLOW-10), each done-when also checks that the queue still
+> records what the design declares; from Implement through Publish, and
+> at each refresh of a feature, that every path the branch changes lies
+> in an area the design declares (FLOW-02). A path outside them is
+> settled by widening the declaration inside the approved design, or by a
+> return to Design (FLOW-06). The merge confirmation (phase 7's
+> done-when) and Close run neither; a refresh runs both, including one
+> taken while the pull request waits at Merge. An item the queue records
 > no declaration for, because it finished Design before the queue
 > recorded declarations, is not compared with its design; its diff check
 > reads the areas the queue records, so with none it is undeclared
@@ -656,8 +685,9 @@ and the opening of `process.md`, outside every rule heading
 > ... Area A *reaches* area B when code in A
 > depends on code in B; only exclusive areas reach and are reached. A
 > repository with no map is one exclusive area. An item is *undeclared*
-> when its `areas` are left out, when its home repository (LOOP-04) has
-> no map, or when they name an area the map lacks, until the map has it;
+> when its `areas` are left out, when its home repository, the first it
+> names and the one that holds its design (FLOW-02, LOOP-04), has no map,
+> or when they name an area the map lacks, until the map has it;
 > an undeclared item is taken to change the whole of each repository it
 > names. An item that declares `areas: []` changes nothing but its own
 > design (FLOW-02). Two features are:
@@ -763,7 +793,7 @@ wording already does; making them neutral is deferred (a10).
   each proposed paragraph appears in `process.md` byte for byte as
   approved (FLOW-14's agent part).
 - **Tier 1's `rule-index`** passes: no rule is added, retired or renamed.
-- **No native validation.** The change is text and one string; no
+- **No native validation.** The change is text and two strings; no
   host-specific behaviour (`native_validation: []`, no `tier2_gaps`).
 - **After the merge.** The next `wf` build on the workflow branch
   regenerates `QUEUE.md` with `is undeclared` in its relations table; no
