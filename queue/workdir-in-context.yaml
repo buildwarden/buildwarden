@@ -3,7 +3,7 @@ title: A work directory inside the build context is served to the build; a Docke
 priority: 70
 status: in_progress
 round: feature
-phase: 0
+phase: 1
 design: docs/design/workdir-in-context.md
 branch: feat/workdir-in-context
 alters_relationships: null
@@ -12,10 +12,17 @@ steps:
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261117T105743Z
-      expires: 2026-11-17T15:29:09.307922319Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -43,3 +50,9 @@ history:
   - at: 2026-11-17T13:29:09Z
     by: cloud/20261117T105743Z
     event: claimed f0-branch-setup until 2026-11-17T15:29:09Z
+  - at: 2026-11-17T13:29:14Z
+    by: cloud/20261117T105743Z
+    event: done f0-branch-setup
+  - at: 2026-11-17T13:29:14Z
+    by: cloud/20261117T105743Z
+    event: entered phase 1 (design)
