@@ -5,6 +5,7 @@ import (
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/container"
+	"github.com/buildwarden/buildwarden/driver/firecracker"
 )
 
 // The drivers linked into warden, until each becomes a binary (K2; the
@@ -70,7 +71,17 @@ var linkedDrivers = map[string]*linkedDriver{
 	"hyperv": {Capabilities: capabilities{VM: true, Keep: keepRunning, Exited: true,
 		Containerfile: containerfileTranslate, GuestOS: []string{"linux", "windows"}}},
 	"firecracker": {Capabilities: capabilities{VM: true, Keep: keepRunning, Exited: true,
-		Containerfile: containerfileTranslate, GuestOS: []string{"linux"}}},
+		Containerfile: containerfileTranslate, GuestOS: []string{"linux"}},
+		Preflight: func(_ context.Context, _ *Config, req *driver.BuildRequest,
+			_ *driver.Start) error {
+			return firecracker.New().Preflight(req)
+		},
+		Run: func(ctx context.Context, cfg *Config, req *driver.BuildRequest,
+			start *driver.Start, host driver.Host) ([]string, error) {
+			d := firecracker.New()
+			d.Verbose = cfg.Output.Verbose
+			return d.Run(ctx, req, start, host)
+		}},
 }
 
 // containerPreflight is the container driver's probe: it resolves the

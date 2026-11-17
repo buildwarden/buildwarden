@@ -4,13 +4,10 @@ package firecracker
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
-	"os/signal"
 	"runtime"
 	"strings"
-	"syscall"
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/linuxguest"
@@ -25,29 +22,26 @@ func hostSupported() error {
 	return nil
 }
 
-// StartBuild implements driver.Driver: it takes a network slot, boots and
-// claims the relay VM, then boots the build VM whose only NIC is on the
-// slot's bridge, and waits for the build to finish.
-func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*driver.BuildResult,
-	error) {
-	if req.GuestOS != "" && req.GuestOS != "linux" {
-		return nil, driver.Fixable("drop --guest-os, or use --driver qemu or hyperv for "+
-			"Windows",
-			"--driver firecracker runs Linux guests only")
-	}
+// Preflight is the firecracker driver's probe: the checks it makes before it
+// creates anything, which Run makes again.
+func (d *Driver) Preflight(req *driver.BuildRequest) error {
+	_, err := buildPreflight(req)
+	return err
+}
+
+// Run is the firecracker driver's run of one build
+// (specs/driver-contract/v1.md, The build): it takes a network slot, boots
+// the relay VM and reports it through host, and once warden has claimed it
+// boots the build VM whose only NIC is on the slot's bridge. It reports
+// either VM's exit as exited, and stops both when host.Wait returns, unless
+// they are kept; it returns what it kept.
+func (d *Driver) Run(ctx context.Context, req *driver.BuildRequest, start *driver.Start,
+	host driver.Host) (kept []string, err error) {
 	pre, err := buildPreflight(req)
 	if err != nil {
 		return nil, err
 	}
-	if req.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
-		defer cancel()
-	}
-	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	buildID := driver.RandAlphaNum(8)
+	buildID := start.BuildID
 	unlockBuild, err := driver.HostLock(buildLockName(buildID))
 	if err != nil {
 		return nil, err
@@ -62,17 +56,13 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	}
 	defer release()
 
-	outputDir, err := makeOutputDir(req)
-	if err != nil {
-		return nil, err
-	}
 	workDir, err := driver.NewWorkDir(req, "firecracker-"+buildID)
 	if err != nil {
 		return nil, err
 	}
 	defer driver.RemoveWorkDir(req, workDir)
 
-	st, err := d.stage(req, pre, workDir, outputDir, buildID)
+	st, err := d.stage(req, pre, workDir, buildID)
 	if err != nil {
 		return nil, err
 	}
@@ -80,56 +70,40 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		defer st.dlv.remove()
 	}
 
-	sess, err := driver.StartSession(driver.SessionConfig{
-		OutputDir:   outputDir,
-		ContextDir:  req.ContextDir,
-		BuildScript: st.script,
-		GuestOS:     req.GuestOS,
-		OutputTee:   driver.ConsoleTee(req),
-		Verbose:     d.Verbose,
-	})
-	if err != nil {
-		return nil, err
-	}
-	defer sess.Close()
-
 	r := &run{d: d, req: req, slot: slot, work: workDir}
-	defer r.teardown()
+	defer func() { kept = r.teardown() }()
 
 	if err := bootInOrder(
-		func() error { return r.startRelay(ctx, sess, pre, st.relayInitrd, st.env) },
+		func() error {
+			return r.startRelay(ctx, host, pre, st.relayInitrd, st.env,
+				start.ClaimToken)
+		},
 		func() error { return r.startBuild(st.dlv.boot) },
 	); err != nil {
 		return nil, err
 	}
-	d.status("running...")
-	if err := r.wait(ctx, sess); err != nil {
+	r.watch(host, driver.ExitedBuild, r.build)
+	if err := host.Started(); err != nil {
 		return nil, err
 	}
-	driver.FinalizeOutput(outputDir, req.Compress)
-	return &driver.BuildResult{OutputDir: outputDir}, nil
+	d.status("running...")
+	host.Wait(ctx)
+	return nil, nil
 }
 
-// buildPreflight is requestPreflight on this host, plus the refusal of a link
-// a host interface uses.
+// buildPreflight is requestPreflight on this host, after the refusal of a
+// guest other than Linux, plus the refusal of a link a host interface uses.
 func buildPreflight(req *driver.BuildRequest) (*preflighted, error) {
+	if req.GuestOS != "" && req.GuestOS != "linux" {
+		return nil, driver.Fixable("drop --guest-os, or use --driver qemu or hyperv for "+
+			"Windows",
+			"--driver firecracker runs Linux guests only")
+	}
 	pre, err := requestPreflight(realHost{}, hostLocal, req)
 	if err != nil {
 		return nil, err
 	}
 	return pre, driver.CheckHostLink(req.Link())
-}
-
-// makeOutputDir creates the build's output directory (default warden-output).
-func makeOutputDir(req *driver.BuildRequest) (string, error) {
-	dir := req.OutputDir
-	if dir == "" {
-		dir = "warden-output"
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("creating output dir: %w", err)
-	}
-	return dir, nil
 }
 
 // staged is a build's inputs and boot files, ready before any VM starts.
@@ -140,11 +114,10 @@ type staged struct {
 	relayInitrd string
 }
 
-// stage records the build's inputs (ORCH-02) and readies both VMs' boot
-// files and the environment record, so a missing image or asset fails before
-// a VM boots.
+// stage readies both VMs' boot files and the environment record, so a missing
+// image or asset fails before a VM boots.
 func (d *Driver) stage(req *driver.BuildRequest, pre *preflighted,
-	workDir, outputDir, buildID string) (*staged, error) {
+	workDir, buildID string) (*staged, error) {
 	d.status("preparing build environment...")
 	script := req.BuildScript
 	image := linuxguest.RequestImage(req)
@@ -179,42 +152,42 @@ type run struct {
 	slot         Slot
 	work         string
 	relay, build *vmm
+	// stops stop the watches of the VMs' exits.
+	stops []func()
 }
 
-// startRelay boots the relay VM and claims it at the slot's relay address
-// (Decision 5). A relay that exits during the claim fails it with the
-// relay's console.
-func (r *run) startRelay(ctx context.Context, sess *driver.Session, pre *preflighted,
-	initrd string, env *relaycfg.Environment) error {
-	token, err := driver.RandomToken()
-	if err != nil {
-		return err
-	}
+// startRelay boots the relay VM with the claim token and reports it at the
+// slot's relay address (Decision 5), watching for its exit, which warden
+// takes as the claim's end when the claim is in progress.
+func (r *run) startRelay(ctx context.Context, host driver.Host, pre *preflighted,
+	initrd string, env *relaycfg.Environment, token string) error {
 	r.d.status(fmt.Sprintf("starting relay on slot %d...", r.slot))
 	cfg := relayConfig(r.slot, pre.assets.Kernel, initrd, relayArgs(r.slot, token))
+	var err error
 	if r.relay, err = startVMM(r.work, "relay", cfg, r.d.Verbose, r.req.KeepVMs); err != nil {
 		return err
 	}
 	if err := writePidFile(r.slot, r.relay); err != nil {
 		return fmt.Errorf("recording VMM pids: %w", err)
 	}
-	cctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go func() {
-		select {
-		case <-r.relay.done:
-			cancel()
-		case <-cctx.Done():
-		}
-	}()
-	if _, err := sess.ClaimRelay(cctx, r.slot.ClaimAddr(), token, r.req, env,
-		r.req.Link().Claim(), driver.OldRelayFix); err != nil {
-		if r.relay.exited() {
-			return r.vmFailure(errRelayVMExited, r.relay)
-		}
-		return err
-	}
-	return nil
+	r.watch(host, driver.ExitedRelay, r.relay)
+	return host.ClaimRelay(ctx, driver.RelayStarted{
+		Claim: driver.ClaimEndpoint{Network: driver.ClaimTCP,
+			Address: r.slot.ClaimAddr()},
+		ClaimValues: driver.ClaimValues{Environment: env,
+			BuildLink:   r.req.Link().Claim(),
+			UpstreamDNS: driver.UpstreamDNS(r.req.DNS)},
+		GuestOS:     "linux",
+		OldRelayFix: driver.OldRelayFix,
+	})
+}
+
+// watch reports v's exit through host as which's, with v's last console
+// lines; teardown stops the watch first.
+func (r *run) watch(host driver.Host, which driver.ExitedPart, v *vmm) {
+	r.stops = append(r.stops, driver.WatchExit(host, which, v.done, func() string {
+		return vmExitDetail(v)
+	}))
 }
 
 // startBuild boots the build VM on the slot's bridge and records both VMMs.
@@ -233,50 +206,45 @@ func (r *run) startBuild(boot buildBoot) error {
 	return nil
 }
 
-// wait waits for the build with the exit ordering of Decision 8, turning a
-// VM that stopped first into a failure with its console.
-func (r *run) wait(ctx context.Context, sess *driver.Session) error {
-	err := waitBuild(ctx, sess.Wait, r.build.done, r.relay.done, afterGrace)
-	switch {
-	case errors.Is(err, errBuildVMExited):
-		return r.vmFailure(err, r.build)
-	case errors.Is(err, errRelayVMExited):
-		return r.vmFailure(err, r.relay)
-	}
-	return err
-}
-
-// vmFailure is a build failed by a VM stopping, with that VM's last console
-// lines.
-func (r *run) vmFailure(err error, v *vmm) error {
+// vmExitDetail says that v's VM stopped, with its last console lines.
+func vmExitDetail(v *vmm) string {
+	what := fmt.Sprintf("the %s VM stopped", v.name)
 	tail := consoleTail(v.console, 20)
 	if tail == "" {
-		return fmt.Errorf("build failed: %w", err)
+		return what
 	}
-	return fmt.Errorf("build failed: %w; last %s console lines:\n%s", err, v.name,
-		indent(tail))
+	return fmt.Sprintf("%s; last %s console lines:\n%s", what, v.name, indent(tail))
 }
 
 func indent(s string) string {
 	return "  " + strings.ReplaceAll(s, "\n", "\n  ")
 }
 
-// teardown stops both VMs and clears the slot's pid file (ORCH-04), or with
-// --keep-vms leaves them running, the slot held by their pid file, and says
-// how to stop them.
-func (r *run) teardown() {
+// teardown stops the exit watches, then stops both VMs and clears the slot's
+// pid file (ORCH-04), or with --keep-vms leaves them running, the slot held
+// by their pid file, says how to stop them, and returns what it left.
+func (r *run) teardown() (kept []string) {
+	for _, stop := range r.stops {
+		stop()
+	}
 	if r.req.KeepVMs {
 		var ids []string
 		for _, v := range []*vmm{r.relay, r.build} {
-			if v != nil {
-				ids = append(ids, fmt.Sprintf("%s %d", v.name, v.rec.pid))
+			if v == nil {
+				continue
 			}
+			ids = append(ids, fmt.Sprintf("%s %d", v.name, v.rec.pid))
+			kept = append(kept, fmt.Sprintf("the %s VM running on slot %d (pid %d)",
+				v.name, r.slot, v.rec.pid))
+		}
+		if len(kept) == 0 {
+			return nil
 		}
 		fmt.Fprintf(os.Stderr, "[warden] --keep-vms: left VMs running on slot %d (%s); "+
 			"consoles in %s; stop them with kill, or warden clean --driver "+
 			"firecracker\n",
 			r.slot, strings.Join(ids, ", "), r.work)
-		return
+		return kept
 	}
 	for _, v := range []*vmm{r.build, r.relay} {
 		if v != nil {
@@ -284,4 +252,5 @@ func (r *run) teardown() {
 		}
 	}
 	_ = os.Remove(pidFilePath(r.slot))
+	return nil
 }

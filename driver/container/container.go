@@ -124,22 +124,15 @@ func (d *Driver) Run(ctx context.Context, req *driver.BuildRequest, start *drive
 // failed before the build ran. The returned function stops the watch and
 // returns once no report can follow, so that none is made after Run returns.
 func (b *build) watchExit(host driver.Host) func() {
-	exited := make(chan int, 1)
-	go func() { exited <- b.containerWait() }()
-	quit, done := make(chan struct{}), make(chan struct{})
+	exited := make(chan struct{})
+	var code int
 	go func() {
-		defer close(done)
-		select {
-		case code := <-exited:
-			host.Exited(driver.ExitedBuild, fmt.Sprintf(
-				"warden-io exited with code %d:\n%s", code, b.consoleTail()))
-		case <-quit:
-		}
+		code = b.containerWait()
+		close(exited)
 	}()
-	return func() {
-		close(quit)
-		<-done
-	}
+	return driver.WatchExit(host, driver.ExitedBuild, exited, func() string {
+		return fmt.Sprintf("warden-io exited with code %d:\n%s", code, b.consoleTail())
+	})
 }
 
 // containerWait blocks until the build container exits and returns its exit

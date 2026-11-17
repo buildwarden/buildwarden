@@ -506,6 +506,66 @@ func TestBuildSequenceExitGrace(t *testing.T) {
 	}
 }
 
+// The exit ordering firecracker's waitBuild had (its Decision 8), now the
+// sequence's for every driver: a non-zero completion within the grace is the
+// build's result, and a relay that exits during the grace fails the build at
+// once, without waiting for the grace to end.
+func TestBuildSequenceExitOrdering(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		// during acts once the grace has started.
+		during  func(s *sequenceTest, relayExit chan<- struct{})
+		want    string // the outcome's error, or "exit 3"
+		wantLog string // the stop warden sent
+	}{
+		{"non-zero exit just after the environment exits",
+			func(s *sequenceTest, _ chan<- struct{}) {
+				s.sess.done <- &driver.ExitError{Code: 3}
+			}, "exit 3", "stop completed"},
+		{"relay exits during the grace",
+			func(_ *sequenceTest, relayExit chan<- struct{}) { close(relayExit) },
+			"the relay exited: killed", "stop failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			buildExit, relayExit := make(chan struct{}), make(chan struct{})
+			var exits run = func(tr *trace, st *driver.Start, h driver.Host) ([]string,
+				error) {
+				go func() {
+					<-buildExit
+					h.Exited(driver.ExitedBuild, "the build VM powered off")
+					<-relayExit
+					h.Exited(driver.ExitedRelay, "killed")
+				}()
+				return wellBehaved(tr, st, h)
+			}
+			s := newSequenceTest(exits, 0)
+			s.begin()
+			s.waitFor(t, "environment-started")
+			close(buildExit)
+			select {
+			case d := <-s.clock.asked:
+				if d != buildExitGrace {
+					t.Fatalf("timer of %s, want the grace", d)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("no grace was given")
+			}
+			tc.during(s, relayExit)
+			out := s.end(t)
+			var ee *driver.ExitError
+			switch {
+			case tc.want == "exit 3":
+				if !errors.As(out.err, &ee) || ee.Code != 3 {
+					t.Errorf("outcome %+v, want exit 3", out)
+				}
+			case out.err == nil || out.err.Error() != tc.want:
+				t.Errorf("outcome %+v, want %q", out, tc.want)
+			}
+			wantTrace(t, s.tr.get(), traceOf(tc.wantLog, "stopped")...)
+		})
+	}
+}
+
 // The start message of a VM driver carries the shared VM settings; another
 // driver's does not, and a probe has no build ID, token, script, output or
 // state file (DRV-32, DRV-40).

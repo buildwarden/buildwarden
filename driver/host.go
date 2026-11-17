@@ -2,6 +2,8 @@ package driver
 
 import (
 	"context"
+	"net/netip"
+	"sync"
 
 	"github.com/buildwarden/buildwarden/relaycfg"
 )
@@ -144,4 +146,37 @@ type Host interface {
 	// Wait returns when warden asks the driver to stop, with the reason, or
 	// when ctx ends.
 	Wait(ctx context.Context) string
+}
+
+// UpstreamDNS is the relay's upstream resolvers as relay-started's
+// claim_values carries them: req.DNS after the driver resolved it, in
+// order.
+func UpstreamDNS(addrs []netip.Addr) []string {
+	var out []string
+	for _, a := range addrs {
+		out = append(out, a.String())
+	}
+	return out
+}
+
+// WatchExit reports through host that which exited once done is closed,
+// with the detail detail gives then. The returned function stops the watch
+// and returns once no report can follow, so that a driver's Run makes none
+// after it returned.
+func WatchExit(host Host, which ExitedPart, done <-chan struct{},
+	detail func() string) (stop func()) {
+	quit, ended := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(ended)
+		select {
+		case <-done:
+			host.Exited(which, detail())
+		case <-quit:
+		}
+	}()
+	var once sync.Once
+	return func() {
+		once.Do(func() { close(quit) })
+		<-ended
+	}
 }

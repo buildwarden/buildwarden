@@ -1,4 +1,4 @@
-// Package firecracker implements driver.Driver with Firecracker microVMs on a
+// Package firecracker is the build driver of Firecracker microVMs on a
 // Linux KVM host (docs/design/firecracker-driver.md). It uses the qemu
 // driver's two-VM topology: the relay VM boots the unchanged Alpine relay
 // initramfs and is claimed over its upstream TAP; the build VM's only NIC is
@@ -6,19 +6,17 @@
 // once by `warden setup --driver firecracker`, so builds run unprivileged.
 //
 // Linux (x86_64) only: the build and process code is in *_linux.go, and other
-// hosts get a stub whose StartBuild returns a fixable error.
+// hosts get a stub whose Preflight and Run return a fixable error.
 package firecracker
 
 import (
-	"context"
 	"fmt"
 	"os"
 
-	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/linuxguest"
 )
 
-// Driver implements driver.Driver using Firecracker.
+// Driver is the firecracker driver: its Preflight and Run.
 type Driver struct {
 	// Verbose shows both VMs' serial consoles on stderr.
 	Verbose bool
@@ -26,19 +24,6 @@ type Driver struct {
 
 // New returns a Firecracker driver.
 func New() *Driver { return &Driver{} }
-
-// Name implements driver.Driver; it returns "firecracker".
-func (d *Driver) Name() string { return "firecracker" }
-
-// Exec implements driver.Driver. The firecracker driver has no interactive
-// mode, so it returns driver.ErrExecNotSupported.
-func (d *Driver) Exec(context.Context, *driver.BuildRequest) error {
-	return driver.ErrExecNotSupported
-}
-
-// Close implements driver.Driver. Each build stops its own VMs, so the driver
-// holds nothing to release.
-func (d *Driver) Close() error { return nil }
 
 func (d *Driver) status(msg string) {
 	fmt.Fprintf(os.Stderr, "[warden] %s\n", msg)

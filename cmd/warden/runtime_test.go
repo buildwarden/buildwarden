@@ -387,6 +387,9 @@ func TestUnusedRuntimeIsNotValidated(t *testing.T) {
 		})
 	}
 	for _, drv := range vmDrivers {
+		if linkedDrivers[drv].Run != nil {
+			continue // its Run reads no runtime; newDriver does not build it
+		}
 		t.Run("newDriver for "+drv, func(t *testing.T) {
 			inConfigFiles(t, cliFile(unused))
 			flagDriver = drv

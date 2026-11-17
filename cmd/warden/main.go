@@ -15,7 +15,6 @@ import (
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
-	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
 	"github.com/buildwarden/buildwarden/driver/qemu"
 	"github.com/buildwarden/buildwarden/driver/vz"
@@ -272,10 +271,6 @@ func newDriver(cfg *Config) (driver.Driver, error) {
 		return d, nil
 	case "hyperv":
 		d := hyperv.New()
-		d.Verbose = cfg.Output.Verbose
-		return d, nil
-	case "firecracker":
-		d := firecracker.New()
 		d.Verbose = cfg.Output.Verbose
 		return d, nil
 	default:
@@ -552,7 +547,11 @@ func prepare(args []string) (*prepared, error) {
 	if p.linked.Preflight != nil {
 		probe := newStart(cfg, req, p.linked.Capabilities, "", "", "")
 		probe.Probe = true
-		if err := p.linked.Preflight(context.Background(), cfg, req, probe); err != nil {
+		// The probe is given a copy, so that what it resolves (a VM driver's
+		// resolvers) is resolved again by the run.
+		probeReq := *req
+		err := p.linked.Preflight(context.Background(), cfg, &probeReq, probe)
+		if err != nil {
 			return nil, err
 		}
 	}
