@@ -920,3 +920,16 @@ gaps:
       by the blocking windows-hyperv step, and qemu Windows builds do not complete on main
       (qemu-windows-guest-package). Run once that is fixed and prebuilt-artifacts has merged, or on
       its branch if still waiting.
+  - id: detached-prepare-windows-exe-qemu
+    host: macos-qemu
+    status: open
+    what: >-
+      A qemu Windows guest build whose prepared layer is past [vm] image_refresh_after prints the
+      "refreshing it in the background" line and its detached prepare runs from the warden that was
+      started; with the start made to fail, the build prints the new warning line and still builds.
+    design: docs/design/detached-prepare-windows-exe.md
+    note: >-
+      Tracked, not blocking (design Validation plan, tier 2). On macOS the start is the exec of the
+      same absolute path as before, covered by tier 0 on Linux; qemu Windows builds do not complete on
+      main (qemu-windows-guest-package). Run once that is fixed and detached-prepare-windows-exe has
+      merged, or on its branch if still waiting.

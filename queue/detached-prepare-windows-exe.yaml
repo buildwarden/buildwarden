@@ -7,7 +7,15 @@ round: feature
 phase: 1
 design: docs/design/detached-prepare-windows-exe.md
 branch: feat/detached-prepare-windows-exe
-alters_relationships: null
+areas:
+  - driver-core
+  - driver/hyperv
+  - driver/qemu
+  - book
+  - designs
+declared: b7619b5
+alters_relationships: false
+design_review: required
 source: 'Found by host:windows-hyperv/20261116T051002Z (unattended, windows-desktop) while validating project-config-trust''s tier-2 gap project-config-trust-hyperv; main 623131a has it too, so it is filed as the item''s follow-up (FLOW-09). driver.StartDetached runs exec.Command(os.Executable(), ...). On Windows os/exec resolves a path with no extension only by adding the PATHEXT endings, so for dist/warden (what make build writes on Windows: go build -o dist/warden) it looks for dist/warden.exe. With no such file Start fails; driver/hyperv/freshness.go (and driver/qemu) drop the error, so the build prints no ''refreshing it in the background'' line, prepare.log is left truncated to 0 bytes and no prepare runs: a prepared base then ages until the build is refused at image_min_grace. With a warden.exe beside it, that other file is started: on this host a stale dist/warden.exe of 2026-11-04 ran the prepare for main''s build of 2026-11-16. Evidence, native/windows-hyperv/2026-11-15/: main-623131a-hyperv-refresh-due.log (stale warden.exe beside: line printed, prepare ran, from the old file), main-623131a-hyperv-refresh-due-no-exe-beside.log (it moved aside: no line, prepare.log 0 bytes, no process), branch-3733c4b-hyperv-build.log (the same on the branch, no warden.exe in its dist), branch-3733c4b-hyperv-refresh-due-exe.log (run as warden.exe: works). A released warden.exe is not affected. To settle in design: start the file os.Executable names without the lookup, report a failed start, and whether make build should write dist/warden.exe on Windows.'
 steps:
   - id: f0-branch-setup
@@ -24,6 +32,14 @@ steps:
     lease:
       claimed_by: cloud/20261117T105743Z
       expires: 2026-11-17T12:58:49.745992416Z
+  - id: f6-validate-windows-hyperv
+    phase: 6
+    affinity: host:windows-hyperv
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/detached-prepare-windows-exe.md Validation plan, on the branch built with make build (dist/warden, no .exe): (1) go test ./driver/ ./driver/hyperv/ on this host, the new StartDetached cases included (the file started is the extension-less one named, not a warden.exe beside it); (2) no warden.exe in dist/: a hyperv build with [vm] image_refresh_after = "1m" prints "refreshing it in the background", prepare.log fills (config line first), the prepare finishes and the new base is active, and a build meanwhile starts no second prepare; (3) with the stale dist/warden.exe of 2026-11-04 beside it (a3): the same build, and the background process path (state.ps1) is dist\warden, not warden.exe; then delete the stale file; (4) prepare.log held open with no sharing by another process: the build prints the new line naming the error and warden image prepare --driver hyperv, and still SUCCEEDS; (5) go build -o dist/warden.exe ./cmd/warden: the refresh-due build still refreshes, from dist\warden.exe. Evidence under native/windows-hyperv/<date>/.'
 budget:
   estimate:
     runs: 1
@@ -31,7 +47,42 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: 'make build on Windows: what it writes. With the fix the extension no longer matters to warden; the native allowlist (.claude/, a process item only) matches dist/warden and not dist/warden.exe.'
+    options:
+      - keep dist/warden on every OS
+      - write dist/warden.exe when the target OS is Windows, and file a process item for the native allowlist
+      - write both
+    recommended: keep dist/warden on every OS
+  - id: a2
+    kind: assumed
+    status: open
+    question: A due background refresh that cannot start (today dropped silently).
+    options:
+      - print one line naming the failure and the warden image prepare command that refreshes by hand, write the error to the log, and go on with the build on the current base
+      - fail the build with that fix
+      - stay silent, as today
+    recommended: print one line naming the failure and the warden image prepare command that refreshes by hand, write the error to the log, and go on with the build on the current base
+  - id: a3
+    kind: assumed
+    status: open
+    question: The stale dist/warden.exe (2026-11-04) in the Windows desktop's checkout.
+    options:
+      - the blocking windows-hyperv step uses it as the file beside dist/warden in its case 3, shows it is not run, then deletes it
+      - leave it
+      - delete it before validating and plant a fresh one for case 3
+    recommended: the blocking windows-hyperv step uses it as the file beside dist/warden in its case 3, shows it is not run, then deletes it
+  - id: a4
+    kind: assumed
+    status: open
+    question: The componentization freeze (FLOW-20). This item is not a program item.
+    options:
+      - exempt, as a fix for a regression on main (FLOW-09), filed as the follow-up of the security fix project-config-trust
+      - on hold until the program ends
+    recommended: exempt, as a fix for a regression on main (FLOW-09), filed as the follow-up of the security fix project-config-trust
 history:
   - at: 2026-11-16T05:27:02Z
     by: host:windows-hyperv/20261116T051002Z
@@ -54,3 +105,9 @@ history:
   - at: 2026-11-17T10:58:49Z
     by: cloud/20261117T105743Z
     event: claimed f1-design until 2026-11-17T12:58:49Z
+  - at: 2026-11-17T11:04:44Z
+    by: cloud/20261117T105743Z
+    event: 'f1-design: design at b7619b5; assumed a1-a4; f6-validate-windows-hyperv added (blocking); tracked gap detached-prepare-windows-exe-qemu'
+  - at: 2026-11-17T11:04:50Z
+    by: cloud/20261117T105743Z
+    event: 'declared at b7619b5: areas declared: driver-core, driver/hyperv, driver/qemu, book, designs; alters_relationships unset -> false; design_review unset -> required'
