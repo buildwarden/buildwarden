@@ -4,7 +4,7 @@ priority: 68
 follows: project-config-trust
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/detached-prepare-windows-exe.md
 branch: feat/detached-prepare-windows-exe
 areas:
@@ -28,10 +28,10 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261117T105743Z
-      expires: 2026-11-17T12:58:49.745992416Z
+      claimed_by: ""
+      expires: null
   - id: f6-validate-windows-hyperv
     phase: 6
     affinity: host:windows-hyperv
@@ -40,6 +40,22 @@ steps:
       claimed_by: ""
       expires: null
     note: 'Blocking native validation (FLOW-09) per docs/design/detached-prepare-windows-exe.md Validation plan, on the branch built with make build (dist/warden, no .exe): (1) go test ./driver/ ./driver/hyperv/ on this host, the new StartDetached cases included (the file started is the extension-less one named, not a warden.exe beside it); (2) no warden.exe in dist/: a hyperv build with [vm] image_refresh_after = "1m" prints "refreshing it in the background", prepare.log fills (config line first), the prepare finishes and the new base is active, and a build meanwhile starts no second prepare; (3) with the stale dist/warden.exe of 2026-11-04 beside it (a3): the same build, and the background process path (state.ps1) is dist\warden, not warden.exe; then delete the stale file; (4) prepare.log held open with no sharing by another process: the build prints the new line naming the error and warden image prepare --driver hyperv, and still SUCCEEDS; (5) go build -o dist/warden.exe ./cmd/warden: the refresh-due build still refreshes, from dist\warden.exe. Evidence under native/windows-hyperv/<date>/.'
+  - id: f2-design-review
+    phase: 2
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -111,3 +127,9 @@ history:
   - at: 2026-11-17T11:04:50Z
     by: cloud/20261117T105743Z
     event: 'declared at b7619b5: areas declared: driver-core, driver/hyperv, driver/qemu, book, designs; alters_relationships unset -> false; design_review unset -> required'
+  - at: 2026-11-17T11:05:35Z
+    by: cloud/20261117T105743Z
+    event: done f1-design
+  - at: 2026-11-17T11:05:35Z
+    by: cloud/20261117T105743Z
+    event: entered phase 2 (plan)
