@@ -6,7 +6,14 @@ round: feature
 phase: 1
 design: docs/design/workdir-in-context.md
 branch: feat/workdir-in-context
-alters_relationships: null
+areas:
+  - driver-core
+  - cli
+  - book
+  - designs
+declared: a2a80e5
+alters_relationships: false
+design_review: required
 source: 'Filed on Jeff''s word, 2026-11-15, in project-config-trust''s design review (a11 (a)); neither is a regression, both are security findings exempt from the FLOW-20 freeze. (1) --tmpdir or [build] tmpdir can place a build''s work directory under the context directory (tmpdir = "."), and the collector serves the whole context root to the build (/v1/context/); what each driver keeps in its work directory that a build should not read was not traced (a relay VM''s seed carries the claim token, tools/relay-vm/README.md). (2) The translator takes the first field after FROM as the image (parseFrom, driver/script/translate.go) and the container driver passes it to <runtime> pull, image inspect and container create (driver/container/container.go, environment.go), so ''FROM --platform=linux/amd64 ubuntu'' puts an option on the host runtime''s command line; read, not run: pull with an option and no image appears to fail first, which the item establishes. Same defect class as the relay image''s (F1), which project-config-trust fixes for the relay image only. See project-config-trust''s design, ''What this item does not do''.'
 steps:
   - id: f0-branch-setup
@@ -30,7 +37,34 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: The order with driver-contract (K1), which rewrites staging (warden stages in <tmpdir>/warden-stage-<id>/; start carries context_dir, tmpdir and base_image) and the container driver's Run, and whose branch already edits cmd/warden/main.go and driver/container/container.go. The two collide (K1 declares no areas; both edit cmd/warden and driver/), so FLOW-05's PR slot keeps their PRs apart; this item ranks ahead (70 against 72). Design, Questions a1 and Order with driver-contract.
+    options:
+      - '(a) this item first; K1 takes it in on its next merge of main and its refresh: the work-directory check stays in newRequest and covers K1''s stage directory under tmpdir, NewWorkDir''s backstop moves with NewWorkDir into the kit, the FROM check stays in driver/script, which K1''s baseImage calls, and K1''s specification says base_image has passed it'
+      - (b) this item waits for K1's PR to merge and is built on K1's structure
+      - (c) K1 absorbs both fixes
+    recommended: '(a): small, ahead in order and a security fix; it does not wait for an item with a blocking question (q2) and five blocking native validations still to run. No collides_with is needed (they already collide), and wf relate is the human''s in any case'
+  - id: a2
+    kind: assumed
+    status: open
+    question: FROM as a host path in the VM drivers (FROM /abs/x or ./x is the build VM's base disk as it is, linuxguest.ResolveImage; qemu opens it as qcow2, whose header can name a backing file anywhere on the host), and linuxguest.ContainerfileImage's silent default image when the Containerfile does not translate (with --script). Found while tracing finding 2; older than this item; not an option on a command line. Design, Questions a2.
+    options:
+      - '(a) out of this item: the session that records the review files them through intake, on Jeff''s word, as one security item for the VM drivers (proposed slug vm-from-host-path), with the design''s a2 paragraph as its source'
+      - '(b) this item fixes them too: refuse a path in FROM (a local image goes through --image) and make ContainerfileImage''s error the build''s; adds driver/qemu and driver/firecracker and blocking native validation on qemu-any'
+      - (c) recorded in this design only
+    recommended: '(a): it needs its own trace of the qcow2 backing chain and firecracker''s EnsureRaw, and changes documented VM behaviour'
+  - id: a3
+    kind: assumed
+    status: open
+    question: 'Other host directories that can lie inside the build context and so are served to the build: the output directory (warden-output, inside the context for warden build . by default: the build reads its own outputs and earlier builds'' outputs and ledgers) and the cache (os.UserCacheDir()/warden, moved by XDG_CACHE_HOME). Not in the source. Design, Questions a3.'
+    options:
+      - (a) unchanged and out of this item; recorded under What this item does not do, for Jeff to file or drop
+      - (b) refuse an output directory or cache inside the context, as the work directory; breaks warden build . by default
+      - (c) the collector does not serve the output directory; a collector storage boundary, which componentization a2 left out of the program
+    recommended: '(a): what it shows is the build''s own outputs and their ledgers, each fetch recorded, not host secrets; the default layout stays'
 history:
   - at: 2026-11-15T21:57:17Z
     by: human/jeff
@@ -59,3 +93,6 @@ history:
   - at: 2026-11-17T13:29:22Z
     by: cloud/20261117T105743Z
     event: claimed f1-design until 2026-11-17T15:29:22Z
+  - at: 2026-11-17T13:40:36Z
+    by: cloud/20261117T105743Z
+    event: 'declared at a2a80e5: areas declared: driver-core, cli, book, designs; alters_relationships unset -> false; design_review unset -> required'

@@ -979,3 +979,30 @@ gaps:
       same absolute path as before, covered by tier 0 on Linux; qemu Windows builds do not complete on
       main (qemu-windows-guest-package). Run once that is fixed and detached-prepare-windows-exe has
       merged, or on its branch if still waiting.
+  - id: workdir-in-context-windows
+    host: container-any
+    status: open
+    what: >-
+      On the Windows desktop: go test ./cmd/warden ./driver/...; warden build --tmpdir .\tmp . and
+      --tmpdir with the context's path in another letter case are each refused before an output
+      directory exists; TEMP set inside the context is refused naming TEMP; --tmpdir C:\elsewhere
+      builds.
+    design: docs/design/workdir-in-context.md
+    note: >-
+      Tracked, not blocking (design Validation plan, tier 2). No driver tree is edited and the
+      check is the same Go code on every OS (os.SameFile, walking up); CI runs cmd/warden's tests on
+      Linux only. Run on the branch once Implement is done, or on main after it merges.
+  - id: workdir-in-context-macos
+    host: macos-finch
+    status: open
+    what: >-
+      On the Mac with finch: warden build --tmpdir ./tmp . and --tmpdir with the context's path in
+      another letter case are each refused before an output directory exists; a context under /tmp
+      with --tmpdir under /private/tmp/<context> is refused; a default build (TMPDIR under
+      /var/folders) succeeds; a Dockerfile with FROM --platform=linux/arm64 alpine is refused before
+      finch is run.
+    design: docs/design/workdir-in-context.md
+    note: >-
+      Tracked, not blocking (design Validation plan, tier 2). No driver tree is edited; the checks
+      are runtime- and OS-independent Go, covered by tier 0 on Linux. Run on the branch once
+      Implement is done, or on main after it merges.
