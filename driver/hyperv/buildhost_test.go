@@ -277,9 +277,20 @@ func baseCfg(t *testing.T, dir string) buildConfig {
 		RelaySeedDir:  filepath.Join(dir, "relay-seed"),
 		makeSeedISO:   copySeedISO,
 		claimPort:     freePort(t),
-		readyTimeout:  5 * time.Second,
-		Timeout:       5 * time.Second,
+		Token:         testToken,
 	}
+}
+
+// testToken is the claim token warden gives the tests' builds.
+var testToken = strings.Repeat("ab", 32)
+
+// build runs runBuild against fp with a sessionHost, as warden's build
+// sequence would, and returns the host, what runBuild kept, and its error.
+func build(t *testing.T, fp Provisioner, cfg buildConfig) (*sessionHost, []string, error) {
+	t.Helper()
+	h := newSessionHost(t, cfg.OutputDir, cfg.Token)
+	kept, err := runBuild(context.Background(), fp, h, cfg)
+	return h, kept, err
 }
 
 // freePort returns a loopback TCP port that was free a moment ago.
@@ -321,15 +332,15 @@ func TestRunBuild_HappyPath(t *testing.T) {
 	cfg := baseCfg(t, dir)
 	fp := &buildFake{claimAddr: claimAddr(cfg), buildExit: 0}
 
-	res, err := runBuild(context.Background(), fp, cfg)
+	h, _, err := build(t, fp, cfg)
 	if err != nil {
 		if rerr, ok := fp.relayReadyErr.Load().(error); ok {
 			t.Fatalf("runBuild failed: %v (relay-sim error: %v)", err, rerr)
 		}
 		t.Fatalf("runBuild failed: %v", err)
 	}
-	if res == nil || res.OutputDir != dir {
-		t.Fatalf("BuildResult.OutputDir = %v, want %s", res, dir)
+	if exits, res := h.outcome(); res != nil || len(exits) != 0 {
+		t.Fatalf("build ended with %v, exits %v; want success", res, exits)
 	}
 	// Both VMs created + started, both overlays created.
 	if got := fp.createRelay.Load(); got != 1 {
@@ -364,6 +375,22 @@ func TestRunBuild_HappyPath(t *testing.T) {
 	}
 }
 
+// TestRunBuild_RelayStarted: the relay is reported to warden at its NAT
+// address over tcp, with the guest the build runs and the boot disk's fix
+// for a relay that refuses a claim field (ORCH-01).
+func TestRunBuild_RelayStarted(t *testing.T) {
+	cfg := baseCfg(t, t.TempDir())
+	h, _, err := build(t, &buildFake{claimAddr: claimAddr(cfg)}, cfg)
+	if err != nil {
+		t.Fatalf("runBuild: %v", err)
+	}
+	r := h.relay
+	if r.Claim != (driver.ClaimEndpoint{Network: driver.ClaimTCP, Address: claimAddr(cfg)}) ||
+		r.GuestOS != "linux" || r.OldRelayFix != RefreshRelayBootFix {
+		t.Errorf("relay-started %+v", r)
+	}
+}
+
 // TestRunBuild_Gen1 confirms a .vhd base drives a Generation-1 build VM (the
 // Windows Server eval image path: BIOS/MBR, no Secure Boot, no conversion).
 func TestRunBuild_Gen1(t *testing.T) {
@@ -376,7 +403,7 @@ func TestRunBuild_Gen1(t *testing.T) {
 	cfg.IsWindows = true
 	fp := &buildFake{claimAddr: claimAddr(cfg), buildExit: 0}
 
-	if _, err := runBuild(context.Background(), fp, cfg); err != nil {
+	if _, _, err := build(t, fp, cfg); err != nil {
 		if rerr, ok := fp.relayReadyErr.Load().(error); ok {
 			t.Fatalf("runBuild failed: %v (relay-sim error: %v)", err, rerr)
 		}
@@ -399,7 +426,7 @@ func TestRunBuild_OverlayFormatMismatch(t *testing.T) {
 	cfg := baseCfg(t, dir)
 	cfg.BuildBaseVHDX = "build-base.vhd"                // Gen1 base
 	cfg.BuildOverlay = filepath.Join(dir, "build.vhdx") // mismatched child
-	if _, err := runBuild(context.Background(), &buildFake{}, cfg); err == nil {
+	if _, _, err := build(t, &buildFake{}, cfg); err == nil {
 		t.Fatal("expected a validation error for a base/overlay format mismatch")
 	}
 }
@@ -409,12 +436,13 @@ func TestRunBuild_NonzeroExit(t *testing.T) {
 	cfg := baseCfg(t, dir)
 	fp := &buildFake{claimAddr: claimAddr(cfg), buildExit: 7}
 
-	_, err := runBuild(context.Background(), fp, cfg)
-	if err == nil {
-		t.Fatal("expected an error for a nonzero build exit code")
+	h, _, err := build(t, fp, cfg)
+	if err != nil {
+		t.Fatalf("runBuild: %v", err)
 	}
-	if !strings.Contains(err.Error(), "code 7") {
-		t.Errorf("error = %q, want it to mention exit code 7", err.Error())
+	var ee *driver.ExitError
+	if _, res := h.outcome(); !errors.As(res, &ee) || ee.Code != 7 {
+		t.Errorf("build ended with %v, want exit code 7", res)
 	}
 	if got := fp.remove.Load(); got != 2 {
 		t.Errorf("RemoveVM = %d, want 2 even on failure (teardown)", got)
@@ -434,8 +462,7 @@ func TestRunBuild_ValidatesConfig(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cfg := baseCfg(t, t.TempDir())
 			mut(&cfg)
-			if _, err := runBuild(
-				context.Background(), &buildFake{}, cfg); err == nil {
+			if _, _, err := build(t, &buildFake{}, cfg); err == nil {
 				t.Errorf("expected a validation error when %s is empty", name)
 			}
 		})
@@ -443,23 +470,24 @@ func TestRunBuild_ValidatesConfig(t *testing.T) {
 }
 
 // TestRunBuild_VMOffWithoutCompletion: a guest that powers off without
-// reporting an exit code fails the build promptly instead of hanging until the
-// build timeout (heartbeat silence only counts once heartbeats have started).
+// reporting an exit code is reported as exited at once, which warden's grace
+// turns into a failure, instead of the build hanging until its timeout
+// (heartbeat silence only counts once heartbeats have started).
 func TestRunBuild_VMOffWithoutCompletion(t *testing.T) {
 	dir := t.TempDir()
 	cfg := baseCfg(t, dir)
-	cfg.Timeout = time.Minute
 	cfg.vmPoll = 50 * time.Millisecond
 	fp := &buildFake{claimAddr: claimAddr(cfg), powersOffSilently: true}
 
-	start := time.Now()
-	_, err := runBuild(context.Background(), fp, cfg)
-	if err == nil ||
-		!strings.Contains(err.Error(), "powered off without reporting an exit code") {
-		t.Fatalf("err = %v, want the powered-off error", err)
+	h, _, err := build(t, fp, cfg)
+	if err != nil {
+		t.Fatalf("runBuild: %v", err)
 	}
-	if took := time.Since(start); took > vmOffGrace+10*time.Second {
-		t.Errorf("took %s; the off VM should fail the build within the grace", took)
+	exits, _ := h.outcome()
+	if len(exits) != 1 || !strings.HasPrefix(exits[0], "build: ") ||
+		!strings.Contains(exits[0], "powered off without reporting an exit code") ||
+		!strings.Contains(exits[0], filepath.Join(dir, "build-output.log")) {
+		t.Fatalf("exits %v, want the build VM's power-off", exits)
 	}
 	if got := fp.remove.Load(); got != 2 {
 		t.Errorf("RemoveVM = %d, want 2 (teardown still runs)", got)
@@ -476,7 +504,7 @@ func TestRunBuild_ClaimBeforeBuildVM(t *testing.T) {
 		cfg := baseCfg(t, dir)
 		cfg.Request = &driver.BuildRequest{UpstreamSystemCA: true, BuildLink: link}
 		fp := &buildFake{claimAddr: claimAddr(cfg)}
-		if _, err := runBuild(context.Background(), fp, cfg); err != nil {
+		if _, _, err := build(t, fp, cfg); err != nil {
 			t.Fatalf("runBuild: %v", err)
 		}
 		if got := fp.buildVMsAtClaim.Load(); got != 1 {
@@ -491,8 +519,9 @@ func TestRunBuild_ClaimBeforeBuildVM(t *testing.T) {
 }
 
 // TestStartRelay_SeedAndClaim pins Decisions 2 to 4 end to end on the fake:
-// the relay is claimed at the address allocated in the NAT prefix, with the
-// token its seed carries as the claim's Bearer; the seed holds only the
+// the relay is claimed at the address allocated in the NAT prefix, with
+// warden's token, which its seed carries, as the claim's Bearer; the seed
+// holds only the
 // pre-claim values; req.DNS is exactly the claim's upstream_dns; the Notes
 // record the allocation; and teardown frees the address and the switch.
 func TestStartRelay_SeedAndClaim(t *testing.T) {
@@ -501,11 +530,11 @@ func TestStartRelay_SeedAndClaim(t *testing.T) {
 	dns := []netip.Addr{netip.MustParseAddr("10.20.0.53"), netip.MustParseAddr("10.20.0.54")}
 	cfg.Request = &driver.BuildRequest{UpstreamSystemCA: true, DNS: dns}
 	fp := &buildFake{claimAddr: claimAddr(cfg)}
-	if _, err := runBuild(context.Background(), fp, cfg); err != nil {
+	if _, _, err := build(t, fp, cfg); err != nil {
 		t.Fatalf("runBuild: %v", err)
 	}
-	if tok := fp.seedKey("claim_token"); !isClaimToken(tok) {
-		t.Errorf("seed claim_token = %q, want 64 lowercase hex digits", tok)
+	if tok := fp.seedKey("claim_token"); tok != testToken {
+		t.Errorf("seed claim_token = %q, want warden's %q", tok, testToken)
 	}
 	for key, want := range map[string]string{"seed": "1", "net": "static",
 		"nat_ip": "127.0.0.1", "nat_prefix": "30", "nat_gw": "127.0.0.2"} {
@@ -538,9 +567,10 @@ func TestStartRelay_SeedAndClaim(t *testing.T) {
 func TestStartRelay_WrongTokenRefused(t *testing.T) {
 	dir := t.TempDir()
 	cfg := baseCfg(t, dir)
-	cfg.readyTimeout = time.Second
 	fp := &buildFake{claimAddr: claimAddr(cfg), serveToken: strings.Repeat("ee", 32)}
-	if _, err := runBuild(context.Background(), fp, cfg); err == nil {
+	h := newSessionHost(t, dir, cfg.Token)
+	h.claimTimeout = time.Second
+	if _, err := runBuild(context.Background(), fp, h, cfg); err == nil {
 		t.Fatal("the claim with the seed's token was accepted by a relay wanting another")
 	}
 	if fp.createBuild.Load() != 0 || fp.remove.Load() != 1 {
@@ -558,7 +588,7 @@ func TestRunBuild_DurableSlot(t *testing.T) {
 	cfg.Slots = []string{"warden-dev-0", "warden-dev-1"}
 	fp := &buildFake{claimAddr: claimAddr(cfg),
 		attached: map[string][]string{"warden-dev-0": {"warden-build-kept"}}}
-	if _, err := runBuild(context.Background(), fp, cfg); err != nil {
+	if _, _, err := build(t, fp, cfg); err != nil {
 		t.Fatalf("runBuild: %v", err)
 	}
 	relay, _ := fp.lastRelay.Load().(RelayVMSpec)
@@ -577,7 +607,7 @@ func TestRunBuild_SlotForeignAdapter(t *testing.T) {
 	cfg.BuildSwitch = ""
 	cfg.Slots = []string{"warden-dev-0"}
 	fp := &buildFake{claimAddr: claimAddr(cfg), intruder: "warden-build-other"}
-	_, err := runBuild(context.Background(), fp, cfg)
+	_, _, err := build(t, fp, cfg)
 	var fe *driver.FixableError
 	if !errors.As(err, &fe) || !strings.Contains(fe.Msg, "also attached: warden-build-other") {
 		t.Fatalf("err = %v", err)
@@ -614,8 +644,14 @@ func TestRunBuild_KeepVMsKeepsRelay(t *testing.T) {
 	cfg := baseCfg(t, dir)
 	cfg.KeepVMs = true
 	fp := &buildFake{claimAddr: claimAddr(cfg)}
-	if _, err := runBuild(context.Background(), fp, cfg); err != nil {
+	_, kept, err := build(t, fp, cfg)
+	if err != nil {
 		t.Fatalf("runBuild: %v", err)
+	}
+	want := []string{"build VM warden-build-unit", cfg.BuildOverlay,
+		"relay VM warden-relay-unit", cfg.RelayOverlay}
+	if strings.Join(kept, "|") != strings.Join(want, "|") {
+		t.Errorf("kept %v, want %v", kept, want)
 	}
 	if fp.remove.Load() != 0 {
 		t.Errorf("RemoveVM = %d, want 0 with --keep-vms", fp.remove.Load())

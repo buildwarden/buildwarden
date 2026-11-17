@@ -20,25 +20,31 @@ func requestedNetwork(req *driver.BuildRequest) string {
 	return req.Network
 }
 
-// StartBuild runs a build on Hyper-V: it verifies the isolated network, brings
-// up the relay host (collector + claimed relay VM) and the build VM,
-// waits for completion, and tears everything down. It composes the resolved
-// assets and delegates the orchestration to runBuild.
+// Preflight is the hyperv driver's probe: the checks its Run makes before
+// any per-build work, for the capabilities this process's token has.
+func (d *Driver) Preflight(req *driver.BuildRequest) error {
+	if req == nil {
+		return fmt.Errorf("hyperv build: nil request")
+	}
+	sw := requestedNetwork(req)
+	return preflightBuild(Detect(sw), sw, req)
+}
+
+// Run is the hyperv driver's run of one build (specs/driver-contract/v1.md,
+// The build): it verifies the isolated network, boots the relay VM with
+// warden's claim token and reports it through host, boots the build VM once
+// warden has claimed it, reports the build VM's power-off as exited, and
+// tears everything down when host.Wait returns, unless --keep-vms keeps it,
+// which it returns as kept. It composes the resolved assets and delegates the
+// orchestration to runBuild.
 //
 // It reuses a durable dev switch (from `warden setup --driver hyperv`) so the whole
 // per-build path stays within the Hyper-V Administrators tier (no elevation).
-func (d *Driver) StartBuild(
-	ctx context.Context, req *driver.BuildRequest,
-) (*driver.BuildResult, error) {
+func (d *Driver) Run(ctx context.Context, req *driver.BuildRequest, start *driver.Start,
+	host driver.Host) (kept []string, err error) {
 	if req == nil {
 		return nil, fmt.Errorf("hyperv build: nil request")
 	}
-	if req.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
-		defer cancel()
-	}
-
 	sw := requestedNetwork(req)
 
 	// Privilege and network readiness first: a missing group membership or
@@ -49,7 +55,7 @@ func (d *Driver) StartBuild(
 		return nil, err
 	}
 
-	buildID := driver.RandAlphaNum(buildIDLen)
+	buildID := start.BuildID
 	// Held for the whole build, so `warden clean` leaves this build alone.
 	unlockBuild, err := driver.HostLock(buildLockName(buildID))
 	if err != nil {
@@ -68,23 +74,25 @@ func (d *Driver) StartBuild(
 		return nil, fmt.Errorf("hyperv build: %w", err)
 	}
 	defer driver.RemoveWorkDir(req, workDir)
+	if req.KeepVMs {
+		kept = append(kept, workDir)
+	}
 	if err := checkDirVisible(workDir, "the build's work directory",
 		"pass --tmpdir a folder outside AppData"); err != nil {
-		return nil, fmt.Errorf("hyperv build: %w", err)
+		return kept, fmt.Errorf("hyperv build: %w", err)
 	}
 
 	seedISO, seedVHDX, err := buildSeed(workDir, buildID, isWindows, req)
 	if err != nil {
-		return nil, fmt.Errorf("hyperv build: %w", err)
+		return kept, fmt.Errorf("hyperv build: %w", err)
 	}
 
 	// warden staged the script (driver.StageBuildScript) and recorded its
 	// inputs before the build started.
-	buildScript := req.BuildScript
 	env, err := describeBuild(LayerCache(), chain, isWindows, generation,
-		buildSeedDir(workDir), buildScript)
+		buildSeedDir(workDir), req.BuildScript)
 	if err != nil {
-		return nil, fmt.Errorf("hyperv build: describing build environment: %w", err)
+		return kept, fmt.Errorf("hyperv build: describing build environment: %w", err)
 	}
 
 	p := newLocalProvisioner(d.Verbose)
@@ -95,47 +103,40 @@ func (d *Driver) StartBuild(
 	// shell lands on ephemeral-per-build.
 	p, bnet, cleanupNet, err := d.provisionBuildNetwork(ctx, p, caps, sw, buildID, req)
 	if err != nil {
-		return nil, err
+		return kept, err
 	}
-	defer cleanupNet()
+	defer func() { kept = append(kept, cleanupNet()...) }()
 	if err := prepareBuildNetwork(req, bnet.NAT, bnet.NATPrefix, defaultRouteDNS); err != nil {
-		return nil, fmt.Errorf("hyperv build: %w", err)
+		return kept, fmt.Errorf("hyperv build: %w", err)
 	}
 
-	res, err := runBuild(ctx, p, buildConfig{
+	vms, err := runBuild(ctx, p, host, buildConfig{
 		BuildID:       buildID,
-		OutputDir:     req.OutputDir,
+		Token:         start.ClaimToken,
+		OutputDir:     start.DiagnosticsDir,
 		RelayBootVHDX: relayBoot,
 		RelayOverlay:  filepath.Join(workDir, "relay.vhdx"),
 		BuildBaseVHDX: base,
 		// The differencing overlay must share the base disk's format (.vhd off a
 		// Gen1 eval VHD, .vhdx off a Gen2 image).
-		BuildOverlay:    filepath.Join(workDir, "build"+filepath.Ext(base)),
-		SeedISO:         seedISO,
-		SeedVHDX:        seedVHDX,
-		IsWindows:       isWindows,
-		Generation:      generation,
-		BuildScriptPath: buildScript,
-		BuildSwitch:     bnet.BuildSwitch,
-		Slots:           bnet.Slots,
-		NATSwitch:       bnet.NAT,
-		NATPrefix:       bnet.NATPrefix,
-		HostIP:          bnet.HostIP,
-		RelaySeedDir:    filepath.Join(workDir, "relay-seed"),
-		Timeout:         req.Timeout,
-		MemoryMB:        req.MemoryMB,
-		CPUs:            req.CPUs,
-		KeepVMs:         req.KeepVMs,
-		OutputTee:       driver.ConsoleTee(req),
-		Request:         req,
-		ContextDir:      req.ContextDir,
-		Environment:     env,
+		BuildOverlay: filepath.Join(workDir, "build"+filepath.Ext(base)),
+		SeedISO:      seedISO,
+		SeedVHDX:     seedVHDX,
+		IsWindows:    isWindows,
+		Generation:   generation,
+		BuildSwitch:  bnet.BuildSwitch,
+		Slots:        bnet.Slots,
+		NATSwitch:    bnet.NAT,
+		NATPrefix:    bnet.NATPrefix,
+		HostIP:       bnet.HostIP,
+		RelaySeedDir: filepath.Join(workDir, "relay-seed"),
+		MemoryMB:     req.MemoryMB,
+		CPUs:         req.CPUs,
+		KeepVMs:      req.KeepVMs,
+		Request:      req,
+		Environment:  env,
 	})
-	if err != nil {
-		return nil, err
-	}
-	driver.FinalizeOutput(req.OutputDir, req.Compress)
-	return res, nil
+	return append(kept, vms...), err
 }
 
 // preflightBuild refuses, before any per-build work, a build these
@@ -193,13 +194,13 @@ func resolveBuildDisks(req *driver.BuildRequest) (
 // slot); the ephemeral strategies stand up a per-build Private switch and take
 // the NAT EnsureNetwork chose, the dev switch's when setup made one. It
 // returns the (possibly updated) provisioner, the network, and a cleanup to
-// run on build teardown.
+// run on build teardown, which returns what --keep-vms left.
 func (d *Driver) provisionBuildNetwork(
 	ctx context.Context, p Provisioner, caps Capabilities,
 	sw, buildID string, req *driver.BuildRequest,
-) (prov Provisioner, bnet buildNetwork, cleanup func(), err error) {
+) (prov Provisioner, bnet buildNetwork, cleanup func() []string, err error) {
 	prov = p
-	cleanup = func() {}
+	cleanup = func() []string { return nil }
 	switch strat := caps.NetworkStrategy(); strat {
 	case NetReuseDurable:
 		// Non-elevated Hyper-V Administrators: the durable network from
@@ -247,17 +248,18 @@ func (d *Driver) provisionBuildNetwork(
 		bnet = buildNetwork{NAT: res.NATName, NATPrefix: res.NATPrefix,
 			HostIP: res.HostIP, BuildSwitch: buildSwitch}
 		bp := prov
-		cleanup = func() {
+		cleanup = func() []string {
 			if req.KeepVMs {
 				fmt.Fprintf(os.Stderr, "warden: --keep-vms: leaving ephemeral "+
 					"network %q\n", buildSwitch)
-				return
+				return []string{"ephemeral network " + buildSwitch}
 			}
 			// Background ctx so teardown runs even when ctx is already cancelled.
 			// Teardown is by per-build name convention, so a reused NAT (a
 			// different name) is never removed - only the per-build build switch
 			// and, when created, the per-build NAT.
 			_ = bp.TeardownNetwork(context.Background(), buildSwitch)
+			return nil
 		}
 
 	default: // NetBlocked, which Ready never passes
@@ -265,11 +267,3 @@ func (d *Driver) provisionBuildNetwork(
 	}
 	return prov, bnet, cleanup, nil
 }
-
-// Exec is not supported by the Hyper-V driver.
-func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
-	return driver.ErrExecNotSupported
-}
-
-// Close releases resources held by the driver. Nothing to release yet.
-func (d *Driver) Close() error { return nil }

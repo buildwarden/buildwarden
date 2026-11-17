@@ -6,6 +6,7 @@ import (
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/container"
 	"github.com/buildwarden/buildwarden/driver/firecracker"
+	"github.com/buildwarden/buildwarden/driver/hyperv"
 	"github.com/buildwarden/buildwarden/driver/qemu"
 	"github.com/buildwarden/buildwarden/driver/vz"
 )
@@ -91,7 +92,17 @@ var linkedDrivers = map[string]*linkedDriver{
 			return d.Run(ctx, req, start, host)
 		}},
 	"hyperv": {Capabilities: capabilities{VM: true, Keep: keepRunning, Exited: true,
-		Containerfile: containerfileTranslate, GuestOS: []string{"linux", "windows"}}},
+		Containerfile: containerfileTranslate, GuestOS: []string{"linux", "windows"}},
+		Preflight: func(_ context.Context, _ *Config, req *driver.BuildRequest,
+			_ *driver.Start) error {
+			return hyperv.New().Preflight(req)
+		},
+		Run: func(ctx context.Context, cfg *Config, req *driver.BuildRequest,
+			start *driver.Start, host driver.Host) ([]string, error) {
+			d := hyperv.New()
+			d.Verbose = cfg.Output.Verbose
+			return d.Run(ctx, req, start, host)
+		}},
 	"firecracker": {Capabilities: capabilities{VM: true, Keep: keepRunning, Exited: true,
 		Containerfile: containerfileTranslate, GuestOS: []string{"linux"}},
 		Preflight: func(_ context.Context, _ *Config, req *driver.BuildRequest,

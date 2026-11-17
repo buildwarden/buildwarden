@@ -10,18 +10,18 @@ import (
 	"github.com/buildwarden/buildwarden/driver"
 )
 
-// StartBuild is unavailable off Windows: Hyper-V is a Windows host feature.
-func (d *Driver) StartBuild(
-	ctx context.Context, req *driver.BuildRequest,
-) (*driver.BuildResult, error) {
-	return nil, fmt.Errorf(
-		"hyperv driver requires a Windows host (current OS: %s)", runtime.GOOS)
+// errNotWindows is the hyperv driver's refusal off Windows: Hyper-V is a
+// Windows host feature.
+func errNotWindows() error {
+	return fmt.Errorf("hyperv driver requires a Windows host (current OS: %s)",
+		runtime.GOOS)
 }
 
-// Exec is unavailable off Windows.
-func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
-	return fmt.Errorf("hyperv driver requires a Windows host (current OS: %s)", runtime.GOOS)
-}
+// Preflight is unavailable off Windows.
+func (d *Driver) Preflight(*driver.BuildRequest) error { return errNotWindows() }
 
-// Close is a no-op.
-func (d *Driver) Close() error { return nil }
+// Run is unavailable off Windows: it reports nothing.
+func (d *Driver) Run(context.Context, *driver.BuildRequest, *driver.Start,
+	driver.Host) ([]string, error) {
+	return nil, errNotWindows()
+}

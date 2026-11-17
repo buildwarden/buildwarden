@@ -2,9 +2,7 @@ package hyperv
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -25,11 +23,15 @@ const (
 
 // buildConfig is the fully-resolved input to runBuild: every asset path is
 // already located and the network already chosen. runBuild is pure
-// orchestration over the Provisioner + StartRelay, so it is unit-testable with a
-// fake Provisioner and never touches asset resolution, image acquisition, or
-// seed generation itself.
+// orchestration over the Provisioner, StartRelay and the driver.Host, so it is
+// unit-testable with a fake Provisioner and never touches asset resolution,
+// image acquisition, or seed generation itself.
 type buildConfig struct {
-	BuildID   string
+	BuildID string
+	// Token is warden's claim token, for the relay's seed.
+	Token string
+	// OutputDir is the build's output directory, which the exit report names
+	// for the guest's last output.
 	OutputDir string
 
 	// Relay assets (relay VM). RelayOverlay is the per-build differencing child
@@ -46,11 +48,6 @@ type buildConfig struct {
 	SeedISO       string
 	SeedVHDX      string
 	IsWindows     bool
-
-	// BuildScriptPath is the host path to the build script. It is served to the
-	// guest via the collector's /v1/build-script endpoint (the relay pulls it
-	// and re-serves it, since the relay has no shared disk).
-	BuildScriptPath string
 
 	// Generation is the build VM's Hyper-V generation, dictated by the base
 	// image format: 1 for a BIOS/MBR .vhd (the Windows Server eval image boots
@@ -72,29 +69,21 @@ type buildConfig struct {
 	// RelaySeedDir is where the relay seed is staged (under the work dir).
 	RelaySeedDir string
 
-	MemoryMB int           // build VM; default 4096
-	CPUs     int           // build VM; default 4
-	KeepVMs  bool          // leave both VMs and their overlays for inspection
-	Timeout  time.Duration // whole-build ceiling; zero means no limit
+	MemoryMB int  // build VM; default 4096
+	CPUs     int  // build VM; default 4
+	KeepVMs  bool // leave both VMs and their overlays for inspection
 
-	// OutputTee, if set, receives a live copy of the guest build console
-	// (forwarded by the collector). Nil (e.g. under --quiet) suppresses it.
-	OutputTee io.Writer
-
-	// Request carries the relay settings (capture mode, upstream CAs).
+	// Request carries the build link and the relay's resolvers.
 	Request *driver.BuildRequest
-	// ContextDir is the build context the collector serves to the guest.
-	ContextDir string
 	// Environment is the ledger's environment record (what the build VM
 	// boots from); nil records none.
 	Environment *relaycfg.Environment
 
 	// Test hooks (zero = production defaults): the claim port, the relay
-	// seed ISO builder, and timings.
-	claimPort    int
-	makeSeedISO  func(seedDir, iso string) error
-	readyTimeout time.Duration
-	vmPoll       time.Duration // build VM state poll (zero = 3 s)
+	// seed ISO builder, and the build VM's state poll.
+	claimPort   int
+	makeSeedISO func(seedDir, iso string) error
+	vmPoll      time.Duration // build VM state poll (zero = 3 s)
 }
 
 // validateBuildConfig rejects a buildConfig that is missing a required field or
@@ -152,64 +141,55 @@ func applyBuildDefaults(cfg *buildConfig) {
 }
 
 // runBuild composes the full Hyper-V build flow against an already-resolved
-// buildConfig:
+// buildConfig, as the driver's side of warden's build sequence:
 //
-//  1. StartRelay starts the build's collector on the host, boots the relay
-//     VM, and claims it (pushing the build config), blocking until it is ready.
+//  1. StartRelay boots the relay VM with warden's claim token and reports it
+//     through host, returning once warden has claimed it.
 //  2. A per-build differencing overlay is created off the read-only build-guest
 //     base image, so the base is never mutated and concurrent builds don't
 //     collide.
 //  3. The build VM is created on the Private build switch (its sole NIC) with
-//     the overlay + seed media, then started.
-//  4. It blocks until the relay POSTs /v1/complete (warden-io in the guest
-//     reported the build finished) or the timeout/context fires. Outputs are
-//     streamed to OutputDir by the collector as the build runs, so on success
-//     there is nothing left to copy.
+//     the overlay + seed media, then started, and reported started.
+//  4. It waits for warden's stop, reporting the build VM's power-off as
+//     exited meanwhile. The collector and the build's completion are
+//     warden's.
 //
 // Everything created is torn down on return (both VMs removed, both overlays
-// deleted, host servers stopped), success or failure.
+// deleted), success or failure, unless KeepVMs keeps it, which runBuild then
+// returns as kept.
 func runBuild(
-	ctx context.Context, prov Provisioner, cfg buildConfig,
-) (*driver.BuildResult, error) {
+	ctx context.Context, prov Provisioner, host driver.Host, cfg buildConfig,
+) (kept []string, err error) {
 	if err := validateBuildConfig(cfg); err != nil {
 		return nil, err
 	}
 	applyBuildDefaults(&cfg)
 
-	if err := os.MkdirAll(cfg.OutputDir, 0o755); err != nil {
-		return nil, fmt.Errorf("runBuild: output dir: %w", err)
-	}
-
-	// 1. Relay host up: collector on the host, relay VM booted and claimed.
-	//    StartRelay tears its own half down on failure.
-	rh, err := StartRelay(ctx, prov, RelayHostConfig{
-		BuildID:         cfg.BuildID,
-		OutputDir:       cfg.OutputDir,
-		BootVHDX:        cfg.RelayBootVHDX,
-		OverlayVHDX:     cfg.RelayOverlay,
-		NATSwitch:       cfg.NATSwitch,
-		NATPrefix:       cfg.NATPrefix,
-		HostIP:          cfg.HostIP,
-		BuildSwitch:     cfg.BuildSwitch,
-		Slots:           cfg.Slots,
-		SeedDir:         cfg.RelaySeedDir,
-		MakeSeedISO:     cfg.makeSeedISO,
-		BuildScriptPath: cfg.BuildScriptPath,
-		GuestOS:         guestOS(cfg.IsWindows),
-		ContextDir:      cfg.ContextDir,
-		Request:         cfg.Request,
-		Environment:     cfg.Environment,
-		KeepVM:          cfg.KeepVMs,
-		ClaimPort:       cfg.claimPort,
-		ReadyTimeout:    cfg.readyTimeout,
-		OutputTee:       cfg.OutputTee,
+	// 1. Relay VM booted, reported and claimed. StartRelay tears its own half
+	//    down on failure.
+	rh, err := StartRelay(ctx, prov, host, RelayHostConfig{
+		BuildID:     cfg.BuildID,
+		Token:       cfg.Token,
+		BootVHDX:    cfg.RelayBootVHDX,
+		OverlayVHDX: cfg.RelayOverlay,
+		NATSwitch:   cfg.NATSwitch,
+		NATPrefix:   cfg.NATPrefix,
+		HostIP:      cfg.HostIP,
+		BuildSwitch: cfg.BuildSwitch,
+		Slots:       cfg.Slots,
+		SeedDir:     cfg.RelaySeedDir,
+		MakeSeedISO: cfg.makeSeedISO,
+		GuestOS:     guestOS(cfg.IsWindows),
+		Request:     cfg.Request,
+		Environment: cfg.Environment,
+		KeepVM:      cfg.KeepVMs,
+		ClaimPort:   cfg.claimPort,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("runBuild: %w", err)
 	}
-	// rh.Close removes the relay VM + relay overlay (unless --keep-vms) and
-	// stops the host servers.
-	defer func() { _ = rh.Close() }()
+	// rh.Close removes the relay VM + relay overlay (unless --keep-vms).
+	defer func() { kept = append(kept, rh.Close()...) }()
 
 	// 2. Per-build differencing overlay off the read-only build-guest base.
 	if err := prov.CreateDiffDisk(ctx, cfg.BuildOverlay, cfg.BuildBaseVHDX); err != nil {
@@ -227,6 +207,7 @@ func runBuild(
 				"warden: --keep-vms: leaving build VM %q "+
 					"(overlay %q) for inspection\n",
 				buildVM, cfg.BuildOverlay)
+			kept = append(kept, "build VM "+buildVM, cfg.BuildOverlay)
 			return
 		}
 		_ = prov.RemoveVM(context.Background(), buildVM)
@@ -268,38 +249,30 @@ func runBuild(
 	if err := prov.StartVM(ctx, buildVM); err != nil {
 		return nil, fmt.Errorf("runBuild: start build VM: %w", err)
 	}
+	if err := host.Started(); err != nil {
+		return nil, err
+	}
 
-	// 4. Wait for the build to finish. The relay POSTs /v1/complete to the
-	//    collector when warden-io in the guest reports completion; the collector
-	//    delivers that (with the exit code) on Done. Artifacts/ledger/output are
-	//    streamed to OutputDir as the build runs.
-	waitCtx := ctx
-	if cfg.Timeout > 0 {
-		var cancel context.CancelFunc
-		waitCtx, cancel = context.WithTimeout(ctx, cfg.Timeout)
-		defer cancel()
-	}
-	// A guest that powers off (or crashes) without reporting completion would
-	// otherwise leave the host waiting forever: heartbeat silence is only
-	// judged once heartbeats have started. Watch the VM alongside the wait.
-	waitCtx, stopWatch := context.WithCancelCause(waitCtx)
-	defer stopWatch(nil)
-	go watchBuildVM(waitCtx, prov, buildVM, stopWatch, cfg.vmPoll)
-	if err := rh.Session.Wait(waitCtx); err != nil {
-		if errors.Is(context.Cause(waitCtx), errBuildVMOff) && ctx.Err() == nil {
-			return nil, driver.Fixable(
-				"see "+filepath.Join(cfg.OutputDir, "build-output.log")+
-					" for the last thing the guest printed",
-				"runBuild: build VM %q powered off without reporting an exit code",
-				buildVM)
-		}
-		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
-			return nil, fmt.Errorf("runBuild: build %q did not complete within %s: %w",
-				buildVM, cfg.Timeout, context.DeadlineExceeded)
-		}
-		return nil, fmt.Errorf("runBuild: %w", err)
-	}
-	return &driver.BuildResult{OutputDir: cfg.OutputDir}, nil
+	// 4. A guest that powers off (or crashes) without reporting completion
+	//    would otherwise leave the build waiting until its heartbeat timeout
+	//    or forever: heartbeat silence is only judged once heartbeats have
+	//    started. The watch reports the VM's power-off as exited, and warden
+	//    gives a completion on its way its grace.
+	watchCtx, stopWatch := context.WithCancel(ctx)
+	watched := make(chan struct{})
+	go func() {
+		defer close(watched)
+		watchBuildVM(watchCtx, prov, buildVM, host, cfg.vmPoll, fmt.Sprintf(
+			"build VM %q powered off without reporting an exit code; see %s for "+
+				"the last thing the guest printed", buildVM,
+			filepath.Join(cfg.OutputDir, "build-output.log")))
+	}()
+	defer func() {
+		stopWatch()
+		<-watched
+	}()
+	host.Wait(ctx)
+	return nil, nil
 }
 
 // buildCOMPipe is the build VM's COM1 pipe: WARDEN_HYPERV_BUILD_COM_PIPE, or
@@ -364,18 +337,11 @@ func joinOrNone(names []string) string {
 	return strings.Join(names, ", ")
 }
 
-var errBuildVMOff = errors.New("build VM powered off")
-
-// vmOffGrace is how long after seeing the build VM off the wait still allows
-// for a completion in flight: the guest reports its exit just before it
-// powers off.
-const vmOffGrace = 5 * time.Second
-
-// watchBuildVM polls the build VM's state and cancels the wait with
-// errBuildVMOff once the VM is off (or gone) and the grace has passed.
+// watchBuildVM polls the build VM's state and reports it through host as
+// exited, with detail, once the VM is off (or gone), until ctx ends.
 func watchBuildVM(
-	ctx context.Context, prov Provisioner, vm string,
-	stop context.CancelCauseFunc, poll time.Duration,
+	ctx context.Context, prov Provisioner, vm string, host driver.Host,
+	poll time.Duration, detail string,
 ) {
 	if poll <= 0 {
 		poll = 3 * time.Second
@@ -390,11 +356,7 @@ func watchBuildVM(
 		if err != nil || (state != "Off" && state != "") {
 			continue
 		}
-		select {
-		case <-ctx.Done():
-		case <-time.After(vmOffGrace):
-			stop(errBuildVMOff)
-		}
+		host.Exited(driver.ExitedBuild, detail)
 		return
 	}
 }

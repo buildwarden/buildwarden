@@ -15,7 +15,6 @@ import (
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
-	"github.com/buildwarden/buildwarden/driver/hyperv"
 )
 
 var version = "dev"
@@ -259,10 +258,6 @@ func validateGuestOS(guestOS, driverName string) error {
 // driver.Driver's StartBuild; it is nil for a driver with a Run (linked.go).
 func newDriver(cfg *Config) (driver.Driver, error) {
 	switch cfg.Runtime.Driver {
-	case "hyperv":
-		d := hyperv.New()
-		d.Verbose = cfg.Output.Verbose
-		return d, nil
 	default:
 		return nil, nil
 	}
