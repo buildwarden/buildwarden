@@ -23,7 +23,7 @@ rules_changed:
   - ORCH-03
   - PROFILE-01
   - UX-08
-declared: c767992
+declared: 975e8cc
 alters_relationships: true
 design_review: required
 source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase K1 (wave 2 by the order table; the design says it does not depend on the relay and can start as soon as P0 merges). Done when adding a driver touches only its own directory. Jeff, attended session 2026-11-12: go ahead.'
@@ -113,10 +113,19 @@ steps:
     lease:
       claimed_by: ""
       expires: null
+  - id: f1-answer-q2
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
   - id: f1-design-r3
     phase: 1
     affinity: cloud
     status: pending
+    needs:
+      - f1-answer-q2
     lease:
       claimed_by: cloud/20261117T105743Z
       expires: 2026-11-17T15:22:42.94285404Z
@@ -367,6 +376,15 @@ questions:
       - 'project-config-trust was withdrawn, or merged with another answer to which file is read: return K1 to Design (FLOW-06)'
     recommended: 'resume: project-config-trust''s PR has merged (name the PR and the merge commit)'
     answer: 'resume: project-config-trust''s PR has merged (#124, 417fabd) (Jeff, 2026-11-16)'
+  - id: q2
+    kind: blocking
+    status: open
+    question: 'A driver''s key spelled in another letter case (r3, return from f3-implement task 20; design, Questions, Blocking, and Design, A driver''s key in another letter case). On main BurntSushi/toml fills the seven driver-owned keys from a key in any letter case: [Runtime] CLI = "podman" selects podman and [runtime] CLI = "./rt" is refused (TestRuntimeKeyInOtherSpellings, cmd/warden/runtime_test.go:335). The kit looks a key up by its exact name, as TOML defines keys (driver/drivercmd/settings.go), so after task 20 both are silently not set. That breaks Behaviour 18, runtime-cli-project-path''s hand-off point 5, and GLOBAL-10/11. warden''s own keys stay decoded as main decodes them under every option. Which reading does K1 adopt?'
+    options:
+      - '(a) the kit, and the contract for every driver, matches keys without regard to letter case: the seven old names only (until 1.0), or every listed key. Every config that works today keeps working; a table with two spellings of one key (main picks one at random) becomes a refusal; the narrow width still needs (b) for new names. Against TOML''s case-sensitive keys (DRV-C5 names TOML v1.1.0), and a driver not built on the kit must fold case itself. Paths: driver/drivercmd/settings.go and its tests, specs/driver-contract/v1.md (DRV-C4, DRV-C5, DRV-C8, DRV-C11, Old names), conformance/driver/, cmd/warden/runtime_test.go rows kept (moved with task 22), guide/configuration.md; reworks tasks 2, 13, 14'
+      - '(b) a listed key, override or old name spelled in another letter case, in a table the driver reads, is refused by the owning driver in its probe with a fixable error that names the file, the spelling found and the key to write (UX-04, GLOBAL-10); two spellings in one table are refused every time; a key the driver does not list is still ignored. A config that spells one of the seven otherwise fails once, with its fix: a nineteenth, loud Behaviour difference. Paths: driver/drivercmd/settings.go and its tests, specs/driver-contract/v1.md (DRV-C5 amended, new DRV-C12, Old names), conformance/driver/ (a static case naming DRV-C12; the fake), cmd/warden/runtime_test.go TestRuntimeKeyInOtherSpellings rewritten to the refusal (moved with task 22) plus rows for [driver.container] cli, task 1 goldens, guide/configuration.md; reworks tasks 2, 13, 14'
+      - '(c) accept a nineteenth Behaviour difference: another spelling is another key, ignored (DRV-C5 as written); the user''s value is replaced by the driver''s default with no message. TestRuntimeKeyInOtherSpellings rows dropped or rewritten to not read; guide/configuration.md notes keys are case-sensitive. Nothing in the kit or v1.md'
+    recommended: '(b). GLOBAL-10 rules out (c): a provided value would be replaced by the default (runtime detection) silently. GLOBAL-11 weighs against (a): case folding is a reading rule TOML does not have, every driver outside the kit would have to copy it, and it keeps a second spelling working for no gain, which is why runtime-cli-project-path rejected normalizing the runtime''s value (its Decision 1). GLOBAL-09: under (b) a user who wrote [Runtime] CLI is told once what to write. runtime-cli-project-path''s security intent (every spelling of the key is seen; what runs is the list''s own member) holds under (a) and (b); under (c) nothing a file names runs, but the refusal and its transitional message are lost for those spellings. RELAY-08 is irrelevant: none of the seven keys configures the relay, and relay_image is resolved by the kit as the others are. Tasks 20, 22 and 25 depend on the answer, 21 only under (a) or (b), 23 and 24 not.'
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
@@ -578,3 +596,9 @@ history:
   - at: 2026-11-17T13:22:42Z
     by: cloud/20261117T105743Z
     event: claimed f1-design-r3 until 2026-11-17T15:22:42Z
+  - at: 2026-11-17T13:27:39Z
+    by: cloud/20261117T105743Z
+    event: 'declared at 975e8cc: nothing changed'
+  - at: 2026-11-17T13:28:09Z
+    by: cloud/20261117T105743Z
+    event: 'f1-design-r3 (return from f3-implement, task 20: a driver''s key in another letter case): design at 975e8cc. Question q2 added, blocking (Jeff''s call), with options (a) fold case, (b) refuse another case with its fix, (c) accept a nineteenth Behaviour difference; recommended (b). Step f1-answer-q2 (human) added, which f1-design-r3 needs. Steps wf back kept: the five f6-validate steps, unchanged (none of their cases spells a key in another case; native_validation unchanged). design_review required, unchanged; nothing approved at a6c8f0b changed.'
