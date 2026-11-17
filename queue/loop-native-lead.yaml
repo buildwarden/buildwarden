@@ -2,9 +2,9 @@ feature: loop-native-lead
 title: 'A native machine may lead an item from its first step: the lead, general host names, any-capability work under a refreshable 20-hour lease, the wrapper and the push script (componentization P1, fourth item)'
 priority: 64
 kind: process
-status: queued
+status: in_progress
 round: process
-phase: 1
+phase: 2
 design: docs/design/loop-native-lead.md
 branch: feat/loop-native-lead
 alters_relationships: null
@@ -13,6 +13,21 @@ steps:
   - id: x1-design
     phase: 1
     affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-state
+    phase: 4
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'After this item''s PR has merged, once no live lease was claimed before the merge commit''s time and both machines'' native/status/ files show a run after the merge; not before. In an attended session with Jeff, on the workflow branch (design loop-native-lead a11, Implementation plan task 11): hosts.yaml''s header comment (names may be shared) and, on Jeff''s word, any second machine for a name or an <os>-any name; host_lease_minutes in config.yaml on Jeff''s word (1200 when unset); README.md (lead, wf lead, wf new -lead, wf renew, wf release -session/-machine -stale, host lease, Workers); the three native gaps of the design''s tier2_gaps in backlog/native-gaps.yaml; the first led item on Jeff''s word. x4-close must not complete before this step: when phase 4 seeds x4-close, add needs: [x4-state] to it by hand.'
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
       claimed_by: ""
@@ -23,7 +38,7 @@ budget:
     steps: 12
   spent:
     runs: 0
-    steps: 0
+    steps: 1
 questions: []
 history:
   - at: 2026-11-14T20:57:45Z
@@ -35,3 +50,15 @@ history:
   - at: 2026-11-17T19:20:47Z
     by: human/jeff
     event: 'priority 63 -> 64 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
+  - at: 2026-11-17T19:53:54Z
+    by: human/jeff
+    event: started (FLOW-05)
+  - at: 2026-11-17T19:53:54Z
+    by: human/jeff
+    event: claimed x1-design until 2026-11-17T21:53:54Z
+  - at: 2026-11-17T19:53:54Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-11-17T19:53:54Z
+    by: human/jeff
+    event: entered phase 2 (implement)
