@@ -132,7 +132,8 @@ review in a later session.
    line, `sitting: <start>-<end> UTC, asks: <n> (<m> in batches)`, where an
    ask is one entry Jeff answers (a6).
 7. **`wf claim` works out new runs itself.** A run is named by the worker
-   string: its kind and the text after its first `/` (`cloud/<UTC>` gives
+   string: its kind (the prefix up to the first `:` or `/`, so `cloud` or
+   `host`) and the text after its first `/` (`cloud/<UTC>` gives
    `<UTC>`; `host:<name>/<UTC>` gives `<UTC>`, and under loop-native-lead's
    `host:<name>/<machine>.<run>`, `<machine>.<run>`). A claim counts a run
    when the worker is not `human/*` and the item's history has no earlier
@@ -224,9 +225,10 @@ None.
   did not decide it (the queue file has no `-hold` or q1). Proceeding with
   (a); confirm.
   - (a) It is not a program item: it changes the review's grain, not a seam
-    of the loop. The freeze applies, so the review records the hold
-    (`-hold` q1) and Jeff's answer to it, his word of 2026-11-17 to do it
-    now, before the outcome.
+    of the loop. The freeze applies, and since `-hold` exists only on `wf
+    new`, the review records the freeze and Jeff's answer to it, his word
+    of 2026-11-17 to do it now, in the Design review entry and the item's
+    history, before the outcome.
   - (b) It is a program item: the loop is one of the program's components
     (`componentization.md`), and this item is added to its `related`.
   - (c) Hold it until the program ends.
@@ -280,8 +282,9 @@ the same in one line.
 
 `State.Claim` drops its `newRun` parameter and computes it: true when the
 worker does not start with `human/` and no `claimed ` history event is by a
-worker with the same kind and the same text after the first `/`
-(Decision 7). `commit.go`'s request loses `NewRun`. `wf claim` and `wf
+worker with the same kind (the prefix up to the first `:` or `/`) and
+the same text after the first `/` (Decision 7). A Tier 0 case shows that
+`cloud/<s>` and `host:x/<s>` with the same suffix count as two runs. `commit.go`'s request loses `NewRun`. `wf claim` and `wf
 commit -claimed` keep `-new-run` as an accepted flag that changes nothing,
 its help saying runs are inferred: the commands share one `ExitOnError`
 FlagSet (`main.go:236`), so removing it now would exit 2 for any agent
@@ -334,6 +337,8 @@ main at `0cd3c02`.
   needs a new subcommand and a scoped exemption from FLOW-19's delta review.
   It becomes a follow-up process item.
 - Rewriting past history (0-run spends, shared timestamps).
+- Removing the ignored `-new-run` flag from `tools/` (its definition, help
+  text and tests); a later item does that once no skill passes it.
 - The habits the assessment lists as allowed under today's text (fewer
   pre-review checks, drafting dependent designs in sequence). They need no
   item.
@@ -414,8 +419,9 @@ review", each one recorded.
   ... -new-run` is accepted and does not change the count; the two tests
   that pass it today (`commit_test.go:174`, `main_test.go:350`) are updated
   to that.
-- **Text checks:** grep that no `-new-run` remains in `.claude/`, `tools/`
-  or the README after `x4-state`; FLOW-19's two bullets match the approved
+- **Text checks:** grep that no `-new-run` remains in `.claude/` or the
+  README after `x4-state` (`tools/` keeps the accepted, ignored flag, its
+  help text and its tests until a later item removes it); FLOW-19's two bullets match the approved
   wording; the size-guide row and the cap appear once each.
 - `make test`, `make lint`, `make enforcement` green.
 - **The real check:** the next sitting held under the new skill. It records
