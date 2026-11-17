@@ -805,7 +805,7 @@ wording already does; making them neutral is deferred (a10).
   `grep -rn "declares no areas" tools/ docs/development/ .claude/`
   finds nothing; `grep -rn "patch-id" docs/development/` finds nothing;
   `grep -rn "one feature at a time" docs/development/` finds nothing;
-  `grep -rn "expected until \`loop-parallel\`" .claude/` finds nothing;
+  `grep -rn "which is expected until" .claude/` finds nothing;
   each proposed paragraph appears in `process.md` byte for byte as
   approved (FLOW-14's agent part).
 - **Tier 1's `rule-index`** passes: no rule is added, retired or renamed.
