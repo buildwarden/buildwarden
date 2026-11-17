@@ -523,8 +523,10 @@ func buildContext() (context.Context, context.CancelFunc) {
 	return ctx, cancel
 }
 
-// prepare resolves everything a build or shell needs, then stages the build
-// script; the returned function removes the stage directory.
+// prepare resolves everything a build or shell needs, then makes the build
+// ID, takes the build's lock and writes its record, and stages the build
+// script, in that order (DRV-45, DRV-56). The returned function removes the
+// stage directory and then the build's lock and record.
 func prepare(args []string) (driver.Driver, *driver.BuildRequest, func(), error) {
 	cfg, err := announcedConfig()
 	if err != nil {
@@ -538,19 +540,48 @@ func prepare(args []string) (driver.Driver, *driver.BuildRequest, func(), error)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	unstage, err := stageBuild(req, cfg.Runtime.Driver)
+	id := driver.RandAlphaNum(8)
+	live, err := startBuildRecord(linkedRecord(cfg, req, id))
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return d, req, unstage, nil
+	unstage, err := stageBuild(req, driverName(cfg), id)
+	if err != nil {
+		_ = live.end()
+		return nil, nil, nil, err
+	}
+	return d, req, func() {
+		unstage()
+		if err := live.end(); err != nil {
+			log.Info(fmt.Sprintf("warning: removing the build's lock and record: %v",
+				err))
+		}
+	}, nil
+}
+
+// linkedRecord is the record of a build of a driver linked into warden: its
+// path is warden's own, and it has no flags of its own yet.
+func linkedRecord(cfg *Config, req *driver.BuildRequest, id string) buildRecord {
+	self, _ := os.Executable()
+	configFile := cfg.File
+	if configFile != "" {
+		if abs, err := filepath.Abs(configFile); err == nil {
+			configFile = abs
+		}
+	}
+	return buildRecord{
+		Driver: driverName(cfg), ID: id, Path: self, Linked: true,
+		Contract: contractVersion, TempDir: req.TempDir,
+		StageDir: stageDir(req.TempDir, id), ConfigFile: configFile, Args: []string{},
+	}
 }
 
 func runBuild(_ *cobra.Command, args []string) error {
-	d, req, unstage, err := prepare(args)
+	d, req, done, err := prepare(args)
 	if err != nil {
 		return err
 	}
-	defer unstage()
+	defer done()
 	defer d.Close()
 	ctx, stop := buildContext()
 	defer stop()
@@ -564,11 +595,11 @@ func runBuild(_ *cobra.Command, args []string) error {
 }
 
 func runShell(_ *cobra.Command, args []string) error {
-	d, req, unstage, err := prepare(args)
+	d, req, done, err := prepare(args)
 	if err != nil {
 		return err
 	}
-	defer unstage()
+	defer done()
 	defer d.Close()
 	ctx, stop := buildContext()
 	defer stop()

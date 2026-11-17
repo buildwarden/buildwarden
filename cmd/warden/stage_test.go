@@ -19,13 +19,13 @@ func TestStageBuildDirectory(t *testing.T) {
 	own := write(t, ctx, "own.sh", "echo own\n")
 	req := &driver.BuildRequest{ContextDir: ctx, Containerfile: df, Script: own,
 		OutputDir: filepath.Join(t.TempDir(), "out"), TempDir: tmp}
-	unstage, err := stageBuild(req, "qemu")
+	unstage, err := stageBuild(req, "qemu", "k3v9x2ab")
 	if err != nil {
 		t.Fatal(err)
 	}
 	dir := filepath.Dir(req.BuildScript)
 	if filepath.Dir(dir) != tmp ||
-		!regexp.MustCompile(`^warden-stage-[a-z0-9]{8}$`).MatchString(filepath.Base(dir)) {
+		!regexp.MustCompile(`^warden-stage-k3v9x2ab$`).MatchString(filepath.Base(dir)) {
 		t.Errorf("staged at %s, want %s/warden-stage-<id>/", req.BuildScript, tmp)
 	}
 	if got, _ := os.ReadFile(req.BuildScript); string(got) != "echo own\n" {
@@ -62,7 +62,7 @@ func TestStageBuildBaseImage(t *testing.T) {
 				Script:        write(t, ctx, "own.sh", "true\n"),
 				OutputDir:     filepath.Join(t.TempDir(), "out"),
 				TempDir:       t.TempDir()}
-			unstage, err := stageBuild(req, tc.driver)
+			unstage, err := stageBuild(req, tc.driver, "k3v9x2ab")
 			if err != nil {
 				t.Fatal(err)
 			}

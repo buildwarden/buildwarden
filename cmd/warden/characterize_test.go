@@ -423,7 +423,7 @@ const stagedName = "staged"
 // driver.StageBuildScript and driver.RecordInputs; the goldens are main's.
 func stageForCharacterization(t *testing.T, d string, req *driver.BuildRequest) error {
 	t.Helper()
-	unstage, err := stageBuild(req, d)
+	unstage, err := stageBuild(req, d, driver.RandAlphaNum(8))
 	if err != nil {
 		return err
 	}
@@ -514,7 +514,7 @@ func TestCharacterizeContainerfileImage(t *testing.T) {
 				b.WriteString(strings.TrimSpace(describeErr(err, dir)) + "\n")
 				continue
 			}
-			unstage, err := stageBuild(req, d)
+			unstage, err := stageBuild(req, d, driver.RandAlphaNum(8))
 			if err != nil {
 				t.Fatal(err)
 			}

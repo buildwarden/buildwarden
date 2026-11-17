@@ -31,12 +31,12 @@ func baseImage(req *driver.BuildRequest) string {
 	return res.Image
 }
 
-// stageBuild stages the build script for driver d in the build's stage
-// directory, <tmpdir>/warden-stage-<id>/, which is warden's, and records an
-// altered input in the output directory (ORCH-02), before any driver work.
+// stageBuild stages the build script for driver d in the stage directory of
+// the build id, <tmpdir>/warden-stage-<id>/, which is warden's, and records
+// an altered input in the output directory (ORCH-02), before any driver work.
 // It sets the request's BuildScript, the staged script's absolute path, and
 // BaseImage. The returned function removes the stage directory.
-func stageBuild(req *driver.BuildRequest, d string) (func(), error) {
+func stageBuild(req *driver.BuildRequest, d, id string) (func(), error) {
 	if containerfileIgnored(d) {
 		req.Containerfile = ""
 	}
@@ -44,7 +44,7 @@ func stageBuild(req *driver.BuildRequest, d string) (func(), error) {
 	if err := os.MkdirAll(req.OutputDir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating output dir: %w", err)
 	}
-	dir, err := makeStageDir(req.TempDir, driver.RandAlphaNum(8))
+	dir, err := makeStageDir(req.TempDir, id)
 	if err != nil {
 		return nil, err
 	}
@@ -62,16 +62,26 @@ func stageBuild(req *driver.BuildRequest, d string) (func(), error) {
 	return remove, nil
 }
 
-// makeStageDir creates the stage directory of the build id under tmpdir, the
-// system's temporary directory when tmpdir is empty.
-func makeStageDir(tmpdir, id string) (string, error) {
-	base := tmpdir
-	if base == "" {
-		base = os.TempDir()
-	} else if err := os.MkdirAll(base, 0o755); err != nil {
-		return "", fmt.Errorf("creating temp dir %s: %w", base, err)
+// stageDirName is the base name of the stage directory of the build id.
+func stageDirName(id string) string { return "warden-stage-" + id }
+
+// stageDir is the stage directory of the build id under tmpdir, the system's
+// temporary directory when tmpdir is empty.
+func stageDir(tmpdir, id string) string {
+	if tmpdir == "" {
+		tmpdir = os.TempDir()
 	}
-	dir := filepath.Join(base, "warden-stage-"+id)
+	return filepath.Join(tmpdir, stageDirName(id))
+}
+
+// makeStageDir creates the stage directory of the build id under tmpdir.
+func makeStageDir(tmpdir, id string) (string, error) {
+	if tmpdir != "" {
+		if err := os.MkdirAll(tmpdir, 0o755); err != nil {
+			return "", fmt.Errorf("creating temp dir %s: %w", tmpdir, err)
+		}
+	}
+	dir := stageDir(tmpdir, id)
 	if err := os.Mkdir(dir, 0o700); err != nil {
 		return "", fmt.Errorf("creating stage dir: %w", err)
 	}

@@ -49,7 +49,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	removed := 0
+	removed := cleanAfterLinkedBuilds(driverName(cfg))
 	if cfg.Runtime.Driver == "firecracker" {
 		tempDir, err := resolveTempDir(cfg)
 		if err != nil {
@@ -122,6 +122,19 @@ func runClean(cmd *cobra.Command, args []string) error {
 	// dangling volumes on the runtime are not warden's to prune.
 	finishClean(removed)
 	return nil
+}
+
+// cleanAfterLinkedBuilds removes the stage directory, record and lock of each
+// dead build of the driver drv. The drivers are linked into warden and have
+// no reap: what a dead build's driver left is found by the driver's own
+// cleanup, which follows. A file that cannot be removed is reported and does
+// not stop the rest.
+func cleanAfterLinkedBuilds(drv string) int {
+	n, err := cleanDeadBuilds(drv, nil, os.Stderr)
+	if err != nil {
+		log.Error(fmt.Sprintf("cleaning up after dead builds: %v", err))
+	}
+	return n
 }
 
 // finishClean handles the cache (removed with --cache, else its size noted)
