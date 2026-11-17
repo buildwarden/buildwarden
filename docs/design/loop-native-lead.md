@@ -1546,7 +1546,31 @@ Each task cites the rules it must satisfy. All on `feat/loop-native-lead`.
 
 ## Design review
 
-None yet. Reviewed by Jeff at `x1-design` (FLOW-19).
+- **r1, 2026-11-17: approved at `74deb30`** (Jeff, workflow-human, FLOW-19),
+  read at `f30b6b8` (the draft `c97caf0` with 21 confirmed corrections from
+  a report-only check, applied before the review). Rule changes: **rule
+  change FLOW-04 approved at `74deb30`** (approved with a change: "A feature
+  may be **led** by a host name, which any worker may set or change, each
+  change recorded in the item's history and the run's digest (FLOW-09)");
+  **rule change FLOW-05 approved at `74deb30`**; **rule change FLOW-09
+  approved at `74deb30`** (approved with a change: "any worker may name the
+  host name as the item's lead, at intake or later", and the added
+  sentence "A process item's native work is done in an attended native
+  session or tracked as native gaps, as its design says; it is never
+  led."); **rule change FLOW-13 approved at `74deb30`**; **rule change
+  FLOW-16 approved at `74deb30`**; **rule change FLOW-17 approved at `74deb30`**;
+  **rule change FLOW-18 approved at `74deb30`**; **rule change PROFILE-01
+  approved at `74deb30`**. Assumptions: a5 answered **(2)**, refined: any
+  worker (human, cloud or a machine) may set or clear a lead, each change
+  logged in the item's history and the run's digest under **Moved**;
+  LOOP-04 is not amended, a lead being routing, not priority or
+  placement. a16 answered (1) with a `TestNativeSettingsRules` case for
+  the colon reading. a10 (1), the attended session's machine from
+  `hosts.yaml` or a second argument. Every other assumption, a1 to a4, a6
+  to a9, a11 to a15 and a17 to a25, confirmed as recommended. Folded in at
+  `756188e` and `74deb30`: the a5 and a16 answers, the two rule wordings above,
+  and the process-item sentence through a4, Decision 3, Design, Defaults,
+  the Validation and Implementation plans.
 
 ## Consolidation
 
