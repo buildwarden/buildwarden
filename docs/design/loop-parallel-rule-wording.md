@@ -838,7 +838,27 @@ must satisfy.
 
 ## Design review
 
-(For Jeff, at `x1-design`.)
+- **r1, 2026-11-17: approved at `d0b4d46`** (Jeff, workflow-human, FLOW-19),
+  read at `2fb5808`. Rule changes: **rule change FLOW-02 approved at
+  `d0b4d46`** (approved with a change: the `[]` sentence adds "though an item
+  whose home repository has no map is undeclared whatever it declares
+  (FLOW-05)"); **rule change FLOW-03 approved at `d0b4d46`** (approved with a
+  change: "a feature's refresh runs both, including one taken while the
+  pull request waits at Merge, and a process item's refresh runs
+  neither"); **rule change FLOW-05 approved at `d0b4d46`** (approved with a
+  change: "A declared item whose areas are `[]` changes nothing but its
+  own design (FLOW-02)"), the opening paragraph included; **rule change
+  FLOW-16 approved at `d0b4d46`**, as drafted. Assumptions a1 to a12
+  confirmed as recommended: a1 (a), a2 (a), a3 (a), a4 (a) with
+  `check/declared.go:148` in scope, a5 amend, a6 (a), a7 (a) (i), a8 (a),
+  a9 add, a10 defer, a11 as proposed, a12 file separately. Folded in at
+  `d0b4d46` besides the three wording changes, all found by a report-only
+  check of the draft against `main` at 0cd3c02: Decision 3 and the summary
+  table qualified for a home with no map; the patch-id rationale (Problem
+  4, Decision 1, a1, FLOW-16's Why) says Decision 23 replaced the proof
+  rather than that Jeff rejected it as unsafe; seven citations corrected;
+  a9's quoted line matches the template block; Decision 5's question
+  references; the Validation plan's two `grep` checks take `-r`.
 
 ## Consolidation
 
