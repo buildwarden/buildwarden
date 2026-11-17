@@ -33,6 +33,13 @@ steps:
   - id: f2-design-review
     phase: 2
     affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-answer-q1
+    phase: 2
+    affinity: human
     status: pending
     lease:
       claimed_by: ""
@@ -43,6 +50,7 @@ steps:
     status: pending
     needs:
       - f2-design-review
+      - f2-answer-q1
     lease:
       claimed_by: ""
       expires: null
@@ -52,35 +60,46 @@ budget:
     steps: 14
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions:
+  - id: q1
+    kind: blocking
+    status: open
+    question: 'Hold (design a1 (b), Jeff, 2026-11-17): K1 first. This item''s Plan starts only after driver-contract''s PR has merged to main. When it has, the item returns to Design once for the delta K1''s structure brings (newRequest''s refusal before start, NewWorkDir''s backstop in the kit on start''s context_dir and tmpdir, the FROM check under K1''s baseImage and K1''s specification of base_image), and that delta is reviewed (FLOW-06, FLOW-19). Design: Order with driver-contract.'
+    options:
+      - 'resume: driver-contract''s PR has merged (name the PR and the merge commit); the item goes back to Design for the K1 delta'
+      - 'driver-contract was withdrawn or reordered: resume on main as it is, and say so'
+    recommended: 'resume: driver-contract''s PR has merged (name the PR and the merge commit); the item goes back to Design for the K1 delta'
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: The order with driver-contract (K1), which rewrites staging (warden stages in <tmpdir>/warden-stage-<id>/; start carries context_dir, tmpdir and base_image) and the container driver's Run, and whose branch already edits cmd/warden/main.go and driver/container/container.go. The two collide (K1 declares no areas; both edit cmd/warden and driver/), so FLOW-05's PR slot keeps their PRs apart; this item ranks ahead (70 against 72). Design, Questions a1 and Order with driver-contract.
     options:
       - '(a) this item first; K1 takes it in on its next merge of main and its refresh: the work-directory check stays in newRequest and covers K1''s stage directory under tmpdir, NewWorkDir''s backstop moves with NewWorkDir into the kit, the FROM check stays in driver/script, which K1''s baseImage calls, and K1''s specification says base_image has passed it'
       - (b) this item waits for K1's PR to merge and is built on K1's structure
       - (c) K1 absorbs both fixes
     recommended: '(a): small, ahead in order and a security fix; it does not wait for an item with a blocking question (q2) and five blocking native validations still to run. No collides_with is needed (they already collide), and wf relate is the human''s in any case'
+    answer: (b) this item waits for driver-contract's PR to merge and is built on K1's structure, with one return to Design for that delta; against the recommendation (Jeff, 2026-11-17; folded in at 26f6066)
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: FROM as a host path in the VM drivers (FROM /abs/x or ./x is the build VM's base disk as it is, linuxguest.ResolveImage; qemu opens it as qcow2, whose header can name a backing file anywhere on the host), and linuxguest.ContainerfileImage's silent default image when the Containerfile does not translate (with --script). Found while tracing finding 2; older than this item; not an option on a command line. Design, Questions a2.
     options:
       - '(a) out of this item: the session that records the review files them through intake, on Jeff''s word, as one security item for the VM drivers (proposed slug vm-from-host-path), with the design''s a2 paragraph as its source'
       - '(b) this item fixes them too: refuse a path in FROM (a local image goes through --image) and make ContainerfileImage''s error the build''s; adds driver/qemu and driver/firecracker and blocking native validation on qemu-any'
       - (c) recorded in this design only
     recommended: '(a): it needs its own trace of the qcow2 backing chain and firecracker''s EnsureRaw, and changes documented VM behaviour'
+    answer: '(a) out of this item: vm-from-host-path filed through intake as its own security item for the VM drivers (Jeff, 2026-11-17)'
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Other host directories that can lie inside the build context and so are served to the build: the output directory (warden-output, inside the context for warden build . by default: the build reads its own outputs and earlier builds'' outputs and ledgers) and the cache (os.UserCacheDir()/warden, moved by XDG_CACHE_HOME). Not in the source. Design, Questions a3.'
     options:
       - (a) unchanged and out of this item; recorded under What this item does not do, for Jeff to file or drop
       - (b) refuse an output directory or cache inside the context, as the work directory; breaks warden build . by default
       - (c) the collector does not serve the output directory; a collector storage boundary, which componentization a2 left out of the program
     recommended: '(a): what it shows is the build''s own outputs and their ledgers, each fetch recorded, not host secrets; the default layout stays'
+    answer: (a) unchanged and out of this item, recorded under What this item does not do (Jeff, 2026-11-17)
 history:
   - at: 2026-11-15T21:57:17Z
     by: human/jeff
@@ -118,3 +137,18 @@ history:
   - at: 2026-11-17T13:41:32Z
     by: cloud/20261117T105743Z
     event: entered phase 2 (plan)
+  - at: 2026-11-17T18:38:22Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: (b) this item waits for driver-contract''s PR to merge and is built on K1''s structure, with one return to Design for that delta; against the recommendation (Jeff, 2026-11-17; folded in at 26f6066)'
+  - at: 2026-11-17T18:38:22Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: (a) out of this item: vm-from-host-path filed through intake as its own security item for the VM drivers (Jeff, 2026-11-17)'
+  - at: 2026-11-17T18:38:22Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: (a) unchanged and out of this item, recorded under What this item does not do (Jeff, 2026-11-17)'
+  - at: 2026-11-17T18:38:23Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-17T20:38:23Z
+  - at: 2026-11-17T18:38:23Z
+    by: human/jeff
+    event: done f2-design-review
