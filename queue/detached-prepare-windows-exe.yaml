@@ -43,7 +43,7 @@ steps:
   - id: f2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -62,43 +62,47 @@ budget:
     steps: 7
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: 'make build on Windows: what it writes. With the fix the extension no longer matters to warden; the native allowlist (.claude/, a process item only) matches dist/warden and not dist/warden.exe.'
     options:
       - keep dist/warden on every OS
       - write dist/warden.exe when the target OS is Windows, and file a process item for the native allowlist
       - write both
     recommended: keep dist/warden on every OS
+    answer: (a) as drafted (Jeff, 2026-11-17)
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: A due background refresh that cannot start (today dropped silently).
     options:
       - print one line naming the failure and the warden image prepare command that refreshes by hand, write the error to the log, and go on with the build on the current base
       - fail the build with that fix
       - stay silent, as today
     recommended: print one line naming the failure and the warden image prepare command that refreshes by hand, write the error to the log, and go on with the build on the current base
+    answer: (a) as drafted (Jeff, 2026-11-17)
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: The stale dist/warden.exe (2026-11-04) in the Windows desktop's checkout.
     options:
       - the blocking windows-hyperv step uses it as the file beside dist/warden in its case 3, shows it is not run, then deletes it
       - leave it
       - delete it before validating and plant a fresh one for case 3
     recommended: the blocking windows-hyperv step uses it as the file beside dist/warden in its case 3, shows it is not run, then deletes it
+    answer: (a) as drafted (Jeff, 2026-11-17)
   - id: a4
     kind: assumed
-    status: open
+    status: confirmed
     question: The componentization freeze (FLOW-20). This item is not a program item.
     options:
       - exempt, as a fix for a regression on main (FLOW-09), filed as the follow-up of the security fix project-config-trust
       - on hold until the program ends
     recommended: exempt, as a fix for a regression on main (FLOW-09), filed as the follow-up of the security fix project-config-trust
+    answer: (a) as drafted (Jeff, 2026-11-17)
 history:
   - at: 2026-11-16T05:27:02Z
     by: host:windows-hyperv/20261116T051002Z
@@ -133,3 +137,21 @@ history:
   - at: 2026-11-17T11:05:35Z
     by: cloud/20261117T105743Z
     event: entered phase 2 (plan)
+  - at: 2026-11-17T18:23:43Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: (a) as drafted (Jeff, 2026-11-17)'
+  - at: 2026-11-17T18:23:43Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: (a) as drafted (Jeff, 2026-11-17)'
+  - at: 2026-11-17T18:23:43Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: (a) as drafted (Jeff, 2026-11-17)'
+  - at: 2026-11-17T18:23:43Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: (a) as drafted (Jeff, 2026-11-17)'
+  - at: 2026-11-17T18:23:43Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-17T20:23:43Z
+  - at: 2026-11-17T18:23:43Z
+    by: human/jeff
+    event: done f2-design-review
