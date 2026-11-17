@@ -1,6 +1,6 @@
 feature: runtime-former-values-removal
 title: 'Remove the transitional detection of former container runtime values at 1.0: TRANSITIONAL(runtime-former-values)'
-priority: 76
+priority: 77
 status: queued
 round: feature
 phase: 0
@@ -56,3 +56,6 @@ history:
   - at: 2026-11-16T05:27:02Z
     by: host:windows-hyperv/20261116T051002Z
     event: 'priority 75 -> 76 (renumbered by wf new: detached-prepare-windows-exe queued at 68)'
+  - at: 2026-11-17T18:41:04Z
+    by: human/jeff
+    event: 'priority 76 -> 77 (renumbered by wf new: vm-from-host-path queued at 71)'

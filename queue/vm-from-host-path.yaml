@@ -1,0 +1,30 @@
+feature: vm-from-host-path
+title: A Dockerfile FROM naming a host path boots that host file as the VM disk (qemu, firecracker), and a FROM that does not translate silently boots the default image (security fix)
+priority: 71
+status: queued
+round: feature
+phase: 0
+design: docs/design/vm-from-host-path.md
+branch: feat/vm-from-host-path
+alters_relationships: null
+source: Filed on Jeff's word, 2026-11-17, in workdir-in-context's design review (a2 (a)). Security fix, exempt from the FLOW-20 freeze. Under qemu and firecracker, FROM /abs/x or FROM ./x is used as the build VM's base disk as it is (linuxguest.ResolveImage), so a build context names a host file to boot; qemu opens it as qcow2 (-F qcow2), whose header can name a backing file of its own anywhere on the host; firecracker's EnsureRaw path not yet traced. And linuxguest.ContainerfileImage returns empty on any translation error, so with --script a FROM that does not parse boots the driver's default image with no message (an unnamed fallback, GLOBAL-11). Both are older than workdir-in-context and change documented VM behaviour. Needs its own trace of the qcow2 backing chain and of EnsureRaw, and native validation on qemu-any. See docs/design/workdir-in-context.md, Questions a2.
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 3
+    steps: 18
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-17T18:41:04Z
+    by: human/jeff
+    event: queued at priority 71 (intake)

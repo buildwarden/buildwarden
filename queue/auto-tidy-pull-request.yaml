@@ -1,6 +1,6 @@
 feature: auto-tidy-pull-request
 title: auto-tidy.yml opens a pull request with the go mod tidy instead of pushing to main
-priority: 77
+priority: 78
 status: queued
 round: feature
 phase: 0
@@ -50,3 +50,6 @@ history:
   - at: 2026-11-16T05:27:02Z
     by: host:windows-hyperv/20261116T051002Z
     event: 'priority 76 -> 77 (renumbered by wf new: detached-prepare-windows-exe queued at 68)'
+  - at: 2026-11-17T18:41:04Z
+    by: human/jeff
+    event: 'priority 77 -> 78 (renumbered by wf new: vm-from-host-path queued at 71)'

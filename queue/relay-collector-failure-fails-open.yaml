@@ -1,6 +1,6 @@
 feature: relay-collector-failure-fails-open
 title: 'Relay: a collector failure on build-script, bootstrap or cwd is served as 404, so exclusive trust becomes append (fails open)'
-priority: 78
+priority: 79
 status: in_progress
 round: feature
 phase: 2
@@ -150,3 +150,6 @@ history:
   - at: 2026-11-17T13:51:43Z
     by: cloud/20261117T105743Z
     event: entered phase 2 (plan)
+  - at: 2026-11-17T18:41:04Z
+    by: human/jeff
+    event: 'priority 78 -> 79 (renumbered by wf new: vm-from-host-path queued at 71)'

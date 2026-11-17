@@ -1,6 +1,6 @@
 feature: relay-exit-code-unreadable
 title: 'Relay: an exit code it cannot read is recorded as 0, success'
-priority: 79
+priority: 80
 status: queued
 round: feature
 phase: 0
@@ -49,3 +49,6 @@ history:
   - at: 2026-11-16T17:02:25Z
     by: cloud/20261112T230554Z
     event: 'on hold (q1): FLOW-20 freeze: not a program item and not exempt (not a fix for a regression on main under FLOW-09, nor a security fix). Resume when Jeff says, or when the freeze ends.'
+  - at: 2026-11-17T18:41:04Z
+    by: human/jeff
+    event: 'priority 79 -> 80 (renumbered by wf new: vm-from-host-path queued at 71)'

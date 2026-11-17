@@ -1,6 +1,6 @@
 feature: configuration-bugfixes
 title: 'Configuration bugfixes: two documented keys that are never read, doctor reporting ok for a runtime it never ran, a file in the working directory hiding an installed runtime, and load-time checks skipped for a key in another letter case'
-priority: 75
+priority: 76
 status: queued
 round: feature
 phase: 0
@@ -62,3 +62,6 @@ history:
   - at: 2026-11-16T05:27:02Z
     by: host:windows-hyperv/20261116T051002Z
     event: 'priority 74 -> 75 (renumbered by wf new: detached-prepare-windows-exe queued at 68)'
+  - at: 2026-11-17T18:41:04Z
+    by: human/jeff
+    event: 'priority 75 -> 76 (renumbered by wf new: vm-from-host-path queued at 71)'

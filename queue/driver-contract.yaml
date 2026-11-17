@@ -1,6 +1,6 @@
 feature: driver-contract
 title: 'The driver command contract, its suite and the kit: warden runs a driver binary, the container driver is one, and every build runs through warden''s build sequence (componentization K1)'
-priority: 72
+priority: 73
 status: in_progress
 round: feature
 phase: 1
@@ -612,3 +612,6 @@ history:
   - at: 2026-11-17T18:17:46Z
     by: human/jeff
     event: done f1-answer-q2
+  - at: 2026-11-17T18:41:04Z
+    by: human/jeff
+    event: 'priority 72 -> 73 (renumbered by wf new: vm-from-host-path queued at 71)'
