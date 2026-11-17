@@ -130,9 +130,8 @@ today, for six reasons.
    `tools/workflow/native/native-run.sh:16-17`; the trailing-`:*` reading is
    in `docs/design/native-allowlist-scratch.md:29-32` and `173-175`);
    nothing recorded of the matcher says it stops at a colon, and a
-   `TestNativeSettingsRules` case records the colon reading under the
-   test's own matcher (a16). So `git push
-   origin feat/x --force`, `git push origin feat/x :feat/other` (a remote
+   `TestNativeSettingsRules` case will record the colon reading under the
+   test's own matcher (a16). So `git push origin feat/x --force`, `git push origin feat/x :feat/other` (a remote
    delete) and `git push origin feat/x:workflow` all match the allow, and
    none matches a deny: the denies are prefixes (`git push --force:*`, `git
    push origin --delete:*`, lines 76-79), and the `git -C * ...` denies
@@ -431,7 +430,7 @@ Each is "proceeding with the recommended option; confirm".
      design review.
   2. *(chosen)* Any worker, by `wf lead`. A machine could take work from
      the cloud on its own judgment; LOOP-04 says priority and placement
-     are the human's, and a lead is neither.
+     are the human's.
 - **a6. Several machines per host name.**
   1. *(recommended)* Any host name may be listed on several machines.
      `validateNative` drops its "served by both" error and keeps the
