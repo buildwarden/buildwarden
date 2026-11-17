@@ -38,9 +38,9 @@ A process item, and a program item under FLOW-20: a follow-up of
 2026-11-16 on the review of that item's implementation. Those decisions
 sent F4, F6 and F5's wording for phases 7 and 8 to one follow-up
 rule-change item, and changed nothing on `loop-parallel`'s branch
-(`docs/design/loop-parallel.md:5604-5606`). The design's archive summary
+(`docs/design/loop-parallel.md:5606-5608`). The design's archive summary
 adds FLOW-16's merge proof to the same list
-(`docs/design/loop-parallel.md:5717-5719`). It is a program item outside
+(`docs/design/loop-parallel.md:5717-5720`). It is a program item outside
 the P1 list at `docs/design/componentization.md:296`, which does not name
 it: a follow-up of `loop-parallel`, it runs before `loop-native-lead` and
 `loop-repository` because the queue ranks it ahead of `loop-native-lead`
@@ -94,7 +94,7 @@ the one he chose, so the rule is the one that moves (a1).
    The rule also names only one of `wf`'s three ways to be undeclared
    (the key absent); the other two, a home repository with no map and an
    area the map lacks, are in `loop-parallel`'s **Defaults and
-   overrides** (`docs/design/loop-parallel.md:3835-3836`) and in the code,
+   overrides** (`docs/design/loop-parallel.md:3835-3837`) and in the code,
    not in the rule.
 
    And the reason `wf` prints for row 5 is `<item> declares no areas`
@@ -153,13 +153,14 @@ the one he chose, so the rule is the one that moves (a1).
    squash C of a ref only if `git merge-tree --write-tree
    --merge-base=B C^ <ref>`, B the ref's single merge base with C^, writes
    exactly C's tree (Decision 23 and a14 (d), Jeff, 2026-11-16;
-   `docs/design/loop-parallel.md:562-645`; `check/check.go:381-485`). No
+   `docs/design/loop-parallel.md:562-646`; `check/check.go:383-481`). No
    code computes a patch-id any more. `CONTRIBUTING.md:17-19` already
    names the merge-tree proof; the rule is the one place left that names
-   the old one. Jeff withdrew the patch-id proof because it proved merged
-   two refs that are not (`loop-parallel.md:618-629`), so FLOW-16 now
-   states as the safety condition for `git branch -D` a proof Jeff has
-   rejected as unsafe.
+   the old one. Decision 23 replaced the three-line patch-id proof FLOW-16
+   names (`loop-parallel.md:562-646`; its zero-context variant, a14 (a),
+   was withdrawn on 2026-11-16 for proving merged two refs that are not,
+   `loop-parallel.md:618-633`), so FLOW-16 states as the safety condition
+   for `git branch -D` a proof `wf` no longer runs.
 
 None of the four changes what a worker does. Each makes a rule say what
 `wf` already enforces, so that an agent reading the rule, or a human
@@ -208,8 +209,8 @@ Nothing in `docs/design/` overlaps otherwise: a search for `declared-empty`,
      `areas: []` as undeclared (dropping a declaration `loop-parallel`'s
      a-questions and tests keep on purpose), run the area checks at Merge
      and Close (where the branch is merged or deleted and `git diff
-     origin/main...<branch>` has nothing to say), and restore a proof Jeff
-     withdrew as unsafe.
+     origin/main...<branch>` has nothing to say), and restore a proof
+     Decision 23 replaced.
 
 2. **`undeclared` is a defined term in FLOW-05, with all three of `wf`'s
    cases** (a2). FLOW-05 defines it once, where the relations are
@@ -225,7 +226,10 @@ Nothing in `docs/design/` overlaps otherwise: a search for `declared-empty`,
 3. **`areas: []` is a declaration that the change edits nothing but its
    own design** (a3). This is what `insideAreas` enforces: with the list
    empty every path but the design is outside it (`areas.go:33-46`). The
-   rules say so in FLOW-02, FLOW-05 and the template's comment (a9).
+   rules say so in FLOW-02, FLOW-05 and the template's comment (a9). It
+   holds for a declared item: an item whose home repository has no map is
+   undeclared whatever its `areas` say (`relation.go:99-102`), and FLOW-02
+   and FLOW-05 say that too (the review's change, 2026-11-17).
    - *Rejected: refuse `areas: []` in `wf declare`.* No open item uses
      it today (no queue file on the workflow branch has `areas: []`), so
      refusing it costs nothing now; but it is the honest declaration for
@@ -239,11 +243,12 @@ Nothing in `docs/design/` overlaps otherwise: a search for `declared-empty`,
 
 5. **FLOW-03 gives the checks' ranges as the code runs them, and names
    the merge confirmation, Close and the undeclared-before-`wf declare`
-   exemption** (a5, a6). The comparison runs from Plan through Publish
+   exemption** (a6; FLOW-02's sentence on the same range, a5). The
+   comparison runs from Plan through Publish
    and at each refresh of a feature; the diff check from Implement
    through Publish and at each refresh of a feature; Merge's confirmation
    and Close run neither; a feature's refresh, at Merge included, runs
-   both. An item with no recorded
+   both, and a process item's refresh neither. An item with no recorded
    declaration is not compared, and its diff check reads the areas the
    queue records, which for such an item are none.
 
@@ -284,7 +289,7 @@ Jeff accepted it on 2026-11-16.
     undeclared, the area checks run at Merge and Close. Consequence: a
     behaviour change to a loop that just went parallel, tests rewritten,
     a worker hold needed while it lands; and FLOW-16 cannot go this way
-    at all, since Jeff withdrew the patch-id proof.
+    at all, since Decision 23 replaced the patch-id proof.
   - Recommendation: (a).
 
 - **a2. How FLOW-05 defines undeclared.** Proceeding with (a); confirm.
@@ -385,7 +390,8 @@ Jeff accepted it on 2026-11-16.
 
 - **a9. The template's `areas` comment.** `docs/design/TEMPLATE.md:13-15`
   says what leaving the key out means and not what `[]` means.
-  Proceeding with adding "`[]`: it edits only its own design" to the
+  Proceeding with adding "`[]`: the change edits nothing but its own
+  design" (and a semicolon at the end of the line before it) to the
   comment, in FLOW-02's change; confirm. Alternative: leave the template,
   which is accurate as far as it goes. Recommendation: add it.
 
@@ -434,11 +440,11 @@ The exact wording is under **Rule changes**. In summary:
 
 | Finding | Where | Before | After |
 |---|---|---|---|
-| F4 | FLOW-02 `areas` bullet; TEMPLATE comment | "A design that declares none is undeclared" | Leaving the key out is undeclared, as FLOW-05 defines it; `areas: []` declares the change edits only its own design |
-| F4 | FLOW-05, How two items relate | "an item that declares no areas"; "either declares no areas" | *Undeclared* defined: key absent, home with no map, or an area the map lacks; `[]` changes only its design; "either is undeclared" |
+| F4 | FLOW-02 `areas` bullet; TEMPLATE comment | "A design that declares none is undeclared" | Leaving the key out is undeclared, as FLOW-05 defines it; `areas: []` declares the change edits only its own design, for an item whose home has a map |
+| F4 | FLOW-05, How two items relate | "an item that declares no areas"; "either declares no areas" | *Undeclared* defined: key absent, home with no map, or an area the map lacks; a declared item's `[]` changes only its design; "either is undeclared" |
 | F4 | `relation.go` row 5; `declared.go` Design text | `<item> declares no areas`; "the design declares no areas" | `<item> is undeclared`; "the design leaves areas out" |
 | F6 | `process.md` opening | "Publish takes one feature at a time through the PR slot" | The slot by relation; disjoint PRs side by side, merging one at a time with `main` contained; the refresh repeats the pass |
-| F5 | FLOW-03 paragraph after the table; FLOW-02 last paragraph | "From Plan on"; "from Implement on" | "From Plan through Publish, and at each refresh of a feature"; "from Implement through Publish, and at each refresh of a feature"; the merge confirmation and Close run neither; a refresh at Merge runs both; the item with no recorded declaration |
+| F5 | FLOW-03 paragraph after the table; FLOW-02 last paragraph | "From Plan on"; "from Implement on" | "From Plan through Publish, and at each refresh of a feature"; "from Implement through Publish, and at each refresh of a feature"; the merge confirmation and Close run neither; a feature's refresh, at Merge too, runs both and a process item's neither; the item with no recorded declaration |
 | F-P2 | FLOW-16 | patch-id `--verbatim`; "the equal tree or change" | `git merge-tree --write-tree --merge-base=B C^ <head>` writes C's tree; "the equal tree or that merge" |
 
 ### What a worker sees
@@ -472,7 +478,7 @@ waits at Merge, the refreshes that keep it current run both checks
 (`Refresh`, check.go:135-150). A process item's refresh runs neither,
 since it has no declaration (`if f.Round != "process"`).
 
-Recorded here, not in the rule (a5). At Merge the pull request is the
+Recorded here, not in the rule. At Merge the pull request is the
 branch Publish checked, kept up to date by refreshes, each of which runs
 both checks again (`Refresh`, `check.go:135-150`); a change that needs
 more goes back to Implement or Design (FLOW-06, FLOW-10), whose gates run
@@ -496,13 +502,13 @@ hand. a6 (b) would close it the same way.
 ### FLOW-16's proof in the rule (F-P2)
 
 The rule names what `refMerged` and `mergeTreeProof` do
-(`check.go:381-485`): first an ancestor of trunk, then a PR commit with
+(`check.go:383-481`): first an ancestor of trunk, then a PR commit with
 the ref's tree, then, for a one-parent PR commit C with a single merge
 base B between the ref and C^, `git merge-tree --write-tree
 --merge-base=B C^ <ref>` printing exactly C's tree. With no merge base or
 several, the third proof does not hold and the item falls to the hand
 confirmation FLOW-16 already describes. `merged` runs it for the local
-and the remote ref when each exists (`check.go:342-379`); the rule keeps
+and the remote ref when each exists (`check.go:342-381`); the rule keeps
 "the branch head", which covers both. The workflow-tick skill's Close
 text ("`git branch -D`, only once `dist/wf check` has passed on it",
 `.claude/skills/workflow-tick/SKILL.md:145-148`) needs no change.
@@ -576,7 +582,8 @@ paragraph (`process.md:104-108`):
 >   edits (FLOW-05). A design that leaves the key out is undeclared, as
 >   FLOW-05 defines it, and FLOW-05 then treats the item as colliding with
 >   every item in its repositories. `areas: []` is a declaration: the
->   change edits nothing but its own design.
+>   change edits nothing but its own design, though an item whose home
+>   repository has no map is undeclared whatever it declares (FLOW-05).
 
 > The automated part diffs the declared `drivers` / `seams` / `surfaces` against the
 > trees and files the change reaches. It checks the declared `areas` against
@@ -637,8 +644,9 @@ exemption for an item with no recorded declaration is unnamed.
 > in an area the design declares (FLOW-02). A path outside them is
 > settled by widening the declaration inside the approved design, or by a
 > return to Design (FLOW-06). The merge confirmation (phase 7's
-> done-when) and Close run neither; a refresh runs both, including one
-> taken while the pull request waits at Merge. An item the queue records
+> done-when) and Close run neither; a feature's refresh runs both,
+> including one taken while the pull request waits at Merge, and a
+> process item's refresh runs neither. An item the queue records
 > no declaration for, because it finished Design before the queue
 > recorded declarations, is not compared with its design; its diff check
 > reads the areas the queue records, so with none it is undeclared
@@ -690,7 +698,7 @@ and the opening of `process.md`, outside every rule heading
 > names and the one that holds its design (FLOW-02, LOOP-04), has no map,
 > or when they name an area the map lacks, until the map has it;
 > an undeclared item is taken to change the whole of each repository it
-> names. An item that declares `areas: []` changes nothing but its own
+> names. A declared item whose areas are `[]` changes nothing but its own
 > design (FLOW-02). Two features are:
 >
 > - **colliding** when they share an exclusive area; when they have a
@@ -726,8 +734,8 @@ guard decision, is unchanged.
 
 ### FLOW-16 (amend), `docs/development/process.md`
 
-**Why:** F-P2 / design-code 2. The rule names the patch-id proof Jeff
-withdrew on 2026-11-16 (`loop-parallel` Decision 23, a14 (d)); `wf`
+**Why:** F-P2 / design-code 2. The rule names the patch-id proof that
+`loop-parallel`'s Decision 23 replaced on 2026-11-16 (a14 (d)); `wf`
 proves a squash by merge-tree.
 
 **Current wording**, the third paragraph (`process.md:648-660`):
@@ -765,7 +773,7 @@ proves a squash by merge-tree.
 
 **Severity and check:** MUST, `automated + agent-judgment`, before and
 after. **Enforcement:** none changes; the sentence describes `refMerged`
-and `mergeTreeProof` (`check/check.go:381-485`) as they are.
+and `mergeTreeProof` (`check/check.go:383-481`) as they are.
 
 ### Against LOOP-08 and LOOP-09
 
@@ -789,8 +797,8 @@ wording already does; making them neutral is deferred (a10).
   for every branch, a process item's included).
 - **Text checks**, run by hand at Implement and recorded in the PR:
   `grep -rn "declares no areas" tools/ docs/development/ .claude/`
-  finds nothing; `grep -n "patch-id" docs/development/` finds nothing;
-  `grep -n "one feature at a time" docs/development/` finds nothing;
+  finds nothing; `grep -rn "patch-id" docs/development/` finds nothing;
+  `grep -rn "one feature at a time" docs/development/` finds nothing;
   each proposed paragraph appears in `process.md` byte for byte as
   approved (FLOW-14's agent part).
 - **Tier 1's `rule-index`** passes: no rule is added, retired or renamed.
