@@ -127,8 +127,8 @@ steps:
     needs:
       - f1-answer-q2
     lease:
-      claimed_by: cloud/20261117T105743Z
-      expires: 2026-11-17T15:22:42.94285404Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -602,3 +602,6 @@ history:
   - at: 2026-11-17T13:28:09Z
     by: cloud/20261117T105743Z
     event: 'f1-design-r3 (return from f3-implement, task 20: a driver''s key in another letter case): design at 975e8cc. Question q2 added, blocking (Jeff''s call), with options (a) fold case, (b) refuse another case with its fix, (c) accept a nineteenth Behaviour difference; recommended (b). Step f1-answer-q2 (human) added, which f1-design-r3 needs. Steps wf back kept: the five f6-validate steps, unchanged (none of their cases spells a key in another case; native_validation unchanged). design_review required, unchanged; nothing approved at a6c8f0b changed.'
+  - at: 2026-11-17T13:28:55Z
+    by: cloud/20261117T105743Z
+    event: 'released f1-design-r3: r3 drafted at 975e8cc; waits on blocking q2 (key letter case, a/b/c, recommended b)'
