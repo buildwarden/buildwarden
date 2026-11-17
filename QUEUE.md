@@ -38,7 +38,7 @@ None.
 |---|---|---|---|---|---|---|---|---|---|
 | 68 | detached-prepare-windows-exe | fix (follows project-config-trust) | buildwarden/buildwarden | driver-core, driver/hyperv, driver/qemu, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 7 |
 | 69 | prebuilt-artifacts | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
-| 72 | driver-contract | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-plan (cloud) | - | - | 5 / 30 |
+| 72 | driver-contract | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-plan (cloud, leased to cloud/20261117T105743Z) | - | - | 6 / 30 |
 
 ## Relations
 
