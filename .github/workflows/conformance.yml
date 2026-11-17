@@ -1,0 +1,130 @@
+name: conformance
+
+# Tier 1 (TEST-02): the seam specifications' suites, each built from the
+# release of buildwarden/buildwarden-specs that tools/conformance/<directory>/
+# pins, against the relay and the disk collector built from this repository
+# (docs/design/seam-specs.md, CI). Its paths are every package the relay and
+# the disk collector are built from (go list -deps ./cmd/relay ./cmd/collector),
+# so a change to a shared package runs the suites (the TEST-02 caveat), with
+# the pins, the target files and this file.
+#
+# It runs on pull requests and on pushes to any branch but main that reach
+# those paths, weekly on main, and on demand. The push trigger is how a branch
+# gets hosted runs before it has a pull request, and its list is the pull
+# requests' list, so the latest run on a branch covers its head.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * 1'
+  pull_request:
+    paths:
+      - 'relay/**'
+      - 'relaycfg/**'
+      - 'collector/**'
+      - 'bootstrap/**'
+      - 'ledger/**'
+      - 'cmd/relay/**'
+      - 'cmd/collector/**'
+      - 'driver/*.go'
+      - 'driver/buildlink/**'
+      - 'driver/script/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Dockerfile.relay'
+      - 'Makefile'
+      - 'tools/conformance/**'
+      - '.github/workflows/conformance.yml'
+  push:
+    branches-ignore: [main]
+    paths:
+      - 'relay/**'
+      - 'relaycfg/**'
+      - 'collector/**'
+      - 'bootstrap/**'
+      - 'ledger/**'
+      - 'cmd/relay/**'
+      - 'cmd/collector/**'
+      - 'driver/*.go'
+      - 'driver/buildlink/**'
+      - 'driver/script/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Dockerfile.relay'
+      - 'Makefile'
+      - 'tools/conformance/**'
+      - '.github/workflows/conformance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  # On a pull request and on main every pin is a release with no replace
+  # line, as make pin-specs writes it (Decision 7). A branch push may pin an
+  # unreleased commit of the specifications, so this job does not run there.
+  pin:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # The job runs the checked-out code; keep it from writing a Go cache.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: sh tools/conformance/check-pins.sh
+
+  # The four relay targets run in the harness's Linux sandbox, which creates
+  # network and mount namespaces and virtual links, so make conformance runs
+  # as root; relay-oci's image is built and run by docker, which the runner
+  # has (docs/design/seam-specs.md, Security note). The job names its targets,
+  # so a target the default would leave out can never make it green.
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: docker version
+      - run: sudo env "PATH=$PATH" make conformance TARGETS="relay-host relay-vm relay-container relay-oci"
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-relay
+          path: dist/conformance/reports/
+          if-no-files-found: ignore
+
+  # The disk collector's capture links differ on Windows, so its suites run
+  # on all three operating systems.
+  collector:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: make conformance TARGETS=collector-disk
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-collector-${{ matrix.os }}
+          path: dist/conformance/reports/
+          if-no-files-found: ignore

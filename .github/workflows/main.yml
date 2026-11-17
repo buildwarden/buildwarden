@@ -197,6 +197,10 @@ jobs:
           go-version: stable
       - run: make build
       - run: ./dist/warden --help
+      # Each target a release builds compiles the way it builds it (design
+      # vz-nocgo-build).
+      - if: runner.os == 'Linux'
+        run: make release-build
 
   # Build-only: docs.yml deploys from main and holds pages: write, so PRs build
   # the book here instead (design ci-path-filters, Decision 7).

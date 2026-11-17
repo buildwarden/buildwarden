@@ -23,18 +23,30 @@ import (
 type Config struct {
 	// PriorityConfirmed gates unattended runs: the loop does no work until the
 	// human has confirmed the priority order.
-	PriorityConfirmed bool       `yaml:"priority_confirmed"`
-	RunBudget         StepBudget `yaml:"run_budget"`
+	PriorityConfirmed bool `yaml:"priority_confirmed"`
+	// Repository is the repository whose gates wf runs and whose area map an
+	// item's areas name, as owner/name. It has no default: unset, an item
+	// that names repos fails Validate.
+	Repository string     `yaml:"repository,omitempty"`
+	RunBudget  StepBudget `yaml:"run_budget"`
 	// NativeBudget bounds one scheduled native session's batch, so native
 	// work never competes with the cloud loop (FLOW-13). Nil falls back to
 	// RunBudget.
 	NativeBudget *StepBudget `yaml:"native_budget,omitempty"`
 	Limits       struct {
-		InProgress int `yaml:"in_progress"`
+		// InProgress is how many features may be in progress at once
+		// (FLOW-05). Nil, the key absent, is 5 (inProgressLimit); a written
+		// value below 1 is an error.
+		InProgress *int `yaml:"in_progress,omitempty"`
 		// AltersRelationships is how many features may hold an
 		// alters_relationships slot at once (FLOW-05, FLOW-20). Nil, the key
 		// absent, is 1 (altersLimit); a written value below 1 is an error.
 		AltersRelationships *int `yaml:"alters_relationships,omitempty"`
+		// WaitingOnHuman is the number of items waiting on the human at
+		// which no queued feature starts (FLOW-05). Nil, the key absent, is
+		// 8 (waitingLimit); a written value below 1 is an error, and no value
+		// means "no cap".
+		WaitingOnHuman *int `yaml:"waiting_on_human,omitempty"`
 	} `yaml:"limits"`
 	LeaseMinutes  int     `yaml:"lease_minutes"`
 	RunawayFactor float64 `yaml:"runaway_factor"`
@@ -69,6 +81,11 @@ type Feature struct {
 	// follows an item is a fix (FLOW-05 class 3) and starts only once that
 	// item is done; on a process item it is only a record.
 	Follows string `yaml:"follows,omitempty"`
+	// Urgent is the human worker who marked the item urgent, as in
+	// human/jeff: the claim that starts it is not refused by the waiting
+	// limit (FLOW-05). Empty, the item is not marked. Only a human sets or
+	// clears it.
+	Urgent string `yaml:"urgent,omitempty"`
 	// Holds lists the affinity patterns (cloud, host:*, host:macos-vz) whose
 	// workers take no new step while this process item is in progress.
 	Holds  []string `yaml:"holds,omitempty"`
@@ -79,6 +96,29 @@ type Feature struct {
 	Phase  int    `yaml:"phase"` // FLOW-03 phase, 0..8
 	Design string `yaml:"design"`
 	Branch string `yaml:"branch"`
+	// Repos lists the repositories the item works in, as owner/name, its
+	// home first: the home holds its design, its branch and its PR
+	// (LOOP-04). Empty, the item works only in Config.Repository.
+	Repos []string `yaml:"repos,omitempty"`
+	// Areas names the areas of the area map whose files the item changes
+	// (FLOW-02, FLOW-05). Nil, the key absent, is undeclared: the item
+	// collides with every item it shares a repository with. An empty list is
+	// a declaration that it changes nothing but its own design, which is why
+	// this is a pointer: the two must stay apart through a save and a load.
+	Areas *[]string `yaml:"areas,omitempty"`
+	// Seams are the seams the item changes, the design's seams (FLOW-02).
+	Seams []string `yaml:"seams,omitempty"`
+	// RulesChanged are the rule IDs of the design's rule_changes (FLOW-14).
+	RulesChanged []string `yaml:"rules_changed,omitempty"`
+	// Declared is the commit of the item's branch whose design wf declare
+	// last copied into this file. Empty, the item was never declared, and no
+	// gate compares this file with its design.
+	Declared string `yaml:"declared,omitempty"`
+	// Adopts marks a reconciliation item (LOOP-07).
+	Adopts *Adopts `yaml:"adopts,omitempty"`
+	// CollidesWith names items the human has said this one collides with,
+	// whatever the areas say.
+	CollidesWith []string `yaml:"collides_with,omitempty"`
 	// AltersRelationships is nil until Design decides it (FLOW-02).
 	AltersRelationships *bool `yaml:"alters_relationships"`
 	// DesignReview is empty until Design decides it: required, or skip when
@@ -93,10 +133,27 @@ type Feature struct {
 	History      []Event    `yaml:"history"`
 }
 
+// Adopts is what a reconciliation item adopts: a release of a consumable
+// (LOOP-07).
+type Adopts struct {
+	Consumable string `yaml:"consumable"`
+	Version    string `yaml:"version"`
+}
+
 // PR records the feature's pull request, opened in Publish (FLOW-08, FLOW-11).
 type PR struct {
 	Number int    `yaml:"number"`
 	CI     string `yaml:"ci"` // pending | green | red
+	// Head is the commit CI was read for. Empty, on a PR recorded before
+	// the field existed, that commit is not known.
+	Head string `yaml:"head,omitempty"`
+}
+
+// HeadIs reports whether pr.head records the commit: its full id, or an
+// abbreviation of it of 7 digits or more. A PR with no head recorded has a
+// result for no commit that is known.
+func (p *PR) HeadIs(sha string) bool {
+	return p != nil && len(p.Head) >= 7 && strings.HasPrefix(sha, p.Head)
 }
 
 // Step is one unit of work a worker claims (FLOW-04).
@@ -163,6 +220,163 @@ type State struct {
 	Gaps     []Gap
 	// Statuses are native/status/*.yaml, one per machine (FLOW-09).
 	Statuses []MachineStatus
+	// Areas is areas.yaml, the area map of Config.Repository; the file is
+	// optional. Nil, the repository is one exclusive area (FLOW-05).
+	Areas *AreaMap
+	// Main is main.yaml, what a session last recorded about main; the file
+	// is optional. Nil, main's CI is not known, which is not read as green.
+	Main *Main
+}
+
+// Main is main.yaml: the head of main a session saw and the result of its
+// check runs, whether GitHub requires an up-to-date branch on main, and the
+// last comparison of the area map with main (FLOW-08, FLOW-09, FLOW-10). wf
+// reads no CI itself: wf main records what the session read.
+type Main struct {
+	SHA string `yaml:"sha,omitempty"`
+	CI  string `yaml:"ci,omitempty"` // green | red | pending
+	// Run is a failing run's URL, kept while main is red.
+	Run string `yaml:"run,omitempty"`
+	// RedSince is the first red commit after the last green one, kept while
+	// main is not green.
+	RedSince string `yaml:"red_since,omitempty"`
+	// Gates marks a red that a session's own gates found on SHA: a later
+	// green reading of the check runs for the same commit does not clear it.
+	Gates bool `yaml:"gates,omitempty"`
+	// Followup is the item filed to fix a red main.
+	Followup string `yaml:"followup,omitempty"`
+	// UpToDate is whether GitHub requires an up-to-date branch on main:
+	// required or not-required. Empty, no session has read it.
+	UpToDate string `yaml:"up_to_date,omitempty"`
+	// Areas is the last comparison of the area map with origin/main.
+	Areas *AreasResult `yaml:"areas,omitempty"`
+}
+
+// AreasResult is what wf areas -check printed for a commit of main.
+type AreasResult struct {
+	SHA         string   `yaml:"sha"`
+	Differences int      `yaml:"differences"`
+	Lines       []string `yaml:"lines"`
+}
+
+// MainReading is what wf main is asked to record. A field left empty
+// changes nothing.
+type MainReading struct {
+	SHA, CI, Run, Followup, UpToDate string
+	Gates                            bool
+}
+
+var shaRe = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+
+// RecordMain records a reading of main's CI, the follow-up filed for a red
+// main, and whether GitHub requires an up-to-date branch on main, in
+// main.yaml (FLOW-09, FLOW-10). A red keeps red_since while main stays red,
+// and a green clears it with the run and the follow-up. A red the gates found
+// (-gates) stays when a later reading for the same commit is green, and goes
+// with another head. The follow-up is recorded once while main is red.
+func (s *State) RecordMain(r MainReading) error {
+	m := Main{}
+	if s.Main != nil {
+		m = *s.Main
+	}
+	if r.CI != "" || r.SHA != "" {
+		if !shaRe.MatchString(r.SHA) {
+			return fmt.Errorf("main: -sha %q is not a commit id", r.SHA)
+		}
+		if !slices.Contains([]string{"green", "red", "pending"}, r.CI) {
+			return fmt.Errorf("main: -ci is green, red or pending, not %q", r.CI)
+		}
+		if r.Gates && r.CI != "red" {
+			return errors.New("main: -gates marks a red the gates found; give -ci red")
+		}
+		m.reading(r)
+	}
+	if err := s.followup(&m, r.Followup); err != nil {
+		return err
+	}
+	if r.UpToDate != "" {
+		if r.UpToDate != "required" && r.UpToDate != "not-required" {
+			return fmt.Errorf("main: -up-to-date is required or not-required, not %q",
+				r.UpToDate)
+		}
+		m.UpToDate = r.UpToDate
+	}
+	s.Main = &m
+	return s.SaveMain()
+}
+
+// followup records the item filed to fix a red main, once.
+func (s *State) followup(m *Main, item string) error {
+	if item == "" {
+		return nil
+	}
+	if m.CI != "red" {
+		return fmt.Errorf("main: -followup %s: main is not recorded red", item)
+	}
+	if m.Followup != "" && m.Followup != item {
+		return fmt.Errorf("main: the follow-up %s is already recorded for main red "+
+			"since %s", m.Followup, m.RedSince)
+	}
+	if _, err := s.Find(item); err != nil {
+		return fmt.Errorf("main: -followup: %w", err)
+	}
+	m.Followup = item
+	return nil
+}
+
+// reading applies a reading of main's check runs.
+func (m *Main) reading(r MainReading) {
+	if m.Gates && m.SHA == r.SHA && r.CI != "red" {
+		// The gates fail on this commit whatever CI says.
+		return
+	}
+	m.SHA, m.CI, m.Gates = r.SHA, r.CI, r.Gates
+	switch r.CI {
+	case "green":
+		m.RedSince, m.Run, m.Followup = "", "", ""
+	case "red":
+		if m.RedSince == "" {
+			m.RedSince = r.SHA
+		}
+		m.Run = r.Run
+	default:
+		m.Run = ""
+	}
+}
+
+// SaveMain writes main.yaml.
+func (s *State) SaveMain() error {
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(s.Main); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(s.Dir, "main.yaml"), buf.Bytes(), 0o644); err != nil {
+		return err
+	}
+	return s.WriteSummary()
+}
+
+// validateMain checks main.yaml's values.
+func (s *State) validateMain() []string {
+	m := s.Main
+	if m == nil {
+		return nil
+	}
+	var out []string
+	if m.CI != "" && !slices.Contains([]string{"green", "red", "pending"}, m.CI) {
+		out = append(out, fmt.Sprintf("main.yaml: ci %q is not green, red or pending",
+			m.CI))
+	}
+	if m.SHA != "" && !shaRe.MatchString(m.SHA) {
+		out = append(out, fmt.Sprintf("main.yaml: sha %q is not a commit id", m.SHA))
+	}
+	if m.UpToDate != "" && m.UpToDate != "required" && m.UpToDate != "not-required" {
+		out = append(out, fmt.Sprintf("main.yaml: up_to_date %q is not required or "+
+			"not-required", m.UpToDate))
+	}
+	return out
 }
 
 // Load reads config.yaml and queue/*.yaml under dir.
@@ -190,7 +404,23 @@ func Load(dir string) (*State, error) {
 	if err := s.loadNative(); err != nil {
 		return nil, err
 	}
+	if err := s.loadAreas(); err != nil {
+		return nil, err
+	}
+	if err := s.loadMain(); err != nil {
+		return nil, err
+	}
 	return s, nil
+}
+
+// loadMain reads the optional main.yaml.
+func (s *State) loadMain() error {
+	p := filepath.Join(s.Dir, "main.yaml")
+	if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	s.Main = &Main{}
+	return readYAML(p, s.Main)
 }
 
 // sortFeatures puts s.Features in FLOW-05 order, a stable starting order for
@@ -238,8 +468,9 @@ func (s *State) Listed(all bool) []*Feature {
 func (f *Feature) IsProcess() bool { return f.Kind == "process" }
 
 // Class returns the item's FLOW-05 class: 1 in implementation, 2 a process
-// item, 3 a fix (a feature that follows another item), 4 new functionality.
-// A done item has no class, 0.
+// item, 3 a fix (a feature that follows another item) or an adoption (one
+// that adopts a release, LOOP-07), 4 new functionality. A done item has no
+// class, 0. A tracked item is classed as the feature it is.
 func (f *Feature) Class() int {
 	switch {
 	case f.Status == "done":
@@ -248,7 +479,7 @@ func (f *Feature) Class() int {
 		return 1
 	case f.IsProcess():
 		return 2
-	case f.Follows != "":
+	case f.Follows != "", f.Adopts != nil:
 		return 3
 	}
 	return 4
@@ -256,10 +487,16 @@ func (f *Feature) Class() int {
 
 // inImplementation reports whether the item is in progress past Plan and not
 // waiting for the human's merge: a merge check must not go ahead of process
-// and fix work, and the merge is confirmed before wf next anyway.
+// and fix work, and the merge is confirmed before wf next anyway. An item
+// with a pending refresh step is, at its merge step too, so a run refreshes
+// open PRs before it starts anything new (FLOW-05, FLOW-10). A tracked item
+// never is: the loop takes none of its steps.
 func (f *Feature) inImplementation() bool {
-	if f.Status != "in_progress" {
+	if f.Status != "in_progress" || f.Round == "tracked" {
 		return false
+	}
+	if f.PendingRefresh() != nil {
+		return true
 	}
 	if f.IsProcess() {
 		return f.Phase == 2 || f.Phase == 4
@@ -269,7 +506,7 @@ func (f *Feature) inImplementation() bool {
 
 // Add creates a queued feature at the given priority, moving the features at
 // or below it down one with a history line each, and returns every feature it
-// changed.
+// changed. An item homed in another repository gets the tracked round.
 func (s *State) Add(f *Feature, now time.Time, by string) ([]*Feature, error) {
 	if _, err := s.Find(f.Feature); err == nil {
 		return nil, fmt.Errorf("feature %q already queued", f.Feature)
@@ -284,8 +521,11 @@ func (s *State) Add(f *Feature, now time.Time, by string) ([]*Feature, error) {
 		}
 	}
 	f.Status, f.Round, f.Phase = "queued", "feature", 0
-	if f.IsProcess() {
+	switch {
+	case f.IsProcess():
 		f.Round, f.Phase = "process", 1
+	case s.Tracked(f):
+		f.Round, f.Phase = "tracked", 1
 	}
 	Seed(f)
 	f.Log(now, by, "queued at priority %d (intake)", f.Priority)
@@ -362,23 +602,39 @@ var (
 	holdRe     = regexp.MustCompile(`^(cloud|human|host:[a-z0-9*?-]+)$`)
 )
 
-// altersLimit is how many features may hold an alters_relationships slot: the
-// value config.yaml writes (FLOW-20), or FLOW-05's 1 when it writes none. A
-// written value is returned as it is, one below 1 included, which Validate
-// reports and under which Next gives no slot: no default stands in for it
-// (GLOBAL-10).
-func (s *State) altersLimit() int {
-	if n := s.Config.Limits.AltersRelationships; n != nil {
+// inProgressLimit is how many features may be in progress: the value
+// config.yaml writes, or FLOW-05's 5 when it writes none. A written value is
+// returned as it is, one below 1 included, which Validate reports and under
+// which Guard starts nothing (GLOBAL-10).
+func (s *State) inProgressLimit() int {
+	if n := s.Config.Limits.InProgress; n != nil {
 		return *n
 	}
-	return 1
+	return 5
 }
 
-// Validate checks the schema of every feature and the FLOW-05 limits. The
-// alters_relationships limit is compared with the features that hold a slot
-// (altersHolders), the count Next withholds a Plan step by, so a state Next
-// produces never fails here.
-func (s *State) Validate() []error {
+// waitingLimit is the number of items waiting on the human at which no
+// queued feature starts: the value config.yaml writes, or FLOW-05's 8 when it
+// writes none. A written value is returned as it is; Validate reports one
+// below 1.
+func (s *State) waitingLimit() int {
+	if n := s.Config.Limits.WaitingOnHuman; n != nil {
+		return *n
+	}
+	return 8
+}
+
+// Tracked reports whether the item's home, its first repository, is not the
+// queue's own: wf sees no branch, design or PR there, so it runs no gate for
+// the item and counts it in no limit (FLOW-03, FLOW-05).
+func (s *State) Tracked(f *Feature) bool {
+	return len(f.Repos) > 0 && f.Repos[0] != s.Config.Repository
+}
+
+// validateConfig checks config.yaml's budgets and limits. A limit is checked
+// as inProgressLimit, altersLimit and waitingLimit return it, so an absent
+// key is its default and a written value below 1 is the finding.
+func (s *State) validateConfig() []error {
 	var errs []error
 	if s.Config.RunBudget.Steps < 1 {
 		errs = append(errs, fmt.Errorf("config: run_budget.steps %d is below 1",
@@ -388,42 +644,88 @@ func (s *State) Validate() []error {
 		errs = append(errs, fmt.Errorf("config: native_budget.steps %d is below 1",
 			nb.Steps))
 	}
-	limit := s.altersLimit()
-	if limit < 1 {
-		errs = append(errs, fmt.Errorf(
-			"config: limits.alters_relationships %d is below 1", limit))
-	}
-	prio := map[int]string{}
-	inProgress := 0
-	for _, f := range s.Features {
-		bad := func(format string, a ...any) {
-			errs = append(errs, fmt.Errorf("%s: %s", f.Feature,
-				fmt.Sprintf(format, a...)))
+	for _, l := range []struct {
+		key   string
+		value int
+	}{{"in_progress", s.inProgressLimit()}, {"alters_relationships", s.altersLimit()},
+		{"waiting_on_human", s.waitingLimit()}} {
+		if l.value < 1 {
+			errs = append(errs, fmt.Errorf("config: limits.%s %d is below 1", l.key,
+				l.value))
 		}
+	}
+	return errs
+}
+
+// Validate checks the schema of every feature and the FLOW-05 limits. Each
+// limit is the predicate Guard evaluates before a claim (validateLimits), so
+// a state Guard allows has no limit finding here.
+func (s *State) Validate() []error {
+	errs := s.validateConfig()
+	prio := map[int]string{}
+	for _, f := range s.Features {
 		if other, ok := prio[f.Priority]; ok {
-			bad("priority %d also held by %s", f.Priority, other)
+			errs = append(errs, fmt.Errorf("%s: priority %d also held by %s",
+				f.Feature, f.Priority, other))
 		}
 		prio[f.Priority] = f.Feature
-		s.validateFollows(f, bad)
-		if f.Status == "in_progress" && !f.IsProcess() {
-			inProgress++
-		}
-		f.validate(bad)
+		errs = append(errs, s.Problems(f)...)
 	}
-	if n := s.Config.Limits.InProgress; n > 0 && inProgress > n {
-		errs = append(errs, fmt.Errorf("%d features in progress, limit %d (FLOW-05)",
-			inProgress, n))
-	}
-	// No count of holders means anything against a limit below 1.
-	if holders := s.altersHolders(); limit >= 1 && len(holders) > limit {
-		errs = append(errs, fmt.Errorf(
-			"%d features hold an alters_relationships slot, limit %d (FLOW-05): %s",
-			len(holders), limit, strings.Join(holders, ", ")))
-	}
-	for _, e := range s.validateNative() {
+	errs = append(errs, s.validateLimits()...)
+	for _, e := range slices.Concat(s.validateNative(), s.validateAreas(), s.validateMain()) {
 		errs = append(errs, errors.New(e))
 	}
 	return errs
+}
+
+// Problems returns Validate's findings about one item's own fields, which wf
+// new refuses to write.
+func (s *State) Problems(f *Feature) []error {
+	var errs []error
+	bad := func(format string, a ...any) {
+		errs = append(errs, fmt.Errorf("%s: %s", f.Feature, fmt.Sprintf(format, a...)))
+	}
+	s.validateFollows(f, bad)
+	tracked := s.Tracked(f)
+	if len(f.Repos) > 0 && s.Config.Repository == "" {
+		errs = append(errs, fmt.Errorf(
+			"config: repository is not set, and %s names repos", f.Feature))
+		// Which repository is the queue's own is not known, so neither is
+		// whether the item is tracked: its round is checked as written.
+		tracked = f.Round == "tracked"
+	}
+	f.validate(bad, tracked)
+	s.validateDeclared(f, bad)
+	s.validateUrgent(f, bad)
+	if f.PR != nil && f.PR.Head != "" && !commitRe.MatchString(f.PR.Head) {
+		bad("pr.head %q is not a commit id", f.PR.Head)
+	}
+	return errs
+}
+
+// Inherit gives a new item that follows parent the parent's repositories and
+// areas: a fix or finish of an item is in that item's areas to a first
+// approximation, and the human agreed those (FLOW-09). It is for an item
+// filed with no areas of its own; ownRepos says it was given its
+// repositories, which are then kept. It returns the history line, which says
+// what was taken.
+func (f *Feature) Inherit(parent *Feature, ownRepos bool) string {
+	what, none := "repos and areas", parent.Areas == nil
+	if ownRepos {
+		what = "areas"
+	} else {
+		f.Repos = slices.Clone(parent.Repos)
+		none = none && len(parent.Repos) == 0
+	}
+	if parent.Areas != nil {
+		areas := slices.Clone(*parent.Areas)
+		f.Areas = &areas
+	}
+	line := what + " taken from " + parent.Feature
+	if none {
+		line += ": it has none"
+	}
+	return line
 }
 
 // validateFollows checks that follows, when set, names another item, done or
@@ -437,11 +739,96 @@ func (s *State) validateFollows(f *Feature, bad func(string, ...any)) {
 	}
 }
 
-func (f *Feature) validate(bad func(string, ...any)) {
+var (
+	repoRe   = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+	commitRe = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+)
+
+// validateDeclared checks what the item declares (FLOW-02, FLOW-03): repos,
+// areas, declared, adopts and collides_with. An area the map lacks is not an
+// error: the item is undeclared until an attended session adds the area.
+func (s *State) validateDeclared(f *Feature, bad func(string, ...any)) {
+	s.validateRepos(f, bad)
+	if f.Areas != nil {
+		if dup := repeated(*f.Areas); dup != "" {
+			bad("areas names %s twice", dup)
+		}
+	}
+	if f.Declared != "" && !commitRe.MatchString(f.Declared) {
+		bad("declared %q is not a commit id", f.Declared)
+	}
+	// A tracked item's seams are what intake records: wf cannot read its
+	// design, so nothing was declared from one.
+	if f.Declared == "" && !s.Tracked(f) && len(f.Seams)+len(f.RulesChanged) > 0 {
+		bad("seams and rules_changed are what wf declare copies from the design, " +
+			"and declared is not set")
+	}
+	if a := f.Adopts; a != nil {
+		if a.Consumable == "" || a.Version == "" {
+			bad("adopts needs both its consumable and its version")
+		}
+		if f.IsProcess() {
+			bad("only a feature adopts a release (LOOP-07)")
+		}
+	}
+	for _, name := range f.CollidesWith {
+		if _, err := s.Find(name); err != nil || name == f.Feature {
+			bad("collides_with %q, which is not another item in the queue", name)
+		}
+	}
+}
+
+// validateRepos checks the form of the item's repos.
+func (s *State) validateRepos(f *Feature, bad func(string, ...any)) {
+	for _, r := range f.Repos {
+		if !repoRe.MatchString(r) {
+			bad("repos entry %q is not owner/name", r)
+		}
+	}
+	if dup := repeated(f.Repos); dup != "" {
+		bad("repos names %s twice", dup)
+	}
+}
+
+// repeated returns the first name the list has twice, or "".
+func repeated(names []string) string {
+	seen := map[string]bool{}
+	for _, n := range names {
+		if seen[n] {
+			return n
+		}
+		seen[n] = true
+	}
+	return ""
+}
+
+// validateUrgent checks the urgent mark: its value is the human worker who
+// set it, and the item is one whose start the waiting limit could refuse.
+// Any other value is honoured by nothing, so it is an error and is read
+// neither as marked nor as unmarked (GLOBAL-10). What the item fixes is not
+// checked: FLOW-05's words and intake hold the mark to a security fix.
+func (s *State) validateUrgent(f *Feature, bad func(string, ...any)) {
+	const never = "the waiting limit never refuses"
+	switch {
+	case f.Urgent == "":
+	case Kind(f.Urgent) != "human":
+		bad("urgent names %s: only a human marks an item urgent (FLOW-05)", f.Urgent)
+	case !namedHuman(f.Urgent):
+		bad("urgent names %q: %s", f.Urgent, urgentUnnamed)
+	case f.IsProcess():
+		bad("urgent on a process item: %s one (FLOW-05)", never)
+	case s.Tracked(f):
+		bad("urgent on a tracked item: %s one (FLOW-05)", never)
+	case f.Follows != "":
+		bad("urgent, and it follows %s: %s a fix (FLOW-05)", f.Follows, never)
+	}
+}
+
+func (f *Feature) validate(bad func(string, ...any), tracked bool) {
 	if !oneOf(f.Status, "queued", "in_progress", "done") {
 		bad("status %q is not queued, in_progress or done", f.Status)
 	}
-	f.validateKind(bad)
+	f.validateKind(bad, tracked)
 	if !oneOf(f.DesignReview, "", "required", "skip") {
 		bad("design_review %q is not required or skip", f.DesignReview)
 	}
@@ -459,29 +846,44 @@ func (f *Feature) validate(bad func(string, ...any)) {
 	}
 }
 
-func (f *Feature) validateKind(bad func(string, ...any)) {
+// validateKind checks the item's kind against its round. tracked says the
+// item is homed in another repository.
+func (f *Feature) validateKind(bad func(string, ...any), tracked bool) {
 	switch {
 	case !oneOf(f.Kind, "", "feature", "process"):
 		bad("kind %q is not feature or process", f.Kind)
+	case f.IsProcess() && tracked:
+		bad("a process item is homed in the queue's repository, not %s "+
+			"(an item homed in another repository is tracked)", f.Repos[0])
 	case f.IsProcess():
-		if f.Round != "process" {
-			bad("a process item's round is process, not %q", f.Round)
-		}
-		if f.Phase < 1 || f.Phase > 4 {
-			bad("process phase %d is outside 1..4", f.Phase)
-		}
-		for _, h := range f.Holds {
-			if _, err := path.Match(h, ""); err != nil || !holdRe.MatchString(h) {
-				bad("hold %q is not cloud, human or host:<pattern>", h)
-			}
-		}
+		f.validateProcess(bad)
 	default:
 		legacy := f.Status == "done" && oneOf(f.Round, "parallel", "merge")
-		if f.Round != "feature" && !legacy {
+		switch {
+		case tracked && f.Round != "tracked":
+			bad("a tracked item's round is tracked, not %q", f.Round)
+		case !tracked && f.Round == "tracked":
+			bad("round tracked is for an item homed in another repository, and this " +
+				"one is homed in the queue's")
+		case !tracked && f.Round != "feature" && !legacy:
 			bad("round %q is not feature (run wf migrate)", f.Round)
 		}
 		if len(f.Holds) > 0 {
 			bad("only a process item holds workers")
+		}
+	}
+}
+
+func (f *Feature) validateProcess(bad func(string, ...any)) {
+	if f.Round != "process" {
+		bad("a process item's round is process, not %q", f.Round)
+	}
+	if f.Phase < 1 || f.Phase > 4 {
+		bad("process phase %d is outside 1..4", f.Phase)
+	}
+	for _, h := range f.Holds {
+		if _, err := path.Match(h, ""); err != nil || !holdRe.MatchString(h) {
+			bad("hold %q is not cloud, human or host:<pattern>", h)
 		}
 	}
 }

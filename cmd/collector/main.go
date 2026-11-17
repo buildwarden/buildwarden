@@ -20,8 +20,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/netip"
 	"os"
 	"os/signal"
@@ -38,7 +40,8 @@ func main() {
 	script := flag.String("script", "", "build script served at http://artifacts/build-script")
 	capture := flag.String("capture", "", "capture payloads (none, headers, bodies, all)")
 	upstreamCAs := flag.String("upstream-ca", "",
-		"extra upstream CA files/dirs, comma-separated")
+		"extra upstream CA files/dirs, comma-separated; only their valid PEM "+
+			"certificates are sent")
 	quiet := flag.Bool("quiet", false, "do not echo the guest build console")
 	buildLink := flag.String("build-link", "",
 		"segment the relay serves the build on, as a CIDR (relay the first host, "+
@@ -49,6 +52,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "collector: --relay and --dir are required")
 		os.Exit(2)
 	}
+	var err error
 	req := &driver.BuildRequest{
 		OutputDir:        *dir,
 		ContextDir:       *ctxDir,
@@ -57,8 +61,13 @@ func main() {
 		Quiet:            *quiet,
 		UpstreamSystemCA: true,
 	}
-	if *upstreamCAs != "" {
-		req.UpstreamCACerts = strings.Split(*upstreamCAs, ",")
+	if req.UpstreamCACerts, err = readUpstreamCAs(os.Stderr, *upstreamCAs); err != nil {
+		fmt.Fprintf(os.Stderr, "collector: %v\n", err)
+		var fe *driver.FixableError
+		if errors.As(err, &fe) && fe.Fix != "" {
+			fmt.Fprintf(os.Stderr, "  To fix: %s\n", fe.Fix)
+		}
+		os.Exit(1)
 	}
 	link, err := parseBuildLink(*buildLink)
 	if err != nil {
@@ -69,6 +78,21 @@ func main() {
 		fmt.Fprintf(os.Stderr, "collector: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// readUpstreamCAs reads --upstream-ca's comma-separated paths by warden's
+// rule (driver.LoadUpstreamCAs) and prints each skip and each path's line on
+// w; there is no --verbose, so no per-file list. Nothing is read when the
+// list is empty.
+func readUpstreamCAs(w io.Writer, list string) ([]byte, error) {
+	if list == "" {
+		return nil, nil
+	}
+	certs, report, err := driver.LoadUpstreamCAs(strings.Split(list, ","), driver.CAFromFlag)
+	for _, line := range report.Lines(false) {
+		fmt.Fprintf(w, "collector: %s\n", line)
+	}
+	return certs, err
 }
 
 // parseBuildLink turns -build-link's CIDR into the claim's build link, the

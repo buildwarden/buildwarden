@@ -1,0 +1,26 @@
+# The Go relay as the image Dockerfile.relay builds, which make conformance
+# builds as buildwarden-relay:conformance when this target runs
+# (docs/design/seam-specs.md, The harness). Its entry point passes no -mode,
+# so it runs container mode. The runtime must have the image already: the
+# harness never pulls it. OCI_RUNTIME=<runtime> make conformance runs this
+# target with that runtime in place of the one named here, and nothing else.
+#
+# The order of its interfaces: a container-mode relay takes the first
+# non-loopback IPv4 address it finds as its own (relay.DetectSelfIP). The
+# container starts with no network, and the sandbox creates the build link in
+# its network namespace before the upstream link, with a name that sorts
+# first, so the relay takes its build address, which the launcher assigns.
+role = "relay"
+os = ["linux"]
+launcher = "oci"
+
+[oci]
+runtime = "docker"
+image = "buildwarden-relay:conformance"
+args = ["-claim-addr", "{claim}"]
+env = { WARDEN_CLAIM_TOKEN = "{token}" }
+
+[relay]
+mode = "container"
+link = "ip"
+address_by_launcher = true

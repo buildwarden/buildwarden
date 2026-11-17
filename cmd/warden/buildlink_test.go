@@ -2,8 +2,6 @@ package main
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,46 +9,38 @@ import (
 	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
-// inConfigDirs points the user config at a fresh home and runs from a fresh
-// project directory, writing each non-empty build_link into its file.
-func inConfigDirs(t *testing.T, user, project string) {
-	t.Helper()
-	home, proj := t.TempDir(), t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	if user != "" {
-		dir := filepath.Join(home, ".config", "warden")
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		write(t, dir, "config.toml", "[vm]\nbuild_link = \""+user+"\"\n")
+func buildLinkFile(link string) string {
+	if link == "" {
+		return ""
 	}
-	if project != "" {
-		write(t, proj, "warden.toml", "[vm]\nbuild_link = \""+project+"\"\n")
-	}
-	orig, _ := os.Getwd()
-	if err := os.Chdir(proj); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(orig) })
+	return "[vm]\nbuild_link = \"" + link + "\"\n"
 }
 
 func TestResolveBuildLinkPrecedence(t *testing.T) {
 	defer func() { flagBuildLink = "" }()
 	tests := []struct {
-		name, user, project, flag string
-		want, source              string
+		name, file, flag string
+		named            string // the file's name when --config names it elsewhere
+		want, source     string
 	}{
-		{"default with no config file", "", "", "", buildlink.DefaultCIDR, "default"},
-		{"user config", "100.126.0.0/30", "", "", "100.126.0.0/30", "config.toml"},
-		{"project over user", "100.126.0.0/30", "100.125.0.0/30", "",
-			"100.125.0.0/30", "warden.toml"},
-		{"flag over both", "100.126.0.0/30", "100.125.0.0/30", "100.124.0.4/30",
-			"100.124.0.4/30", "--build-link"},
+		{name: "default with no config file", want: buildlink.DefaultCIDR,
+			source: "default"},
+		{name: "the config file", file: "100.126.0.0/30", want: "100.126.0.0/30",
+			source: "warden.toml"},
+		{name: "flag over the file", file: "100.125.0.0/30", flag: "100.124.0.4/30",
+			want: "100.124.0.4/30", source: "--build-link"},
+		{name: "a file --config names, under its own name", file: "100.125.0.0/30",
+			named: "ci.toml", want: "100.125.0.0/30", source: "ci.toml"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inConfigDirs(t, tt.user, tt.project)
+			if tt.named == "" {
+				inConfigFiles(t, buildLinkFile(tt.file))
+			} else {
+				inConfigFiles(t, "")
+				giveConfigFlag(t,
+					write(t, t.TempDir(), tt.named, buildLinkFile(tt.file)))
+			}
 			flagBuildLink = tt.flag
 			cfg, err := LoadConfig()
 			if err != nil {
@@ -71,11 +61,11 @@ func TestResolveBuildLinkPrecedence(t *testing.T) {
 func TestBadBuildLinkFailsAtLoad(t *testing.T) {
 	for _, bad := range []string{"100.126.0.1/30", "100.126.0.0/29", "10.0.2.0/30",
 		"127.0.0.0/30", "nonsense"} {
-		inConfigDirs(t, "", bad)
+		inConfigFiles(t, buildLinkFile(bad))
 		_, err := LoadConfig()
 		var fe *driver.FixableError
 		if !errors.As(err, &fe) || !strings.Contains(fe.Msg,
-			"[vm] build_link in warden.toml") ||
+			"[vm] build_link in "+configPath(t)) ||
 			!strings.Contains(fe.Fix, exampleBuildLink) {
 			t.Errorf("%s: err = %#v", bad, err)
 		}
@@ -88,7 +78,7 @@ func TestBadBuildLinkFailsAtLoad(t *testing.T) {
 // host's NAT was elsewhere).
 func TestBuildLinkInHyperVNATLoads(t *testing.T) {
 	for _, link := range []string{"192.168.250.4/30", "192.168.240.252/30"} {
-		inConfigDirs(t, "", link)
+		inConfigFiles(t, buildLinkFile(link))
 		cfg, err := LoadConfig()
 		if err != nil || cfg.VM.BuildLink != link {
 			t.Errorf("%s: cfg %+v, err = %v", link, cfg.VM, err)
@@ -98,7 +88,7 @@ func TestBuildLinkInHyperVNATLoads(t *testing.T) {
 
 func TestBuildLinkFlagChecked(t *testing.T) {
 	defer func() { flagBuildLink = "" }()
-	inConfigDirs(t, "", "")
+	inConfigFiles(t, "")
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatal(err)
@@ -121,7 +111,7 @@ func TestBuildLinkFlagChecked(t *testing.T) {
 
 func TestBuildLinkFlagNeedsAVMDriver(t *testing.T) {
 	defer func() { flagBuildLink, flagDriver = "", "" }()
-	inConfigDirs(t, "", "")
+	inConfigFiles(t, "")
 	flagBuildLink = buildlink.DefaultCIDR
 	for _, d := range []string{"", "container"} {
 		if err := validateFlagsForDriver(d); err == nil ||

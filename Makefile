@@ -1,4 +1,4 @@
-.PHONY: build test integration-test lint tier1 enforcement fmt tidy cover clean sign relay-vm deadcode
+.PHONY: build test release-build integration-test lint tier1 enforcement fmt tidy cover clean sign relay-vm deadcode pin-specs conformance
 
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
@@ -34,6 +34,17 @@ test:
 	go test ./...
 	cd tools/workflow && go test ./...
 	cd tools/tier1 && go test ./...
+
+# What a release compiles (.goreleaser.yaml, its hook, release.yml): each
+# program, for each target, without cgo. Nothing is kept. A target or
+# program added there is added here.
+RELEASE_TARGETS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
+release-build:
+	@for t in $(RELEASE_TARGETS); do \
+		echo "== $$t"; \
+		GOOS=$${t%/*} GOARCH=$${t#*/} CGO_ENABLED=0 \
+			go build ./cmd/warden ./cmd/warden-io ./cmd/relay ./cmd/warden-pause || exit 1; \
+	done
 
 integration-test:
 	./test-integration.sh
@@ -98,6 +109,29 @@ fmt:
 
 tidy:
 	go mod tidy
+
+# Moves the pins of the seam specifications, tools/conformance/<directory>/
+# (Decision 7 of docs/design/seam-specs.md). Give SPECS="<directory>@<version>
+# ...", SPECS=latest or REF=<commit>; it has no default. A pin is moved by this
+# target and never by go get, which keeps the old pin's harness version.
+pin-specs:
+	SPECS='$(SPECS)' REF='$(REF)' sh tools/conformance/pin-specs.sh
+
+# The seam specifications' suites against the relay and the disk collector
+# built from this checkout (docs/design/seam-specs.md, The harness). Each
+# suite's command is built from the release its own module
+# tools/conformance/<directory>/ pins, with that release's harness, and runs
+# against each target in tools/conformance/targets/; one table is printed per
+# target. With TARGETS unset it runs every target whose file declares this
+# host's OS and prints each one it leaves out; a named target that cannot run
+# here is an error. SUITES names the specifications whose suites run (all six
+# by default), SPECS_DIR=<checkout> builds the suites from a checkout of the
+# specs repository instead of the pins, and OCI_RUNTIME runs relay-oci with
+# that runtime. The relay targets need Linux and root or user namespaces, and
+# relay-oci root and its runtime.
+conformance:
+	@TARGETS='$(TARGETS)' SUITES='$(SUITES)' SPECS_DIR='$(SPECS_DIR)' OCI_RUNTIME='$(OCI_RUNTIME)' \
+		sh tools/conformance/conformance.sh
 
 cover:
 	go test -coverprofile=coverage.out ./...

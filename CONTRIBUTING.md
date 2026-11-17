@@ -14,6 +14,9 @@ and the process for designing, reviewing and merging a feature is
   run `mise exec -- go ...` if your `GOROOT` is misconfigured)
 - golangci-lint v2
 - A container runtime: finch, docker, or podman
+- git 2.40 or later where the feature loop's `wf` runs: its merge check
+  proves a squash merge with `git merge-tree --merge-base`, and with an
+  older git it leaves the branch unconfirmed and says why
 
 **VZ driver (macOS 13+ on Apple Silicon):**
 
@@ -48,6 +51,7 @@ and the process for designing, reviewing and merging a feature is
 ```sh
 make build               # Compile all binaries to dist/
 make test                # Unit tests: run on every platform, no external dependencies
+make release-build       # Compile what a release compiles: each target, without cgo
 make lint                # golangci-lint, then the tier-1 checks on your diff
 make fmt                 # gofmt -s -w
 make tidy                # go mod tidy
@@ -60,8 +64,12 @@ make clean               # Remove built binaries
 
 `make build` cross-compiles the relay and `warden-io` for linux/amd64 and
 linux/arm64; on macOS/arm64 it also builds `warden-io` for darwin/arm64 and signs
-the host binary. Platform-specific code has build-tagged stubs, so `make test`
-passes everywhere. The test tiers and what each one needs are in
+the host binary. Run a development `warden` from its tree as `dist/warden`: it
+finds its source only from where its executable is, never from the working
+directory, so `go run ./cmd/warden` or a copy elsewhere stops at the first
+thing it would build from source. Platform-specific code has build-tagged
+stubs, so `make test` passes everywhere. The test tiers and what each one
+needs are in
 [`testing.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/development/testing.md).
 The `warden-io` keytool comparison skips where no JDK's `keytool` runs; CI's
 `keytool` job installs Java and runs it on Linux, macOS and Windows.
@@ -128,6 +136,56 @@ changing the relay or orchestrator, a quick end-to-end check is:
 ./warden clean                            # if a build crashed or was interrupted
 ```
 
+### Seam specifications and conformance
+
+The specifications of the component seams (the claim, the collector, the
+relay's guest API, the executor's `initialize` and the bootstrap config) live in
+[buildwarden/buildwarden-specs](https://github.com/buildwarden/buildwarden-specs).
+This repository pins one version of each in a Go module of its own,
+`tools/conformance/<directory>/go.mod`, which the root module does not require;
+[Component seams](docs/book/src/concepts/seams.md) shows each pin and links each
+specification at it.
+
+```sh
+make conformance                                   # Every pinned suite against every target this OS can run
+make conformance TARGETS="relay-host collector-disk"  # Exactly those targets
+make conformance SUITES="relay-claim"              # Exactly those specifications' suites
+make conformance SPECS_DIR=../buildwarden-specs    # Suites from a specs checkout, not the pins
+OCI_RUNTIME=podman make conformance                # relay-oci with podman in place of docker
+make pin-specs SPECS="relay-claim@v0.2.0"          # Move named pins to those releases
+make pin-specs SPECS=latest                        # Move all six pins to their newest releases
+make pin-specs REF=<commit>                        # Pin all six at one commit, on a branch only
+```
+
+- **`make conformance`** runs the seam specifications' suites against the
+  relay and the disk collector built from this checkout. It builds each pinned
+  specification's command, `bw-conformance-<directory>`, from its own module
+  with `GOWORK=off`, so each runs with the harness its own release names, and
+  builds what the targets run into `dist/conformance/`: `relay`, `collector`
+  and, for `relay-oci`, the image `buildwarden-relay:conformance` from
+  `Dockerfile.relay`. A target is a file in `tools/conformance/targets/`
+  (`relay-host`, `relay-vm`, `relay-container`, `relay-oci`, `collector-disk`)
+  that declares the operating systems it runs on. With `TARGETS` unset it runs
+  every target that declares this host's, and prints a line for each one it
+  leaves out; a target named in `TARGETS` that cannot run here is an error.
+  The relay targets run in the harness's sandbox, which needs Linux and root
+  or unprivileged user namespaces; `relay-oci` needs root and the runtime its
+  file names, with the image built from this checkout. It prints one table per
+  target, a row for each specification with its version, its harness's and
+  its counts, and keeps each report in `dist/conformance/reports/`. A failed
+  case is not retried. `SPECS_DIR` runs the suites from a local checkout of
+  the specifications instead, and says so. The `conformance` workflow runs it
+  on pull requests and on pushes to branches other than `main` that change a
+  path on its list, weekly and on demand: the relay targets as root on Linux,
+  `collector-disk` on Linux, macOS and Windows.
+- **`make pin-specs`** is the only way a pin moves. It takes `SPECS` or `REF`,
+  never both and never neither. It writes each module it moves from nothing,
+  builds every command in a scratch directory first, and only then moves the
+  files into place and rewrites the refs on the seams page, so a failure changes
+  nothing. Never move a pin with `go get`: it keeps the old pin's harness
+  version. `main` pins releases only; the workflow's `pin` job fails a pull
+  request whose pins name a commit or carry a `replace` line.
+
 ## Pull requests
 
 1. Fork the repo and branch from `main`.
@@ -153,7 +211,10 @@ changing the relay or orchestrator, a quick end-to-end check is:
    The full release gate (tier-1 checks, the test matrix, the security suite
    and the behavioral report) is described in
    [`behavioral-linter.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/development/behavioral-linter.md)
-   and is being built out.
+   and is being built out. Run `make release-build` too: it compiles each
+   program a release builds, for each release target, without cgo, as
+   GoReleaser does (CI's `build` job runs it on every PR that changes code).
+   A released macOS arm64 `warden` therefore has no vz driver, and says so.
 2. Tag the commit and push the tag: `git tag v0.x.y && git push origin v0.x.y`.
 3. GoReleaser, run by GitHub Actions, builds and publishes the binaries.
 

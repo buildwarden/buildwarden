@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -161,12 +162,21 @@ func sameRuleChange(a, b RuleChange) bool {
 // skipValid applies the FLOW-19 criteria for skipping a design review. A
 // design never approved is judged on its own; a design already approved is
 // judged on its delta from the design at its last approval, so a minimal
-// change after a return to Design needs no re-approval.
+// change after a return to Design needs no re-approval. Neither may declare
+// fewer repositories or areas than the queue records, or areas where it
+// records none: that claims more room than the human agreed to at intake.
 func (c *checker) skipValid(d *Design) {
 	const name = "design review skip is valid (FLOW-19)"
 	if n := len(d.Front.RuleChanges); n > 0 {
 		c.add(name, false, "the design declares %d rule_changes, each approved in review",
 			n)
+		return
+	}
+	// wf declare refuses a narrowing while the design says skip, so the
+	// queue still holds what intake recorded.
+	if how := c.state().Narrows(c.f, d.Front.Repos, d.Front.Areas); how != "" {
+		c.add(name, false, "the design declares less than the queue records: %s: "+
+			"narrowing needs the design review", how)
 		return
 	}
 	for _, q := range c.f.Questions {
@@ -225,8 +235,10 @@ func impactOf(fm *Front) string {
 	return ""
 }
 
-// impactDelta returns how the impact fields changed between two versions of
-// a design, or "".
+// impactDelta returns how the impact fields, and repos and areas, changed
+// between two versions of a design, or "". The review is where the human
+// confirms what an item may run beside, so a change to its repositories or
+// areas since the approval is a design change like a changed seam (FLOW-19).
 func impactDelta(was, now *Front) string {
 	var out []string
 	if ptr(was.Alters) != ptr(now.Alters) {
@@ -243,6 +255,14 @@ func impactDelta(was, now *Front) string {
 	if !sameSet(blockingHosts(was), blockingHosts(now)) {
 		out = append(out, fmt.Sprintf("blocking hosts %v -> %v", blockingHosts(was),
 			blockingHosts(now)))
+	}
+	// The first repository is the item's home, so the order counts.
+	if !slices.Equal(was.Repos, now.Repos) {
+		out = append(out, fmt.Sprintf("repos %v -> %v", was.Repos, now.Repos))
+	}
+	if !sameAreas(was.Areas, now.Areas) {
+		out = append(out, fmt.Sprintf("areas %s -> %s", areasText(was.Areas),
+			areasText(now.Areas)))
 	}
 	return strings.Join(out, "; ")
 }

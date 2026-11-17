@@ -25,6 +25,7 @@ import (
 var version = "dev"
 
 var (
+	flagConfig  string
 	flagRuntime string
 	flagDriver  string
 	flagVerbose bool
@@ -92,6 +93,9 @@ cannot attach an interactive session say so.`,
 
 func init() {
 	driver.WardenVersion = version
+	rootCmd.PersistentFlags().StringVar(&flagConfig, "config", "",
+		"config file to read, the only one that is "+
+			"(default: WARDEN_CONFIG, then ./warden.toml if it exists)")
 	rootCmd.PersistentFlags().StringVar(&flagRuntime, "runtime", "",
 		"container runtime (finch, docker, podman)")
 	rootCmd.PersistentFlags().StringVar(&flagDriver, "driver", "",
@@ -181,14 +185,20 @@ func fixableArgs(c *cobra.Command) {
 	}
 }
 
+// resolveConfig loads the config file and applies the flags over it. When
+// the driver in effect is not one warden has, it returns the configuration
+// with the error, so that the caller can say which file it read before the
+// error: the file can be a repository's.
 func resolveConfig() (*Config, error) {
 	cfg, err := LoadConfig()
 	if err != nil {
 		return nil, err
 	}
+	// A background image prepare this run starts reads the same file.
+	driver.ConfigFile = cfg.File
 
 	if flagRuntime != "" {
-		cfg.Runtime.CLI = flagRuntime
+		cfg.Runtime.CLI, cfg.Runtime.CLISource = flagRuntime, cliFromFlag
 	}
 	if flagDriver != "" {
 		cfg.Runtime.Driver = flagDriver
@@ -203,11 +213,35 @@ func resolveConfig() (*Config, error) {
 	return cfg, validateDriver(cfg.Runtime.Driver)
 }
 
-func resolveRuntime(cfg *Config) (string, error) {
-	if cfg.Runtime.CLI != "" {
-		return cfg.Runtime.CLI, nil
+// announcedConfig is resolveConfig for the commands that say on stderr which
+// config file they read, before any other line. doctor says it in its
+// report instead. A load that fails prints its error, which names the file;
+// a driver the file names that warden does not have is reported after the
+// line, which names the file.
+func announcedConfig() (*Config, error) {
+	cfg, err := resolveConfig()
+	if cfg != nil {
+		log.Info(configLine(cfg))
 	}
-	return DetectRuntime()
+	if err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// resolveRuntime returns the container runtime to run: the one in effect
+// when it is a supported runtime, the detected one when no level names any.
+// Another value is refused here, before anything is looked up, run or
+// created. Only the commands that run the container runtime call this, so a
+// run that does not use the setting does not validate it (UX-08).
+func resolveRuntime(cfg *Config) (string, error) {
+	if cfg.Runtime.CLI == "" {
+		return DetectRuntime()
+	}
+	if name, ok := supportedRuntime(cfg.Runtime.CLI); ok {
+		return name, nil
+	}
+	return "", unsupportedRuntime(cfg.Runtime)
 }
 
 func validateGuestOS(guestOS, driverName string) error {
@@ -258,8 +292,8 @@ func newDriver(cfg *Config) (driver.Driver, error) {
 }
 
 // newRequest resolves config and flags into the BuildRequest every driver
-// takes. Precedence everywhere: flag, then warden.toml / user config, then
-// the driver's default.
+// takes. Precedence everywhere: flag, then the environment variable, then
+// the config file, then the driver's default.
 func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 	d := cfg.Runtime.Driver
 	if err := validateFlagsForDriver(d); err != nil {
@@ -267,6 +301,11 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 	}
 	if err := validateGuestOS(flagGuestOS, d); err != nil {
 		return nil, err
+	}
+	if !isVMDriver(d) {
+		if err := checkRelayImage(cfg.Runtime); err != nil {
+			return nil, err
+		}
 	}
 
 	capture, err := resolveCapture(cfg)
@@ -301,11 +340,17 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 		return nil, err
 	}
 
-	refreshAfter, err := configAge("image_refresh_after", cfg.VM.ImageRefreshAfter)
+	refreshAfter, err := configAge(cfg, "image_refresh_after", cfg.VM.ImageRefreshAfter)
 	if err != nil {
 		return nil, err
 	}
-	minGrace, err := configAge("image_min_grace", cfg.VM.ImageMinGrace)
+	minGrace, err := configAge(cfg, "image_min_grace", cfg.VM.ImageMinGrace)
+	if err != nil {
+		return nil, err
+	}
+	// Read here, before the output directory, the work directory or the
+	// relay exists; the claim sends what was read.
+	upstreamCAs, err := resolveUpstreamCAs(cfg, log.Info)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +376,7 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 		DNS:               dns,
 		TempDir:           tempDir,
 		RelayImage:        cfg.Runtime.RelayImage,
-		UpstreamCACerts:   cfg.Relay.UpstreamCACerts,
+		UpstreamCACerts:   upstreamCAs,
 		UpstreamSystemCA:  resolveSystemCA(cfg),
 		Stdin:             os.Stdin,
 		Stdout:            os.Stdout,
@@ -418,8 +463,8 @@ func addBuildLinkFlag(c *cobra.Command) {
 }
 
 // resolveBuildLink returns the build link and where it came from: the flag,
-// then [vm] build_link (project over user, already checked at load), then
-// the default. The flag is checked here, before any driver work.
+// then [vm] build_link (already checked at load), then the default. The flag
+// is checked here, before any driver work.
 func resolveBuildLink(cfg *Config) (buildlink.Link, string, error) {
 	if flagBuildLink != "" {
 		link, err := checkBuildLink(flagBuildLink)
@@ -480,7 +525,7 @@ func buildContext() (context.Context, context.CancelFunc) {
 
 // prepare resolves everything a build or shell needs.
 func prepare(args []string) (driver.Driver, *driver.BuildRequest, error) {
-	cfg, err := resolveConfig()
+	cfg, err := announcedConfig()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -579,8 +624,9 @@ func buildFailed(
 	return err
 }
 
-// configAge parses a [vm] age setting; empty means the driver default.
-func configAge(key, v string) (time.Duration, error) {
+// configAge parses a [vm] age setting; empty means the driver default. The
+// key has no flag and no variable, so a value is the config file's.
+func configAge(cfg *Config, key, v string) (time.Duration, error) {
 	if v == "" {
 		return 0, nil
 	}
@@ -588,7 +634,7 @@ func configAge(key, v string) (time.Duration, error) {
 	if err != nil {
 		return 0, driver.Fixable(
 			"set it to an age such as \"7d\" or \"36h\"",
-			"warden.toml [vm] %s: %v", key, err)
+			"%s [vm] %s: %v", driver.EscapeOutside(cfg.File), key, err)
 	}
 	return d, nil
 }

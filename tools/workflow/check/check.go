@@ -4,6 +4,7 @@ package check
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,6 +24,9 @@ type Env struct {
 	// Run enables the checks that run make targets; off, they are reported
 	// as skipped and fail.
 	Run bool
+	// State is the queue state, for the area map and the other items. Nil,
+	// there is no map: every item is undeclared.
+	State *queue.State
 }
 
 // Result is one check's outcome.
@@ -39,6 +43,13 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.process()
 		return c.out
 	}
+	if f.Round == "tracked" {
+		// The item's branch, design and PR are in its home repository,
+		// where wf sees none of them.
+		c.add("tracked", true, "wf runs no gate in %s (FLOW-03)",
+			strings.Join(f.Repos[:min(1, len(f.Repos))], ""))
+		return c.out
+	}
 	switch f.Phase {
 	case 0:
 		c.branchOnRemote()
@@ -48,21 +59,29 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.plan()
 		c.reviewed()
 		c.approvalDelta()
+		c.declaredStill()
 	case 3:
 		c.onBranchHead()
 		c.make("lint")
 		c.make("test")
 		c.docsTouched("UX-01 reference docs updated", "docs/")
 		c.ruleClearance()
+		c.declaredStill()
+		c.insideAreas()
 	case 4:
 		c.onBranchHead()
 		c.make("lint")
 		c.make("test")
 		c.tier2Report()
 		c.ruleClearance()
+		c.declaredStill()
+		c.insideAreas()
+		c.trialMerge()
 	case 5:
 		c.docsTouched("guides or examples updated", "docs/book/src/guide/",
 			"docs/book/src/getting-started/", "examples/", "README.md")
+		c.declaredStill()
+		c.insideAreas()
 	case 6:
 		if c.mergedEarly() {
 			break
@@ -72,6 +91,9 @@ func Phase(env Env, f *queue.Feature) []Result {
 			c.section(d, "Consolidation")
 		}
 		c.ruleClearance()
+		c.declaredStill()
+		c.insideAreas()
+		c.trialMerge()
 		c.archivedOn(c.f.Branch)
 		c.prGreen()
 	case 7:
@@ -89,6 +111,70 @@ func Review(env Env, f *queue.Feature) []Result {
 	c := &checker{env: env, f: f}
 	c.reviewed()
 	return c.out
+}
+
+// Merged reports whether the human has merged the item's pull request, by
+// the merge step's own check (FLOW-08). wf stale asks it before it seeds a
+// refresh: the human may have merged since the last confirmation, and a
+// refresh pushed after that would bring a deleted branch back (FLOW-16).
+func Merged(env Env, f *queue.Feature) bool {
+	c := &checker{env: env, f: f}
+	c.merged()
+	return OK(c.out)
+}
+
+// Refresh runs the done-when check of a refresh step (FLOW-10): the branch
+// contains current main and is pushed, and what Publish's gate checks holds
+// again on the branch with main merged: the consolidation entry, the
+// rule-change clearance, the queue equal to the design and the diff inside
+// the areas. The archive and the PR's CI are
+// checked only when a PR is recorded: a feature refreshed in Publish opens
+// its PR afterwards, at f6-open-pr. A process item has no consolidation pass
+// to record. It does not pass on a merge the human made meanwhile: the
+// refresh then pushes nothing, and the merge confirmation drops the step.
+func Refresh(env Env, f *queue.Feature) []Result {
+	c := &checker{env: env, f: f}
+	c.mainMerged()
+	c.pushed()
+	hasPR := f.PR != nil && f.PR.Number > 0
+	if f.Round != "process" {
+		c.consolidationNamesMain()
+		c.ruleClearance()
+		c.declaredStill()
+		c.insideAreas()
+	}
+	if hasPR || f.Round == "process" {
+		c.archivedOn(f.Branch)
+		c.prGreen()
+	}
+	return c.out
+}
+
+var commitIDRe = regexp.MustCompile(`\b[0-9a-f]{7,40}\b`)
+
+// consolidationNamesMain checks that the design's Consolidation section
+// names the commit of main the branch merged: the refresh's pass over what
+// landed is recorded against that commit (FLOW-10).
+func (c *checker) consolidationNamesMain() {
+	const name = "consolidation names the main commit merged (FLOW-10)"
+	d, err := c.loadDesign(c.f.Branch)
+	if err != nil {
+		c.add(name, false, "%v", err)
+		return
+	}
+	main, err := c.git("rev-parse", "origin/main")
+	if err != nil {
+		c.add(name, false, "%v", err)
+		return
+	}
+	for _, id := range commitIDRe.FindAllString(d.Sections["Consolidation"], -1) {
+		if strings.HasPrefix(main, id) {
+			c.add(name, true, "origin/main %s", short(main))
+			return
+		}
+	}
+	c.add(name, false, "the Consolidation section on %s does not name origin/main %s",
+		c.f.Branch, short(main))
 }
 
 // process runs a process item's done-when checks: x1 design written and
@@ -238,17 +324,27 @@ func (c *checker) tier2Report() {
 	}
 }
 
+// prGreen checks that the PR is open with its checks green on the branch's
+// pushed head: pr.ci is a result for the commit pr.head records, and says
+// nothing about another (FLOW-08).
 func (c *checker) prGreen() {
-	ok := c.f.PR != nil && c.f.PR.Number > 0 && c.f.PR.CI == "green"
-	c.add("PR open with CI green (FLOW-11)", ok, "pr %+v", c.f.PR)
+	const name = "PR open with CI green (FLOW-11)"
+	pr := c.f.PR
+	if pr == nil || pr.Number == 0 || pr.CI != "green" {
+		c.add(name, false, "pr %+v", pr)
+		return
+	}
+	head := c.remoteHead(c.f.Branch)
+	c.add(name, pr.HeadIs(head), "pr %+v; origin/%s is at %s, and pr.ci counts only for "+
+		"the commit pr.head records (FLOW-08)", *pr, c.f.Branch, orNone(head))
 }
 
 // merged confirms the human's merge (FLOW-08). Each branch head still
 // around, local or remote, must be contained in origin/main, or, for a
 // squash merge, origin/main must carry a commit naming the PR whose tree is
-// the head's tree, or whose change is the head's change (FLOW-16; see
-// refMerged). Once GitHub has deleted the branch, the PR's commit on
-// origin/main alone is the proof.
+// the head's tree, or which merging the head onto its parent writes
+// (FLOW-16; see refMerged). Once GitHub has deleted the branch, the PR's
+// commit on origin/main alone is the proof.
 func (c *checker) merged() {
 	const name = "merged by a human (FLOW-08)"
 	var prCommits []string
@@ -286,13 +382,14 @@ func (c *checker) merged() {
 
 // refMerged reports whether ref is on origin/main, by the first of three
 // proofs that holds: ref is an ancestor of it; a commit in prCommits has
-// ref's tree; or a one-parent commit C in prCommits made the change ref
-// made, its change C^..C having the patch-id of B..ref, where B is ref's
-// single merge base with C^. The last proof covers a squash made after main
-// moved, whose tree also holds main's new commits (the GLOBAL-11 fallback
-// named in docs/design/wf-squash-after-base-moved.md). Each proof is what
-// makes deleting a squashed branch safe: a head pushed past the squash, or a
-// squash of an older head, has a different tree and a different change.
+// ref's tree; or merging ref onto the parent of a one-parent commit C in
+// prCommits writes C's tree (mergeTreeProof). The last proof covers a squash
+// made after main moved, whose tree also holds main's new commits (the
+// GLOBAL-11 fallback named in docs/design/wf-squash-after-base-moved.md), and
+// a ref older than the head that merged (Decision 23 of
+// docs/design/loop-parallel.md). Each proof is what makes deleting a squashed
+// branch safe: a head pushed past the squash, or a ref that puts a line
+// elsewhere, writes a different tree.
 func (c *checker) refMerged(ref string, prCommits []string) (string, bool) {
 	if _, err := c.git("merge-base", "--is-ancestor", ref, "origin/main"); err == nil {
 		return ref + " is contained in origin/main", true
@@ -312,7 +409,7 @@ func (c *checker) refMerged(ref string, prCommits []string) (string, bool) {
 	var seen []string
 	for _, line := range prCommits {
 		sha := strings.Fields(line)[0]
-		info, ok := c.sameChange(ref, sha)
+		info, ok := c.mergeTreeProof(ref, sha)
 		if ok {
 			return fmt.Sprintf("%s squash-merged as %s after main moved (%s)",
 				ref, sha, info), true
@@ -324,15 +421,19 @@ func (c *checker) refMerged(ref string, prCommits []string) (string, bool) {
 		drop += "; git update-ref -d refs/remotes/origin/" + c.f.Branch
 	}
 	return fmt.Sprintf("%s (tree %s) is not contained in origin/main, and no PR commit "+
-		"has its tree or its change: %s; after comparing, a human may delete: %s",
+		"has its tree or is its merge: %s; after comparing, a human may delete: %s",
 		ref, short(tree), strings.Join(seen, ", "), drop), false
 }
 
-// sameChange reports whether PR commit sha has one parent and makes ref's
-// change since ref's merge base with that parent. Its text names every
-// value compared, or why sha was not compared, so that a human can repeat
-// the comparison at the escalation.
-func (c *checker) sameChange(ref, sha string) (string, bool) {
+// mergeTreeProof reports whether PR commit sha has one parent and merging ref
+// onto that parent, from ref's single merge base B with it, writes exactly
+// sha's tree: `git merge-tree --write-tree --merge-base=B sha^ ref`. The merge
+// replays what ref adds where it adds it, so a ref holding anything sha does
+// not, or a line somewhere else, writes another tree. With no merge base or
+// several, the proof does not hold: a chosen base would be a guess
+// (GLOBAL-10). Its text names every value compared, or why sha was not
+// compared, and the command, so that a human can repeat it at the escalation.
+func (c *checker) mergeTreeProof(ref, sha string) (string, bool) {
 	pt, _ := c.git("rev-parse", sha+"^{tree}")
 	desc := fmt.Sprintf("%s tree %s", sha, short(pt))
 	parents, _ := c.git("rev-list", "--parents", "-n", "1", sha)
@@ -350,42 +451,64 @@ func (c *checker) sameChange(ref, sha string) (string, bool) {
 		}
 		return fmt.Sprintf("%s, merge bases %s", desc, strings.Join(b, ", ")), false
 	}
-	full := strings.TrimSpace(bases)
-	base := short(full)
-	want, got := c.patchID(sha+"^", sha), c.patchID(full, ref)
-	if want != "" && want == got {
-		return fmt.Sprintf("change %s, base %s", want, base), true
+	base := strings.TrimSpace(bases)
+	repeat := fmt.Sprintf("git merge-tree --write-tree --merge-base=%s %s^ %s",
+		short(base), sha, ref)
+	args := append(c.textMergeOnly(), "merge-tree", "--write-tree", "--no-messages",
+		"--merge-base="+base, sha+"^", ref)
+	cmd := exec.Command("git", args...)
+	cmd.Dir = c.env.Repo
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	got := firstLine(strings.TrimSpace(string(out)))
+	var exit *exec.ExitError
+	switch {
+	case err == nil && got != "" && got == pt:
+		return fmt.Sprintf("merged onto %s^ from base %s writes tree %s", sha,
+			short(base), short(pt)), true
+	case err == nil:
+		return fmt.Sprintf("%s, base %s, the merge writes tree %s (repeat: %s)", desc,
+			short(base), short(orNone(got)), repeat), false
+	case errors.As(err, &exit) && exit.ExitCode() == 1:
+		return fmt.Sprintf("%s, base %s, the merge conflicts (repeat: %s)", desc,
+			short(base), repeat), false
 	}
-	return fmt.Sprintf("%s, change %s, base %s, %s change %s "+
-		"(compare: git diff %s %s; git diff %s^ %s)", desc, orNone(want), base, ref,
-		orNone(got), base, ref, sha, sha), false
+	version, _ := c.git("version")
+	return fmt.Sprintf("%s, base %s, not compared: %s could not run (%v: %s); "+
+		"--merge-base needs git 2.40 or later, and this is %s", desc, short(base),
+		repeat, err, firstLine(strings.TrimSpace(stderr.String())), orNone(version)), false
 }
 
-// patchID returns the whitespace-exact patch-id of the change from a to b,
-// or "" for no change. Every option that shapes the diff is pinned, so no
-// user or repository configuration changes the id, and an id in a detail
-// reproduces with the same command elsewhere.
-func (c *checker) patchID(a, b string) string {
-	diff := exec.Command("git", "diff", "--no-color", "--no-ext-diff", "--no-textconv",
-		"--no-renames", "--no-relative", "-U3", "--diff-algorithm=myers",
-		"--indent-heuristic", "--inter-hunk-context=0", "--src-prefix=a/",
-		"--dst-prefix=b/", a, b)
-	diff.Dir = c.env.Repo
-	out, err := diff.Output()
-	if err != nil || len(out) == 0 {
-		return ""
+// textMerge is the merge driver the trial merge gives every driver name: git
+// merge-file is git's own three-way text merge, writes the result to %A and
+// exits non-zero on a conflict, as a driver must.
+const textMerge = "git merge-file -q %A %O %B"
+
+// textMergeOnly returns the -c options that make the trial merge git's text
+// merge of every file, whatever an attribute or the config says. A merge
+// attribute can come from the checkout's .gitattributes, from the ref's or
+// C^'s tree, from info/attributes or from the global attributes file, and a
+// driver such as union resolves a conflict by keeping both sides' or one
+// side's lines: the trial merge would then write C's tree although the ref
+// changed a line C does not have (F-P1 of the implementation's review). So
+// the built-in union, every driver the config defines, and merge.default are
+// all made the text merge, and no file is renormalized. A file whose
+// attribute is binary, or -merge, still conflicts, which refuses the proof:
+// the safe side. Overriding the driver works on every git the proof runs on,
+// where reading no attributes (--attr-source) needs git 2.41 and leaves
+// info/attributes read.
+func (c *checker) textMergeOnly() []string {
+	opts := []string{"-c", "merge.renormalize=false", "-c", "merge.default=text",
+		"-c", "merge.union.driver=" + textMerge}
+	defined, _ := c.git("config", "--name-only", "--get-regexp", `^merge\..*\.driver$`)
+	for _, key := range strings.Fields(defined) {
+		if strings.EqualFold(key, "merge.union.driver") {
+			continue
+		}
+		opts = append(opts, "-c", key+"="+textMerge)
 	}
-	pid := exec.Command("git", "patch-id", "--verbatim")
-	pid.Dir = c.env.Repo
-	pid.Stdin = bytes.NewReader(out)
-	id, err := pid.Output()
-	if err != nil {
-		return ""
-	}
-	if f := strings.Fields(string(id)); len(f) > 0 {
-		return f[0]
-	}
-	return ""
+	return opts
 }
 
 func orNone(id string) string {
@@ -459,6 +582,7 @@ func (c *checker) design() {
 		c.add("alters_relationships recorded in queue", false, "design %v, queue %v",
 			ptr(d.Front.Alters), ptr(c.f.AltersRelationships))
 	}
+	c.declaredAtDesign(d)
 	for _, s := range []string{"Problem", "Prior art", "Decisions", "Design",
 		"Defaults and overrides", "Cross-driver impact", "Validation plan"} {
 		c.section(d, s)
@@ -511,14 +635,20 @@ type Design struct {
 
 // Front is the FLOW-02 front-matter.
 type Front struct {
-	Feature          string   `yaml:"feature"`
-	Status           string   `yaml:"status"`
-	DesignReview     string   `yaml:"design_review"`
-	Drivers          []string `yaml:"drivers"`
-	Seams            []string `yaml:"seams"`
-	Surfaces         []string `yaml:"surfaces"`
-	SecurityBoundary string   `yaml:"security_boundary"`
-	Alters           *bool    `yaml:"alters_relationships"`
+	Feature      string `yaml:"feature"`
+	Status       string `yaml:"status"`
+	DesignReview string `yaml:"design_review"`
+	// Repos are the repositories the item works in, its home first; empty
+	// or absent, only the one that holds the design (LOOP-04).
+	Repos []string `yaml:"repos"`
+	// Areas are the areas of the area map the change edits (FLOW-02). Nil,
+	// the key absent, the design is undeclared, which an empty list is not.
+	Areas            *[]string `yaml:"areas"`
+	Drivers          []string  `yaml:"drivers"`
+	Seams            []string  `yaml:"seams"`
+	Surfaces         []string  `yaml:"surfaces"`
+	SecurityBoundary string    `yaml:"security_boundary"`
+	Alters           *bool     `yaml:"alters_relationships"`
 	NativeValidation []struct {
 		Host     string `yaml:"host"`
 		Blocking *bool  `yaml:"blocking"`

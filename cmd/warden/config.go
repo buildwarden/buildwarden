@@ -2,13 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/BurntSushi/toml"
 
@@ -25,6 +30,13 @@ type Config struct {
 	Build   BuildCfg      `toml:"build"`
 	VM      VMConfig      `toml:"vm"`
 	Output  OutputConfig  `toml:"output"`
+	// File is the absolute path of the one config file that was read, empty
+	// when none was, and FileSource how it was chosen (configFromFlag,
+	// configFromEnv or configFromDir). Every message that names the file by
+	// a path prints File through driver.EscapeOutside: the path can be the
+	// working directory's, which a repository or an archive names.
+	File       string `toml:"-"`
+	FileSource string `toml:"-"`
 }
 
 // VMConfig holds defaults for the VM-driver flags (--cpus, --memory,
@@ -43,13 +55,15 @@ type VMConfig struct {
 	WindowsImage       string `toml:"windows_image"`
 	WindowsImageUpdate string `toml:"windows_image_update"`
 	// BuildLink is the relay-to-build link (an advanced option; empty means
-	// buildlink.DefaultCIDR), checked as the file loads. BuildLinkSource
-	// names the file that set it ("warden.toml" or "config.toml").
+	// buildlink.DefaultCIDR), checked as the file loads. BuildLinkSource is
+	// the base name of the config file when it set the key, the label
+	// warden doctor prints.
 	BuildLink       string `toml:"build_link"`
 	BuildLinkSource string `toml:"-"`
 	// DNS is [vm] dns, the relay's upstream resolvers for every VM driver, in
 	// order and used exclusively; unset means the host's. It is checked as
-	// the file loads into DNSAddrs, and DNSSource names the file that set it.
+	// the file loads into DNSAddrs, and DNSSource is the config file's base
+	// name when it set the key.
 	DNS       []string     `toml:"dns"`
 	DNSAddrs  []netip.Addr `toml:"-"`
 	DNSSource string       `toml:"-"`
@@ -61,10 +75,41 @@ type RelayConfig struct {
 }
 
 type RuntimeConfig struct {
-	CLI        string `toml:"cli"`
+	CLI string `toml:"cli"`
+	// CLISource says where CLI was named: cliFromFlag, cliFromEnv, or the
+	// path of the config file that set it, escaped for printing. It words
+	// the error that refuses an unsupported runtime; nothing that decides
+	// what is run reads it.
+	CLISource  string `toml:"-"`
 	Driver     string `toml:"driver"`
 	RelayImage string `toml:"relay_image"`
+	// RelayImageSource says where RelayImage was set: relayImageFromEnv, or
+	// the path of the config file, escaped for printing. It words
+	// checkRelayImage's error.
+	RelayImageSource string `toml:"-"`
 }
+
+// What RuntimeConfig.RelayImageSource holds for the variable.
+const relayImageFromEnv = "WARDEN_IMAGE"
+
+// What RuntimeConfig.CLISource holds for a runtime named outside a config
+// file.
+const (
+	cliFromFlag = "--runtime"
+	cliFromEnv  = "WARDEN_CTR_CLI"
+)
+
+// projectConfig is the config file read when none is named: the one of this
+// name in the working directory, when it exists.
+const projectConfig = "warden.toml"
+
+// How the config file was chosen, as Config.FileSource holds it and as the
+// config: line and the errors print it.
+const (
+	configFromFlag = "--config"
+	configFromEnv  = "WARDEN_CONFIG"
+	configFromDir  = "found in the working directory"
+)
 
 type BuildCfg struct {
 	Dockerfile string `toml:"dockerfile"`
@@ -82,37 +127,230 @@ type OutputConfig struct {
 	Verbose bool   `toml:"verbose"`
 }
 
+// configFile chooses the one config file a command reads and says how it was
+// chosen: the file --config names, else the one WARDEN_CONFIG names, else
+// warden.toml in the working directory when it exists, else none (an empty
+// path). The path is absolute. A source that a higher one replaces is not
+// looked at, so a named file is the only one that is ever opened. Nothing
+// here falls through on a failure: an empty --config is an error because the
+// next source down can be the warden.toml of a repository the caller meant
+// not to use, and a working directory's warden.toml that cannot be examined
+// is an error, not "no file".
+func configFile() (path, source string, err error) {
+	if f := rootCmd.PersistentFlags().Lookup("config"); f != nil && f.Changed {
+		if flagConfig == "" {
+			return "", "", driver.Fixable("pass --config the path of a config "+
+				"file, or drop the flag to use WARDEN_CONFIG or ./warden.toml",
+				"--config was given an empty path")
+		}
+		path, err = filepath.Abs(flagConfig)
+		return path, configFromFlag, err
+	}
+	if named := os.Getenv(configFromEnv); named != "" {
+		path, err = filepath.Abs(named)
+		return path, configFromEnv, err
+	}
+	if path, err = filepath.Abs(projectConfig); err != nil {
+		return "", "", err
+	}
+	switch _, err := os.Stat(path); {
+	case err == nil:
+		return path, configFromDir, nil
+	case errors.Is(err, fs.ErrNotExist):
+		return "", "", nil
+	default:
+		return "", "", unreadableConfig(path, configFromDir, err)
+	}
+}
+
+// readConfigFile returns the bytes of the config file configFile chose, or
+// the error that says why it cannot be read. No other file is tried in its
+// place. The working directory's file must be a regular file once links are
+// followed: nobody named it, and a repository can make it a link to a device
+// (/dev/zero, a terminal) that would exhaust memory or wait for ever. For the
+// same reason it is read up to maxProjectConfig and no further, counted as
+// read: a link to a procfs file such as /proc/self/pagemap passes as an
+// empty regular file and gives far more. A file named with --config or
+// WARDEN_CONFIG is read whole, whatever kind it is.
+func readConfigFile(path, source string) ([]byte, error) {
+	info, err := os.Stat(path)
+	switch {
+	case err != nil:
+	case info.IsDir():
+		err = errIsDirectory
+	case source == configFromDir && !info.Mode().IsRegular():
+		err = errNotRegular
+	}
+	var data []byte
+	switch {
+	case err != nil:
+	case source == configFromDir:
+		data, err = readProjectConfig(path)
+	default:
+		data, err = os.ReadFile(path)
+	}
+	if err == nil {
+		return data, nil
+	}
+	if errors.Is(err, errTooLarge) {
+		return nil, driver.Fixable("make it 1 MiB or smaller, or name it with "+
+			"--config or WARDEN_CONFIG, which reads it whatever its size",
+			"cannot read config file %s (%s): %v", driver.EscapeOutside(path),
+			source, err)
+	}
+	if source == configFromDir {
+		return nil, unreadableConfig(path, source, err)
+	}
+	shown := driver.EscapeOutside(path)
+	fix := "pass --config an existing file, or drop it to use WARDEN_CONFIG " +
+		"or ./warden.toml"
+	if source == configFromEnv {
+		fix = "set WARDEN_CONFIG to an existing file, or unset it to use " +
+			"./warden.toml"
+	}
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return nil, driver.Fixable(fix, "config file %s (from %s) does not exist",
+			shown, source)
+	case errors.Is(err, errIsDirectory):
+		return nil, driver.Fixable(fix, "config file %s (from %s) is a directory",
+			shown, source)
+	}
+	return nil, unreadableConfig(path, source, err)
+}
+
+// maxProjectConfig is how many bytes of the working directory's warden.toml
+// are read: 1 MiB, far past any real config file.
+const maxProjectConfig = 1 << 20
+
+// configBlock is how much each read of the working directory's warden.toml
+// asks for: 64 KiB, a multiple of 8, because /proc/self/pagemap refuses a
+// read of any other length.
+const configBlock = 1 << 16
+
+// errTooLarge marks a working directory's warden.toml that gives more than
+// maxProjectConfig bytes, 1 MiB, when read.
+var errTooLarge = errors.New("larger than 1 MiB")
+
+// readProjectConfig reads the working directory's warden.toml through
+// readCapped.
+func readProjectConfig(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	return readCapped(f)
+}
+
+// readCapped reads r to its end, or errTooLarge once it has given more than
+// maxProjectConfig bytes. Every read asks for a whole configBlock, so it reads
+// at most maxProjectConfig+configBlock bytes, and the count is of the bytes
+// read: a procfs file that stat reports as empty, or a reader that never
+// ends, costs no more than that. A read error before the cap is returned as
+// it is.
+func readCapped(r io.Reader) ([]byte, error) {
+	var data []byte
+	block := make([]byte, configBlock)
+	for {
+		n, err := r.Read(block)
+		data = append(data, block[:n]...)
+		switch {
+		case len(data) > maxProjectConfig:
+			return nil, errTooLarge
+		case errors.Is(err, io.EOF):
+			return data, nil
+		case err != nil:
+			return nil, err
+		}
+	}
+}
+
+// errIsDirectory marks a config file path that names a directory.
+var errIsDirectory = errors.New("is a directory")
+
+// errNotRegular marks a working directory's warden.toml that is a device, a
+// pipe or a socket, or a link to one.
+var errNotRegular = errors.New("not a regular file")
+
+// unreadableConfig is the error for a config file that exists and cannot be
+// read; the reason is the operating system's. For a named file its source
+// follows "from", as in the other errors that name one.
+func unreadableConfig(path, source string, err error) error {
+	if source != configFromDir {
+		source = "from " + source
+	}
+	return driver.Fixable("make it readable, or name another file with "+
+		"--config or WARDEN_CONFIG",
+		"cannot read config file %s (%s): %s", driver.EscapeOutside(path),
+		source, osReason(err))
+}
+
+// osReason is the operating system's reason for a failed file operation,
+// without the operation and the path that *fs.PathError puts before it,
+// escaped for printing.
+func osReason(err error) string {
+	var pe *fs.PathError
+	if errors.As(err, &pe) {
+		err = pe.Err
+	}
+	return driver.EscapeOutside(err.Error())
+}
+
+// configLine says which config file a command read and how it was chosen.
+// Every command that reads configuration prints it, so that the working
+// directory's file is never used without a word. The path is escaped: a
+// directory whose name holds a newline or an escape sequence would
+// otherwise print a second line, or erase this one, in a terminal.
+func configLine(cfg *Config) string {
+	if cfg.File == "" {
+		return "config: none (no --config, no WARDEN_CONFIG, no " +
+			"./warden.toml): defaults apply"
+	}
+	return "config: " + driver.EscapeOutside(cfg.File) + " (" + cfg.FileSource + ")"
+}
+
+// LoadConfig reads the one config file (configFile) and applies the
+// environment variables over it. It reads no other file and merges none.
+// WARDEN_UPSTREAM_CA_CERTS is not applied here: it replaces [relay]
+// upstream_ca_certs, and resolveUpstreamCAs reads both.
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
 		Output: OutputConfig{Color: "auto"},
 	}
 
-	// User-level config
-	if home, err := os.UserHomeDir(); err == nil {
-		userPath := filepath.Join(home, ".config", "warden", "config.toml")
-		if err := loadTOML(userPath, cfg); err != nil {
+	path, source, err := configFile()
+	if err != nil {
+		return nil, err
+	}
+	var data []byte
+	if path != "" {
+		if data, err = readConfigFile(path, source); err != nil {
 			return nil, err
 		}
 	}
-
-	// Project-level config (overrides user)
-	if err := loadTOML("warden.toml", cfg); err != nil {
+	// TRANSITIONAL(one-config-file)
+	if err := formerUserConfig(path); err != nil {
 		return nil, err
+	}
+	if path != "" {
+		if err := decodeConfig(path, data, cfg); err != nil {
+			return nil, err
+		}
+		cfg.File, cfg.FileSource = path, source
+		cfg.Runtime.CLISource = driver.EscapeOutside(path)
+		cfg.Runtime.RelayImageSource = driver.EscapeOutside(path)
 	}
 
 	// Environment variable overrides
-	if cli := os.Getenv("WARDEN_CTR_CLI"); cli != "" {
-		cfg.Runtime.CLI = cli
+	if cli := os.Getenv(cliFromEnv); cli != "" {
+		cfg.Runtime.CLI, cfg.Runtime.CLISource = cli, cliFromEnv
 	}
 	if d := os.Getenv("WARDEN_DRIVER"); d != "" {
 		cfg.Runtime.Driver = d
 	}
-	if img := os.Getenv("WARDEN_IMAGE"); img != "" {
-		cfg.Runtime.RelayImage = img
-	}
-	if caCerts := os.Getenv("WARDEN_UPSTREAM_CA_CERTS"); caCerts != "" {
-		paths := strings.Split(caCerts, ":")
-		cfg.Relay.UpstreamCACerts = append(cfg.Relay.UpstreamCACerts, paths...)
+	if img := os.Getenv(relayImageFromEnv); img != "" {
+		cfg.Runtime.RelayImage, cfg.Runtime.RelayImageSource = img, relayImageFromEnv
 	}
 	if os.Getenv("NO_COLOR") != "" {
 		cfg.Output.Color = "never"
@@ -124,11 +362,12 @@ func LoadConfig() (*Config, error) {
 	return cfg, nil
 }
 
-func loadTOML(path string, cfg *Config) error {
-	if _, err := os.Stat(path); err != nil {
-		return nil
-	}
-	md, err := toml.DecodeFile(path, cfg)
+// decodeConfig decodes the config file's bytes into cfg and makes the checks
+// that are made as the file loads ([vm] build_link, [vm] dns). Its messages
+// and the source labels it sets print the path escaped.
+func decodeConfig(file string, data []byte, cfg *Config) error {
+	path := driver.EscapeOutside(file)
+	md, err := toml.Decode(string(data), cfg)
 	if err != nil {
 		return driver.Fixable("fix the TOML syntax in "+path, "parsing %s: %v", path, err)
 	}
@@ -140,7 +379,7 @@ func loadTOML(path string, cfg *Config) error {
 					path, exampleBuildLink),
 				"[vm] build_link in %s: %v", path, err)
 		}
-		cfg.VM.BuildLinkSource = filepath.Base(path)
+		cfg.VM.BuildLinkSource = driver.EscapeOutside(filepath.Base(file))
 	}
 	if md.IsDefined("vm", "dns") {
 		if len(cfg.VM.DNS) == 0 {
@@ -159,7 +398,7 @@ func loadTOML(path string, cfg *Config) error {
 				"[vm] dns in %s: %v", path, err)
 		}
 		cfg.VM.DNSAddrs = addrs
-		cfg.VM.DNSSource = filepath.Base(path)
+		cfg.VM.DNSSource = driver.EscapeOutside(filepath.Base(file))
 	}
 	return nil
 }
@@ -195,11 +434,63 @@ func checkBuildLink(s string) (buildlink.Link, error) {
 	return link, nil
 }
 
-// DetectRuntime probes for a working container runtime.
-// Preference order: finch, docker, podman.
+// containerRuntimes are the runtimes the container driver supports, in the
+// order detection prefers them. A runtime named by a flag, a variable or a
+// config file is one of these or is refused (resolveRuntime).
+var containerRuntimes = []string{"finch", "docker", "podman"}
+
+// supportedRuntime returns the member of containerRuntimes that v equals.
+// The comparison is exact, and what is returned is the list's own string,
+// never v: no text from a flag, a variable or a config file reaches exec.
+func supportedRuntime(v string) (string, bool) {
+	for _, name := range containerRuntimes {
+		if v == name {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+// runtimeNames lists containerRuntimes in prose, the last after conj:
+// "finch, docker or podman".
+func runtimeNames(conj string) string {
+	last := len(containerRuntimes) - 1
+	return strings.Join(containerRuntimes[:last], ", ") +
+		" " + conj + " " + containerRuntimes[last]
+}
+
+// unsupportedRuntime is the error for a runtime in effect that is not one of
+// containerRuntimes. It names the level that set the value and gives the fix
+// for that level. The value is printed once, quoted: it may come from a file
+// someone else wrote, and %q keeps control characters out of the terminal.
+// Nothing else in the message or the fix is taken from the value.
+func unsupportedRuntime(rt RuntimeConfig) error {
+	var setting, set, orNot string
+	switch rt.CLISource {
+	case cliFromFlag:
+		setting, set, orNot = cliFromFlag, "pass --runtime ", ", or leave it out"
+	case cliFromEnv:
+		setting, set, orNot = cliFromEnv, "set WARDEN_CTR_CLI to ", ", or unset it"
+	default:
+		setting, set = "[runtime] cli in "+rt.CLISource, "set it to "
+		orNot = ", or remove it; --runtime with one of those replaces it " +
+			"for one command"
+	}
+	what := "the container driver supports " + runtimeNames("and")
+	fix := set + runtimeNames("or") + orNot
+	// TRANSITIONAL(runtime-former-values): a value that ran before this
+	// check existed gets a message that says what to change.
+	if formerWhat, formerFix, ok := formerRuntimeValue(rt.CLI); ok {
+		what, fix = formerWhat, set+formerFix
+	}
+	return driver.Fixable(fix, "%s is %q; %s", setting, rt.CLI, what)
+}
+
+// DetectRuntime probes for a working container runtime, in
+// containerRuntimes' order.
 func DetectRuntime() (string, error) {
 	var installed []string
-	for _, name := range []string{"finch", "docker", "podman"} {
+	for _, name := range containerRuntimes {
 		if _, err := exec.LookPath(name); err != nil {
 			continue
 		}
@@ -434,4 +725,35 @@ func validateFlagsForDriver(d string) error {
 		return driver.Fixable(fix, "--network is only used by --driver hyperv")
 	}
 	return nil
+}
+
+// checkRelayImage refuses a relay image that is not shaped like an image
+// reference. The value goes to `<runtime> pull` and to the container's
+// creation as one argument, so one that starts with "-" would be read as an
+// option, and a space or a control character has no place in a reference.
+// A control character here is any that does not print: the C0 and C1
+// controls, and the format characters (a right-to-left override, a
+// zero-width space, a byte order mark) that reorder or hide the text around
+// them where the value is printed; a byte that is not valid UTF-8 too.
+// Empty and "dev" are the release's image and a development build; nothing
+// more of a reference is checked here, which the runtime's own error does.
+// Only the container driver uses the image, so only its runs call this.
+func checkRelayImage(rt RuntimeConfig) error {
+	img := rt.RelayImage
+	if img == "" || img == "dev" {
+		return nil
+	}
+	bad := strings.HasPrefix(img, "-") || strings.IndexFunc(img, func(r rune) bool {
+		return r == ' ' || r == utf8.RuneError || !unicode.IsPrint(r)
+	}) >= 0
+	if !bad {
+		return nil
+	}
+	where := relayImageFromEnv
+	if rt.RelayImageSource != relayImageFromEnv {
+		where = "[runtime] relay_image in " + rt.RelayImageSource
+	}
+	return driver.Fixable("set it to an image reference such as "+
+		"ghcr.io/buildwarden/relay:v0.2.0 or to \"dev\", or remove it",
+		"%s is %q: not an image reference", where, img)
 }

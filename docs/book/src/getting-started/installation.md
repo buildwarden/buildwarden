@@ -12,6 +12,11 @@ A container runtime is required. Any of the following will work:
 - [Docker](https://docs.docker.com/get-docker/)
 - [Podman](https://podman.io/)
 
+`warden` runs the runtime by its name (`finch`, `docker` or `podman`), which
+it looks up on `PATH`. If yours is installed outside `PATH`, as it often is
+for a CI job or a service, add its directory to `PATH`: the runtime setting
+takes one of the three names, not a path.
+
 ### QEMU driver
 
 Requires `qemu-system-{arch}` and `qemu-img`:
@@ -50,7 +55,11 @@ relay boot disk from a source tree also needs Git Bash and WSL.
 
 ### VZ driver
 
-Requires macOS on Apple Silicon. No extra installation is needed — Virtualization.framework is built into macOS.
+Requires macOS on Apple Silicon. Virtualization.framework is built into macOS,
+but the vz driver is only in a `warden` you build [from source](#from-source)
+on the Mac: a released `warden` has none, and `--driver vz` says so (see the
+[drivers guide](../guide/drivers.md#vz-driver)). The build also needs the
+Xcode Command Line Tools (`xcode-select --install`).
 
 ## One-liner Install
 
@@ -58,7 +67,7 @@ Requires macOS on Apple Silicon. No extra installation is needed — Virtualizat
 curl -sSfL https://raw.githubusercontent.com/buildwarden/buildwarden/main/install.sh | sh
 ```
 
-This detects your OS and architecture, downloads the latest release, and installs to `/usr/local/bin/`. The released binary is ready for the container driver out of the box.
+This detects your OS and architecture, downloads the latest release, and installs to `/usr/local/bin/`. The released binary is ready for the container driver out of the box. It is built without cgo, so it has no vz driver: for vz, build `warden` from source on the Mac and follow the [first-time VZ setup](#first-time-vz-setup).
 
 ## From Releases
 
@@ -74,6 +83,9 @@ tar xzf buildwarden_*_linux_amd64.tar.gz
 mv warden /usr/local/bin/
 ```
 
+These are the same binaries the one-liner installs, so the macOS one has no vz
+driver either.
+
 ## From Source
 
 ```sh
@@ -82,7 +94,9 @@ cd buildwarden
 make build
 ```
 
-Requires Go 1.26+ (managed via [mise](https://mise.jdx.dev/) if present).
+Requires Go 1.26+ (managed via [mise](https://mise.jdx.dev/) if present). On
+a Mac it also needs the Xcode Command Line Tools: `make build` compiles the vz
+driver with cgo, which a release does not.
 
 The build produces the following binaries in `dist/`:
 
@@ -127,9 +141,15 @@ every option.
 
 ```sh
 brew install qemu                           # macOS (or apt install qemu-system on Linux)
+make build                                  # dist/warden and the guest binaries
 tools/relay-vm/build-initramfs.sh           # Build relay VM kernel + initramfs
 tools/build-vm/build-initramfs.sh           # Build test VM initramfs (includes warden-io)
+dist/warden doctor --driver qemu
 ```
+
+Run the VM drivers as `dist/warden` from this tree: `warden` finds the relay
+VM assets and the source it builds guest binaries from only in the tree its
+executable is in.
 
 ## First-time Firecracker Setup
 
@@ -224,6 +244,32 @@ the single `warden-dev` build switch of earlier setups. Until you do, durable
 service builds make their own switch and need only the relay disk. The qemu
 and Firecracker relay initramfs need no rebuild.
 
+<!-- TRANSITIONAL(runtime-former-values): this section is removed with the
+     "A path, or another runtime" subsection of guide/configuration.md, in
+     the change that prepares 1.0. -->
+## Upgrading: the Container Runtime Setting
+
+Earlier releases ran whatever program `--runtime`, `WARDEN_CTR_CLI` or
+`[runtime] cli` named. The setting now takes `finch`, `docker` or `podman`
+and nothing else, wherever it is set. If yours names one of the three or is
+unset, nothing changes. Any other value is refused by the first command that
+uses the container runtime (`build`, `shell` and `doctor` with the container
+driver; `clean` with the container driver, `qemu` or `vz`), before anything
+is run, and the error says where the value is set and what to change.
+
+Two kinds of value have a replacement:
+
+- A path to a supported runtime (`/opt/homebrew/bin/docker`), or its name in
+  another form (`Docker`, `docker.exe`): write the name, `docker`, and add
+  the runtime's directory to `PATH` if it is not there.
+- A wrapper script that only set variables for a supported runtime
+  (`DOCKER_HOST`, `DOCKER_CONTEXT`, `CONTAINER_HOST`): name the runtime and
+  set those variables in the environment `warden` runs in.
+
+`nerdctl`, and a wrapper that added `sudo` or arguments, have none.
+[A path, or another runtime](../guide/configuration.md#a-path-or-another-runtime)
+lists every value that stopped working and the message each one gets.
+
 ## Verify Installation
 
 ```sh
@@ -231,4 +277,4 @@ warden --version
 warden --help
 ```
 
-BuildWarden auto-detects your container runtime for the container driver (trying finch, docker, podman in order). Override with `--runtime` or the `WARDEN_CTR_CLI` environment variable.
+BuildWarden auto-detects your container runtime for the container driver (trying finch, docker, podman in order). Override with `--runtime` or the `WARDEN_CTR_CLI` environment variable; see [The container runtime](../guide/configuration.md#the-container-runtime).

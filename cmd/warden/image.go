@@ -147,7 +147,7 @@ func defaultImageOS(drv string) string {
 }
 
 func runImagePrepare(cmd *cobra.Command, args []string) error {
-	cfg, err := resolveConfig()
+	cfg, err := announcedConfig()
 	if err != nil {
 		return err
 	}
@@ -291,7 +291,8 @@ func prepareHyperVWindows(ctx context.Context, source string, cfg *Config) (stri
 	case "", "auto", "reuse":
 	default:
 		return "", driver.Fixable(`set it to "auto" or "reuse"`,
-			"warden.toml [vm] windows_image_update = %q", cfg.VM.WindowsImageUpdate)
+			"%s [vm] windows_image_update = %q", driver.EscapeOutside(cfg.File),
+			cfg.VM.WindowsImageUpdate)
 	}
 	if src, fetch, tolerant := hypervImageSource(source, cfg, hyperv.Status()); fetch {
 		_, err := hyperv.FetchEvalImage(ctx, hyperv.FetchOptions{

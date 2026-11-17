@@ -1,0 +1,26 @@
+feature: workdir-in-context
+title: The item workdir-in-context
+priority: 67
+status: queued
+round: feature
+phase: 0
+design: docs/design/workdir-in-context.md
+branch: feat/workdir-in-context
+alters_relationships: null
+steps:
+- id: f0-branch-setup
+  phase: 0
+  affinity: cloud
+  status: pending
+  lease:
+    claimed_by: ''
+    expires: null
+budget:
+  estimate:
+    runs: 2
+    steps: 14
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history: []

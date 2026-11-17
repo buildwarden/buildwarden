@@ -80,9 +80,11 @@ type BuildRequest struct {
 	TempDir string
 	// RelayImage specifies the relay container image (container driver only).
 	RelayImage string
-	// UpstreamCACerts are host paths to additional CA certificate files/dirs
-	// trusted by the relay for upstream TLS connections.
-	UpstreamCACerts []string
+	// UpstreamCACerts is the PEM certificates the relay trusts for upstream
+	// TLS besides its own roots: the ones LoadUpstreamCAs read from the
+	// configured paths before anything was created, re-encoded, and nothing
+	// else. The claim carries them as they are; no file is read again.
+	UpstreamCACerts []byte
 	// UpstreamSystemCA controls whether the system cert pool is included.
 	UpstreamSystemCA bool
 	// BuildLink is the VM drivers' relay-to-build link ([vm] build_link,
