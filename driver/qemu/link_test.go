@@ -41,18 +41,27 @@ type fakeVM struct {
 
 func (f fakeVM) stop() { *f.log = append(*f.log, "stop "+f.name) }
 
-// TestRunVMsOrder pins BOOT-01's ordering: the build VM boots only after the
-// relay step (boot and claim) has returned, and never when it failed.
-func TestRunVMsOrder(t *testing.T) {
-	sess, err := driver.StartSession(driver.SessionConfig{OutputDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer sess.Close()
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Wait returns at once
+// orderHost is a driver.Host whose stop has already come, and which logs the
+// environment's start.
+type orderHost struct {
+	driver.Host
+	log *[]string
+}
 
+func (h orderHost) Started() error {
+	*h.log = append(*h.log, "environment-started")
+	return nil
+}
+
+func (h orderHost) Wait(context.Context) string { return driver.StopCompleted }
+
+// TestRunVMsOrder pins BOOT-01's ordering: the build VM boots only after the
+// relay step (boot and claim) has returned, and never when it failed; the
+// environment is reported started once it booted, and both VMs stop once
+// warden's stop has come.
+func TestRunVMsOrder(t *testing.T) {
 	var log []string
+	host := orderHost{log: &log}
 	d := &Driver{
 		relayStep: func() (stopper, error) {
 			log = append(log, "relay claimed")
@@ -63,16 +72,17 @@ func TestRunVMsOrder(t *testing.T) {
 			return fakeVM{"build", &log}, nil
 		},
 	}
-	_ = d.runVMs(ctx, sess, &driver.BuildRequest{}, nil, &buildVMConfig{}, "", "", "")
-	want := "relay claimed,build booted,stop build,stop relay"
+	_ = d.runVMs(context.Background(), host, &driver.BuildRequest{}, relayBoot{},
+		&buildVMConfig{})
+	want := "relay claimed,build booted,environment-started,stop build,stop relay"
 	if got := strings.Join(log, ","); got != want {
 		t.Fatalf("order = %s, want %s", got, want)
 	}
 
 	log = nil
 	d.relayStep = func() (stopper, error) { return nil, errors.New("claim refused") }
-	if err := d.runVMs(ctx, sess, &driver.BuildRequest{}, nil, &buildVMConfig{},
-		"", "", ""); err == nil || len(log) != 0 {
+	if err := d.runVMs(context.Background(), host, &driver.BuildRequest{}, relayBoot{},
+		&buildVMConfig{}); err == nil || len(log) != 0 {
 		t.Fatalf("after a failed claim: err %v, log %v", err, log)
 	}
 }

@@ -104,6 +104,7 @@ func TestBuildRecordHoldsNoSecret(t *testing.T) {
 // cannot be taken, no output directory and no stage directory exist
 // (DRV-56).
 func TestBuildLockTakenBeforeAnythingIsCreated(t *testing.T) {
+	withoutProbe(t, "qemu")
 	dir := inConfigFiles(t, "")
 	write(t, dir, "build.sh", "true\n")
 	cache := filepath.Join(t.TempDir(), "not-a-directory")
@@ -155,6 +156,17 @@ func TestBuildLockTakenBeforeAnythingIsCreated(t *testing.T) {
 	if _, err := os.Stat(rec.StageDir); !os.IsNotExist(err) {
 		t.Errorf("stage directory left: %v", err)
 	}
+}
+
+// withoutProbe makes the linked driver d probe nothing for the test, so that
+// prepare gets past the probe on a host without d's tools.
+func withoutProbe(t *testing.T, d string) {
+	t.Helper()
+	orig := linkedDrivers[d]
+	ld := *orig
+	ld.Preflight = nil
+	linkedDrivers[d] = &ld
+	t.Cleanup(func() { linkedDrivers[d] = orig })
 }
 
 // parseBuildLine parses a command line's flags into warden's flag variables,

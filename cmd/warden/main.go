@@ -16,7 +16,6 @@ import (
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
-	"github.com/buildwarden/buildwarden/driver/qemu"
 	"github.com/buildwarden/buildwarden/driver/vz"
 )
 
@@ -263,10 +262,6 @@ func newDriver(cfg *Config) (driver.Driver, error) {
 	switch cfg.Runtime.Driver {
 	case "vz":
 		d := vz.New()
-		d.Verbose = cfg.Output.Verbose
-		return d, nil
-	case "qemu":
-		d := qemu.New()
 		d.Verbose = cfg.Output.Verbose
 		return d, nil
 	case "hyperv":
