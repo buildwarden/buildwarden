@@ -19,7 +19,7 @@
   RelayImage        
   UpstreamCACerts   0 bytes
   UpstreamSystemCA  true
-  BuildLink         100.127.255.252/30
+  BuildLink         $DEFAULT_LINK
   DNS               []
   Env               map[]
 == flags: warden build --driver hyperv --capture headers --output out --no-compress --timeout 10m --tmpdir tmp --quiet $CTX
@@ -43,7 +43,7 @@
   RelayImage        
   UpstreamCACerts   0 bytes
   UpstreamSystemCA  true
-  BuildLink         100.127.255.252/30
+  BuildLink         $DEFAULT_LINK
   DNS               []
   Env               map[]
 == vm flags: warden build --driver hyperv --image base.qcow2 --cpus 8 --memory 16384 --keep-vms --build-link 10.9.0.0/30 --script build.sh $CTX
@@ -133,7 +133,7 @@ warden.toml:
   RelayImage        
   UpstreamCACerts   0 bytes
   UpstreamSystemCA  true
-  BuildLink         100.127.255.252/30
+  BuildLink         $DEFAULT_LINK
   DNS               []
   Env               map[]
 == windows guest: warden build --driver hyperv --guest-os windows $CTX
@@ -157,6 +157,6 @@ warden.toml:
   RelayImage        
   UpstreamCACerts   0 bytes
   UpstreamSystemCA  true
-  BuildLink         100.127.255.252/30
+  BuildLink         $DEFAULT_LINK
   DNS               []
   Env               map[]

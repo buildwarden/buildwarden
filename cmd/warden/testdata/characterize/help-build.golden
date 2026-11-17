@@ -18,7 +18,7 @@ Examples:
   warden build --driver qemu --guest-os windows --cpus 8 --memory 16384 ./win-project
 
 Flags:
-      --build-link string      advanced: the VM drivers' relay-to-build link, a /30 (default: [vm] build_link, then 100.127.255.252/30)
+      --build-link string      advanced: the VM drivers' relay-to-build link, a /30 (default: [vm] build_link, then $DEFAULT_LINK)
       --capture string         capture payloads (none, headers, bodies, all)
       --cpus int               build VM vCPUs (VM drivers; default per driver)
       --guest-os string        guest OS for VM drivers: linux (default) or windows

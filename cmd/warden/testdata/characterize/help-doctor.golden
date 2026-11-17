@@ -38,7 +38,7 @@ Usage:
   warden doctor [flags]
 
 Flags:
-      --build-link string   advanced: the VM drivers' relay-to-build link, a /30 (default: [vm] build_link, then 100.127.255.252/30)
+      --build-link string   advanced: the VM drivers' relay-to-build link, a /30 (default: [vm] build_link, then $DEFAULT_LINK)
   -h, --help                help for doctor
       --network string      hyperv: durable build switch name (default: [vm] network, then warden-dev)
 

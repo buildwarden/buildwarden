@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/linuxguest"
 	"github.com/buildwarden/buildwarden/driver/qemu"
@@ -45,9 +46,11 @@ var goldenDir = func() string {
 }()
 
 // golden compares got with testdata/characterize/<name>.golden, or writes
-// the file under -update.
+// the file under -update. The default build link is shown as $DEFAULT_LINK:
+// it is written once, in driver/buildlink (TestNoStrayLinkLiterals).
 func golden(t *testing.T, name, got string) {
 	t.Helper()
+	got = strings.ReplaceAll(got, buildlink.DefaultCIDR, "$DEFAULT_LINK")
 	path := filepath.Join(goldenDir, name+".golden")
 	if *update {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
