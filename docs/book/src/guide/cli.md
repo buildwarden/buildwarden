@@ -383,6 +383,14 @@ or crashed builds. Only removes resources not associated with a currently
 running warden process, and nothing a later build would reuse: prepared and
 downloaded VM images, the Hyper-V relay boot disk and the support images stay.
 
+Under every driver it first cleans up after the selected driver's builds
+whose warden is gone: a build holds a lock in warden's lock directory
+(`buildwarden/locks` in the user cache directory) while it runs, and for each
+build whose lock nobody holds clean removes its stage directory
+(`warden-stage-<id>`, where warden staged the build script, under the
+build's temporary directory) and then its lock and record, printing
+`Cleaning up after build <id> (<driver>)`. A running build's are left alone.
+
 Under the container driver, `qemu` and `vz` it removes leftover containers,
 so there a runtime in effect that is not `finch`, `docker` or `podman` fails
 the command before anything is listed or removed

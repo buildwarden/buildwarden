@@ -523,83 +523,118 @@ func buildContext() (context.Context, context.CancelFunc) {
 	return ctx, cancel
 }
 
-// prepare resolves everything a build or shell needs, then makes the build
-// ID, takes the build's lock and writes its record, and stages the build
-// script, in that order (DRV-45, DRV-56). The returned function removes the
-// stage directory and then the build's lock and record.
-func prepare(args []string) (driver.Driver, *driver.BuildRequest, func(), error) {
+// prepared is a build or shell that prepare readied: its configuration and
+// request, its driver, and the build's ID and hold on its lock and record.
+type prepared struct {
+	cfg    *Config
+	req    *driver.BuildRequest
+	d      driver.Driver
+	linked *linkedDriver
+	id     string
+	live   *liveBuild
+	// done removes the stage directory and then the build's lock and record.
+	done func()
+}
+
+// prepare resolves everything a build or shell needs and probes the driver's
+// run, then makes the build ID, takes the build's lock and writes its
+// record, and stages the build script, in that order (DRV-33, DRV-45,
+// DRV-56).
+func prepare(args []string) (*prepared, error) {
 	cfg, err := announcedConfig()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	req, err := newRequest(cfg, args)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	d, err := newDriver(cfg)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
-	id := driver.RandAlphaNum(8)
-	live, err := startBuildRecord(linkedRecord(cfg, req, id))
+	p := &prepared{cfg: cfg, req: req, d: d, linked: linkedDrivers[driverName(cfg)]}
+	if p.linked == nil {
+		return nil, fmt.Errorf("driver %q is not linked into warden", driverName(cfg))
+	}
+	if p.linked.Preflight != nil {
+		probe := newStart(cfg, req, p.linked.Capabilities, "", "", "")
+		probe.Probe = true
+		if err := p.linked.Preflight(context.Background(), req, probe); err != nil {
+			return nil, err
+		}
+	}
+	p.id = driver.RandAlphaNum(8)
+	if p.live, err = startBuildRecord(linkedRecord(cfg, req, p.id)); err != nil {
+		return nil, err
+	}
+	unstage, err := stageBuild(req, driverName(cfg), p.id)
 	if err != nil {
-		return nil, nil, nil, err
+		_ = p.live.end()
+		return nil, err
 	}
-	unstage, err := stageBuild(req, driverName(cfg), id)
-	if err != nil {
-		_ = live.end()
-		return nil, nil, nil, err
-	}
-	return d, req, func() {
+	p.done = func() {
 		unstage()
-		if err := live.end(); err != nil {
+		if err := p.live.end(); err != nil {
 			log.Info(fmt.Sprintf("warning: removing the build's lock and record: %v",
 				err))
 		}
-	}, nil
+	}
+	return p, nil
 }
 
 // linkedRecord is the record of a build of a driver linked into warden: its
 // path is warden's own, and it has no flags of its own yet.
 func linkedRecord(cfg *Config, req *driver.BuildRequest, id string) buildRecord {
 	self, _ := os.Executable()
-	configFile := cfg.File
-	if configFile != "" {
-		if abs, err := filepath.Abs(configFile); err == nil {
-			configFile = abs
-		}
-	}
 	return buildRecord{
 		Driver: driverName(cfg), ID: id, Path: self, Linked: true,
 		Contract: contractVersion, TempDir: req.TempDir,
-		StageDir: stageDir(req.TempDir, id), ConfigFile: configFile, Args: []string{},
+		StageDir: stageDir(req.TempDir, id), ConfigFile: absConfigFile(cfg),
+		Args: []string{},
 	}
 }
 
+// absConfigFile is the absolute path of the config file warden read, or ""
+// when it read none.
+func absConfigFile(cfg *Config) string {
+	if cfg.File == "" {
+		return ""
+	}
+	if abs, err := filepath.Abs(cfg.File); err == nil {
+		return abs
+	}
+	return cfg.File
+}
+
 func runBuild(_ *cobra.Command, args []string) error {
-	d, req, done, err := prepare(args)
+	p, err := prepare(args)
 	if err != nil {
 		return err
 	}
-	defer done()
-	defer d.Close()
+	defer p.done()
+	defer p.d.Close()
+	if p.linked.Run != nil {
+		return runLinkedBuild(p)
+	}
 	ctx, stop := buildContext()
 	defer stop()
 
 	start := time.Now()
-	if _, err := d.StartBuild(ctx, req); err != nil {
-		return buildFailed(ctx, err, req, time.Since(start))
+	if _, err := p.d.StartBuild(ctx, p.req); err != nil {
+		return buildFailed(ctx, err, p.req, time.Since(start))
 	}
-	fmt.Fprintf(os.Stderr, "warden: build SUCCEEDED (output: %s)\n", req.OutputDir)
+	fmt.Fprintf(os.Stderr, "warden: build SUCCEEDED (output: %s)\n", p.req.OutputDir)
 	return nil
 }
 
 func runShell(_ *cobra.Command, args []string) error {
-	d, req, done, err := prepare(args)
+	p, err := prepare(args)
 	if err != nil {
 		return err
 	}
-	defer done()
+	defer p.done()
+	d, req := p.d, p.req
 	defer d.Close()
 	ctx, stop := buildContext()
 	defer stop()

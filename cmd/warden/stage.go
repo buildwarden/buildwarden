@@ -12,7 +12,10 @@ import (
 // containerfileIgnored reports whether driver d's guest cannot run a
 // Containerfile, so that warden drops it before staging: nothing is
 // translated or recorded (describe's capabilities.containerfile: ignore).
-func containerfileIgnored(d string) bool { return d == "vz" }
+func containerfileIgnored(d string) bool {
+	ld, ok := linkedDrivers[d]
+	return ok && ld.Capabilities.Containerfile == containerfileIgnore
+}
 
 // baseImage is the FROM image of the build's Containerfile, as written there,
 // whether or not the script is translated from it (with --script, or a

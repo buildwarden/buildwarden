@@ -116,7 +116,7 @@ func TestBuildLockTakenBeforeAnythingIsCreated(t *testing.T) {
 	tmp, out := t.TempDir(), filepath.Join(t.TempDir(), "out")
 	args := parseBuildLine(t, "build", "--driver", "qemu", "--tmpdir", tmp,
 		"--output", out, dir)
-	if _, _, _, err := prepare(args); err == nil {
+	if _, err := prepare(args); err == nil {
 		t.Fatal("prepare went on without the build's lock")
 	}
 	if _, err := os.Stat(out); !os.IsNotExist(err) {
@@ -131,10 +131,11 @@ func TestBuildLockTakenBeforeAnythingIsCreated(t *testing.T) {
 	inLocks(t)
 	args = parseBuildLine(t, "build", "--driver", "qemu", "--tmpdir", tmp,
 		"--output", out, dir)
-	_, req, done, err := prepare(args)
+	p, err := prepare(args)
 	if err != nil {
 		t.Fatal(err)
 	}
+	req, done := p.req, p.done
 	ids, err := heldBuildIDs("qemu")
 	if err != nil || len(ids) != 1 {
 		t.Fatalf("held builds %v, %v; want the one being prepared", ids, err)
