@@ -56,3 +56,16 @@ func TestDefaultCacheDirIgnoresSudoUserWhenNotRoot(t *testing.T) {
 		t.Errorf("DefaultCacheDir() = %s, want it under %s", got, home)
 	}
 }
+
+// Building the driver value does no host work: the image cache is resolved
+// only when the driver first needs it (K1 task 9).
+func TestNewDoesNoHostLookup(t *testing.T) {
+	if d := New(); d.Cache != nil {
+		t.Fatalf("New() resolved the image cache %+v", d.Cache)
+	}
+	t.Setenv("HOME", t.TempDir())
+	d := New()
+	if got, want := d.cache().CacheDir, DefaultCacheDir(); got != want {
+		t.Errorf("cache dir %s, want the default %s", got, want)
+	}
+}
