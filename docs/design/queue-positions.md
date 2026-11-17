@@ -31,7 +31,7 @@ related: [regression-fixes-follow-up.md, budgets-active-only.md, queue-summary.m
 A process item (FLOW-03, LOOP-09), filed on Jeff's word on 2026-11-17 and
 placed first. It holds no worker (a8): the one change an older `wf` would
 misread, the move of done items to `queue/done/`, is made at `x4-state`
-once no worker runs an older `wf`.
+once every session running an older `wf` has ended.
 
 Words used throughout. **wf** is the loop's tool, `tools/workflow/`. **The
 order** is FLOW-05's: class, then in progress before queued, then priority.
@@ -55,8 +55,10 @@ of `queue/`. Today none of that holds:
 - **The hand numbering is not the order.** `wf status` at `6433c05` lists
   `loop-parallel-rule-wording` (3), `loop-native-lead` (4) and
   `loop-repository` (5) before `queue-positions` (1) and
-  `loop-streamline-2` (2): all five are class 2, and in-progress items come
-  before queued ones in a class. A number the order overrides is the kind
+  `loop-streamline-2` (2): the first three are process items in Implement
+  (phase 2), so class 1, and come before the class-2 queued process items
+  whatever their numbers (`process.md:211-214`, `Class`,
+  `queue.go:474-504`). A number the order overrides is the kind
   of drift Jeff asked to end. (The order itself is right; only the numbers
   disagree with it.)
 - **Uniqueness spans done items.** `Validate` refuses two items with one
@@ -96,7 +98,9 @@ of `queue/`. Today none of that holds:
   `origin/feat/loop-native-lead` at `dbd3032`): a state change an old `wf`
   would misread is made at a `human` `x4-state` step once no worker runs an
   old `wf` (`loop-native-lead.md`, "Holds, and what the merge does to
-  running work"). This design uses the same precondition (Decision 8).
+  running work"). This design uses the same kind of step, with a stronger
+  precondition, because its old-`wf` failure is not on the safe side
+  (Decision 8).
 - **LOOP-04**: "Priority is the human's. An agent places an item only where
   a rule says so ... No agent otherwise reorders items." Renumbering
   changes numbers, never the order, so it places nothing; `wf move` is
@@ -181,18 +185,36 @@ of `queue/`. Today none of that holds:
      numbering: a done item in `queue/` numbered 1 to N (N open items) gets
      the number after the highest held. The 45 set-aside items already
      are; this covers an item that closes in the window. An old `wf new`
-     still shifts items and logs it; the next new commit renumbers.
+     still shifts items and logs it; the next new commit renumbers. One
+     cost: the new `wf` rewrites the `priority` line of every item whose
+     position moved, and an old `wf`'s replay treats any conflict in a
+     queue file as hard (`commit.go:383-404`). Where `kind` is omitted,
+     `priority:` and `status:` are adjacent lines, so an old-`wf` session
+     that starts or closes an item the remote has just renumbered can get
+     exit 5 ("re-apply the change by hand"). That is accepted for the
+     window, and is one more reason to keep it short.
    - *New layout* (after `x4-state`): an old `wf` globs `queue/*.yaml` and
      no longer sees done items. `waitsForParent` then reads a done parent
      as done, which is right, but `validateFollows` reports every open item
      that follows a done one ("follows X, which is not another item in the
-     queue"; two today), and a tick told that `wf validate` must pass might
-     edit the `follows`. So the layout waits for the old `wf` to be gone.
-   `x4-state`'s precondition is `loop-native-lead`'s: no live lease
-   predates the merge commit, each machine's `native/status/` file shows a
-   run after it, a cloud run has started after it (the digest has its
-   file), and Jeff has rebuilt `dist/wf` in his attended sessions. The
-   layout switch is the directory itself: `wf` writes done items to
+     queue"; two today), `collides_with` naming a done item is reported the
+     same way (`queue.go:774-777`), and `wf new -follows <done item>` is
+     refused (`main.go:652`, `Find`). A tick told that `wf validate` must
+     pass would "fix what the agent wrote into the queue file"
+     (`workflow-tick/SKILL.md:171-172`), that is, edit the `follows`. So
+     the layout waits for every session running an old `wf` to have ended.
+   `x4-state`'s precondition is therefore about sessions ending, not
+   leases: a lease exists only while a step is claimed, so an old-`wf`
+   session between two steps holds none, and a new run having started does
+   not prove an earlier one ended. The step proceeds when every cloud run
+   that started before the merge commit has written its digest, each
+   machine's `native/status/` file shows a run that both started and
+   finished after the merge, and Jeff confirms that no attended session
+   from before the merge is still open and that he has rebuilt `dist/wf`.
+   Only the `native/status/` part is shared with `loop-native-lead`
+   (whose old-`wf` failure, losing a lead, falls on the safe side, so it
+   checks leases only). The layout switch is the directory itself: `wf`
+   writes done items to
    `queue/done/` only once it exists, which `wf migrate -done` creates.
    - **Rejected: `holds: cloud,host:*`.** A hold lasts while the item is in
      progress, Design included: days of a stopped loop for one moment.
@@ -280,9 +302,13 @@ None.
   confirm.
   - (a) No hold. The new `wf` keeps done numbers clear of the open ones
     until the layout changes, and the move is made at `x4-state`, a `human`
-    step, once no worker runs an old `wf`.
+    step, once every session that started before the merge has ended
+    (pre-merge cloud runs have digests, each machine's `native/status/`
+    shows a run started and finished after the merge, Jeff confirms his
+    attended sessions). Old-`wf` sessions in the window may meet exit 5 on
+    a renumbered file.
   - (b) The same, with `x4-state` a `cloud` step: the run that takes it
-    checks leases and `native/status/`, but cannot see Jeff's attended
+    checks digests and `native/status/`, but cannot see Jeff's attended
     sessions.
   - (c) `holds: cloud,host:*` for the item's life.
 
@@ -335,7 +361,12 @@ carry no number.
 - `Save` writes an item to `queue/done/` when it is done and the folder
   exists, otherwise to `queue/`, and removes the file from the other place.
 - `wf commit` takes a named `queue/F.yaml` to mean `queue/done/F.yaml` too,
-  and the reverse, so a close commits the move. Its generation step also
+  and the reverse, so a close commits the move. It adds the counterpart
+  only when it exists in the worktree, the index or `HEAD` (which covers
+  the deleted side of a move): `git add -A --` and `git commit --only --`
+  fail on a pathspec that matches nothing (`commit.go:203-218`), and before
+  `x4-state` `queue/done/` does not exist at all, so an unconditional pair
+  would fail every claim commit (`commit.go:122`). Its generation step also
   commits every queue file whose only uncommitted change is its `priority`
   line, and moves a done item an old `wf` left in `queue/` when that file
   has no uncommitted change. A file with other uncommitted changes outside
@@ -393,14 +424,25 @@ plan).
 
 ### Overlaps with other items (FLOW-05, FLOW-10)
 
-All declare `loop`, which is exclusive, so FLOW-05 orders them; whichever
-merges second rebases on the first and keeps both edits.
+Nothing serializes these items. Process items are outside the area
+relations and are not counted against the limits (`process.md:266-267,
+277-279`), and none of them declares `holds`, so they may be in
+implementation with PRs open side by side, all editing
+`tools/workflow/queue`. Each implement step merges current `main` before it
+opens its PR (Consolidation), and a PR whose base moved is refreshed
+(FLOW-10) before it merges, so whichever merges second rebases on the first
+and keeps both edits; the hunks it must reconcile are named below. If Jeff
+wants them in sequence, that takes a hold or a `needs` step, not the area
+map.
 
 - **loop-streamline-2** (drafted alongside this one): edits
   `workflow-intake` step 3's size guide (next to the priority sentence
   here), `workflow-human`, `commit.go`'s request (`-new-run` goes), the
   claim code, and the workflow `README.md` at its own `x4-state`. Its
-  `x4-state` and this one's touch different README lines.
+  `x4-state` and this one's touch different README lines. To reconcile:
+  `commit.go`'s request (its `-new-run` removal beside this item's path
+  pairing) and `generate`, `queue.go`'s claim next to `Save`, and the
+  intake skill's step 3.
 - **loop-parallel-rule-wording** (approved, unmerged, `823bdd5`): amends
   FLOW-05's **How two items relate**, not the paragraph added here, and
   deletes lines at `workflow-intake/SKILL.md:25` and
@@ -408,7 +450,13 @@ merges second rebases on the first and keeps both edits.
 - **loop-native-lead** (approved, unmerged, `dbd3032`): amends FLOW-05's
   "Otherwise a worker takes the next ready step ... blocks" clause, in the
   paragraph after the one added here; edits `workflow-intake` step 4,
-  `workflow-human` (`wf lead`), the claim code and the README.
+  `workflow-human` (`wf lead`), the claim code and the README. To
+  reconcile: `queue.go`'s `Feature` fields and `Save`, the claim code, and
+  the README's Layout and command rows.
+- **loop-repository** (approved, unmerged, design at
+  `origin/feat/loop-repository`): edits `queue.go`'s `Feature`, `Validate`
+  and `Problems`, and the README's Layout. To reconcile: `Validate`
+  (this item drops the uniqueness check there) and the Layout rows.
 
 The FLOW-05 wording below is therefore drafted on `main` at `0cd3c02`:
 neither approved item changes the lines it replaces.
@@ -459,7 +507,7 @@ no new text replaces it):
 > 4. **New functionality**: every other feature.
 
 **Proposed wording:** unchanged, followed by a new paragraph between item 4
-and "While a process item is in progress" (`process.md:224`):
+and "While a process item is in progress" (`process.md:225`):
 
 > An open item's priority is its position in this order, 1 for the first;
 > a done item has none. The queue's tooling (`wf`) renumbers the open items
@@ -506,7 +554,9 @@ are in other paragraphs; this paragraph applies on top of either.
     run.
   - `commit.go` tests (the existing git fixtures): a renumbered file with
     only its `priority` changed is committed; one with other uncommitted
-    changes outside the paths is not; a close commits the move; a replay
+    changes outside the paths is not; a close commits the move; a plain
+    `wf commit ... queue/F.yaml` (and a claim commit) succeeds before
+    `queue/done/` exists, and for an open item never done; a replay
     whose conflict is only `priority` lines resolves and renumbers; a
     replayed `wf new` keeps its asked place; a conflict elsewhere in the
     file stays hard.
@@ -534,7 +584,8 @@ A process item has no Plan phase; this is the work of `x2-implement`.
    key and done order; `Renumber`, `place`, `Move`; `Add` through `place`;
    `Save` by status and folder; `Validate`'s changes (FLOW-05, Decisions 1,
    4-6, 8-10).
-3. `commit.go`: renumber and move in `generate`; the path pairing; the
+3. `commit.go`: renumber and move in `generate`; the path pairing, only
+   for a counterpart that exists; the
    replay's re-merge and renumber before validation (Decision 11).
 4. `migrate.go`: `MigrateDone` (Decision 7).
 5. `cmd/wf/main.go`: `wf move`, `wf migrate -done`, `wf new`'s output, `wf
