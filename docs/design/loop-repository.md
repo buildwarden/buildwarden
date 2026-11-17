@@ -303,8 +303,8 @@ checkout of this repository, with this repository's paths and commands.
    sitting merges when no run is in progress and writes the `profile`
    before any run starts. Every branch here whose merge base with `main`
    predates the merge (every branch open at it), other than a process
-   item's, which is exempt (FLOW-14), has the profile file at neither its merge base nor its
-   head, so once the entry names the file that branch fails the
+   item's, which is exempt (FLOW-14), has the profile file at neither its
+   merge base nor its head, so once the entry names the file that branch fails the
    rule-change clearance, naming the file, until it next merges `main`
    (Decision 5): a one-time cost, accepted by Jeff (2026-11-17).
    *Rejected:* reading the trunk from the remote's default
@@ -626,9 +626,10 @@ checkout of this repository, with this repository's paths and commands.
     sitting immediately after the merge and before the next run, as for
     any adoption, so items already declared, among them the in-progress
     `relay-collector-failure-fails-open` whose `repos` names
-    `buildwarden/buildwarden-specs`, validate unchanged at the merge. A run
-    that started before the merge keeps its tools and touches none of the
-    new files.
+    `buildwarden/buildwarden-specs`, meet no absent entry at the merge and
+    validate unchanged once the profile is added (task 14b), before the
+    next run. The sitting merges when no run is in progress (Decision 3),
+    so no run meets the window between the merge and task 14b.
   - (b) `holds: [cloud, host:*]` for the whole time the item is in
     progress, from its claim: days of S1-, K1- and fix work stopped for
     nothing that breaks.
@@ -1257,15 +1258,15 @@ their `trunk` only (Implementation plan task 14a), so no item meets an
 absent entry at the merge; this repository's `profile` is added in the
 same sitting immediately after the merge, before the next run (task 14b),
 since until then the new `wf` reads it as not adopted (Decision 3), and
-once it is, `wf validate` passes on that item unchanged; and an item declared before the merge with `repos`
-beyond its home keeps the `human` merge-recording step it may already have
+once it is, `wf validate` passes on that item unchanged; and an item
+declared before the merge with `repos` beyond its home keeps the `human` merge-recording step it may already have
 until its Close; it is not converted (FLOW-04's old clause binds its branch
 until it merges `main`, LOOP-09).
 
 An accepted cost (Jeff, 2026-11-17): when a repository's entry gains its
 `profile` (this repository's at task 14b, the relay's after its
-adoption), every branch open there that forked before the adoption merged
-fails the rule-change clearance, naming the file, until it merges its
+adoption), every branch open there that forked before the adoption merged,
+other than a process item's, which is exempt (FLOW-14), fails the rule-change clearance, naming the file, until it merges its
 trunk (Decision 5). A branch before Publish gets no automatic refresh for
 it.
 
