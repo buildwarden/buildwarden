@@ -35,7 +35,7 @@ None.
 
 | Pri | Item | Kind | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|
-| 68 | detached-prepare-windows-exe | fix (follows project-config-trust) | buildwarden/buildwarden | undeclared | 1 design | f1-design (cloud) | - | - | 1 / 7 |
+| 68 | detached-prepare-windows-exe | fix (follows project-config-trust) | buildwarden/buildwarden | undeclared | 1 design | f1-design (cloud, leased to cloud/20261117T105743Z) | - | - | 2 / 7 |
 | 69 | prebuilt-artifacts | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 72 | driver-contract | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-plan (cloud) | - | - | 5 / 30 |
 
