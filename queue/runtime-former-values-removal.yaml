@@ -1,6 +1,6 @@
 feature: runtime-former-values-removal
 title: 'Remove the transitional detection of former container runtime values at 1.0: TRANSITIONAL(runtime-former-values)'
-priority: 77
+priority: 78
 status: queued
 round: feature
 phase: 0
@@ -59,3 +59,6 @@ history:
   - at: 2026-11-17T18:41:04Z
     by: human/jeff
     event: 'priority 76 -> 77 (renumbered by wf new: vm-from-host-path queued at 71)'
+  - at: 2026-11-17T19:20:47Z
+    by: human/jeff
+    event: 'priority 77 -> 78 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'

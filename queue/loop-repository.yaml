@@ -1,6 +1,6 @@
 feature: loop-repository
 title: 'Work in a second repository from the one queue: wf''s gates and checks, branches and PRs per repository, and the native side (componentization P1, last part). The move to a loop repository follows as P1''s last item.'
-priority: 64
+priority: 65
 kind: process
 status: queued
 round: process
@@ -47,3 +47,6 @@ history:
   - at: 2026-11-16T01:16:03Z
     by: cloud/20261112T230554Z
     event: 'priority 63 -> 64 (renumbered by wf new: loop-parallel-rule-wording queued at 62)'
+  - at: 2026-11-17T19:20:47Z
+    by: human/jeff
+    event: 'priority 64 -> 65 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'

@@ -1,0 +1,31 @@
+feature: skill-areas-yaml-lines
+title: Remove the four stale skill and agent lines that say wf areas -list and -check exit 1 until loop-parallel's x4-state writes areas.yaml
+priority: 63
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/skill-areas-yaml-lines.md
+branch: feat/skill-areas-yaml-lines
+alters_relationships: null
+source: 'Filed on Jeff''s word, 2026-11-17, in loop-parallel-rule-wording''s design review (a12, file separately). x4-state is done and areas.yaml exists, so these lines describe a past state: .claude/agents/wf-review.md:24, .claude/skills/workflow-intake/SKILL.md:25, .claude/skills/workflow-tick/SKILL.md:90, .claude/skills/workflow-human/SKILL.md:72 (main at 0cd3c02). Delete the clause in each; nothing else changes.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 7
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-17T19:20:47Z
+    by: human/jeff
+    event: queued at priority 63 (intake)

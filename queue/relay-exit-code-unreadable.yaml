@@ -1,6 +1,6 @@
 feature: relay-exit-code-unreadable
 title: 'Relay: an exit code it cannot read is recorded as 0, success'
-priority: 80
+priority: 81
 status: queued
 round: feature
 phase: 0
@@ -52,3 +52,6 @@ history:
   - at: 2026-11-17T18:41:04Z
     by: human/jeff
     event: 'priority 79 -> 80 (renumbered by wf new: vm-from-host-path queued at 71)'
+  - at: 2026-11-17T19:20:47Z
+    by: human/jeff
+    event: 'priority 80 -> 81 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'

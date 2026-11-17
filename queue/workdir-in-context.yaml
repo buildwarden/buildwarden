@@ -1,6 +1,6 @@
 feature: workdir-in-context
 title: A work directory inside the build context is served to the build; a Dockerfile FROM value reaches the container runtime's command line unchecked (security fix)
-priority: 70
+priority: 71
 status: in_progress
 round: feature
 phase: 2
@@ -152,3 +152,6 @@ history:
   - at: 2026-11-17T18:38:23Z
     by: human/jeff
     event: done f2-design-review
+  - at: 2026-11-17T19:20:47Z
+    by: human/jeff
+    event: 'priority 70 -> 71 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
