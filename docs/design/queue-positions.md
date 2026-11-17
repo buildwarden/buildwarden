@@ -176,8 +176,8 @@ of `queue/`. Today none of that holds:
    history line** (a7). `wf migrate -done` removes `priority` from each
    done item as it moves it (`priority` becomes `omitempty`). The move is
    the layout's, not the item's; the commit records it.
-8. **No hold. The layout changes at `x4-state`, a `human` step, once no
-   worker runs an old `wf`** (a8). What an old `wf` does with each state:
+8. **No hold. The layout changes at `x4-state`, a `human` step, once every
+   session running an old `wf` has ended** (a8). What an old `wf` does with each state:
    - *New numbers, old layout* (from the merge to `x4-state`): an old `wf`
      reads the same files and fields. Its `Validate` requires numbers
      unique across every item, done ones included, so until the layout
