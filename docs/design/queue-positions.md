@@ -613,7 +613,12 @@ it is the state step of the 5-step estimate.
 
 ## Design review
 
-None yet.
+- **r1, 2026-11-17: approved at `3660840`** (Jeff, workflow-human, FLOW-19),
+  as read. **Rule change FLOW-05 approved at `3660840`**, as drafted.
+  Assumptions a1 to a11 confirmed as recommended, in one answer. FLOW-20:
+  not a program item; Jeff exempted it from the freeze on 2026-11-17,
+  placing it first. No changes folded in. The `x4-state` step of Decision 8
+  is added to the queue by hand at this review.
 
 ## Consolidation
 
