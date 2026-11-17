@@ -582,7 +582,8 @@ paragraph (`process.md:104-108`):
 > trees and files the change reaches. It checks the declared `areas` against
 > what `drivers`, `surfaces` and the `rule_changes` paths imply, at Design,
 > and against the paths the change edits, from Implement through Publish
-> and at each refresh (FLOW-03). The agent part judges the security note.
+> and at each refresh of a feature (FLOW-03). The agent part judges the
+> security note.
 
 **`TEMPLATE.md`**, current (`TEMPLATE.md:13-15`):
 
