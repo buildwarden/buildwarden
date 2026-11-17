@@ -953,6 +953,8 @@ gaps:
       2026-11-17 (host:container-any/20261117T111001Z, unattended, main 0cd3c02): not run, nothing
       changed. feat/prebuilt-artifacts is still 49b513a (design only), and q1 is still open: driver-contract
       is still in Plan (cloud step f2-plan, now claimed) with no PR.
+      2026-11-17 (host:container-any/20261117T171002Z, unattended, main 0cd3c02): not run, nothing
+      changed. feat/prebuilt-artifacts is still 49b513a (design only), and q1 is still open.
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: open
@@ -992,6 +994,9 @@ gaps:
       Tracked, not blocking (design Validation plan, tier 2). No driver tree is edited and the
       check is the same Go code on every OS (os.SameFile, walking up); CI runs cmd/warden's tests on
       Linux only. Run on the branch once Implement is done, or on main after it merges.
+      2026-11-17 (host:container-any/20261117T171002Z, unattended, main 0cd3c02): not run.
+      feat/workdir-in-context is design-only (a2a80e5, docs/design/workdir-in-context.md alone against
+      main) and waits on its design review (f2-design-review).
   - id: workdir-in-context-macos
     host: macos-finch
     status: open
