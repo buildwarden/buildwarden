@@ -3,7 +3,7 @@ title: 'The driver command contract, its suite and the kit: warden runs a driver
 priority: 72
 status: in_progress
 round: feature
-phase: 3
+phase: 1
 design: docs/design/driver-contract.md
 branch: feat/driver-contract
 seams:
@@ -113,13 +113,13 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: f3-implement
-    phase: 3
+  - id: f1-design-r3
+    phase: 1
     affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261117T105743Z
-      expires: 2026-11-17T14:57:15.383554506Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -557,3 +557,21 @@ history:
   - at: 2026-11-17T12:57:15Z
     by: cloud/20261117T105743Z
     event: claimed f3-implement until 2026-11-17T14:57:15Z
+  - at: 2026-11-17T13:22:30Z
+    by: cloud/20261117T105743Z
+    event: kept f6-validate-macos-vz pending for phase 6
+  - at: 2026-11-17T13:22:30Z
+    by: cloud/20261117T105743Z
+    event: kept f6-validate-windows-hyperv pending for phase 6
+  - at: 2026-11-17T13:22:30Z
+    by: cloud/20261117T105743Z
+    event: kept f6-validate-qemu-any pending for phase 6
+  - at: 2026-11-17T13:22:30Z
+    by: cloud/20261117T105743Z
+    event: kept f6-validate-macos-finch pending for phase 6
+  - at: 2026-11-17T13:22:30Z
+    by: cloud/20261117T105743Z
+    event: kept f6-validate-container-any pending for phase 6
+  - at: 2026-11-17T13:22:30Z
+    by: cloud/20261117T105743Z
+    event: 'back to design: f3-implement (tasks 1-19 done, 7c6110a): task 20 cannot hold as designed. Moving the seven driver-owned keys into the kit (drivercmd.Resolve, case-sensitive lookup) silently changes which values are read: on main BurntSushi/toml matches keys in any letter case, so [Runtime] CLI = "podman" selects podman and [runtime] CLI = "./rt" is refused (TestRuntimeKeyInOtherSpellings, cmd/warden/runtime_test.go:335); under the kit both are silently not set. That breaks Behaviour 18, hand-off point 5 (runtime-cli-project-path''s tables move and pass) and GLOBAL-10/11. Choose: (a) the kit reads old names, or every key, case-insensitively; (b) a key in another letter case is refused with a fixable error; (c) accept a nineteenth Behaviour difference and rewrite those test rows. Paths: driver/drivercmd/settings.go, cmd/warden/config.go, cmd/warden/runtime_test.go, specs/driver-contract/v1.md (DRV-C5/C11).'
