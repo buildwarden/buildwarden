@@ -532,7 +532,8 @@ func inCache(t *testing.T) string {
 	t.Helper()
 	inConfigFiles(t, "")
 	cache := t.TempDir()
-	t.Setenv("XDG_CACHE_HOME", cache)
+	t.Setenv("XDG_CACHE_HOME", cache) // Linux; macOS reads HOME, which is the test's
+	t.Setenv("LocalAppData", cache)   // Windows
 	return driver.CacheDir()
 }
 

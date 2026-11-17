@@ -3,6 +3,7 @@ package container
 import (
 	"errors"
 	"os/exec"
+	"runtime"
 	"testing"
 
 	"github.com/lesiw/ctrctl"
@@ -11,10 +12,15 @@ import (
 // cliError produces a real *ctrctl.CliError for a process exiting with code.
 func cliError(t *testing.T, code string) error {
 	t.Helper()
-	err := exec.Command("sh", "-c", "exit "+code).Run()
+	// cmd.exe on Windows, where sh is not certain to be on PATH.
+	cmd := exec.Command("sh", "-c", "exit "+code)
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd.exe", "/c", "exit "+code)
+	}
+	err := cmd.Run()
 	var ee *exec.ExitError
 	if !errors.As(err, &ee) {
-		t.Fatalf("sh exit %s: %v", code, err)
+		t.Fatalf("exit %s: %v", code, err)
 	}
 	return &ctrctl.CliError{ProcessState: ee.ProcessState}
 }
