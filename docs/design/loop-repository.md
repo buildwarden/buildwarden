@@ -14,10 +14,11 @@ design_review: required  # a process item's design always gets its review (FLOW-
 native_validation: []    # the native wrapper's change is tested by its Go test and on each
                          # machine by its owner at re-install; see Validation plan
 tier2_gaps: []
-rules: [FLOW-02, FLOW-03, FLOW-04, FLOW-05, FLOW-08, FLOW-09, FLOW-10, FLOW-12, FLOW-13,
-        FLOW-14, FLOW-16, FLOW-17, FLOW-18, FLOW-19, FLOW-20, LOOP-01, LOOP-02, LOOP-03,
-        LOOP-04, LOOP-05, LOOP-06, LOOP-07, LOOP-08, LOOP-09, PROFILE-01, LINT-01, LINT-02,
-        LINT-03, LINT-04, LINT-05, GLOBAL-09, GLOBAL-10, GLOBAL-11, TEST-01]
+rules: [FLOW-02, FLOW-03, FLOW-04, FLOW-05, FLOW-06, FLOW-08, FLOW-09, FLOW-10, FLOW-11,
+        FLOW-12, FLOW-13, FLOW-14, FLOW-15, FLOW-16, FLOW-17, FLOW-18, FLOW-19, FLOW-20,
+        LOOP-01, LOOP-03, LOOP-04, LOOP-05, LOOP-06, LOOP-08, LOOP-09, PROFILE-01, LINT-01,
+        LINT-03, LINT-04, LINT-05, GLOBAL-06, GLOBAL-09, GLOBAL-10, GLOBAL-11, UX-01,
+        TEST-01, TEST-03]
 rule_changes:
   - {rule: FLOW-03, change: amend, paths: [docs/development/process.md,
       tools/workflow/check/check.go, tools/workflow/check/check_test.go,
@@ -25,7 +26,8 @@ rule_changes:
       tools/workflow/check/review.go]}
   - {rule: FLOW-04, change: amend, paths: [docs/development/process.md]}
   - {rule: FLOW-08, change: amend, paths: [docs/development/process.md,
-      tools/workflow/check/check.go, tools/workflow/check/check_test.go]}
+      tools/workflow/check/check.go, tools/workflow/check/check_test.go,
+      tools/workflow/check/mergeproof_test.go]}
   - {rule: FLOW-10, change: amend, paths: [docs/development/process.md]}
                                                       # its enforcement, `wf stale` in
                                                       # tools/workflow/cmd/wf/main.go, is
@@ -44,7 +46,8 @@ rule_changes:
       tools/workflow/check/frontmatter_test.go]}      # enforcement only: the pre-standard
                                                       # handling moves with the check (a13 (b))
   - {rule: FLOW-14, change: amend, paths: [tools/workflow/check/rulechange.go,
-      tools/workflow/check/workflows.go, tools/workflow/check/rulechange_test.go]}
+      tools/workflow/check/workflows.go, tools/workflow/check/rulechange_test.go,
+      tools/workflow/check/workflows_test.go]}
                                                       # enforcement only: no text change
   - {rule: LOOP-01, change: amend, paths: [docs/development/loop-contract.md,
       tools/workflow/check/profile.go, tools/workflow/check/profile_test.go]}
@@ -109,7 +112,7 @@ checkout of this repository, with this repository's paths and commands.
    `.claude/skills/workflow-tick/SKILL.md:38-53`). A branch in another
    repository is not in it.
 2. **An item has one branch and one pull request.** `Feature.Branch` and
-   `Feature.PR` (`queue.go:97`, `:117`, `:144-151`) are the home's. A work
+   `Feature.PR` (`queue.go:98`, `:129`, `:144-150`) are the home's. A work
    item that also changes the specs repository, such as `seam-specs` or the
    open `relay-collector-failure-fails-open`, has its second branch and pull
    request named only in steps' evidence and its design. `seam-specs`
@@ -262,7 +265,8 @@ checkout of this repository, with this repository's paths and commands.
    (FLOW-05). The entries for every repository named by an item already in
    the queue (here `buildwarden/buildwarden` and
    `buildwarden/buildwarden-specs`) are written before the merge, so no
-   item fails at it and no absent entry is read leniently (GLOBAL-11).
+   item fails at it and no absent entry is read leniently (GLOBAL-11), the
+   queue's own repository's included.
    *Rejected:* reading the trunk from the remote's default
    branch: a value the loop did not write down, used when nothing is given
    (GLOBAL-10).
@@ -274,13 +278,16 @@ checkout of this repository, with this repository's paths and commands.
    and keeps today's behaviour (Defaults and overrides).
 5. **The gates run in each repository the item has a branch in**, each
    through its own profile; a repository that has not adopted gets the
-   branch, trunk and pull-request checks and no fast gate, because it has
-   no profile to name one (LOOP-08's last paragraphs). The checks are
-   listed under **The gates, per repository**.
+   branch, area, trunk and pull-request checks and no fast gate or
+   reference-document checks, because it has no profile to name them
+   (LOOP-08's last paragraphs), and no path there is a rule path for the
+   clearance. The checks are listed under **The gates, per repository**.
 6. **The loop sees every merge it records** (a5). The `human` step that
-   records a merge the loop cannot see (FLOW-04, FLOW-08) is retired for
-   any repository with an entry in `config.yaml`, which is every
-   repository an item may name (Decision 3). The human merges the item's
+   records a merge the loop cannot see (FLOW-04, FLOW-08) is retired for a
+   pull request of an item the loop runs (not tracked), in any repository
+   with an entry in `config.yaml`, which is every repository an item may
+   name (Decision 3); a tracked item's Merge stays its `human` step
+   (FLOW-03). The human merges the item's
    pull requests in the order its design gives; a step the design adds
    after one of them (a release, a pin) needs that merge.
 7. **A home that has adopted gets the feature round; one that has not
@@ -332,7 +339,9 @@ checkout of this repository, with this repository's paths and commands.
     its Implement waits, through a `human` step `x2-predecessors-merged`
     that `x2-implement` needs, for `loop-native-lead`'s merge, whose
     wrapper the native part builds on, and for
-    `loop-parallel-rule-wording`'s, which also amends FLOW-03 and FLOW-16.
+    `loop-parallel-rule-wording`'s, which also amends FLOW-02's `areas`
+    bullet and the template's `areas` comment, FLOW-03's "from Implement
+    on" sentence and its phases 7 and 8, and FLOW-16.
 17. **What proves the item is not its done-when** (a16). This item is done
     when its PR merges (FLOW-03, process items). The wave-1 gate is met
     later, when the relay's first item and an item here complete from the
@@ -434,10 +443,12 @@ checkout of this repository, with this repository's paths and commands.
     phase is done when the loop has seen every one merge. A design whose
     home pull request needs another's merge first (a release to pin, as
     `seam-specs` did) says so, and the step it adds for the release
-    `needs` that merge: `wf` seeds a confirmation step per `work` entry,
-    `f6-merged-<n>` in Publish for one the design marks `first`, and
-    `f7-merge` for the rest, all done by the tick's confirmation and never
-    offered (FLOW-05).
+    `needs` that merge: for each `work` entry the design marks `first`,
+    `wf` seeds a confirmation step `f6-merged-<n>` in Publish, `<n>` being
+    the entry's position in `work`, counted from 1. The other entries get
+    no step of their own: the existing `f7-merge` step proves them, and
+    passes only once every pull request has merged. Each is done by the
+    tick's confirmation and never offered (FLOW-05).
   - (b) `wf` enforces the home last: the home's pull request is opened
     only after every other has merged. Simple, and wrong for an item whose
     other pull requests need nothing first.
@@ -454,11 +465,14 @@ checkout of this repository, with this repository's paths and commands.
     refuses one whose `repos[0]` is not `config.yaml`'s `repository`. It
     now checks this directly rather than through `tracked`, because
     `tracked` now means "the home has no profile", and an adopted second
-    repository is not tracked. `State.validate` (`queue.go:689`) passes a
-    separate `homedHere := len(f.Repos) == 0 || f.Repos[0] ==
-    s.Config.Repository` into `validate` and `validateKind`, and the
-    process case becomes `f.IsProcess() && !homedHere`, keeping the message
-    "a process item is homed in the queue's repository, not %s". The
+    repository is not tracked. `State.Problems` (`queue.go:689`, `:697`)
+    computes a separate `homedHere := len(f.Repos) == 0 || f.Repos[0] ==
+    s.Config.Repository`, threaded through `Feature.validate`
+    (`:827-831`) into `validateKind`, and the process case becomes
+    `f.IsProcess() && !homedHere`. Its message keeps "a process item is
+    homed in the queue's repository, not %s" and drops the parenthetical
+    "(an item homed in another repository is tracked)", which an adopted
+    home makes false. The
     `tracked` argument still drives only the feature-round checks. When
     `config.repository` is unset (`:690-696`), the current fallback stays.
   - (b) The tracked round is retired: an item is homed only in an adopted
@@ -521,9 +535,9 @@ checkout of this repository, with this repository's paths and commands.
     `buildwarden/buildwarden-specs`, validate unchanged at the merge. A run
     that started before the merge keeps its tools and touches none of the
     new files.
-  - (b) `holds: [cloud, host:*]` from `x3-merge` on. A hold lasts while the
-    item is in progress, so in practice from its claim: days of S1-, K1-
-    and fix work stopped for nothing that breaks.
+  - (b) `holds: [cloud, host:*]` for the whole time the item is in
+    progress, from its claim: days of S1-, K1- and fix work stopped for
+    nothing that breaks.
 
   Recommended: (a).
 - **a11. How `wf` finds a second repository's checkout.** Proceeding with
@@ -598,10 +612,16 @@ checkout of this repository, with this repository's paths and commands.
   `loop-native-lead` changes the wrapper first, and this part is re-derived
   on its wrapper at Implement (a15).
 - **a15. Order with `loop-native-lead` and `loop-parallel-rule-wording`.**
-  Both are process items queued ahead of this one (priorities 62 and 63,
-  this one 64), neither designed yet. `loop-native-lead` rewrites the
-  native wrapper; `loop-parallel-rule-wording` amends FLOW-03 (phases 7
-  and 8) and FLOW-16 (the merge proof). Proceeding with (a); confirm.
+  Both are process items queued ahead of this one (priorities 62 and 64,
+  this one 65, on the `workflow` branch on 2026-11-17).
+  `loop-native-lead` is not designed yet, and rewrites the native wrapper.
+  `loop-parallel-rule-wording` is designed (its review approved, its
+  Implement pending) and amends FLOW-02's `areas` bullet and the
+  template's `areas` comment, FLOW-03's paragraph after the table (its
+  "from Implement on" sentence) and phases 7 and 8, FLOW-05, and FLOW-16
+  (the merge proof). Its approved wording already replaces two sentences
+  quoted here: FLOW-02's "A design that declares none is undeclared" and
+  FLOW-03's "from Implement on" sentence. Proceeding with (a); confirm.
   - (a) This design is reviewed now. When the design review is recorded,
     the attended session seeds a `human` step `x2-predecessors-merged`
     (phase 2, affinity `human`), and `x2-implement` lists it in `needs:
@@ -611,10 +631,12 @@ checkout of this repository, with this repository's paths and commands.
     merged, and at that point re-checks whether either changed a sentence
     quoted in this design. While the step is pending the item counts as
     waiting on the human (FLOW-05), which is acceptable: a process item
-    starts whatever the count. The rule wording below is re-based on theirs and the
-    native part on `loop-native-lead`'s wrapper, and if either changes a
-    sentence quoted here, the design comes back for a review of that
-    change only (FLOW-19).
+    starts whatever the count. The rule wording below is re-based on theirs
+    (FLOW-02's `areas` bullet and template comment, FLOW-03's "from
+    Implement on" sentence, FLOW-16) and the native part on
+    `loop-native-lead`'s wrapper, and if either changes a sentence quoted
+    here, as `loop-parallel-rule-wording`'s approved wording does, the
+    design comes back for a review of that change only (FLOW-19).
   - (b) The review waits for both to merge.
 
   Recommended: (a). The questions here do not depend on theirs.
@@ -635,7 +657,7 @@ checkout of this repository, with this repository's paths and commands.
   and a process item in progress ranks ahead of every new feature
   (FLOW-05).
 - **a17. Which front-matter keys are the loop's and which a profile's.**
-  `Front.Problems` requires twelve keys (`check.go:670-672`). LOOP-08 says
+  `Front.Problems` requires twelve keys (`check.go:671-673`). LOOP-08 says
   no loop rule may require that a component has drivers, user-facing
   surfaces or security boundaries. Proceeding with (a); confirm.
   - (a) `wf` requires the loop's keys (`feature`, `status`, `seams`,
@@ -643,9 +665,13 @@ checkout of this repository, with this repository's paths and commands.
     `concepts`) and the keys the profile file adds, with the values it
     gives. This repository's file adds `drivers`, `surfaces`,
     `security_boundary` (GLOBAL-06's four values) and `tier2_gaps`
-    (TEST-03), so nothing changes here. FLOW-02's text is not changed for
-    this split of the required keys: it is read through LOOP-01 in another
-    component, and is made neutral when next amended (LOOP-08).
+    (TEST-03), so nothing changes here. This item amends FLOW-02, so its
+    text is made neutral in the same change (LOOP-08: "made neutral when
+    the rule is next changed"): the `drivers`, `surfaces`,
+    `security_boundary` and `tier2_gaps` bullets are marked as keys this
+    repository's profile file adds, and `alters_relationships` and the
+    conservative-derivation paragraph name this repository's components
+    and packages as its examples (**Rule changes**, FLOW-02).
   - (b) Every component's designs carry all twelve, `none` or `[]` where
     the term is `none`.
 
@@ -730,9 +756,8 @@ is not tracked and names a `private` repository. The two entries above are
 written in the attended sitting that merges this item's PR, before the
 merge, on Jeff's word (Decision 3, a10), so every item already in the
 queue validates at the merge. An entry absent for the queue's own
-repository is read as `profile: docs/development/loop-profile.yaml`, with a
-`wf validate` notice, until an attended session writes it (Defaults and
-overrides).
+repository fails as any other absent entry does; it is not read as a
+default profile path (Decision 3, GLOBAL-11).
 
 ### The queue file
 
@@ -771,7 +796,7 @@ line numbers:
 | 0 Branch setup | `branchOnRemote` (`:245-248`) | in each repository |
 | 1 Design | `design` (`:570-606`): front-matter, sections | home only; keys and values from the home's profile file (a17) |
 | 2 Plan | `plan`, `reviewed`, `approvalDelta`, `declaredStill` | home only; `impactDelta` also compares `work`'s repositories |
-| 3 Implement | `onBranchHead`, `make lint`, `make test`, `docsTouched("docs/")`, `ruleClearance`, `declaredStill`, `insideAreas` | each repository: clean branch head, its fast gate, its reference documents, its rule paths cleared against the home design's `rule_changes`, its areas from its map. No fast gate or reference documents where it has no profile |
+| 3 Implement | `onBranchHead`, `make lint`, `make test`, `docsTouched("docs/")`, `ruleClearance`, `declaredStill`, `insideAreas` | each repository: clean branch head, its fast gate, its reference documents, its rule paths cleared against the home design's `rule_changes`, its areas from its map. No fast gate or reference documents where it has no profile, and no path there is a rule path |
 | 4 Review | as 3, plus `tier2Report`, `trialMerge` | as 3 in each; one report whose `heads` cover every branch (a12); a trial merge onto each trunk |
 | 5 Guide | `docsTouched(guides)` | each adopted repository's guides |
 | 6 Publish | `mainMerged`, consolidation names `origin/main`, `ruleClearance`, `archivedOn`, `prGreen` | trunk merged and named in **Consolidation** for each repository; archived in the home; a pull request green on its pushed head in each; `f6-merged-<n>` confirmed for each `first` entry |
@@ -802,7 +827,11 @@ that adopts the repository and adds it, every path the branch adds or
 changes under the new file's rule and machinery paths is classified as a
 rule path (Defaults and overrides). A profile file the merge base has but
 cannot be parsed, or one absent at both the merge base and the branch,
-fails the clearance, naming the file. A process item's
+fails the clearance, naming the file. A repository with no profile (its
+`config.yaml` entry gives only `trunk`) has no rule or machinery paths:
+the loop's rules and machinery are not kept there, so the clearance
+classifies no path there as a rule path (LOOP-01: a term it does not
+have is `none`; Defaults and overrides). A process item's
 branch stays exempt from the clearance (FLOW-14), and a process item is
 homed here (a6), so a change to the loop's machinery is still a process
 item's.
@@ -920,7 +949,8 @@ None of this is done by an agent (LOOP-05, FLOW-08, umbrella a11):
 
 ### Rule changes in brief
 
-Amended text: FLOW-02 (`merge_first`, prefixed areas; its enforcement,
+Amended text: FLOW-02 (`merge_first`, prefixed areas, and the keys this
+repository's profile adds marked as its, LOOP-08; its enforcement,
 `Front.Problems`, also reads the profile's keys), FLOW-03, FLOW-04,
 FLOW-08, FLOW-10, FLOW-16, FLOW-17, LOOP-01, LOOP-08, PROFILE-01.
 Enforcement only, no text change: FLOW-03's area check (`insideAreas`,
@@ -936,12 +966,12 @@ The wording is under **Rule changes**.
 | Default | Why it is the obvious one (GLOBAL-09) | Override, used exclusively (GLOBAL-10) |
 |---|---|---|
 | `work` absent: the item has no branch in a second repository, and its gates run in the home only | It is what every queue file means today | `wf declare` writes `work` from the design's `repos` |
-| `first` absent on a `work` entry (the repository is not in `merge_first`): its merge is confirmed by `f7-merge`, in the Merge phase (a5) | Most other pull requests need nothing merged first; Merge is where every pull request merges today (FLOW-08) | `merge_first` in the design's front matter, which `wf declare` writes as `first: true`, so the merge is confirmed by `f6-merged-<n>` in Publish |
+| `first` absent on a `work` entry (the repository is not in `merge_first`): its merge is confirmed by the existing `f7-merge` step, in the Merge phase, with no step of its own (a5) | Most other pull requests need nothing merged first; Merge is where every pull request merges today (FLOW-08) | `merge_first` in the design's front matter, which `wf declare` writes as `first: true`, so the merge is confirmed by `f6-merged-<n>` in Publish |
 | A host step's `repo` absent: the step concerns the item's home | Every host step today is in this repository, the home of every queue file | `repo`, naming a `work` entry |
 | `-checkouts` absent: `wf` reads no second repository. An item with no `work` behaves as today, and a check that needs a second repository's clone fails, naming the flag and the expected path (a11) | No item before this one names a second repository; a silent default directory would be a second name for what the skills already pass (a11 (b)) | `-checkouts DIR` |
 | The merge base has no profile file (the branch being checked adopts the repository and adds it): every path the branch adds or changes under the new file's rule and machinery paths is a rule path for the clearance (a2) | The branch cannot be trusted to classify its own edits, and there is no earlier file to read | None |
 | A `native.prepare` command exits non-zero: its hosts are stale for the run, and the session runs with their steps skipped and the reason in the digest | It is what `native-tick.sh` does today; one stale asset should not block the machine's other hosts | None |
-| A `config.yaml` entry absent for the queue's own repository: its profile file is `docs/development/loop-profile.yaml` | It is the file this item adds; the queue's repository is always adopted | The entry, once written |
+| A repository with no profile (its `config.yaml` entry gives only `trunk`): no fast gate, no reference documents, and no rule or machinery paths for the clearance; its branch, area, trunk and pull-request checks run (Decision 5) | LOOP-01: a term the component does not have is `none`; the loop's rules and machinery are not kept there | Its adoption: a `profile` in its entry |
 | A key absent from a profile file: the term is `none` | LOOP-01: a term the component does not have is `none` | The key |
 | A bare area name: an area of the item's home (a8) | Every queue file today is homed here; a relay design names its own areas bare | `<owner>/<name>:<area>` |
 | `hosts.yaml` `repositories` absent: the queue's own only | It is what every machine serves today | The list |
@@ -949,7 +979,8 @@ The wording is under **Rule changes**.
 | `wf main` and `wf areas -check` without `-repository`: the queue's repository | Today's behaviour | `-repository` |
 
 Beyond the prepare fallback above, no fallback: a missing clone, an
-unreadable profile file, a repository with no entry, or a host step whose
+unreadable profile file, a repository with no entry (the queue's own
+included), or a host step whose
 repository its machine does not list fails and names what to fix
 (GLOBAL-11). The transitions named here: the `repositories` entries for
 every repository an item already in the queue names (this repository and
@@ -970,16 +1001,27 @@ is named in the profile file and not changed.
 
 Each entry quotes the current text at `0cd3c02` and gives the proposed
 text in full for each amended paragraph. Severities and check types do not
-change. Under a15 the FLOW-03 and FLOW-16 paragraphs are re-based on
-`loop-parallel-rule-wording`'s wording if it merges first, and come back
-for review only if a sentence quoted here changed.
+change. Under a15 the paragraphs `loop-parallel-rule-wording` also
+amends (FLOW-02's `areas` bullet and the template's `areas` comment,
+FLOW-03's "from Implement on" sentence, FLOW-16) are re-based on its
+wording if it merges first, and come back for review only if a sentence
+quoted here changed; its approved wording changes the first two.
 
 ### FLOW-02 (amend), `docs/development/process.md`, `docs/design/TEMPLATE.md`
 
 **Why:** a design names the repositories whose pull requests merge first
-(a5), and the areas it edits in each repository it works in (a8).
+(a5), and the areas it edits in each repository it works in (a8). The
+change also makes the list neutral (LOOP-08: neutral when the rule is next
+changed), as row 3 of FLOW-03 is: the keys a profile adds are marked as
+this repository's (a17).
 
-**Current wording,** the list of front-matter keys (`process.md:75-97`):
+**Current wording,** the `drivers` bullet (`process.md:73-74`):
+
+> - `drivers` — which drivers are touched, or `interface` for a change made at the
+>   level of the driver contract or `driver.Session` (ORCH-01).
+
+**Current wording,** the rest of the list of front-matter keys
+(`process.md:75-97`):
 
 > - `seams` — which versioned seams change (GLOBAL-08).
 > - `surfaces` — which user-facing surfaces change (UX-01, ORCH-03).
@@ -1005,11 +1047,24 @@ for review only if a sentence quoted here changed.
 >   edits, enforcement included. Empty or absent means none.
 > - `concepts` — retrieval tags for the archive (FLOW-12).
 
-(The list opens with `drivers`, unchanged.)
+**Current wording,** the paragraph after the list (`process.md:99-102`):
 
-**Proposed:** the same list, with the `areas` bullet replaced and a bullet
-added after `repos`:
+> Declarations are derived conservatively: a change to a shared package (`relay/`,
+> `ledger/`, `collector/`, `driver/`) declares every dependent driver and host, per
+> the TEST-02 caveat. `areas` name what the change edits, not what depends on
+> it: the area map says which area reaches which.
 
+**Proposed:** the same list, with the `drivers`, `surfaces`,
+`security_boundary`, `alters_relationships` and `tier2_gaps` bullets made
+neutral, the `areas` bullet replaced, a bullet added after `repos`, and a
+sentence added after the list; the `seams`, `native_validation`, `rules`,
+`rule_changes` and `concepts` bullets are unchanged. The changed and added
+bullets, in the list's order:
+
+> - `drivers` — here: which drivers are touched, or `interface` for a
+>   change made at the level of the driver contract or `driver.Session`
+>   (ORCH-01).
+> - `surfaces` — here: which user-facing surfaces change (UX-01, ORCH-03).
 > - `repos` — every repository the change works in, the one that holds the
 >   design first, when there is more than that one (LOOP-04).
 > - `merge_first` — the repositories in `repos`, other than the home, whose
@@ -1021,6 +1076,32 @@ added after `repos`:
 >   `<owner>/<name>:<area>`. A design that declares none is undeclared, and
 >   FLOW-05 then treats the item as colliding with every item in its
 >   repositories.
+> - `security_boundary` — here: which GLOBAL-06 boundary is altered, if
+>   any. Any value other than `none` requires a security note in the
+>   design.
+> - `alters_relationships` — `true` when the change alters a component's
+>   role or how components interact: a versioned seam (GLOBAL-08), or which
+>   component owns a responsibility; here also the bootstrap model (BOOT
+>   rules), which of relay, collector, executor, orchestrator or a driver
+>   owns a responsibility, or the driver contract or `driver.Session`.
+>   Changes inside one component's existing role are `false`. FLOW-05
+>   limits how many such features are in flight.
+> - `tier2_gaps` — here: platform validation knowingly deferred (TEST-03).
+
+and after the list:
+
+> A key marked "here" is one this repository's profile file adds to the
+> loop's keys (LOOP-01, its impact keys); a design in a component whose
+> profile file does not add it leaves it out. Where a bullet says "here",
+> the rest of it is this repository's entry for that term.
+
+The paragraph after the list, proposed:
+
+> Declarations are derived conservatively: a change to a shared package
+> (here `relay/`, `ledger/`, `collector/`, `driver/`) declares every
+> dependent driver and host, per the TEST-02 caveat. `areas` name what the
+> change edits, not what depends on it: the area map says which area
+> reaches which.
 
 **Template** (`TEMPLATE.md:13-15`): after `repos:`, add verbatim
 
@@ -1088,9 +1169,11 @@ waits for the merge of each pull request the design names to merge first
 > names the branch, the fast gate, `main`, the reference documents or the
 > PR, it holds in each of those repositories, read through that
 > repository's profile (LOOP-01). In a repository that has not adopted the
-> contract (LOOP-08) only the branch, trunk and pull-request checks run:
-> there is no profile to name a gate. The design and its review are the
-> home's. "`main`" in the tables above reads as each repository's trunk.
+> contract (LOOP-08) there is no profile to name a gate: the fast gate and
+> the reference-document checks do not run there, no path there is a rule
+> path, and the branch, area, trunk and pull-request checks do run. The
+> design and its review are the home's. "`main`" in the tables above reads
+> as each repository's trunk.
 
 **Current wording,** the tracked paragraph:
 
@@ -1482,9 +1565,12 @@ text change, to `rules.yaml`, not to the rule:
   4. An item with a `work` entry: phase 0 fails until both branches exist;
      phase 3 runs each repository's fast gate in its clone and none where
      the repository has no profile; a path outside the second
-     repository's areas fails `insideAreas`; phase 6 needs a green PR in
-     each; phase 7 passes only when both merges are proved; Close fails
-     while either branch remains.
+     repository's areas fails `insideAreas`; phase 4 fails while the
+     report's `heads` lack the second repository's head or name a stale
+     one, and runs a trial merge onto each trunk; phase 5 checks each
+     adopted repository's guides and none where the repository has no
+     profile; phase 6 needs a green PR in each; phase 7 passes only when
+     both merges are proved; Close fails while either branch remains.
   5. `first`: `f6-merged-<n>` passes only on the merge of that entry, and
      a design-added step that needs it is not offered before.
   6. `wf stale` seeds a refresh when only the second branch is behind its
@@ -1515,6 +1601,12 @@ text change, to `rules.yaml`, not to the rule:
       on it with no new error or notice.
   11. Under a13 (b): tier 1's report on `main` is byte-for-byte the same
       before and after the move of the three checks' code.
+  12. A stub repository with a minimal profile file (no `rules.index`, no
+      `impact` keys): `wf rules` and `wf rules -base REV` run the three
+      checks, `rule-index` checking only the rule IDs; `Front.Problems`
+      accepts a design there with no `drivers`, `surfaces`,
+      `security_boundary` or `tier2_gaps`, and still fails one missing a
+      loop key (a13 (b), a17).
 - **Native:** `native_test.go` covers the wrapper's new resets and the
   prepare command with stub repositories, including a stub prepare that
   exits 1: the session still starts, its prompt carries the stale-host
@@ -1535,11 +1627,12 @@ here (a15). Then, on `feat/loop-repository`:
 
 1. `docs/development/loop-profile.yaml` and its parser,
    `tools/workflow/check/profile.go`, with tests 1 (LOOP-01, PROFILE-01).
-2. `config.yaml`'s `repositories` in `queue.Config`, with its validation
-   and its default for the queue's own repository (test 8; GLOBAL-09,
-   GLOBAL-10).
+2. `config.yaml`'s `repositories` in `queue.Config`, with its validation,
+   an absent entry failing for the queue's own repository as for any
+   other (test 8; GLOBAL-10, GLOBAL-11).
 3. `work` in `queue.Feature`, `wf declare` writing it; FLOW-02's text in
-   `process.md` amended (`merge_first`, prefixed `areas`) and the
+   `process.md` amended (`merge_first`, prefixed `areas`, the profile's
+   keys marked as this repository's) and the
    template's `merge_first` line and `areas` comment (`TEMPLATE.md:13-15`,
    prefix form) (FLOW-02 text and template, FLOW-03).
 4. `check.Env.Checkouts`, `-checkouts`, and the checker per repository
@@ -1547,9 +1640,12 @@ here (a15). Then, on `feat/loop-repository`:
    repository's trunk (tests 4, 6).
 5. `Front.Problems` from the profile file, with `merge_first` and prefixed
    areas; `kindOf` and `workflowRunsRe` from the merge base's profile file,
-   the profile file's own path always a rule path (tests 2, 3, 8; FLOW-02,
-   FLOW-14).
+   the profile file's own path always a rule path (tests 2, 3, 8, 12;
+   FLOW-02, FLOW-14).
 6. The merge confirmations per `work` entry and `first` (test 5; FLOW-08).
+6a. `tier2Report` reads the report JSON's `heads` and passes only when
+    they equal the item's current head in every repository, and
+    `wf-review` writes `heads` into the JSON (a12; test 4; LINT-04).
 7. The tracked test from `config.yaml`, and the process-home check on
    `repos[0]` through `homedHere` (test 7; FLOW-03).
 8. `repos/<owner>/<name>/` state, `wf main -repository`, `wf areas -check
@@ -1568,8 +1664,8 @@ here (a15). Then, on `feat/loop-repository`:
     `tools/tier1/diff/diff.go` (the Tier1-Allow trailer parsing) and from
     `tools/tier1/coupling/frontmatter.go` (the front-matter check, FLOW-12's
     pre-standard rule and `design_tolerate`), tier 1 keeping thin wrappers
-    that call them; `rules.yaml`'s LINT-05 owner updated (test 11; LINT-01,
-    LINT-05, FLOW-02, FLOW-12).
+    that call them; `rules.yaml`'s LINT-05 owner updated (tests 11, 12;
+    LINT-01, LINT-05, FLOW-02, FLOW-12).
 12. Under q1 (A): `private` and its validation.
 13. The skills and agents: `workflow-tick` (clones, `-checkouts`, each
     repository's trunk CI and ruleset read with `gh api
@@ -1579,7 +1675,8 @@ here (a15). Then, on `feat/loop-repository`:
     digest heads),
     `workflow-native`, `workflow-intake` (repositories need an entry),
     `wf-publish` (a PR per repository), `wf-implement` and `wf-review` (the
-    profile's fast gate) (FLOW-14: cite, not restate).
+    profile's fast gate; `wf-review` also the report's `heads`, task 6a)
+    (FLOW-14: cite, not restate).
 14. The rule text: FLOW-02, -03, -04, -08, -10, -16, -17, LOOP-01, LOOP-08
     and PROFILE-01 as approved (FLOW-14).
 15. Test 10 on the live `workflow` state as well as its fixture; archive
