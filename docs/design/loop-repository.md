@@ -2420,7 +2420,29 @@ pull request that adopts it has merged, such as the relay's (Decision 3).
 
 ## Design review
 
-None yet.
+- **r1, 2026-11-17: approved at `61f6fbe`** (Jeff, workflow-human, FLOW-19),
+  read at `b6fa193` (the draft `dfbdcc1`, with three report-only check
+  rounds and a reconciliation with the two predecessors as approved,
+  applied before the review: `95aeff8`, `38435c2`, `74f7651`, `a6bcefd`,
+  `85bc432`, `b6fa193`). Blocking q1 answered **(C)**: a private
+  repository's work is published as a public one's from its first item.
+  Assumptions a1 to a17 confirmed as recommended (a13 (b)). Choices the
+  reconciliation surfaced, decided: trunk only in `config.yaml`; the three
+  native additions kept (repository-qualified host satisfaction in
+  FLOW-04, the lead and declare refusals, `native-push.sh <name>
+  [<owner>/<repo>]`); an adopting repository's `profile` added only after
+  its adoption merges, this repository's included (task 14b, right after
+  this item's merge, before the next run); two narrow native allows
+  (`git -C .dev/checkouts/* fetch*`, `... worktree*`) in place of a broad
+  one; the one-time clearance cost on branches open at an adoption
+  accepted. Rule changes: **rule change FLOW-02 approved at `61f6fbe`**; **rule change FLOW-03 approved at `61f6fbe`**; **rule change FLOW-04 approved at `61f6fbe`**; **rule change FLOW-08 approved at `61f6fbe`**; **rule change FLOW-10 approved at `61f6fbe`**; **rule change FLOW-16 approved at `61f6fbe`**; **rule change FLOW-17 approved at `61f6fbe`**; **rule change LOOP-01 approved at `61f6fbe`**; **rule change LOOP-08 approved at `61f6fbe`**; **rule change PROFILE-01 approved at `61f6fbe`**; the enforcement-only changes to FLOW-12,
+  FLOW-14, LINT-01, LINT-04 and LINT-05 (and LINT-05's owner line in
+  `tools/tier1/rules.yaml`) approved with them. Folded in at `07718d5`
+  and `61f6fbe`: the home's `profile` after the merge, the narrow allows, the
+  accepted cost. Implement waits for `x2-predecessors-merged` (a15); at
+  that step the merged text of each overlapping paragraph is compared
+  with the approved text quoted under **Rule changes**, and a delta
+  review follows only if it differs.
 
 ## Consolidation
 
