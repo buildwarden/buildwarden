@@ -60,6 +60,10 @@ type Start struct {
 	// Probe asks for the checks the driver makes before any work, and
 	// nothing else.
 	Probe bool `json:"probe,omitempty"`
+	// Settings is the driver's configuration resolved from ConfigFile, Args
+	// and the environment, which the kit sets before it calls the driver's
+	// Preflight or Run. It is not part of the message.
+	Settings Settings `json:"-"`
 }
 
 // The modes of a build.
