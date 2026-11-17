@@ -129,7 +129,9 @@ today, for six reasons.
    spans spaces and slashes (`native-run.sh`'s header,
    `tools/workflow/native/native-run.sh:16-17`; the trailing-`:*` reading is
    in `docs/design/native-allowlist-scratch.md:29-32` and `173-175`);
-   nothing recorded of the matcher says it stops at a colon. So `git push
+   nothing recorded of the matcher says it stops at a colon, and a
+   `TestNativeSettingsRules` case records the colon reading under the
+   test's own matcher (a16). So `git push
    origin feat/x --force`, `git push origin feat/x :feat/other` (a remote
    delete) and `git push origin feat/x:workflow` all match the allow, and
    none matches a deny: the denies are prefixes (`git push --force:*`, `git
@@ -231,14 +233,26 @@ merge, and allows auto-merge (`allow_auto_merge: true`).
    decide the start exactly as they do for the cloud, because
    `loop-parallel` already made them every worker's. A queued process or
    tracked item still starts on any claim, as today.
-3. **Only a feature may be led, and only the human sets or changes a
-   lead** (a4, a5). `wf new -lead host:<name>` at intake, with Jeff, and
-   `wf lead -worker human/<name> -feature F -host <name> | -clear` later.
-   `wf lead` re-labels the item's pending, unleased template steps of
-   phases 0 to 5, and logs the change. A process item's work is the
+3. **Only a feature may be led, and any worker may set or change a
+   lead, each change on the record** (a4, a5). `wf new -lead
+   host:<name>` at intake and `wf lead -worker W -feature F -host <name>
+   | -clear` later, by a human, the cloud or a machine; no worker kind is
+   refused. `wf lead` re-labels the item's pending, unleased template
+   steps of phases 0 to 5 and writes a line in the item's queue history;
+   the run that made the change lists it in its digest under **Moved**.
+   A lead is routing (which worker takes the steps), not priority or
+   placement: the item's order and FLOW-05's limits are unchanged, so
+   LOOP-04 is not amended. A process item is never led: its work is the
    loop's own machinery, which a machine's session may not edit
-   (`workflow-native` Never list, `.claude/skills/workflow-native/SKILL.md:25-38`);
-   a tracked item's steps are all `human`.
+   (`workflow-native` Never list, `.claude/skills/workflow-native/SKILL.md:25-38`),
+   and its native work is done in an attended native session or tracked
+   as native gaps, as its design says. A tracked item's steps are all
+   `human`.
+   - *Rejected: only the human sets a lead* (the draft's a5 option 1).
+     A design or a machine that finds an item needs a native host would
+     wait for Jeff's next session to move it; the history line and the
+     digest's **Moved** put every change in front of him instead, and he
+     may change it back with `wf lead`.
 4. **Any host name may be served by several machines; a step goes to
    whichever serving worker next takes steps** (Jeff's rule for
    `<capability>-any`, loop-contract a15 (b); this design proposes the
@@ -394,20 +408,30 @@ Each is "proceeding with the recommended option; confirm".
      fresh checkout.
 - **a4. Which items may be led.**
   1. *(recommended)* A feature only. `wf validate` rejects `lead` on a
-     process item or a tracked item. A follow-up filed with no human
+     process item or a tracked item; a process item's native work is done
+     in an attended native session or tracked as native gaps, as its
+     design says (FLOW-09 as amended). A follow-up filed with no human
      present (FLOW-09) takes the repositories and areas of the item it
-     follows and no lead; Jeff may lead it with `wf lead`.
+     follows and no lead; any worker may lead it with `wf lead` (a5).
   2. A feature, and a follow-up takes its parent's lead. A regression
      found on a machine would stay there, but a fix the cloud could make
      today would wait for a machine.
-- **a5. Who sets a lead.**
-  1. *(recommended)* The human, at intake (`wf new -lead`) or later
-     (`wf lead`, which refuses a worker that is not `human/<name>`, as
-     `wf relate` does). A design that finds an item needs a machine says
-     so as a finding, and Jeff leads it at the design review.
-  2. Any worker, by `wf lead`. A machine could take work from the cloud
-     on its own judgment; LOOP-04 says priority and placement are the
-     human's.
+- **a5. Who sets a lead.** *Answered at the design review (2026-11-17):
+  option 2, Jeff's choice, refined.* Any worker (human, cloud or a native
+  machine) may set or clear a lead, with `wf lead` or `wf new -lead`;
+  each change is a line in the item's queue history and is listed in that
+  run's digest under **Moved**. No worker kind is refused. LOOP-04 is not
+  amended: a lead is routing (which worker takes the steps), not priority
+  or placement, and the item's order and FLOW-05's limits are unchanged.
+  The options as drafted:
+  1. *(recommended in the draft; not chosen)* The human, at intake (`wf
+     new -lead`) or later (`wf lead`, which refuses a worker that is not
+     `human/<name>`, as `wf relate` does). A design that finds an item
+     needs a machine says so as a finding, and Jeff leads it at the
+     design review.
+  2. *(chosen)* Any worker, by `wf lead`. A machine could take work from
+     the cloud on its own judgment; LOOP-04 says priority and placement
+     are the human's, and a lead is neither.
 - **a6. Several machines per host name.**
   1. *(recommended)* Any host name may be listed on several machines.
      `validateNative` drops its "served by both" error and keeps the
@@ -568,7 +592,13 @@ Each is "proceeding with the recommended option; confirm".
      `-C` directory). Never `-m`, never `--grep push`.
      `TestNativeSettingsRules` also records the false positive: the deny
      matches `git -C .scratch/x commit -m "a push fix"` and does not match
-     `git -C .scratch/x commit -F ../x.msg`.
+     `git -C .scratch/x commit -F ../x.msg`. *Answered at the design
+     review (2026-11-17): option 1, with one more test case.* Using the
+     test's own matcher reading, `TestNativeSettingsRules` shows that the
+     old allow `Bash(git push origin feat/*)` matches `git push origin
+     feat/x:workflow` and `git push origin feat/x :feat/other` (Problem
+     6's colon claim), and that the new denies `git push*` and `git -C *
+     push*` match them.
   2. Keep the allows and add denies for each bad form found (Decision
      10's first rejection).
   3. Keep `-m` and state as a known limit that a message or argument
@@ -649,7 +679,8 @@ The queue file gains one optional field, on a feature only:
 
 ```yaml
 lead: host:windows-hyperv   # optional (FLOW-04, FLOW-09): the host name whose machines take this
-                            #   feature's cloud steps of phases 0-5; set by a human only
+                            #   feature's cloud steps of phases 0-5; any worker may set or
+                            #   clear it, each change a history line (a5)
 ```
 
 - `Feature.Lead string` (`yaml:"lead,omitempty"`) in `queue/queue.go`.
@@ -666,18 +697,27 @@ lead: host:windows-hyperv   # optional (FLOW-04, FLOW-09): the host name whose m
   otherwise a `cloud` claim, as today. The comment and the README's claim
   paragraph say so.
 - `wf new -lead host:<name>` (`tools/workflow/cmd/wf/main.go`, `newFeature`): sets the
-  field and seeds `f0-branch-setup` with it; refuses with `-kind
-  process`, with `-repos` naming another home (a tracked item), and from
-  a worker that is not `human/<name>`.
-- `wf lead -worker human/<name> -feature F (-host <name> | -clear)`: a
-  new command. It sets or clears the field and re-labels each pending
-  template step of phases 0 to 5 whose lease is not held, between
-  `cloud` and the lead. A held step keeps its affinity until it is done
-  or released, so no session loses a step it is working; the history
-  line names the steps it changed and those it left.
+  field, seeds `f0-branch-setup` with it, and writes the lead in the
+  item's first history line; refuses with `-kind process` and with
+  `-repos` naming another home (a tracked item). It refuses no worker
+  kind (a5).
+- `wf lead -worker W -feature F (-host <name> | -clear)`: a new command,
+  open to any worker (`human/<name>`, `cloud/<run>` or a machine's
+  `host:<name>/<machine>.<run>`); it refuses no worker kind (a5), and
+  refuses a process or tracked item as `Validate` does. It sets or
+  clears the field and re-labels each pending template step of phases 0
+  to 5 whose lease is not held, between `cloud` and the lead. A held
+  step keeps its affinity until it is done or released, so no session
+  loses a step it is working. It writes one line in the item's queue
+  history naming the worker, the old and new lead, the steps it changed
+  and those it left. It changes no priority, order or limit: a lead is
+  routing, not placement (LOOP-04 unchanged).
+- The digests: `workflow-tick` and `workflow-native` list each lead
+  change their run made (`wf new -lead` or `wf lead`) under **Moved**,
+  from the history line.
 - The intake skill (`workflow-intake`, step 4's sentence at lines 85-86)
-  replaces the hand edit with `-lead host:<name>`, asked of Jeff for an
-  item whose work needs a machine from its first step.
+  replaces the hand edit with `-lead host:<name>`, for an item whose work
+  needs a machine from its first step.
 - The workflow branch's `README.md`: the field, `wf lead`, `-lead`, and
   a led item's steps in the Steps and phases table.
 
@@ -974,7 +1014,7 @@ a component's checkout.
 
 | Default | Why it is the obvious choice (GLOBAL-09) | Override (GLOBAL-10) |
 |---|---|---|
-| An item has no lead: its steps are `cloud` | Today's behaviour; only the human leads an item | `wf new -lead`, `wf lead` (human only) |
+| An item has no lead: its steps are `cloud` | Today's behaviour; a lead is set only when some worker finds the item needs a native host | `wf new -lead`, `wf lead` (any worker; each change a history line and a digest **Moved** entry) |
 | A led item's machine takes phases 0-5; Publish on is `cloud` | Publish needs `gh`, which a machine's settings deny (a3) | None; a design that needs otherwise is a process item |
 | A machine's lease is 1200 minutes | Jeff's 20 hours (loop-contract a15 (b)) | `host_lease_minutes` in `config.yaml` |
 | A cloud or human lease is `lease_minutes`, 120 | Unchanged | `lease_minutes` |
@@ -1063,7 +1103,8 @@ machine):
 >   workflow branch's `hosts.yaml` lists the machines that serve each host
 >   name, one or more, and only the human changes it.
 >
-> A feature may be **led** by a host name, which the human sets and changes
+> A feature may be **led** by a host name, which any worker may set or
+> change, each change recorded in the item's history and the run's digest
 > (FLOW-09). Its steps of Branch setup through Guide that would be `cloud`
 > carry that `host:<name>` instead; its design review stays `human`, and its
 > Publish, Merge and Close stay `cloud`. A claim by a worker that serves the
@@ -1120,8 +1161,9 @@ behaves so.
 ### FLOW-09 (amend)
 
 **Why:** a lead replaces the per-phase host affinity that `wf` could not
-keep (Problem 1); the scheduled session now honours the priority gate
-(a12).
+keep (Problem 1), and any worker may set it (a5); a process item is
+never led, and its native work is attended or tracked (a4); the scheduled
+session now honours the priority gate (a12).
 
 **Current wording**, the scheduled-session sentence (`process.md:418-423`)
 and the last paragraph (`process.md:441-442`):
@@ -1148,11 +1190,13 @@ and the last paragraph (`process.md:441-442`):
 
 > A feature whose design or implementation itself needs a native host (for
 > example a platform or hypervisor update, or a driver only that platform
-> builds) is **led** by that host from its first step (FLOW-04): the human
-> names the host name as the item's lead at intake, or later, and a machine
-> that serves it takes the item's steps through Guide that would otherwise be
-> `cloud` (FLOW-04). Its Publish runs on the cloud, and its native validation
-> is blocking or tracked as its design says.
+> builds) is **led** by that host from its first step (FLOW-04): any worker
+> may name the host name as the item's lead, at intake or later, and a
+> machine that serves it takes the item's steps through Guide that would
+> otherwise be `cloud` (FLOW-04). Its Publish runs on the cloud, and its
+> native validation is blocking or tracked as its design says. A process
+> item's native work is done in an attended native session or tracked as
+> native gaps, as its design says; it is never led.
 
 **Severity and check:** MUST, `automated + agent-judgment`, unchanged:
 `wf gate`, `Seed`; the design review judges a lead.
@@ -1325,7 +1369,11 @@ that has no driver.
   session, and the session now names the machine. "Scheduled and
   bounded": FLOW-13 now says it for every machine. "Set up by the
   owner": the installers are unchanged.
-- **LOOP-04**: priority is the human's; a lead is set only by the human.
+- **LOOP-04**: priority and placement are the human's, and stay so; it
+  is not amended. A lead, which any worker may set (a5), is routing:
+  it says which worker takes an item's steps, not where the item sits.
+  The item's order and FLOW-05's limits are unchanged, and each change
+  is a history line and a digest **Moved** entry, so the human sees it.
 - **LOOP-06**: a machine's run writes its own digest file, as today.
 - **LOOP-08**: the amended FLOW-17 names "the loop's push script" and
   "state commit", the loop's machinery, and no agent tool, CI system or
@@ -1371,8 +1419,12 @@ that has no driver.
     `lead` on a process or tracked item fails `Validate`.
   - `tools/workflow/cmd/wf`: `wf renew` (held by W, by another, expired, done), `wf
     release -session` and `-machine -stale` (the current run is spared),
-    `wf lead` (human only; leased steps keep their affinity), `wf new
-    -lead` (refused on a process item), each pushed through `wf commit`
+    `wf lead` (by a `human/<name>`, a `cloud/<run>` and a
+    `host:<name>/<machine>.<run>` worker alike, none refused; leased
+    steps keep their affinity; one history line written, naming the
+    worker, the old and new lead and the steps changed and left), `wf new
+    -lead` (refused on a process item; any worker kind accepted; the lead
+    in the first history line), each pushed through `wf commit`
     against a bare remote as `commit_test.go` does; a rejected renew is
     asked again through `-renewed`, leaves `budget.spent.steps` and
     `runs` unchanged, writes a "renewed" history line and no "claimed"
@@ -1385,7 +1437,12 @@ that has no driver.
   - `queue/summary_test.go`: the Lead column and the Workers section,
     with no clock read.
   - `native/native_test.go`: the denies (`git push*`, `git -C * push*`)
-    and no `git push` allow; `native-push.sh`'s refusals and a push to a
+    and no `git push` allow; a `TestNativeSettingsRules` case that,
+    using the test's own matcher reading, shows the old allow `Bash(git
+    push origin feat/*)` matches `git push origin feat/x:workflow` and
+    `git push origin feat/x :feat/other` (Problem 6's colon claim), and
+    that the new denies `git push*` and `git -C * push*` match both;
+    `native-push.sh`'s refusals and a push to a
     bare remote, and a non-fast-forward refused; the deny's false
     positive on a `-m` message containing ` push`, and no match on `-F
     ../x.msg`; the commit form run for real, `git -C .scratch/x commit -F
@@ -1432,7 +1489,8 @@ Each task cites the rules it must satisfy. All on `feat/loop-native-lead`.
 2. **The lead.** `Feature.Lead`, its validation, `Seed`, `Starts` and
    `takesStart`'s comment (`queue/limits.go:131-136`), which says only the
    cloud's claim sets a feature in progress, `wf new
-   -lead`, `wf lead`, with tests (FLOW-04, FLOW-09, LOOP-04).
+   -lead`, `wf lead` (any worker kind; the history line), with tests
+   (FLOW-04, FLOW-09; LOOP-04 unchanged, a lead being routing).
 3. **Host names.** `validateNative` without the one-machine error; the
    lead check (FLOW-04, LOOP-05).
 4. **The lease.** `host_lease_minutes`, `Claim`, `wf renew`, `wf commit
@@ -1446,8 +1504,12 @@ Each task cites the rules it must satisfy. All on `feat/loop-native-lead`.
 6. **`QUEUE.md`.** The Lead column, the Workers section, `wf status`'s
    `lead:` line (FLOW-13, LOOP-06).
 7. **The push script and the settings.** `native-push.sh`;
-   `settings.native.json`'s allows and denies; `native_test.go`
-   (FLOW-16, FLOW-17).
+   `settings.native.json`'s allows and denies; `native_test.go`, with
+   the `TestNativeSettingsRules` case that, by the test's own matcher
+   reading, shows the old allow `Bash(git push origin feat/*)` matching
+   `git push origin feat/x:workflow` and `git push origin feat/x
+   :feat/other`, and the new denies `git push*` and `git -C * push*`
+   matching both (a16) (FLOW-16, FLOW-17).
 8. **The wrapper.** `native-tick.sh`: the session id with the machine, the
    `-stale` release after `build wf` and before the gate (stage `release`),
    and the `-session` release in the EXIT path (`on_exit`) before
@@ -1463,8 +1525,10 @@ Each task cites the rules it must satisfy. All on `feat/loop-native-lead`.
    -C .dev/workflow <add|commit|...>` and saying the workflow branch is
    pushed only by `dist/wf commit` and a feature branch only by
    `tools/workflow/native/native-push.sh <name>`, since `Bash(git -C *
-   push*)` denies every other push (a16)); `workflow-tick` (the trunk check;
-   **Waiting on a host** lists leads); `workflow-intake` (`-lead` in place
+   push*)` denies every other push (a16), and each lead change its run
+   made listed under **Moved** in its digest (a5)); `workflow-tick` (the
+   trunk check; **Waiting on a host** lists leads; each lead change its
+   run made listed under **Moved**); `workflow-intake` (`-lead` in place
    of the hand edit); `workflow-human` (`wf lead`); one sentence in each of
    the six phase agents (FLOW-14, LOOP-06).
 10. **Archive.** This design archived on the branch with its summary;
