@@ -114,8 +114,9 @@ func TestExtractSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := ids(s), []string{"flag runtime", "flag slots", "key cli",
-		"key image_min_grace", "key image_refresh_after", "key relay_image"}; !reflect.DeepEqual(got, want) {
+	want := []string{"flag runtime", "flag slots", "key cli", "key image_min_grace",
+		"key image_refresh_after", "key relay_image"}
+	if got := ids(s); !reflect.DeepEqual(got, want) {
 		t.Errorf("names %v, want %v", got, want)
 	}
 	if n := s.Names["flag slots"]; n.Line != 18 {
@@ -124,12 +125,14 @@ func TestExtractSettings(t *testing.T) {
 	if len(s.Literals) != 0 {
 		t.Errorf("literals read from a driver directory: %v", s.Literals)
 	}
-	kit := "package drivercmd\n\nvar x = []Setting{{Flag: \"in-kit\", Key: \"driver.k.in_kit\"}}\n"
+	kit := "package drivercmd\n\n" +
+		"var x = []Setting{{Flag: \"in-kit\", Key: \"driver.k.in_kit\"}}\n"
 	s, err = extract(map[string]string{"driver/drivercmd/x.go": kit}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := ids(s), []string{"flag in-kit", "key in_kit"}; !reflect.DeepEqual(got, want) {
+	want = []string{"flag in-kit", "key in_kit"}
+	if got := ids(s); !reflect.DeepEqual(got, want) {
 		t.Errorf("names in package drivercmd %v, want %v", got, want)
 	}
 }
@@ -143,31 +146,36 @@ func ids(s *Surface) []string {
 	return out
 }
 
+// drv is a driver package whose settings are elts, each the fields of one
+// Setting literal.
+func drv(elts ...string) string {
+	src := "package container\n\n" +
+		"import \"github.com/buildwarden/buildwarden/driver/drivercmd\"\n\n" +
+		"var settings = []drivercmd.Setting{\n"
+	for _, e := range elts {
+		src += "\t{" + e + "},\n"
+	}
+	return src + "}\n"
+}
+
 const (
-	cmdWithFlag = "package main\n\nfunc init() { root.Flags().String(\"runtime\", \"\", \"\") }\n"
-	cmdBare     = "package main\n"
-	drvBase     = "package container\n\nimport \"github.com/buildwarden/buildwarden/driver/drivercmd\"\n\n" +
-		"var settings = []drivercmd.Setting{\n\t{Name: \"relay-image\", " +
-		"Key: \"driver.container.relay_image\"},\n}\n"
-	drvRuntime = "package container\n\nimport \"github.com/buildwarden/buildwarden/driver/drivercmd\"\n\n" +
-		"var settings = []drivercmd.Setting{\n\t{Name: \"relay-image\", " +
-		"Key: \"driver.container.relay_image\"},\n\t{Name: \"runtime\", Flag: \"runtime\"},\n}\n"
-	drvAdded = "package container\n\nimport \"github.com/buildwarden/buildwarden/driver/drivercmd\"\n\n" +
-		"var settings = []drivercmd.Setting{\n\t{Name: \"relay-image\", " +
-		"Key: \"driver.container.relay_image\"},\n\t{Name: \"x\", Flag: \"extra\"},\n}\n"
-	drvEmpty = "package container\n"
+	cmdWithFlag = "package main\n\n" +
+		"func init() { root.Flags().String(\"runtime\", \"\", \"\") }\n"
+	cmdBare    = "package main\n"
+	relayImage = `Name: "relay-image", Key: "driver.container.relay_image"`
+	drvEmpty   = "package container\n"
+)
+
+var (
+	drvBase    = drv(relayImage)
+	drvRuntime = drv(relayImage, `Name: "runtime", Flag: "runtime"`)
+	drvAdded   = drv(relayImage, `Name: "x", Flag: "extra"`)
+	drvCommon  = drv(relayImage, `Name: "grace", Common: "image_min_grace"`)
 	// The relay image's key moved to a new name, with and without its old
 	// name kept as an alias.
-	drvMovedAlias = "package container\n\nimport \"github.com/buildwarden/buildwarden/driver/drivercmd\"\n\n" +
-		"var settings = []drivercmd.Setting{\n\t{Name: \"relay-image\", " +
-		"Key: \"driver.container.image\", Aliases: []string{\"runtime.relay_image\"}},\n}\n"
-	drvCommon = "package container\n\nimport \"github.com/buildwarden/buildwarden/driver/drivercmd\"\n\n" +
-		"var settings = []drivercmd.Setting{\n\t{Name: \"relay-image\", " +
-		"Key: \"driver.container.relay_image\"},\n\t{Name: \"grace\", " +
-		"Common: \"image_min_grace\"},\n}\n"
-	drvMovedBare = "package container\n\nimport \"github.com/buildwarden/buildwarden/driver/drivercmd\"\n\n" +
-		"var settings = []drivercmd.Setting{\n\t{Name: \"relay-image\", " +
-		"Key: \"driver.container.image\"},\n}\n"
+	drvMovedAlias = drv(`Name: "relay-image", Key: "driver.container.image", ` +
+		`Aliases: []string{"runtime.relay_image"}`)
+	drvMovedBare = drv(`Name: "relay-image", Key: "driver.container.image"`)
 )
 
 // The drivers' Setting literals are part of the surface at both revisions:
@@ -181,7 +189,8 @@ func TestCheckDrivers(t *testing.T) {
 		docs             bool
 		want             []string
 	}{
-		{"flag moved into a driver", cmdWithFlag, drvBase, cmdBare, drvRuntime, false, nil},
+		{"flag moved into a driver", cmdWithFlag, drvBase, cmdBare, drvRuntime, false,
+			nil},
 		{"flag added in a driver, no docs", cmdBare, drvBase, cmdBare, drvAdded, false,
 			[]string{"UX-01 +flag extra"}},
 		{"flag added in a driver, docs", cmdBare, drvBase, cmdBare, drvAdded, true, nil},
@@ -198,10 +207,12 @@ func TestCheckDrivers(t *testing.T) {
 		files := map[string]string{"cmd/warden/main.go": tc.baseCmd,
 			"driver/container/settings.go": tc.baseDrv}
 		r := gittest.New(t, files)
+		inTest := strings.Replace(drvAdded, "extra", "in-test", 1)
+		deep := strings.Replace(drvAdded, "extra", "deep", 1)
 		change := map[string]string{"cmd/warden/main.go": tc.headCmd,
 			"driver/container/settings.go":      tc.headDrv,
-			"driver/container/settings_test.go": strings.Replace(drvAdded, "extra", "in-test", 1),
-			"driver/container/deep/x.go":        strings.Replace(drvAdded, "extra", "deep", 1)}
+			"driver/container/settings_test.go": inTest,
+			"driver/container/deep/x.go":        deep}
 		if tc.docs {
 			change["docs/book/src/guide/cli.md"] = "cli\n"
 		}
