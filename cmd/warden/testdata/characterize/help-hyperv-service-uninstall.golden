@@ -1,0 +1,14 @@
+Stop and remove the privileged helper service (elevated)
+
+Usage:
+  warden hyperv service uninstall [flags]
+
+Flags:
+  -h, --help   help for uninstall
+
+Global Flags:
+      --color string     color output (auto, always, never)
+      --config string    config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
+      --driver string    orchestration driver (container, qemu, vz, hyperv, firecracker)
+      --runtime string   container runtime (finch, docker, podman)
+  -v, --verbose          verbose output

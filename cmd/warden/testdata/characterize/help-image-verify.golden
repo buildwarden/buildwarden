@@ -1,0 +1,27 @@
+Re-hash, in full, every base-image file a VM driver has recorded in its
+layer cache (the hashes builds put in the ledger's environment record).
+
+Builds reuse a cached hash while the file's size and modification time are
+unchanged; verify reads every byte instead. A file whose contents changed is
+re-recorded as a local file (its download/prepare provenance no longer
+applies) and a missing file is dropped. Exits 1 if anything drifted.
+
+With --driver, only that driver's cache is checked; otherwise every VM
+driver's cache on this host.
+
+Usage:
+  warden image verify [flags]
+
+Examples:
+  warden image verify
+  warden image verify --driver hyperv
+
+Flags:
+  -h, --help   help for verify
+
+Global Flags:
+      --color string     color output (auto, always, never)
+      --config string    config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
+      --driver string    orchestration driver (container, qemu, vz, hyperv, firecracker)
+      --runtime string   container runtime (finch, docker, podman)
+  -v, --verbose          verbose output

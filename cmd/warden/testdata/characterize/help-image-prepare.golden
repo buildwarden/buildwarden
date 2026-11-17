@@ -1,0 +1,76 @@
+Acquire, verify and ready a build-guest base image for a VM driver.
+
+The driver comes from --driver (or warden.toml); --os defaults per driver
+(vz: macos, qemu and firecracker: linux, hyperv: windows). [source] (or --source) is a local
+path or URL:
+
+  --driver vz     --os macos    macOS IPSW URL, a local .ipsw file (read
+                                in place, kept), or a prepared image
+                                directory. Run under sudo. No source
+                                refreshes the active image (the one builds
+                                use) in place, no download, and warns when
+                                a newer macOS exists; with none prepared it
+                                restores the latest supported IPSW. An IPSW
+                                already prepared is refreshed in place, a
+                                downloaded IPSW is deleted once prepared,
+                                and the result becomes the active image.
+                                --update moves to the latest supported IPSW.
+  --driver qemu   --os linux    cloud image reference (alpine:3.21,
+                                ubuntu:24.04, debian:bookworm) or a qcow2.
+  --driver firecracker          cloud image reference (default ubuntu:24.04)
+                --os linux    or a local qcow2 or raw image, downloaded if
+                              needed and converted once to the raw image
+                              builds copy. Images with a backing file or an
+                              external data file are refused.
+  --driver qemu   --os windows  Windows install ISO (required), installed
+                                unattended (--edition, --virtio, --arch).
+  --driver hyperv --os windows  Windows Server evaluation VHDX: a URL, or a
+                                local file registered in place. Default:
+                                [vm] windows_image, else Microsoft's current
+                                Server 2025 evaluation download. Then
+                                prepares it: one network-free boot through
+                                OOBE and tuning, producing the layer builds
+                                boot from. With no source it is the refresh:
+                                re-checks a downloaded base for new media
+                                ([vm] windows_image_update) and re-prepares.
+
+--sha256 verifies the download against an expected digest (optional: the
+digest of what was used is always recorded); --force re-acquires even when a
+valid cached copy exists; --update (vz only) restores the newest supported OS
+release, or refreshes it in place when already prepared, and makes it active.
+
+Usage:
+  warden image prepare [source] [flags]
+
+Examples:
+  sudo warden image prepare --driver vz
+  sudo warden image prepare --driver vz --update
+  sudo warden image prepare --driver vz ~/Downloads/UniversalMac_27.2_26B123_Restore.ipsw
+  sudo warden image prepare --driver vz ~/.cache/warden/images/macos-<key>
+  warden image prepare --driver qemu ubuntu:24.04
+  warden image prepare --driver firecracker ubuntu:24.04
+  warden image prepare --driver qemu --os windows --source Win11_Arm64.iso
+  warden image prepare --driver hyperv --source https://.../server2025.vhd
+  warden image prepare --driver hyperv --sha256 <hash-printed-on-first-prepare>
+  warden image prepare --driver hyperv --source D:\images\server2025.vhdx
+  warden image prepare --driver hyperv
+
+Flags:
+      --arch string      guest arch: arm64 or amd64 (default host arch)
+      --edition string   Windows edition / install.wim image name (qemu windows)
+      --force            re-acquire even if a valid cached copy exists
+  -h, --help             help for prepare
+      --keep-vms         leave the prepare VM and its disk for inspection (hyperv)
+      --name string      registry name of the image (hyperv; default windows-server-2025)
+      --os string        guest OS: macos, linux or windows (default per driver)
+      --sha256 string    expected SHA256; verified and pinned
+      --source string    image source: local path or URL (same as [source])
+      --update           move to the newest supported OS release: restore it, or refresh it when already prepared (vz)
+      --virtio string    virtio-win driver ISO path or URL (qemu windows)
+
+Global Flags:
+      --color string     color output (auto, always, never)
+      --config string    config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
+      --driver string    orchestration driver (container, qemu, vz, hyperv, firecracker)
+      --runtime string   container runtime (finch, docker, podman)
+  -v, --verbose          verbose output

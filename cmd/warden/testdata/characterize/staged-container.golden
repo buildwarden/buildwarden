@@ -1,0 +1,43 @@
+== Dockerfile
+  inputs/Containerfile:
+    FROM alpine
+    RUN echo hi
+  inputs/build.sh:
+    #!/bin/sh
+    set -e
+    echo hi
+  staged/build.sh:
+    #!/bin/sh
+    set -e
+    echo hi
+== Containerfile
+  inputs/Containerfile:
+    FROM alpine
+    RUN echo hi
+  inputs/build.sh:
+    #!/bin/sh
+    set -e
+    echo hi
+  staged/build.sh:
+    #!/bin/sh
+    set -e
+    echo hi
+== build.sh
+  error: no Dockerfile or Containerfile found in $CTX
+  fix:   pass the Dockerfile's path, or the directory that holds it
+== Dockerfile and build.sh
+  inputs/Containerfile:
+    FROM alpine
+    RUN echo hi
+  inputs/build.sh:
+    #!/bin/sh
+    set -e
+    echo hi
+  staged/build.sh:
+    #!/bin/sh
+    set -e
+    echo hi
+== --script and Dockerfile
+  error: --script requires a VM driver (--driver qemu, vz, hyperv or firecracker)
+== windows build.ps1
+  error: --guest-os windows is currently only supported by --driver qemu or --driver hyperv

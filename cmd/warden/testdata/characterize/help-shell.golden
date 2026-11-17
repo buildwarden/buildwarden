@@ -1,0 +1,35 @@
+Open an interactive shell in a network-audited build environment.
+
+Useful for debugging builds or exploring what network requests a build makes.
+All traffic is recorded to the ledger just as in a normal build. Drivers that
+cannot attach an interactive session say so.
+
+Usage:
+  warden shell [path] [flags]
+
+Examples:
+  warden shell
+  warden shell ./my-project
+
+Flags:
+      --build-link string      advanced: the VM drivers' relay-to-build link, a /30 (default: [vm] build_link, then 100.127.255.252/30)
+      --capture string         capture payloads (none, headers, bodies, all)
+      --cpus int               build VM vCPUs (VM drivers; default per driver)
+      --guest-os string        guest OS for VM drivers: linux (default) or windows
+  -h, --help                   help for shell
+      --image string           base disk image for the build VM (VM drivers)
+      --keep-vms               leave VMs, disks and the work dir in place for inspection (VM drivers)
+      --memory int             build VM memory in MiB (VM drivers; default per driver)
+      --network warden setup   pre-provisioned network to reuse (hyperv: the durable switch from warden setup)
+      --no-compress            disable zstd compression of the ledger and CA certificate
+  -o, --output string          output directory for build results (default: warden-output)
+      --script string          build script to run (VM drivers)
+      --timeout string         maximum build duration (e.g., 10m, 1h)
+      --tmpdir string          directory to create each build's private work dir in (default: the OS temp dir)
+
+Global Flags:
+      --color string     color output (auto, always, never)
+      --config string    config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
+      --driver string    orchestration driver (container, qemu, vz, hyperv, firecracker)
+      --runtime string   container runtime (finch, docker, podman)
+  -v, --verbose          verbose output

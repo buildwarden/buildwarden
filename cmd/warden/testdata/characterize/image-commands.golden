@@ -1,0 +1,16 @@
+== empty cache: warden image list
+No prepared images. Run 'warden image prepare --driver <driver>'.
+== empty cache: warden image verify
+== prepared images: warden image list
+qemu    linux    $CACHE/images/alpine-3.21.qcow2
+qemu    windows  $CACHE/images/windows-server-2025.qcow2
+firecracker linux $CACHE/firecracker/images/alpine.raw
+== layers unchanged: warden image verify
+qemu    ok       $CACHE/images/alpine-3.21.qcow2
+firecracker ok       $CACHE/firecracker/images/alpine.raw
+== one driver: warden image verify --driver qemu
+qemu    ok       $CACHE/images/alpine-3.21.qcow2
+== one layer changed, one missing: warden image verify
+qemu    changed  $CACHE/images/alpine-3.21.qcow2
+firecracker missing  $CACHE/firecracker/images/alpine.raw
+error: 2 cached layer(s) changed or missing

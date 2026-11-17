@@ -1,0 +1,39 @@
+One-time, idempotent host preparation for the selected driver.
+
+  hyperv   create the durable network builds reuse: --slots Private build
+           switches (default 4, at most 64) named <network>-0 to
+           <network>-<N-1> (--network, default warden-dev), one per
+           concurrent build, plus an Internal NAT switch, host IP and NAT
+           rule for relay egress, which every build uses. Slot switches
+           above N with nothing attached are removed; the single <network>
+           Private switch of earlier setups is retired when nothing is
+           attached to it. Either refuses, naming the VMs, when one is in
+           use. Run from an elevated terminal; afterwards builds run as a
+           Hyper-V Administrators member with no elevation. Existing
+           resources are verified, not recreated.
+  firecracker  as root (sudo), create --slots network slots (default 16, at
+           most 256) owned by the invoking user: a bridge and three TAPs
+           each, their sysctls, the warden_fc bridge table and the WARDEN-FC
+           iptables chains. Refuses, printing the fix, on a host whose filter
+           FORWARD policy is ACCEPT or whose firewalld or nftables would drop
+           the relays' traffic. Runtime state: re-run after every reboot.
+
+Other drivers need no host setup; their base images are prepared with
+'warden image prepare'.
+
+Usage:
+  warden setup [flags]
+
+Flags:
+  -h, --help                help for setup
+      --host-ip string      hyperv: host gateway IP on the NAT switch, used by every build (default 192.168.240.1)
+      --nat-prefix string   hyperv: NAT CIDR for relay egress, used by every build (default 192.168.240.0/20)
+      --network string      hyperv: durable build switch name (default: [vm] network, then warden-dev)
+      --slots int           hyperv: build switches to create, 1-64 (default 4); firecracker: network slots to create, 1-256 (default 16)
+
+Global Flags:
+      --color string     color output (auto, always, never)
+      --config string    config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
+      --driver string    orchestration driver (container, qemu, vz, hyperv, firecracker)
+      --runtime string   container runtime (finch, docker, podman)
+  -v, --verbose          verbose output

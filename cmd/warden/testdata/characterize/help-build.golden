@@ -1,0 +1,42 @@
+Run a build with full network auditing, on any driver.
+
+The path argument can be:
+  - A directory (default: current directory) holding a Dockerfile, or for
+    VM drivers a build.sh / build.ps1
+  - A path to a specific Dockerfile or build script (context = its directory)
+
+All network traffic during the build is recorded to a cryptographically
+signed ledger. The output directory is printed on completion.
+
+Usage:
+  warden build [path] [flags]
+
+Examples:
+  warden build
+  warden build ./my-project
+  warden build ./my-project/Dockerfile.prod
+  warden build --driver qemu --guest-os windows --cpus 8 --memory 16384 ./win-project
+
+Flags:
+      --build-link string      advanced: the VM drivers' relay-to-build link, a /30 (default: [vm] build_link, then 100.127.255.252/30)
+      --capture string         capture payloads (none, headers, bodies, all)
+      --cpus int               build VM vCPUs (VM drivers; default per driver)
+      --guest-os string        guest OS for VM drivers: linux (default) or windows
+  -h, --help                   help for build
+      --image string           base disk image for the build VM (VM drivers)
+      --keep-vms               leave VMs, disks and the work dir in place for inspection (VM drivers)
+      --memory int             build VM memory in MiB (VM drivers; default per driver)
+      --network warden setup   pre-provisioned network to reuse (hyperv: the durable switch from warden setup)
+      --no-compress            disable zstd compression of the ledger and CA certificate
+  -o, --output string          output directory for build results (default: warden-output)
+  -q, --quiet                  do not echo the guest build console (still captured to build-output.log)
+      --script string          build script to run (VM drivers)
+      --timeout string         maximum build duration (e.g., 10m, 1h)
+      --tmpdir string          directory to create each build's private work dir in (default: the OS temp dir)
+
+Global Flags:
+      --color string     color output (auto, always, never)
+      --config string    config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
+      --driver string    orchestration driver (container, qemu, vz, hyperv, firecracker)
+      --runtime string   container runtime (finch, docker, podman)
+  -v, --verbose          verbose output

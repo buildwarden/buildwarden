@@ -1,0 +1,38 @@
+Parse, verify, and display the contents of a BuildWarden ledger.
+
+The path can be a ledger file directly, or a warden output directory
+(the ledger will be found automatically, compressed or not).
+
+Verifies the cryptographic signature chain and displays a summary of all
+recorded network requests and artifacts. Exits 0 if the ledger is valid,
+exits 1 if verification fails.
+
+The build environment record is decoded and its payload (environment.json
+beside the ledger) checked against the signed record. With --verify-disks,
+each VM disk layer it names is re-hashed at its recorded path, which reads
+every byte of every base image.
+
+Usage:
+  warden inspect <path> [flags]
+
+Examples:
+  warden inspect warden-output
+  warden inspect warden-output/ledger.zst
+  warden inspect --json warden-output
+  warden inspect -v ledger.bin
+  warden inspect -vv ledger.bin
+  warden inspect --verify-disks warden-output
+
+Flags:
+      --extract string   extract captured payloads to directory
+  -h, --help             help for inspect
+      --json             output as JSON
+      --no-color         disable colored output
+  -v, --verbose count    increase verbosity (-v=tree, -vv=full)
+      --verify-disks     re-hash the VM disk layers the environment record names
+
+Global Flags:
+      --color string     color output (auto, always, never)
+      --config string    config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
+      --driver string    orchestration driver (container, qemu, vz, hyperv, firecracker)
+      --runtime string   container runtime (finch, docker, podman)
