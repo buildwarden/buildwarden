@@ -6351,179 +6351,348 @@ this item (FLOW-09).
 
 ## Implementation plan
 
-Plan refines these into tasks; the order is **Order of the work**, and
-each task leaves `make test` and `make lint` green (FLOW-17). Plan
-starts after `project-config-trust` has merged and `main` is merged
-into the branch; a `main` that still reads
-`~/.config/warden/config.toml` stops the first task (**What K1 takes
-from the two configuration items**).
+Planned on 2026-11-17 from the design as approved at `a6c8f0b` (r2),
+after `main` at `0cd3c02` was merged into the branch (`661886d`), with
+`project-config-trust` (#124, `417fabd`) and `seam-specs` (#125) in it.
+`main` reads one config file, so the hold of **What K1 takes from the
+two configuration items** is lifted.
 
-1. Add the characterization tests to `cmd/warden` on unchanged production
-   code: help goldens, the refusal table, request tables per driver, the
-   staged inputs per driver, the image a VM build resolves for a
-   script-plus-Dockerfile context, `image list` and `image verify`
-   fixtures (GLOBAL-04, UX-09, TEST-01, TEST-04).
-2. Move staging to `warden`: `prepare` stages with
-   `driver.StageBuildScript`, records with `driver.RecordInputs`, drops
-   the Containerfile for vz, and passes the staged path and the
-   Containerfile's `FROM` image in the request, with `--script` too; each
-   driver stops staging and translating (`container.stageBuildScript`,
-   `linuxguest.ContainerfileImage`) (ORCH-02, BOOT-04, ORCH-01).
-3. Add the build lock to `driver/hostlock.go` (taken, compared with its
-   path, retaken when it was unlinked; removable under the lock) with its
-   test, and `cmd/warden/buildrecord.go`: the record, the state file's
-   path, and cleanup of a dead build from them (ORCH-04, GLOBAL-07,
-   GLOBAL-04).
-4. Add `driver.Host`, `driver.Start`, `driver.RelayStarted`
-   (`driver/host.go`) and `warden`'s build sequence
-   (`cmd/warden/buildseq.go`) over `driver.Session`, with `linked.go`;
-   `warden` makes the build ID and the claim token, takes the lock and
-   writes the record before it stages, handles SIGINT and SIGTERM for
-   every driver, and follows the failure table (ORCH-01, ORCH-04,
-   BOOT-01, RELAY-07, RELAY-08, GLOBAL-01, UX-09).
-5. Move the container driver's `StartBuild` onto `Run`; it reports
-   `exited` from `container wait` (ORCH-01, BOOT-01).
-6. Move the firecracker driver's `StartBuild` onto `Run`; its relay-exit
-   watch and `waitBuild` rule move into the build sequence with their
-   tests; its signal handler goes (ORCH-01, ORCH-04).
-7. Move the qemu driver's `StartBuild` onto `Run`; its signal handler
-   goes (ORCH-01, GLOBAL-07).
-8. Move the vz driver's `StartBuild` onto `Run`; `vz.New` does no host
-   lookup; it reports `guest_os: darwin` and names its work directory and
-   relay child from the build ID (ORCH-01, GLOBAL-07).
-9. Move the hyperv driver's `StartBuild` onto `Run`: `StartRelay` gives up
-   its session and claim; `watchBuildVM` reports `exited` (ORCH-01,
-   ORCH-05, GLOBAL-07).
-10. Remove the four-method `driver.Driver`, `newDriver` and the per-driver
-   grace constants; rewrite `driver/claimlink_test.go` (ORCH-01, TEST-01).
-11. Split the container driver's `Exec` into the held `Run` (`mode:
-    shell`) and `Attach` (BOOT-03, UX-09).
-12. Write `specs/driver-contract/v1.md` with numbered requirements and
-    `v1.schema.json`, add it to `specs/README.md` and the book's specs
-    pages. It is done at step 1 of **Order of the work**, ahead of tasks
-    2 to 11 (LOOP-02). It lists each requirement that is not
-    machine-checked, with the reason (LOOP-03). It includes the
-    build-lock convention, the failure table, the
-    probe form of `start`, commands not started by `warden`, UTF-8 paths,
-    teardown with closed output, the configuration requirements C1 to
-    C11 (`config_file`, the TOML version of the
-    file, `args` and the form of a switch, `describe`'s `flags` and
-    `keys` with their types and commands, the two tables, the common
-    keys of version 1 with their type and meaning, the precedence with
-    its five steps and the worked example, the seven old names by
-    driver name, and the state file's authority in `reap` and
-    `attach`), how `warden` finds the driver
-    before it parses, `warden`'s reserved flag names, and an introduction that says
-    what a
-    driver needs besides this contract (GLOBAL-08, RELAY-05's
-    `schema-doc` pairing, UX-01).
-13. Add `driver/drivercmd` to match the specification, with doc comments
-    on every exported identifier: dispatch through `Main` and `Call`,
-    `Preflight` for a probe, `Setting`, `Resolve` and `driver.Settings`
-    (the flags from `args`, the two existing variables, the keys from
-    `config_file`, with `warden`'s precedence; a common key read in the
-    driver's own table and then in `[driver]`; an old name read as its
-    key, with its warning, printed once per command (C11), and the
-    refusal of a file that sets both),
-    the state file helpers,
-    and `run` ignoring SIGPIPE (GLOBAL-01, GLOBAL-03, GLOBAL-08,
-    GLOBAL-10, ORCH-03, ORCH-04, UX-08).
-14. Add `conformance/driver/`: `warden-driver-fake` with all eleven
-    commands and a flag, a key of its own and a common key read by
-    hand, `stubrelay`, the suite's
-    static tier with the configuration checks, its self-test with the
-    fault switches, and the imports test; run the static tier under `make
-    test`. Each case names the requirements of `v1.md` it checks
-    (TEST-01, TEST-05, GLOBAL-07, LOOP-03).
-15. Add the `driver-contract` job to `.github/workflows/main.yml` (three
-    platforms) and to `ci-ok`'s `needs`, leaving the `test` job as it is;
-    run `cmd/warden`'s and `driver`'s existing tests on macOS and Windows
-    first and fix or build-tag what fails there (TEST-01, GLOBAL-07,
-    FLOW-14).
-16. Change tier 1's surface extraction as approved, to read
-    `drivercmd.Setting` literals (`Flag`, `Key`, `Common`, `Aliases`),
-    with its tests; leave `rules.yaml`'s
-    `surface` keys as they are (UX-01, UX-03, ORCH-03, FLOW-14, LINT-05).
-17. Add the lookup (`driverlookup.go`: a path, `PATH`, `warden`'s
-    directory, a linked driver) with the rule that no config file
-    names a path, the exec
-    transport (`drivercall.go`) for every
-    command of the contract (`run` and its probe, `reap`, `doctor`,
-    `setup`, the image commands, `clean`, `attach`, and `ext` as `warden
-    <name> ...`), the refusal of a path that is not UTF-8, `warden driver
-    list`, `driver.json` and the teardown wait read from `[build]
-    teardown_timeout` (GLOBAL-06, GLOBAL-07, GLOBAL-10, GLOBAL-11,
-    UX-02, UX-04, UX-09, ORCH-04, ORCH-05).
-18. Move every driver-owned flag and key into its driver's `Setting`
-    declaration, the seven keys under their new names in `[driver]` and
-    `[driver.<name>]` with their old names as `Aliases`; `warden` finds
-    the driver before parsing flags (the `ext` form, the command, then
-    the scan for `--driver` and `--config`), registers
-    the flags the selected driver declares, refuses one nobody declares
-    and a line whose parsed `--driver` or `--config` is not the scanned
-    one, and
-    passes the driver's on in `args` with `config_file`; `warden clean`
-    probes the driver's `clean` before it reaps;
-    each driver reads its settings through the kit, the linked ones
-    through `Call` in `warden`'s process for `run`, and the VM drivers' doctor,
-    setup, image and clean code through `Resolve`; qemu and hyperv
-    start their background image prepare with the `config_file` of
-    `start`; the seven driver-owned
-    fields and the two variables leave `Config` and `LoadConfig`. Update
-    the goldens for the eighteen differences only (ORCH-03, UX-03,
-    UX-07, UX-08, GLOBAL-10).
-19. Add `warden`'s end-to-end tests against the fake, for every command,
-    run on three platforms by the `driver-contract` job (TEST-01, TEST-04,
-    UX-09, ORCH-04).
-20. Add `cmd/warden-driver-container`: move the container driver's doctor,
-    runtime detection and cleanup out of `cmd/warden`; its `Preflight`;
-    the runtime checked against the driver's supported list, with
-    `runtime-cli-project-path`'s transitional detection and its tests
-    moved here and the rows for `[driver.container] cli` added, and
-    written to the state file; `project-config-trust`'s check of the
-    relay image's shape, moved with `relay_image`; `reap` (exit 1 when
-    the runtime does not answer) and `clean` with `keep_ids` beside the process scan;
-    take it out of `linked.go`; `warden clean` cleans up after dead builds
-    from their records (ORCH-01, ORCH-04, GLOBAL-06, GLOBAL-07,
-    GLOBAL-10, GLOBAL-11).
-21. Add `driver/relaysource` (`Bundled`, `Path`, `Image`, `Relay.Verify`)
-    and route the container driver's relay through it (GLOBAL-03,
-    GLOBAL-10, GLOBAL-11, RELAY-08).
-22. Packaging: `make build`, the goreleaser build and archive, the
-    container driver's ldflags, `install.sh` (GLOBAL-07, ORCH-05).
-23. Add the suite's lifecycle tier, `make driver-conformance`, and its
-    runs in the `integration` workflow; add `driver/drivercmd/**`,
+The tasks follow **Order of the work**; its step is named in brackets.
+Each task leaves `make test` and `make lint` green, and `GOOS=<os> make
+lint` for each platform whose build-tagged files it touches (FLOW-17).
+Testing tasks name their tier (TEST-02) and are tests that fail on the
+defect they guard, with goldens and seeded inputs (TEST-01). Tier 0 is
+`make test` and, from task 18, the `driver-contract` job on three
+platforms; tier 1 is the `integration` workflow and the `conformance`
+workflow; tier 2 is the `firecracker` workflow and native validation.
+
+Design's draft of this list had 27 tasks, and other sections cite them
+by number. In this list Design's task 12 (the specification) is task 2,
+its tasks 2 to 11 are 3 to 12, 13 to 15 are 13, 14 and 18, 16 is 15 to
+17, 17 to 23 are 19 to 25, 24 is 26 to 33, 25 is 34, 26 is 35 and 36,
+and 27 is 37.
+
+Since `seam-specs` merged, the `conformance` workflow (TEST-05, tier 1)
+runs on this branch, because K1 changes `driver/*.go` and the
+`Makefile`. K1 changes none of the code its seam entries list
+(`relaycfg/`, `collector/`, `relay/`, `bootstrap/`, `cmd/warden-io/`);
+every task keeps that workflow green and touches none of its pins
+(**Specification changes**: no protocol of seams 1, 2, 3, 5 or 6
+changes). A task that finds it has to touch one stops and reports it
+for Design (FLOW-06).
+
+**Step 1: characterization and the specification**
+
+1. Characterization tests in `cmd/warden`, on unchanged production code
+   (tier 0): the help goldens, the refusal table, the request tables per
+   driver, the staged inputs per driver, the image a VM build resolves
+   for a script-plus-Dockerfile context, and `image list` and `image
+   verify` fixtures; written against `main`'s one config file (its
+   `--config`, `WARDEN_CONFIG` and `./warden.toml`) (GLOBAL-04, UX-09,
+   TEST-01, TEST-04).
+2. Write `specs/driver-contract/v1.md` with numbered requirements and
+   `v1.schema.json`, as **The commands**, **The build**,
+   **Configuration** (C1 to C11) and **Errors, output and versions**
+   give them: the lookup and how `warden` finds the driver before it
+   parses, `warden`'s reserved flag names, `describe`, every command
+   with its request, result and exit codes, the messages of a build and
+   their order, the build-lock convention, the failure table, the probe
+   form of `start`, commands not started by `warden`, UTF-8 paths,
+   teardown with closed output, `config_file`, the TOML version, `args`
+   and the form of a switch, `describe`'s `flags` and `keys`, the two
+   tables, the common keys of version 1 with their type and meaning,
+   the precedence with its five steps and the worked example, the seven
+   old names by driver, the state file's authority in `reap` and
+   `attach`, the reserved `collector` field of `start`, and an
+   introduction on what a driver needs besides this contract. It lists
+   each requirement that is not machine-checked, with the reason. Add it
+   to `specs/README.md` and the book's specs pages, and its examples to
+   `specs/specs_test.go` (tier 0: the schema against every example, and
+   the `schema-doc` pair). Done before any code of the seam (LOOP-02,
+   LOOP-03, GLOBAL-08, RELAY-05, UX-01).
+
+**Step 2: `warden` stages**
+
+3. `prepare` stages with `driver.StageBuildScript`, records with
+   `driver.RecordInputs`, drops the Containerfile for vz, and passes the
+   staged path and the Containerfile's `FROM` image in the request,
+   with `--script` too. Rework: each driver stops staging and
+   translating (`container`'s `(*build).stageBuildScript`, the
+   `StageBuildScript` calls in qemu, firecracker, vz and hyperv, and
+   `linuxguest.ContainerfileImage` at the drivers' call sites). Task 1's
+   staged-input and image goldens pass unchanged (tier 0) (ORCH-02,
+   BOOT-04, ORCH-01, TEST-01).
+
+**Step 3: the build sequence, the lock and the record**
+
+4. The build lock in `driver/hostlock.go` (taken, compared with its
+   path, retaken when it was unlinked, removable under the lock) and
+   `cmd/warden/buildrecord.go` (the record, the state file's path,
+   cleanup of a dead build from them). Tier 0: the lock taken before
+   anything is created; an unlinked lock detected and retaken; no
+   secret in the record; `reap` and `attach` given the record's values
+   and not the invocation's; a failed `reap` keeps lock and record; a
+   dead build's stage directory removed, for a linked driver too
+   (ORCH-04, GLOBAL-07, GLOBAL-04, TEST-01).
+5. `driver.Host`, `driver.Start` and `driver.RelayStarted`
+   (`driver/host.go`), `warden`'s build sequence
+   (`cmd/warden/buildseq.go`) over `driver.Session`, and
+   `cmd/warden/linked.go`. `warden` makes the build ID and the claim
+   token, takes the lock and writes the record before it stages, starts
+   the default collector and sends the claim at the endpoint the driver
+   reports, sends `start.vm` (the shared VM settings, still `warden`'s)
+   to a driver that declares `capabilities.vm`, handles SIGINT and
+   SIGTERM for every driver, applies the 10 s build-exit grace, and
+   follows the failure table. Tier 0, against a fake `driver.Host` peer:
+   the message order, the claim cancelled by a relay exit, the grace,
+   `stop` on completion, failure, timeout, SIGINT and SIGTERM, and each
+   row of the failure table (ORCH-01, ORCH-04, BOOT-01, RELAY-07,
+   RELAY-08, GLOBAL-01, UX-09, TEST-01).
+6. Container: `StartBuild` becomes `Run`, reporting `exited` from
+   `container wait`; it is linked until task 22. Its existing tests pass
+   (tier 0); `make integration-test` passes (tier 1) (ORCH-01, BOOT-01).
+7. Firecracker: `StartBuild` becomes `Run`; its relay-exit watch and
+   `waitBuild` rule move into the build sequence with their tests
+   (tier 0); its signal handler goes (rework) (ORCH-01, ORCH-04).
+8. Qemu: `StartBuild` becomes `Run`; its SIGINT and SIGTERM handler goes
+   (rework). Existing tests pass (tier 0) (ORCH-01, GLOBAL-07).
+9. vz: `StartBuild` becomes `Run`; `vz.New` does no host lookup; it
+   reports `guest_os: darwin` and names its work directory and relay
+   child from the build ID. Existing tests pass (tier 0) (ORCH-01,
+   GLOBAL-07).
+10. Hyper-V: `StartBuild` becomes `Run`; `StartRelay` gives up its
+    session and claim to `warden`; `watchBuildVM` reports `exited`; the
+    grace becomes `warden`'s 10 s. Existing tests pass (tier 0, Windows
+    build tags linted) (ORCH-01, ORCH-05, GLOBAL-07).
+11. Rework: remove the four-method `driver.Driver`, `newDriver` and the
+    per-driver grace constants; rewrite `driver/claimlink_test.go` for
+    the claim at the reported endpoint (tier 0) (ORCH-01, TEST-01).
+
+**Step 4: the shell**
+
+12. Split the container driver's `Exec` into the held `Run` (`mode:
+    shell`) and `Attach`; tier 0 tests for both and for a failed attach
+    (BOOT-03, UX-09).
+
+**Step 5: the kit, the suite, the surface check and the CI job**
+
+13. `driver/drivercmd`, to match `v1.md`, with doc comments on every
+    exported identifier: `Main` and `Call`, `Preflight`, `Setting`,
+    `Resolve` and `driver.Settings` (flags from `args`, the two existing
+    variables, keys from `config_file`, with `warden`'s precedence; a
+    common key read in the driver's own table, then in `[driver]`; an
+    old name read as its key, with one warning per command (C11), and a
+    file that sets both refused), the state file helpers, and `run`
+    ignoring SIGPIPE. The four form names and four file roles of the
+    relay source are provisional Go constants here, outside the command
+    contract (a11). Tier 0: dispatch, `describe` built from the Go value
+    and valid against the schema, the result file, the error mapping,
+    stdout redirected during `run`, end of input as cancellation,
+    teardown with stdout and stderr closed, and the kit's configuration
+    cases of the **Validation plan** (Configuration, the kit's side),
+    each naming the requirements it checks (GLOBAL-01, GLOBAL-03,
+    GLOBAL-08, GLOBAL-10, ORCH-03, ORCH-04, UX-08, TEST-01).
+14. `conformance/driver/`: `warden-driver-fake` with all eleven commands,
+    a flag, a key of its own and a common key read by hand, and its
+    fault switches; `stubrelay`; the suite's static tier with the
+    configuration checks; its self-test against each fault switch; the
+    imports test. The static tier runs under `make test` against the
+    fake (tier 0). Each case names the requirements of `v1.md` it checks
+    (TEST-05, TEST-01, GLOBAL-07, LOOP-03).
+15. Rule change UX-01 (enforcement), in `tools/tier1/surface/surface.go`,
+    `tools/tier1/surface/surface_test.go` and
+    `tools/tier1/surface/testdata/driver.go.txt`, as the entry words it:
+    `Check` also loads the non-test Go files of `driver/` and of each
+    directory directly under it, at the base and at HEAD, and `Extract`
+    reads `drivercmd.Setting` literals, elided ones in a
+    `[]drivercmd.Setting` included: `Flag` yields the flag, `Key` the
+    last element of its path; the check runs when the diff touches
+    `surface.dir` or `driver/`. `rules.yaml`'s `surface` entry is not
+    edited. Tier 0 tests over the fixture (UX-01, FLOW-14, LINT-05).
+16. Rule change UX-03 (enforcement), same three paths: `Extract` reads
+    each string of `Aliases` as the last element of its path, so a key
+    moved with its old name kept is not reported removed, and one moved
+    without it is. Tier 0 test cases for both (UX-03, FLOW-14).
+17. Rule change ORCH-03, in `docs/development/orchestrator.md` and the
+    same three surface paths: `Extract` reads `Common` as a key (tier 0
+    case); and the new second paragraph and the clause "over
+    `cmd/warden` and the drivers this repository builds", added as
+    approved after `project-config-trust`'s first paragraph, which is
+    now on `main` and is not edited (ORCH-03, FLOW-14).
+18. The `driver-contract` job in `.github/workflows/main.yml`:
+    `ubuntu-latest`, `macos-latest` and `windows-latest`, `go test` for
+    `./cmd/warden/...`, `./conformance/...`, `./driver`,
+    `./driver/drivercmd/...`, `./driver/relaysource/...` and
+    `./driver/container/...`, under the `test` job's `changes` filter,
+    and in `ci-ok`'s `needs`; the `test` job is not edited. First run
+    `cmd/warden`'s and `driver`'s existing tests on macOS and Windows and
+    fix or build-tag what fails there (tier 0 on three platforms)
+    (TEST-01, GLOBAL-07, FLOW-14).
+
+**Step 6: the exec transport, the lookup and the settings**
+
+19. `cmd/warden/driverlookup.go` (a path from `--driver` or
+    `WARDEN_DRIVER`, then `PATH` in order, then `warden`'s own directory,
+    then a linked driver; no auto-detection; no config file names a
+    path, in `./warden.toml` or a file named with `--config`; no batch
+    file on Windows), `cmd/warden/drivercall.go` for every command (`run`
+    and its probe, `reap`, `doctor`, `setup`, the image commands,
+    `clean`, `attach`, and `ext` as `warden <name> ...`), the refusal of
+    a path that is not UTF-8, `warden driver list` (with `--json`),
+    `<output>/driver.json` (where the driver was found, its digest, what
+    it shadowed), and `[build] teardown_timeout` (60 s, 1 s to 1 h,
+    refused at load) bounding the stop and the `reap` after a kill.
+    Tier 0: the lookup and transport cases of the **Validation plan**,
+    with a fake clock for the 10 s and 30 s limits (GLOBAL-06,
+    GLOBAL-07, GLOBAL-10, GLOBAL-11, UX-02, UX-04, UX-09, ORCH-04,
+    ORCH-05, TEST-01).
+20. Every driver-owned flag and key moves into its driver's `Setting`
+    declarations, the seven keys under their new names in `[driver]`
+    and `[driver.<name>]` with their old names as `Aliases`, each old
+    name read until 1.0 (a26). `warden` finds the driver before parsing
+    (the `ext` form, the command, then the scan for `--driver` and
+    `--config`), registers the selected driver's declared flags, refuses
+    a flag nobody declares and a line whose parsed `--driver` or
+    `--config` is not the scanned one, and passes the driver's flags on
+    in `args` with `config_file`. `warden clean` probes the driver's
+    `clean` before it reaps, and no longer runs the container cleanup
+    for a driver without one (Decision 16, Behaviour 5). Each driver
+    reads its settings through the kit: the linked ones through `Call`
+    in `warden`'s process for `run`, and the VM drivers' doctor, setup,
+    image and clean code through `Resolve`; qemu and hyperv start the
+    background image prepare with the `config_file` of `start`. Rework:
+    the seven driver-owned fields and the two variables leave `Config`
+    and `LoadConfig`; `[vm] build_link` and `[vm] dns` stay `warden`'s
+    and checked as the file loads. Tier 0: `warden`'s configuration
+    cases of the **Validation plan**, and task 1's goldens updated for
+    the eighteen differences of **Behaviour** only (ORCH-03, UX-03,
+    UX-07, UX-08, GLOBAL-10, TEST-01).
+21. `warden`'s end-to-end tests through `warden-driver-fake` and
+    `stubrelay`, for every command, as the **Validation plan** lists
+    them (tier 0, run on three platforms by the `driver-contract` job)
+    (TEST-01, TEST-04, UX-09, ORCH-04).
+
+**Step 7: the container driver binary, the relay source, packaging**
+
+22. `cmd/warden-driver-container`: the container driver's doctor,
+    runtime detection and cleanup move out of `cmd/warden`; its
+    `Preflight`; the runtime checked against `finch`, `docker` and
+    `podman` on the resolved value, written to the state file and
+    checked again when `reap` or `attach` reads it back;
+    `runtime-cli-project-path`'s transitional detection moved here under
+    its marker `TRANSITIONAL(runtime-former-values)`, with its tables and
+    the rows for `[driver.container] cli` added beside those for
+    `[runtime] cli` (the removal item `runtime-former-values-removal`
+    refers to this as "K1 plan task 20"; it is this task); the relay
+    image's shape check moved with `relay_image`; `reap` (exit 1 when
+    the runtime does not answer) and `clean` with `keep_ids` beside the
+    process scan. It leaves `linked.go`, and `warden clean` cleans up
+    after dead builds from their records. Tier 0: the moved tests and the
+    suite's static tier against it (ORCH-01, ORCH-04, GLOBAL-06,
+    GLOBAL-07, GLOBAL-10, GLOBAL-11, UX-08, TEST-01).
+23. `driver/relaysource` (`Bundled`, `Path`, `Image`, `Relay.Verify`)
+    and the container driver's relay routed through it. Tier 0: one
+    place or the other and never mixed, an override used exclusively,
+    `Verify` on a matching and a mismatching hash (GLOBAL-03, GLOBAL-10,
+    GLOBAL-11, RELAY-08, TEST-01).
+24. Packaging: `make build` builds `dist/warden-driver-container`; one
+    more goreleaser build with its own version stamp and the container
+    driver's image references in its ldflags; the archive carries it
+    beside `warden`, `warden-io` and `warden-relay`; `install.sh`
+    installs it beside `warden`. No Windows release target (GLOBAL-07,
+    ORCH-05).
+
+**Step 8: the lifecycle tier, the rules, the umbrella, the docs**
+
+Nothing in `process.md` or any other loop rule is edited (LOOP-09).
+
+25. The suite's lifecycle tier and `make driver-conformance`, run in the
+    `integration` workflow against `warden-driver-container` (tier 1);
+    that workflow's `paths` gain `driver/drivercmd/**`,
     `driver/relaysource/**`, `conformance/driver/**` and
-    `specs/driver-contract/**` to that workflow's `paths` and
-    `driver/drivercmd/**` to the `firecracker` workflow's; extend the
-    `firecracker` workflow's cases. Each lifecycle case names the
-    requirements it checks, and a test under `make test` fails on a
-    requirement of `v1.md` that no case of either tier names and the
-    specification does not list as not machine-checked (TEST-02,
-    TEST-05, TEST-07, LOOP-03).
-24. Make the approved rule edits: GLOBAL-08 in `global.md`; ORCH-01,
-    ORCH-02, ORCH-03 and ORCH-04 in `orchestrator.md`; TEST-05 in
-    `testing.md`;
-    BOOT-02 and the diagram in `bootstrap.md`; PROFILE-01's four rows in
-    `loop-profile.md`; the last paragraph of UX-08 in
-    `ux-cli-config.md`, as `runtime-cli-project-path` left it on `main`
-    (if it is not there as **Rule changes** quotes it, no edit, and back
-    to Design);
-    `seams`, `drivers.shared` and the TEST-05 owner in `rules.yaml`
-    (FLOW-14, BOOT-07). Nothing in `process.md` is edited (LOOP-09).
-25. Make the approved amendments to `docs/design/componentization.md`
-    (FLOW-12, FLOW-20).
-26. Update `guide/cli.md`, `guide/configuration.md`, `guide/output.md` and
-    `guide/drivers.md` for the eighteen differences, the lookup, what a
-    file on `PATH` replaces, `[driver]` with its common keys,
-    `[driver.<name>]`, the order between the two tables, the table of
-    the seven renamed keys with the window (until 1.0), and
-    `[build] teardown_timeout`; `concepts/overview.md` and
-    `contributing/structure.md` for the new shape; `CONTRIBUTING.md` for
-    `make driver-conformance`; `getting-started/installation.md` for the
-    second binary (UX-01, FLOW-15).
-27. Update the tracked gap's backlog entry if Design has not (TEST-03,
-    FLOW-09).
+    `specs/driver-contract/**`, and the `firecracker` workflow's gain
+    `driver/drivercmd/**`. The `firecracker` workflow gains a build
+    interrupted mid-way, one ended by SIGTERM and one whose VM is killed
+    (tier 2, hosted). Each lifecycle case names the requirements it
+    checks, and a test under `make test` (tier 0) fails on a requirement
+    of `v1.md` that no case of either tier names and the specification
+    does not list as not machine-checked (TEST-02, TEST-05, TEST-07,
+    LOOP-03).
+26. Rule change GLOBAL-08, in `docs/development/global.md` and
+    `tools/tier1/rules.yaml`: the Driver contract bullet and the
+    rewritten paragraph after the bullets, as approved; `seam-specs`'
+    executor bullet and its paragraph on the specs repository, now on
+    `main`, are kept as they are. `seams` gains the `driver-contract`
+    entry as the entry gives it, beside S1's entries, and the comment
+    above the list is corrected to cover a contract in `specs/` as well
+    as a pin (GLOBAL-08, FLOW-14).
+27. Rule change ORCH-01, in `docs/development/orchestrator.md` and
+    `tools/tier1/rules.yaml`: the rule's wording as approved, and the
+    eight paths added to `drivers.shared`; the `drivers-claim` check's
+    code is not edited (ORCH-01, FLOW-14).
+28. Rule change ORCH-02, in `docs/development/orchestrator.md`: the
+    second paragraph as approved (ORCH-02, FLOW-14).
+29. Rule change ORCH-04, in `docs/development/orchestrator.md`: the new
+    paragraph after the first, as approved (ORCH-04, FLOW-14).
+30. Rule change TEST-05, in `docs/development/testing.md` and
+    `tools/tier1/rules.yaml`: the approved paragraph added as the rule's
+    last, after `seam-specs`' body, which stays; the owner string joins
+    both halves, `main`'s ("the conformance workflow (the specs
+    repository's suites at the pinned releases) and make test (the
+    ledger round-trip tests)") and K1's ("the driver suite's static tier
+    runs there") (TEST-05, FLOW-14).
+31. Rule change BOOT-02, in `docs/development/bootstrap.md`: BOOT-02's
+    sentence and the two labels of the model diagram, as the Bootstrap
+    comparison has them (BOOT-02, BOOT-07, FLOW-14).
+32. Rule change PROFILE-01, in `docs/development/loop-profile.md`: the
+    Impact vocabulary, Reference documents and tier-1 Safety rows as
+    approved, and the Specifications row in its joined form: K1's
+    clause and sentence added to the row `seam-specs` left on `main`,
+    whose sentences are kept as merged and not replaced by the
+    quotation from its design at `e4801d6`. Consumables and the tier-1
+    Specification row are not edited (PROFILE-01, FLOW-14).
+33. Rule change UX-08, in `docs/development/ux-cli-config.md`: its last
+    paragraph as approved. `main` ends UX-08 with the paragraph quoted as
+    current (checked at `661886d`); if it does not when this task runs,
+    no edit, and the feature goes back to Design for this entry (UX-08,
+    FLOW-14, FLOW-06).
+34. The amendments to `docs/design/componentization.md` as approved:
+    section A, B and C's rows, against the umbrella as `main` has it
+    (its TEST-05 row of the rule table is now "TEST-05" alone after
+    `seam-specs`; K1 changes its last cell only), and the dated
+    **Amendments** entry, "2026-11-15, by `driver-contract` (K1)", after
+    `seam-specs`' entry (FLOW-12, FLOW-20).
+35. Reference docs: `guide/cli.md`, `guide/configuration.md`,
+    `guide/output.md` and `guide/drivers.md` for the eighteen
+    differences, the lookup, what a file on `PATH` replaces, `[driver]`
+    with its common keys, `[driver.<name>]`, the order between the two
+    tables, the table of the seven renamed keys with their window (until
+    1.0), `[build] teardown_timeout` and `driver.json`;
+    `getting-started/installation.md` for the second binary;
+    `CONTRIBUTING.md` for `make driver-conformance` (UX-01, UX-03,
+    ORCH-03).
+36. `concepts/overview.md`: the orchestrator's pseudocode and each
+    driver's skeleton as **The overview** gives them, and the short
+    section on the other commands and the lookup;
+    `contributing/structure.md` gains `driver/drivercmd`,
+    `driver/relaysource`, `cmd/warden-driver-container`,
+    `specs/driver-contract` and `conformance/driver`; `make deadcode`
+    over the new programs, and a kit function no driver or test calls is
+    removed (FLOW-15, UX-01).
+37. The tracked gap's backlog entry `driver-contract-qemu-windows`
+    (workflow branch, `backlog/native-gaps.yaml`): its `what` still says
+    the ages are `[vm] image_refresh_after, image_min_grace` reaching
+    the driver "as its declared options"; reword it for the answers to
+    a21 and a25 (the driver reads them through the kit, as `[driver]`
+    keys, or their old names) (TEST-03, FLOW-09).
+38. At Publish, file seam 8 (relay release forms) as its own S-track
+    item through `workflow-intake`, to exist before M6 adopts a
+    release, as a11 was answered; nothing in the queue holds it yet
+    (FLOW-20, FLOW-12).
+
+Native validation is the six `f6-validate-<host>` steps Design added;
+their notes carry the **Validation plan**'s cases unchanged, and each
+runs on the branch after consolidation (FLOW-09).
 
 ## Design review
 
