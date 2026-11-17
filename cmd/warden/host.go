@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -82,14 +83,21 @@ or agent gate.`,
 		if err != nil {
 			return err
 		}
-		drv := cfg.Runtime.Driver
-		if flagBuildLink != "" && !isVMDriver(drv) {
+		sd, err := selectDriver(cfg)
+		if err != nil {
+			return err
+		}
+		drv := sd.name()
+		if flagBuildLink != "" && !sd.caps().VM {
 			return driver.Fixable("", "--build-link requires a VM driver "+
 				"(--driver qemu, vz, hyperv or firecracker)")
 		}
 		blocked, err := doctorUpstreamCAs(out, cfg)
 		if err != nil {
 			return err
+		}
+		if sd.bin != nil {
+			return doctorBinary(cfg, sd, blocked)
 		}
 		var link buildlink.Link
 		var vmDNS []netip.Addr
@@ -175,6 +183,13 @@ Other drivers need no host setup; their base images are prepared with
 		cfg, err := announcedConfig()
 		if err != nil {
 			return err
+		}
+		sd, err := selectDriver(cfg)
+		if err != nil {
+			return err
+		}
+		if sd.bin != nil {
+			return setupBinary(cfg, sd)
 		}
 		if cfg.Runtime.Driver == "firecracker" {
 			return firecracker.RunSetup(cmd.OutOrStdout(),
@@ -389,4 +404,64 @@ func runServiceOp(out io.Writer, label, okMsg string, op func() error) error {
 		fmt.Fprintln(out, okMsg)
 	}
 	return nil
+}
+
+// hostRequest is the request of doctor and setup for a driver binary:
+// {contract, vm, config_file, args, verbose}.
+func hostRequest(cfg *Config, sd *selectedDriver) (map[string]any, error) {
+	req := withConfig(map[string]any{"contract": sd.bin.contract, "args": []string{},
+		"verbose": cfg.Output.Verbose}, absConfigFile(cfg))
+	if sd.caps().VM {
+		link, source, err := resolveBuildLink(cfg)
+		if err != nil {
+			return nil, err
+		}
+		vm := map[string]any{"build_link": link.String(), "build_link_source": source}
+		if source == "default" {
+			vm["build_link"] = ""
+		}
+		req["vm"] = vm
+	}
+	return req, nil
+}
+
+// doctorBinary runs a driver binary's doctor after warden's own part of the
+// report; blocked is whether warden's part blocks a build. It exits 1 when
+// either does (UX-09).
+func doctorBinary(cfg *Config, sd *selectedDriver, blocked bool) error {
+	if !sd.bin.desc.lists("doctor") {
+		fmt.Println("ok")
+		if blocked {
+			os.Exit(1)
+		}
+		return nil
+	}
+	req, err := hostRequest(cfg, sd)
+	if err != nil {
+		return err
+	}
+	res, err := sd.bin.call("doctor", req, callOpts{})
+	if err != nil {
+		return err
+	}
+	var driverBlocked bool
+	_ = json.Unmarshal(res["blocked"], &driverBlocked)
+	if blocked || driverBlocked {
+		os.Exit(1)
+	}
+	return nil
+}
+
+// setupBinary runs a driver binary's setup.
+func setupBinary(cfg *Config, sd *selectedDriver) error {
+	if !sd.bin.desc.lists("setup") {
+		fmt.Printf("--driver %s needs no host setup\n", sd.name())
+		return nil
+	}
+	req, err := hostRequest(cfg, sd)
+	if err != nil {
+		return err
+	}
+	_, err = sd.bin.call("setup", req, callOpts{})
+	return err
 }

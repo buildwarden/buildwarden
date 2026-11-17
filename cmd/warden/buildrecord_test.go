@@ -117,7 +117,7 @@ func TestBuildLockTakenBeforeAnythingIsCreated(t *testing.T) {
 	tmp, out := t.TempDir(), filepath.Join(t.TempDir(), "out")
 	args := parseBuildLine(t, "build", "--driver", "qemu", "--tmpdir", tmp,
 		"--output", out, dir)
-	if _, err := prepare(args); err == nil {
+	if _, err := prepare(args, driver.ModeBuild); err == nil {
 		t.Fatal("prepare went on without the build's lock")
 	}
 	if _, err := os.Stat(out); !os.IsNotExist(err) {
@@ -132,7 +132,7 @@ func TestBuildLockTakenBeforeAnythingIsCreated(t *testing.T) {
 	inLocks(t)
 	args = parseBuildLine(t, "build", "--driver", "qemu", "--tmpdir", tmp,
 		"--output", out, dir)
-	p, err := prepare(args)
+	p, err := prepare(args, driver.ModeBuild)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestBuildLockTakenBeforeAnythingIsCreated(t *testing.T) {
 		rec.TempDir != tmp || rec.Contract != contractVersion {
 		t.Errorf("record %+v for a build staged at %s", rec, req.BuildScript)
 	}
-	done()
+	done(false)
 	if names := lockDirFiles(t); len(names) != 0 {
 		t.Errorf("a build that ended left %v", names)
 	}

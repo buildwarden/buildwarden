@@ -9,14 +9,6 @@ import (
 	"github.com/buildwarden/buildwarden/driver/script"
 )
 
-// containerfileIgnored reports whether driver d's guest cannot run a
-// Containerfile, so that warden drops it before staging: nothing is
-// translated or recorded (describe's capabilities.containerfile: ignore).
-func containerfileIgnored(d string) bool {
-	ld, ok := linkedDrivers[d]
-	return ok && ld.Capabilities.Containerfile == containerfileIgnore
-}
-
 // baseImage is the FROM image of the build's Containerfile, as written there,
 // whether or not the script is translated from it (with --script, or a
 // build.sh named by path, the image is still the Containerfile's). It is
@@ -34,18 +26,28 @@ func baseImage(req *driver.BuildRequest) string {
 	return res.Image
 }
 
-// stageBuild stages the build script for driver d in the stage directory of
-// the build id, <tmpdir>/warden-stage-<id>/, which is warden's, and records
-// an altered input in the output directory (ORCH-02), before any driver work.
-// It sets the request's BuildScript, the staged script's absolute path, and
-// BaseImage. The returned function removes the stage directory.
-func stageBuild(req *driver.BuildRequest, d, id string) (func(), error) {
-	if containerfileIgnored(d) {
+// stageBuild creates the output directory and writes dj there as
+// driver.json, then stages the build script for a driver with caps in the
+// stage directory of the build id, <tmpdir>/warden-stage-<id>/, which is
+// warden's, and records an altered input in the output directory (ORCH-02),
+// before any driver work. A driver whose guest cannot run a Containerfile
+// (capabilities.containerfile: ignore) has it dropped first, so nothing is
+// translated or recorded. It sets the request's BuildScript, the staged
+// script's absolute path, and BaseImage. The returned function removes the
+// stage directory.
+func stageBuild(req *driver.BuildRequest, caps capabilities, id string,
+	dj *driverJSON) (func(), error) {
+	if caps.Containerfile == containerfileIgnore {
 		req.Containerfile = ""
 	}
 	req.BaseImage = baseImage(req)
 	if err := os.MkdirAll(req.OutputDir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating output dir: %w", err)
+	}
+	if dj != nil {
+		if err := dj.write(req.OutputDir); err != nil {
+			return nil, fmt.Errorf("writing driver.json: %w", err)
+		}
 	}
 	dir, err := makeStageDir(req.TempDir, id)
 	if err != nil {

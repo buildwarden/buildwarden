@@ -19,7 +19,7 @@ func TestStageBuildDirectory(t *testing.T) {
 	own := write(t, ctx, "own.sh", "echo own\n")
 	req := &driver.BuildRequest{ContextDir: ctx, Containerfile: df, Script: own,
 		OutputDir: filepath.Join(t.TempDir(), "out"), TempDir: tmp}
-	unstage, err := stageBuild(req, "qemu", "k3v9x2ab")
+	unstage, err := stageBuild(req, linkedDrivers["qemu"].Capabilities, "k3v9x2ab", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,8 @@ func TestStageBuildBaseImage(t *testing.T) {
 				Script:        write(t, ctx, "own.sh", "true\n"),
 				OutputDir:     filepath.Join(t.TempDir(), "out"),
 				TempDir:       t.TempDir()}
-			unstage, err := stageBuild(req, tc.driver, "k3v9x2ab")
+			caps := linkedDrivers[tc.driver].Capabilities
+			unstage, err := stageBuild(req, caps, "k3v9x2ab", nil)
 			if err != nil {
 				t.Fatal(err)
 			}

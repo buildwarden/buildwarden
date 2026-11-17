@@ -9,6 +9,7 @@ warden-output/
 ├── ledger.zst              # Cryptographic ledger (compressed by default)
 ├── ca.cert.pem.zst         # Ephemeral CA cert (compressed by default)
 ├── environment.json        # Signed environment descriptor (what the build ran on)
+├── driver.json             # Which driver ran the build, and where it was found
 ├── build-output.log        # Captured build console output
 ├── artifacts/              # Build outputs posted to the ledger
 │   └── myapp-1.0.0.whl
@@ -37,6 +38,26 @@ The container and vz drivers, whose relay runs as a container or host process,
 also write `relay.log`.
 
 ## File Details
+
+### driver.json
+
+Written before the driver starts. It names the driver, its version and
+contract version, the file that ran and its SHA-256 digest, where it was found
+(`path` when `--driver` or `WARDEN_DRIVER` named the file, `PATH`,
+`beside-warden`, or `linked`, for a driver linked into warden, whose path and
+digest are warden's own), and the copies the lookup passed over:
+
+```json
+{"name": "container", "version": "0.9.0", "contract": 1,
+ "path": "/home/ana/bin/warden-driver-container", "sha256": "9f2c...",
+ "found": "PATH",
+ "shadowed": [{"path": "/home/ana/.local/bin/warden-driver-container",
+               "found": "beside-warden"}]}
+```
+
+A bundled driver was replaced exactly when `found` is `PATH` or `path` and
+`shadowed` holds a `beside-warden` or `linked` entry. The file is not signed
+and is not part of the ledger.
 
 ### ledger.zst
 

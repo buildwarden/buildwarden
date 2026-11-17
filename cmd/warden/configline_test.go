@@ -143,15 +143,19 @@ func TestConfigLineEscapesThePath(t *testing.T) {
 	})
 }
 
-// A driver the file names that warden does not have is reported after the
+// A driver the file names that warden cannot find is reported after the
 // config: line, which says which file named it.
 func TestConfigLineBeforeAnUnknownDriver(t *testing.T) {
-	const msg = `unknown driver "bogus"`
+	const msg = `driver "bogus" not found`
 	inConfigFiles(t, "[runtime]\ndriver = \"bogus\"\n")
 	want := "config: " + configPath(t) + " (found in the working directory)"
 	stderr := captureLog(t)
-	if _, err := announcedConfig(); err == nil || !strings.Contains(err.Error(), msg) {
-		t.Fatalf("announcedConfig: %v, want %s", err, msg)
+	cfg, err := announcedConfig()
+	if err != nil {
+		t.Fatalf("announcedConfig: %v", err)
+	}
+	if _, err := selectDriver(cfg); err == nil || !strings.Contains(err.Error(), msg) {
+		t.Fatalf("selectDriver: %v, want %s", err, msg)
 	}
 	if got := stderr.String(); got != "[warden] "+want+"\n" {
 		t.Errorf("stderr is %q, want the config: line", got)

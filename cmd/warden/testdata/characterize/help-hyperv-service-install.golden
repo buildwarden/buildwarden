@@ -9,6 +9,6 @@ Flags:
 Global Flags:
       --color string     color output (auto, always, never)
       --config string    config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
-      --driver string    orchestration driver (container, qemu, vz, hyperv, firecracker)
+      --driver string    driver to run: container (default), qemu, vz, hyperv or firecracker, or the name or path of another driver binary
       --runtime string   container runtime (finch, docker, podman)
   -v, --verbose          verbose output

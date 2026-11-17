@@ -94,7 +94,14 @@ type buildOutcome struct {
 	teardownErr error
 	// shellCode is the shell's exit code, for a shell whose attach ran.
 	shellCode int
+	// leftovers is set when a driver binary had to be killed and its reap
+	// did not remove what the build left: the record and lock stay.
+	leftovers bool
 }
+
+// killer is a runPeer that a further signal can kill: a driver binary, whose
+// process group is killed and its build reaped (DRV-52).
+type killer interface{ kill() }
 
 // attachResult is how an attach ended: the shell's exit code, or the
 // attach's own failure.
@@ -181,6 +188,9 @@ func (s *buildSequence) run() buildOutcome {
 		select {
 		case ev := <-s.peer.events():
 			if st.onEvent(ev) {
+				if l, ok := s.peer.(interface{ hasLeftovers() bool }); ok {
+					st.out.leftovers = l.hasLeftovers()
+				}
 				return st.out
 			}
 		case err := <-st.claimDone:
@@ -313,6 +323,16 @@ func (st *seqState) onEnd(ev runEvent) {
 			st.out.teardownErr = ev.err
 		}
 	case ev.err != nil:
+		// A driver that broke the dialogue does not undo a completion the
+		// collector already holds: it is said beside the result (DRV-54).
+		var de *driverError
+		if errors.As(ev.err, &de) && de.bug {
+			if res, ok := st.session.result(); ok {
+				st.decided, st.out.err, st.stopped = true, res, true
+				st.out.teardownErr = ev.err
+				return
+			}
+		}
 		st.decide(ev.err, driver.StopFailed)
 	default:
 		// It stopped by itself: only a completion already in makes that a
@@ -327,9 +347,13 @@ func (st *seqState) onEnd(ev runEvent) {
 	}
 }
 
-// onSignal stops the build on the first SIGINT or SIGTERM.
+// onSignal stops the build on the first SIGINT or SIGTERM. A further one
+// kills a driver binary, and then its reap.
 func (st *seqState) onSignal(sig os.Signal) {
 	if st.stopped {
+		if k, ok := st.peer.(killer); ok {
+			k.kill()
+		}
 		return
 	}
 	st.stopSignals()
@@ -349,53 +373,35 @@ func driverDefect(what string) error {
 	return fmt.Errorf("driver defect: the driver %s", what)
 }
 
-// runLinkedBuild runs a build of a linked driver through the build sequence:
-// warden makes the claim token, starts the collector and claims the relay,
-// owns SIGINT and SIGTERM and --timeout, and reports the build.
-func runLinkedBuild(p *prepared) error {
-	out, err := runLinkedSequence(p, driver.ModeBuild)
-	if err != nil {
-		return err
-	}
-	return reportBuild(out, p.req)
-}
-
-// runLinkedShell runs warden shell with a linked driver: the sequence in
-// mode shell, which attaches once the held environment is reported started
-// and stops it when the shell exits, and reports the shell's end.
-func runLinkedShell(p *prepared) error {
-	out, err := runLinkedSequence(p, driver.ModeShell)
-	if err != nil {
-		return err
-	}
-	return reportShell(out)
-}
-
-// runLinkedSequence runs the build sequence of a linked driver in mode, and
-// finalizes the output once a claim was made. A shell has no --timeout, as
-// before the build sequence.
-func runLinkedSequence(p *prepared, mode string) (buildOutcome, error) {
+// runSequence runs the build sequence of the driver p prepared in mode, and
+// finalizes the output once a claim was made: warden makes the claim token,
+// starts the collector and claims the relay, owns SIGINT and SIGTERM and
+// --timeout. A shell has no --timeout, as before the build sequence.
+func runSequence(p *prepared, mode string) (buildOutcome, error) {
 	token, err := driver.RandomToken()
 	if err != nil {
 		return buildOutcome{}, err
 	}
-	start := newStart(p.cfg, p.req, p.linked.Capabilities, p.id, token,
-		p.live.statePath())
+	caps := p.sd.caps()
+	start := newStart(p.cfg, p.req, caps, p.id, token, p.live.statePath())
 	start.Mode = mode
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sigs)
 	sess := &collectorSession{req: p.req, token: token, verbose: p.cfg.Output.Verbose}
-	seq := &buildSequence{
-		start: start, peer: newLinkedPeer(p.linked, p.cfg, p.req), session: sess,
-		timeout: p.req.Timeout, signals: sigs, stopSignals: func() { signal.Stop(sigs) },
-		after: time.After,
+	seq := &buildSequence{start: start, session: sess, timeout: p.req.Timeout,
+		signals: sigs, stopSignals: func() { signal.Stop(sigs) }, after: time.After}
+	if p.sd.bin != nil {
+		start.Contract = p.sd.bin.contract
+		seq.peer = newExecPeer(p.sd.bin, p.live.record, p.live.statePath())
+		// warden keeps the signals: a second one kills the driver.
+		seq.stopSignals = func() {}
+	} else {
+		seq.peer = newLinkedPeer(p.sd.linked, p.cfg, p.req)
 	}
 	if mode == driver.ModeShell {
 		seq.timeout = 0
-		seq.attach = func() (int, error) {
-			return p.linked.Attach(context.Background(), p.cfg, p.req, p.id)
-		}
+		seq.attach = func() (int, error) { return attach(p) }
 	}
 	out := seq.run()
 	sess.close()
@@ -403,6 +409,23 @@ func runLinkedSequence(p *prepared, mode string) (buildOutcome, error) {
 		driver.FinalizeOutput(p.req.OutputDir, p.req.Compress)
 	}
 	return out, nil
+}
+
+// attach enters the held environment of the shell p prepared, and returns the
+// shell's exit code; an error is the attach's own failure (DRV-28). A driver
+// binary is sent the record's values (DRV-60).
+func attach(p *prepared) (int, error) {
+	if p.sd.bin == nil {
+		return p.sd.linked.Attach(context.Background(), p.cfg, p.req, p.id)
+	}
+	rec := p.live.record
+	req := withConfig(map[string]any{"contract": p.sd.bin.contract, "build_id": rec.ID,
+		"args": nonNil(rec.Args), "state_file": p.live.statePath()}, rec.ConfigFile)
+	res, err := p.sd.bin.call("attach", req, callOpts{argv: []string{rec.ID}})
+	if err != nil {
+		return 0, err
+	}
+	return resultInt(res, "exit_code"), nil
 }
 
 // reportShell gives warden shell's exit: the shell's own code, quietly, as

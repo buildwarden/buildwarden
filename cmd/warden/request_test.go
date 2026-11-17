@@ -22,31 +22,33 @@ func TestResolveBuildInputVMDrivers(t *testing.T) {
 	sh := write(t, dir, "build.sh", "true")
 
 	// A directory with a Dockerfile: the Dockerfile is used (Linux guests).
-	got, ctx, script, err := resolveBuildInput(dir, "qemu", "", "")
+	got, ctx, script, err := resolveBuildInput(dir, isVMDriver("qemu"), "", "")
 	if err != nil || got != df || ctx != dir || script != "" {
 		t.Fatalf("dir: %q %q %q %v", got, ctx, script, err)
 	}
 	// A script path as the positional argument becomes the build script.
-	got, ctx, script, err = resolveBuildInput(sh, "vz", "", "")
+	got, ctx, script, err = resolveBuildInput(sh, isVMDriver("vz"), "", "")
 	if err != nil || script != sh || ctx != dir {
 		t.Fatalf("script path: %q %q %q %v", got, ctx, script, err)
 	}
 	// Windows guests ignore Dockerfiles and need build.ps1 or --script.
-	if _, _, _, err := resolveBuildInput(dir, "hyperv", "windows", ""); err == nil ||
+	_, _, _, err = resolveBuildInput(dir, isVMDriver("hyperv"), "windows", "")
+	if err == nil ||
 		!strings.Contains(err.Error(), "build.ps1") {
 		t.Fatalf("windows without build.ps1: err = %v", err)
 	}
 	write(t, dir, "build.ps1", "exit 0")
-	if got, _, _, err := resolveBuildInput(dir, "qemu", "windows", ""); err != nil ||
-		got != "" {
+	got, _, _, err = resolveBuildInput(dir, isVMDriver("qemu"), "windows", "")
+	if err != nil || got != "" {
 		t.Fatalf("windows with build.ps1: %q %v", got, err)
 	}
 	// An explicit --script satisfies any context.
 	empty := t.TempDir()
-	if _, _, s, err := resolveBuildInput(empty, "qemu", "", sh); err != nil || s != sh {
+	_, _, s, err := resolveBuildInput(empty, isVMDriver("qemu"), "", sh)
+	if err != nil || s != sh {
 		t.Fatalf("--script in empty context: %q %v", s, err)
 	}
-	if _, _, _, err := resolveBuildInput(empty, "qemu", "", ""); err == nil {
+	if _, _, _, err := resolveBuildInput(empty, isVMDriver("qemu"), "", ""); err == nil {
 		t.Fatal("empty context without --script accepted")
 	}
 }
@@ -54,7 +56,7 @@ func TestResolveBuildInputVMDrivers(t *testing.T) {
 func TestResolveBuildInputContainerNeedsDockerfile(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "build.sh", "true")
-	if _, _, _, err := resolveBuildInput(dir, "", "", ""); err == nil {
+	if _, _, _, err := resolveBuildInput(dir, isVMDriver(""), "", ""); err == nil {
 		t.Fatal("container driver accepted a context without a Dockerfile")
 	}
 }
@@ -63,51 +65,60 @@ func TestValidateFlagsForDriver(t *testing.T) {
 	defer func() { flagCPUs, flagNetwork, flagKeepVMs, flagTimeout = 0, "", false, "" }()
 
 	flagTimeout = "10m"
-	if err := validateFlagsForDriver(""); err != nil {
+	if err := validateFlagsForDriver("", isVMDriver("")); err != nil {
 		t.Fatalf("--timeout must be accepted by every driver: %v", err)
 	}
 	flagCPUs = 8
-	if err := validateFlagsForDriver("container"); err == nil {
+	if err := validateFlagsForDriver("container", isVMDriver("container")); err == nil {
 		t.Fatal("--cpus accepted by the container driver")
 	}
 	for _, d := range []string{"qemu", "vz", "hyperv"} {
-		if err := validateFlagsForDriver(d); err != nil {
+		if err := validateFlagsForDriver(d, isVMDriver(d)); err != nil {
 			t.Fatalf("--cpus refused by %s: %v", d, err)
 		}
 	}
 	flagCPUs = 0
 	flagNetwork = "warden-dev"
-	if err := validateFlagsForDriver("qemu"); err == nil {
+	if err := validateFlagsForDriver("qemu", isVMDriver("qemu")); err == nil {
 		t.Fatal("--network accepted by qemu")
 	}
-	if err := validateFlagsForDriver("hyperv"); err != nil {
+	if err := validateFlagsForDriver("hyperv", isVMDriver("hyperv")); err != nil {
 		t.Fatalf("--network refused by hyperv: %v", err)
 	}
 }
 
 func TestFirecrackerIsAVMDriver(t *testing.T) {
 	defer func() { flagCPUs, flagKeepVMs, flagImage, flagNetwork = 0, false, "", "" }()
-	if err := validateDriver("firecracker"); err != nil {
-		t.Fatalf("validateDriver(firecracker) = %v", err)
+	if err := checkDriverName("firecracker"); err != nil {
+		t.Fatalf("checkDriverName(firecracker) = %v", err)
 	}
 	flagCPUs, flagKeepVMs, flagImage = 2, true, "disk.qcow2"
-	if err := validateFlagsForDriver("firecracker"); err != nil {
+	if err := validateFlagsForDriver("firecracker", isVMDriver("firecracker")); err != nil {
 		t.Fatalf("VM flags refused by firecracker: %v", err)
 	}
-	if err := validateFlagsForDriver("container"); err == nil ||
+	if err := validateFlagsForDriver("container", isVMDriver("container")); err == nil ||
 		!strings.Contains(err.Error(), "firecracker") {
 		t.Fatalf("the VM-driver hint does not name firecracker: %v", err)
 	}
 	flagCPUs, flagKeepVMs, flagImage = 0, false, ""
 	flagNetwork = "warden-dev"
-	if err := validateFlagsForDriver("firecracker"); err == nil {
+	if err := validateFlagsForDriver("firecracker", isVMDriver("firecracker")); err == nil {
 		t.Fatal("--network accepted by firecracker")
 	}
-	if err := validateGuestOS("windows", "firecracker"); err == nil {
+	fc := linkedDrivers["firecracker"].Capabilities
+	if err := validateGuestOS("windows", "firecracker", fc); err == nil {
 		t.Fatal("--guest-os windows accepted by firecracker")
 	}
 	caches, err := layerCaches("firecracker")
 	if err != nil || caches["firecracker"] == nil {
 		t.Fatalf("layerCaches(firecracker) = %v, %v", caches, err)
 	}
+}
+
+// linkedSel is the selection of the linked driver cfg names, as prepare finds
+// it when no driver binary of that name is on PATH or beside warden.
+func linkedSel(cfg *Config) *selectedDriver {
+	n := driverName(cfg)
+	return &selectedDriver{found: &foundDriver{Name: n, Found: foundLinked, Linked: true},
+		linked: linkedDrivers[n]}
 }

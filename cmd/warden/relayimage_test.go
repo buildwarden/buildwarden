@@ -33,7 +33,7 @@ func TestRelayImageShape(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolveConfig: %v", err)
 		}
-		_, err = newRequest(cfg, []string{buildProject(t)})
+		_, err = newRequest(cfg, linkedSel(cfg), []string{buildProject(t)})
 		return err
 	}
 	doctor := func(t *testing.T) error {
@@ -78,7 +78,7 @@ func TestRelayImageShape(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = newRequest(cfg, []string{buildProject(t)})
+		_, err = newRequest(cfg, linkedSel(cfg), []string{buildProject(t)})
 		if err != nil && strings.Contains(err.Error(), "relay_image") {
 			t.Errorf("a VM driver's build checked the relay image: %v", err)
 		}

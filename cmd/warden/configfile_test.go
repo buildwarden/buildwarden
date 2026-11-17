@@ -371,7 +371,7 @@ func TestBuildContextConfigIsNotRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveConfig: %v", err)
 	}
-	req, err := newRequest(cfg, []string{context})
+	req, err := newRequest(cfg, linkedSel(cfg), []string{context})
 	if err != nil {
 		t.Fatalf("newRequest: %v", err)
 	}

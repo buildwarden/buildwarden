@@ -6,8 +6,10 @@ runs your build code and how network isolation is enforced.
 
 ## Driver Selection
 
-By default, BuildWarden uses the container driver if a container runtime is
-detected. Override with the `--driver` flag or a config file entry.
+By default, BuildWarden uses the container driver. Override with the
+`--driver` flag, `WARDEN_DRIVER`, or a config file entry. There is no
+auto-detection: a driver that is not found is an error that says where warden
+looked.
 
 **Flag:**
 ```sh
@@ -21,6 +23,40 @@ warden build --driver container .
 [runtime]
 driver = "qemu"
 ```
+
+### Where a driver comes from
+
+A driver is a program named `warden-driver-<name>` (`warden-driver-<name>.exe`
+on Windows) that warden runs through the driver contract
+(`specs/driver-contract/v1.md`), or a driver linked into warden itself. In
+this release `qemu`, `vz`, `hyperv` and `firecracker` are linked, and so is
+`container` until its binary ships beside warden. A name is looked up once
+per command, and the first match wins:
+
+1. `PATH`, in order;
+2. the directory warden itself is installed in (symbolic links resolved),
+   when `PATH` gave nothing;
+3. a driver linked into warden.
+
+So a `warden-driver-<name>` in a `PATH` directory that comes before warden's
+own runs in place of the one warden ships, for every command. A file of that
+name that is a directory or cannot be executed is passed over; one reached
+through a relative `PATH` entry (or an empty one, the current directory) is an
+error that names the entry, and is not run. A batch file (`.bat`, `.cmd`) is
+never taken for a driver.
+
+`--driver` and `WARDEN_DRIVER` also take the path of a driver's file
+(anything with a `/`, or on Windows a `\`): the file is used as given. A
+config file may select a driver by name only; `[runtime] driver` holding a
+path is refused, whichever file it is in.
+
+`warden driver list` shows, for each name, the file that would run and where
+it was found, and every other copy beneath it: the ones it shadows and the
+ones it skips. Each build records the same in its output's `driver.json`
+([Output](output.md#driverjson)). A driver binary is given
+`[build] teardown_timeout` (60 s unless set) to tear a build down after it is
+asked to stop; after that, or on a second Ctrl-C, warden kills it and runs its
+`reap` for the build, bounded by the same wait.
 
 ---
 

@@ -148,6 +148,11 @@ capture = ""               # Payload capture mode:
                            #   "all" = save both
 tmpdir = ""                # Where each build's private work dir is created
                            #   ("" = the OS temp dir; --tmpdir wins)
+teardown_timeout = "60s"   # How long a driver binary is given to tear a build
+                           #   down when asked to stop, and then its reap;
+                           #   a Go duration from "1s" to "1h". A value that
+                           #   does not parse or is out of range is refused as
+                           #   the file loads. No flag, no variable
 
 [relay]
 upstream_ca_certs = []     # Files or directories of PEM certificates the relay
@@ -458,7 +463,7 @@ neither tested nor supported.
 
 ## Driver Selection
 
-When `driver` is empty (the default), the **container** driver is used. Use `--driver` or `WARDEN_DRIVER` to select a VM driver:
+When `driver` is empty (the default), the **container** driver is used. Use `--driver` or `WARDEN_DRIVER` to select another; either may also give the path of a driver binary, which `driver` in a config file may not ([Drivers](drivers.md#where-a-driver-comes-from)). The bundled drivers:
 
 - `container` — Unprivileged container with iptables isolation (default)
 - `qemu` — Two-VM topology, cross-platform, requires `qemu-system-*`

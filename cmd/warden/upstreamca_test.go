@@ -223,7 +223,8 @@ func TestUpstreamCALinesOfABuild(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				req, err = newRequest(cfg, []string{buildProject(t)})
+				req, err = newRequest(cfg, linkedSel(cfg),
+					[]string{buildProject(t)})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -388,7 +389,7 @@ func TestNoUpstreamCAPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req, err := newRequest(cfg, []string{buildProject(t)})
+	req, err := newRequest(cfg, linkedSel(cfg), []string{buildProject(t)})
 	if err != nil {
 		t.Fatal(err)
 	}

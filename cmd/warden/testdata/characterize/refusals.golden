@@ -24,7 +24,8 @@ warden build --driver firecracker --guest-os windows
 warden build --guest-os plan9
   error: invalid --guest-os "plan9" (want "linux" or "windows")
 warden build --driver nomad
-  error: unknown driver "nomad" (valid: container, qemu, vz, hyperv, firecracker)
+  error: driver "nomad" not found (searched PATH, then $WARDEN_DIR, where warden is installed)
+  fix:   put warden-driver-nomad on PATH or beside warden, or name its file: --driver /path/to/warden-driver-nomad. `warden driver list` shows the drivers warden can find
 warden build --timeout soon
   error: invalid --timeout: time: invalid duration "soon"
   fix:   give a Go duration such as 30s, 10m or 1h
@@ -47,7 +48,8 @@ warden build --driver qemu
 warden build --driver hyperv --guest-os windows
   error: nothing to build in $CTX: pass --script, or add build.ps1
 warden build  (warden.toml: "[runtime]\ndriver = \"nomad\"\n")
-  error: unknown driver "nomad" (valid: container, qemu, vz, hyperv, firecracker)
+  error: driver "nomad" not found (searched PATH, then $WARDEN_DIR, where warden is installed)
+  fix:   put warden-driver-nomad on PATH or beside warden, or name its file: --driver /path/to/warden-driver-nomad. `warden driver list` shows the drivers warden can find
 warden build  (warden.toml: "[runtime]\nrelay_image = \"-x\"\n")
   error: [runtime] relay_image in $CTX/warden.toml is "-x": not an image reference
   fix:   set it to an image reference such as ghcr.io/buildwarden/relay:v0.2.0 or to "dev", or remove it

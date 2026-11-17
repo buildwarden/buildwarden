@@ -8,6 +8,7 @@ Available Commands:
   clean       Remove orphaned warden containers, networks, and images
   completion  Generate the autocompletion script for the specified shell
   doctor      Preflight the host for the selected driver
+  driver      Show the drivers warden can find
   help        Help about any command
   hyperv      Hyper-V privileged helper service (Windows host)
   image       Prepare and list build-guest base images (VM drivers)
@@ -18,7 +19,7 @@ Available Commands:
 Flags:
       --color string     color output (auto, always, never)
       --config string    config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
-      --driver string    orchestration driver (container, qemu, vz, hyperv, firecracker)
+      --driver string    driver to run: container (default), qemu, vz, hyperv or firecracker, or the name or path of another driver binary
   -h, --help             help for warden
       --runtime string   container runtime (finch, docker, podman)
   -v, --verbose          verbose output

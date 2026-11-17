@@ -162,7 +162,7 @@ func TestBuildRequestDNSForVMDriversOnly(t *testing.T) {
 		"":            nil,
 	} {
 		cfg.Runtime.Driver = d
-		req, err := newRequest(cfg, []string{proj})
+		req, err := newRequest(cfg, linkedSel(cfg), []string{proj})
 		if err != nil {
 			t.Fatalf("%q: %v", d, err)
 		}

@@ -82,9 +82,9 @@ func TestDetectRuntimeExplainsTheFix(t *testing.T) {
 
 func TestInputErrorsAreFixable(t *testing.T) {
 	for name, err := range map[string]error{
-		"driver":  validateDriver("kvm"),
+		"driver":  checkDriverName("kvm-x"),
 		"capture": validateCapture("everything"),
-		"guestOS": validateGuestOS("plan9", "qemu"),
+		"guestOS": validateGuestOS("plan9", "qemu", linkedDrivers["qemu"].Capabilities),
 	} {
 		var fe *driver.FixableError
 		if !errors.As(err, &fe) {

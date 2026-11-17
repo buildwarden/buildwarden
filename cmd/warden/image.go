@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -150,6 +151,13 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 	cfg, err := announcedConfig()
 	if err != nil {
 		return err
+	}
+	sd, err := selectDriver(cfg)
+	if err != nil {
+		return err
+	}
+	if sd.bin != nil {
+		return prepareBinary(cfg, sd, args)
 	}
 	drv := cfg.Runtime.Driver
 	osName := flagImgOS
@@ -351,38 +359,24 @@ func firstNonEmptyStr(a, b string) string {
 }
 
 func runImageList(_ *cobra.Command, _ []string) error {
+	bins, err := bundledBinaries()
+	if err != nil {
+		return err
+	}
 	found := false
-	if runtime.GOOS == "darwin" {
-		cache := &vz.ImageCache{CacheDir: vz.DefaultCacheDir()}
-		for _, line := range formatVZImages(cache.Images()) {
-			fmt.Println(line)
-			found = true
+	for _, name := range bundledDrivers {
+		bin := bins[name]
+		if bin == nil || !bin.desc.lists("image-list") {
+			continue
 		}
+		res, err := bin.call("image-list", withConfig(map[string]any{
+			"contract": bin.contract}, unparsedConfigFile()), callOpts{})
+		if err != nil {
+			return err
+		}
+		found = found || resultInt(res, "count") > 0
 	}
-	qemuImages, _ := filepath.Glob(filepath.Join(driver.CacheDir(), "images", "*.qcow2"))
-	for _, p := range qemuImages {
-		osName := "linux"
-		if strings.HasPrefix(filepath.Base(p), "windows-") {
-			osName = "windows"
-		}
-		fmt.Printf("qemu    %-8s %s\n", osName, p)
-		found = true
-	}
-	for _, p := range firecracker.ListImages() {
-		fmt.Printf("firecracker linux %s\n", p)
-		found = true
-	}
-	if st := hyperv.Status(); st.Base != "" {
-		pin := "pinned"
-		if !st.Pinned {
-			pin = "UNPINNED"
-		}
-		fmt.Printf("hyperv  windows  base     %s (%s)\n", st.Base, pin)
-		fmt.Printf("hyperv  windows  prepared %s\n", st.Summary(time.Now()))
-		for _, p := range st.Older {
-			fmt.Printf("hyperv  windows  older    %s (deleted by the next prepare)\n",
-				p.Path)
-		}
+	if listLinkedImages(bins) {
 		found = true
 	}
 	if !found {
@@ -416,4 +410,117 @@ func formatVZImages(imgs []vz.Image) []string {
 		lines = append(lines, strings.TrimRight(line, " "))
 	}
 	return lines
+}
+
+// prepareBinary is image prepare for a driver binary: --os defaults to the
+// driver's default_image_os.
+func prepareBinary(cfg *Config, sd *selectedDriver, args []string) error {
+	bin := sd.bin
+	if !bin.desc.lists("image-prepare") {
+		return driver.Fixable("", "driver %q prepares no images", sd.name())
+	}
+	osName := flagImgOS
+	if osName == "" {
+		osName = bin.desc.Capabilities.DefaultImageOS
+	}
+	source, err := imageSource(args)
+	if err != nil {
+		return err
+	}
+	req := withConfig(map[string]any{"contract": bin.contract, "os": osName,
+		"source": source, "args": []string{}, "verbose": cfg.Output.Verbose},
+		absConfigFile(cfg))
+	res, err := bin.call("image-prepare", req, callOpts{})
+	if err != nil {
+		return err
+	}
+	var path string
+	_ = json.Unmarshal(res["path"], &path)
+	if path != "" {
+		fmt.Fprintf(os.Stderr, "Base image ready: %s\n", path)
+	}
+	return nil
+}
+
+// bundledBinaries are the bundled names the lookup resolves to a driver
+// binary, each described, for the commands that select no driver (image list,
+// and image verify with no --driver): a copy on PATH answers for its name
+// there, as it would in a build. A name that is not found is left out.
+func bundledBinaries() (map[string]*execDriver, error) {
+	env := hostLookupEnv()
+	out := map[string]*execDriver{}
+	for _, name := range bundledDrivers {
+		fd, err := findByName(name, env)
+		var fe *driver.FixableError
+		switch {
+		case err != nil && fd != nil && errors.As(err, &fe):
+			continue // not found
+		case err != nil:
+			return nil, err
+		case fd.Linked:
+			continue
+		}
+		bin, err := describeDriver(fd, time.After)
+		if err != nil {
+			return nil, err
+		}
+		out[name] = bin
+	}
+	return out, nil
+}
+
+// unparsedConfigFile is the config file of an invocation that loads no
+// configuration, named without being parsed, or "" for none.
+func unparsedConfigFile() string {
+	path, _, err := configFile()
+	if err != nil {
+		return ""
+	}
+	return path
+}
+
+// listLinkedImages prints the images of the linked drivers that no driver
+// binary answers for, and reports whether there were any.
+func listLinkedImages(bins map[string]*execDriver) bool {
+	found := false
+	if bins["vz"] == nil && runtime.GOOS == "darwin" {
+		cache := &vz.ImageCache{CacheDir: vz.DefaultCacheDir()}
+		for _, line := range formatVZImages(cache.Images()) {
+			fmt.Println(line)
+			found = true
+		}
+	}
+	qemuImages, _ := filepath.Glob(filepath.Join(driver.CacheDir(), "images", "*.qcow2"))
+	if bins["qemu"] != nil {
+		qemuImages = nil
+	}
+	for _, p := range qemuImages {
+		osName := "linux"
+		if strings.HasPrefix(filepath.Base(p), "windows-") {
+			osName = "windows"
+		}
+		fmt.Printf("qemu    %-8s %s\n", osName, p)
+		found = true
+	}
+	for _, p := range firecracker.ListImages() {
+		if bins["firecracker"] != nil {
+			break
+		}
+		fmt.Printf("firecracker linux %s\n", p)
+		found = true
+	}
+	if st := hyperv.Status(); st.Base != "" && bins["hyperv"] == nil {
+		pin := "pinned"
+		if !st.Pinned {
+			pin = "UNPINNED"
+		}
+		fmt.Printf("hyperv  windows  base     %s (%s)\n", st.Base, pin)
+		fmt.Printf("hyperv  windows  prepared %s\n", st.Summary(time.Now()))
+		for _, p := range st.Older {
+			fmt.Printf("hyperv  windows  older    %s (deleted by the next prepare)\n",
+				p.Path)
+		}
+		found = true
+	}
+	return found
 }

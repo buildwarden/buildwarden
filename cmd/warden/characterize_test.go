@@ -46,10 +46,15 @@ var goldenDir = func() string {
 
 // golden compares got with testdata/characterize/<name>.golden, or writes
 // the file under -update. The default build link is shown as $DEFAULT_LINK:
-// it is written once, in driver/buildlink (TestNoStrayLinkLiterals).
+// it is written once, in driver/buildlink (TestNoStrayLinkLiterals). The test
+// binary's directory, where a driver beside warden is looked for, is shown as
+// $WARDEN_DIR.
 func golden(t *testing.T, name, got string) {
 	t.Helper()
 	got = strings.ReplaceAll(got, buildlink.DefaultCIDR, "$DEFAULT_LINK")
+	if env := hostLookupEnv(); env.selfDir != "" {
+		got = strings.ReplaceAll(got, env.selfDir, "$WARDEN_DIR")
+	}
 	path := filepath.Join(goldenDir, name+".golden")
 	if *update {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -325,7 +330,7 @@ func parsedRequest(t *testing.T, args ...string) (*driver.BuildRequest, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newRequest(cfg, c.Flags().Args())
+	return newRequest(cfg, linkedSel(cfg), c.Flags().Args())
 }
 
 func indent(s string) string {
@@ -423,7 +428,8 @@ const stagedName = "staged"
 // driver.StageBuildScript and driver.RecordInputs; the goldens are main's.
 func stageForCharacterization(t *testing.T, d string, req *driver.BuildRequest) error {
 	t.Helper()
-	unstage, err := stageBuild(req, d, driver.RandAlphaNum(8))
+	unstage, err := stageBuild(req, linkedDrivers[d].Capabilities,
+		driver.RandAlphaNum(8), nil)
 	if err != nil {
 		return err
 	}
@@ -514,7 +520,8 @@ func TestCharacterizeContainerfileImage(t *testing.T) {
 				b.WriteString(strings.TrimSpace(describeErr(err, dir)) + "\n")
 				continue
 			}
-			unstage, err := stageBuild(req, d, driver.RandAlphaNum(8))
+			unstage, err := stageBuild(req, linkedDrivers[d].Capabilities,
+				driver.RandAlphaNum(8), nil)
 			if err != nil {
 				t.Fatal(err)
 			}

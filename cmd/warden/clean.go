@@ -49,6 +49,13 @@ func runClean(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	sd, err := selectDriver(cfg)
+	if err != nil {
+		return err
+	}
+	if sd.bin != nil {
+		return cleanBinary(cfg, sd)
+	}
 	removed := cleanAfterLinkedBuilds(driverName(cfg))
 	if cfg.Runtime.Driver == "firecracker" {
 		tempDir, err := resolveTempDir(cfg)
@@ -68,9 +75,24 @@ func runClean(cmd *cobra.Command, args []string) error {
 		finishClean(removed)
 		return nil
 	}
-	runtime, err := resolveRuntime(cfg)
+	n, err := cleanContainers(cfg)
 	if err != nil {
 		return err
+	}
+	// Build containers are removed with their anonymous volumes; other
+	// dangling volumes on the runtime are not warden's to prune.
+	finishClean(removed + n)
+	return nil
+}
+
+// cleanContainers removes the containers, networks and per-build relay
+// images of builds that are no longer running, on the container runtime
+// cfg resolves, and reports how many it removed.
+func cleanContainers(cfg *Config) (int, error) {
+	removed := 0
+	runtime, err := resolveRuntime(cfg)
+	if err != nil {
+		return 0, err
 	}
 	ctrctl.Cli = []string{runtime}
 
@@ -118,10 +140,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Build containers are removed with their anonymous volumes above; other
-	// dangling volumes on the runtime are not warden's to prune.
-	finishClean(removed)
-	return nil
+	return removed, nil
 }
 
 // cleanAfterLinkedBuilds removes the stage directory, record and lock of each
@@ -233,4 +252,85 @@ func isOrphan(name string, liveIDs map[string]bool) bool {
 	}
 	buildID := parts[len(parts)-1]
 	return !liveIDs[buildID]
+}
+
+// cleanBinary is warden clean for a driver binary (the design's warden
+// clean): it probes the driver's clean with this invocation's flags and
+// config file, so a value the driver refuses stops it before anything is
+// removed; then it reaps every dead build from its record; then it runs the
+// driver's clean with the held builds as keep_ids. A failed reap keeps that
+// build's files, and clean exits 1 at the end.
+func cleanBinary(cfg *Config, sd *selectedDriver) error {
+	bin := sd.bin
+	tempDir, err := resolveTempDir(cfg)
+	if err != nil {
+		return err
+	}
+	cleanReq := func(keep []string, probe bool) map[string]any {
+		req := withConfig(map[string]any{"contract": bin.contract,
+			"keep_ids": nonNil(keep), "cache": flagCleanCache, "tmpdir": tempDir,
+			"args": []string{}}, absConfigFile(cfg))
+		if probe {
+			req["probe"] = true
+		}
+		return req
+	}
+	if bin.desc.lists("clean") {
+		if _, err := bin.call("clean", cleanReq(nil, true),
+			callOpts{limit: probeLimit}); err != nil {
+			return err
+		}
+	}
+	removed := 0
+	reap := func(rec buildRecord, stateFile string) error {
+		rb, err := recordDriver(rec, sd)
+		if err != nil {
+			return err
+		}
+		res, err := rb.call("reap", reapRequest(rec, stateFile, rb.contract),
+			callOpts{argv: []string{rec.ID}})
+		removed += resultInt(res, "removed")
+		return err
+	}
+	n, reapErr := cleanDeadBuilds(sd.name(), reap, os.Stderr)
+	removed += n
+	if bin.desc.lists("clean") {
+		keep, err := heldBuildIDs(sd.name())
+		if err != nil {
+			return err
+		}
+		res, err := bin.call("clean", cleanReq(keep, false), callOpts{})
+		if err != nil {
+			return err
+		}
+		removed += resultInt(res, "removed")
+	}
+	finishClean(removed)
+	if reapErr != nil {
+		return fmt.Errorf("cleaning up after dead builds: %w", reapErr)
+	}
+	return nil
+}
+
+// recordDriver is the driver binary that reaps the dead build rec: the file
+// its record names, or the one named with --driver for this clean. A file
+// that is gone or cannot be run is an error with the fix; one that changed
+// since the build is run, with a line that says so.
+func recordDriver(rec buildRecord, sd *selectedDriver) (*execDriver, error) {
+	if sd.found.Found == foundPath {
+		return sd.bin, nil
+	}
+	if reason := unrunnable(rec.Path, isWindows); reason != "" {
+		fix := fmt.Sprintf("reap it with the driver's file named: warden clean "+
+			"--driver /path/to/%s", driverFileName(rec.Driver, isWindows))
+		return nil, driver.Fixable(fix, "the driver %s that ran build %s %s",
+			driver.EscapeOutside(rec.Path), rec.ID, reason)
+	}
+	if sum, err := fileSHA256(rec.Path); err == nil && rec.SHA256 != "" && sum != rec.SHA256 {
+		log.Info(fmt.Sprintf("the driver %s has changed since build %s; reaping with it",
+			driver.EscapeOutside(rec.Path), rec.ID))
+	}
+	return &execDriver{found: &foundDriver{Name: rec.Driver, Path: rec.Path},
+		desc: sd.bin.desc, contract: rec.Contract, after: sd.bin.after,
+		teardown: sd.bin.teardown}, nil
 }

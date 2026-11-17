@@ -80,9 +80,13 @@ type RuntimeConfig struct {
 	// path of the config file that set it, escaped for printing. It words
 	// the error that refuses an unsupported runtime; nothing that decides
 	// what is run reads it.
-	CLISource  string `toml:"-"`
-	Driver     string `toml:"driver"`
-	RelayImage string `toml:"relay_image"`
+	CLISource string `toml:"-"`
+	// Driver selects the driver, by name or, from the flag or the variable,
+	// by path; DriverSource says which set it: sourceFlag, sourceEnv, or
+	// empty for the config file.
+	Driver       string `toml:"driver"`
+	DriverSource string `toml:"-"`
+	RelayImage   string `toml:"relay_image"`
 	// RelayImageSource says where RelayImage was set: relayImageFromEnv, or
 	// the path of the config file, escaped for printing. It words
 	// checkRelayImage's error.
@@ -120,6 +124,65 @@ type BuildCfg struct {
 	// TempDir is where each build's private work dir is created; --tmpdir
 	// wins, and empty means the OS temp dir.
 	TempDir string `toml:"tmpdir"`
+	// TeardownTimeout is [build] teardown_timeout, how long a driver binary
+	// is given to answer stop and then to reap; zero is not set. It is
+	// decoded apart from the typed fields (teardownTimeout).
+	TeardownTimeout time.Duration `toml:"-"`
+}
+
+// The teardown wait's default and bounds ([build] teardown_timeout).
+const (
+	defaultTeardown = 60 * time.Second
+	minTeardown     = time.Second
+	maxTeardown     = time.Hour
+)
+
+// teardown is the teardown wait: [build] teardown_timeout, else 60 s.
+func (b BuildCfg) teardown() time.Duration {
+	if b.TeardownTimeout == 0 {
+		return defaultTeardown
+	}
+	return b.TeardownTimeout
+}
+
+// teardownTimeout reads [build] teardown_timeout from the file's bytes, apart
+// from Config's typed fields, so that a value of the wrong type gets the
+// key's own message. It is refused as the file loads (UX-08), and the
+// default is not used in its place (GLOBAL-10).
+func teardownTimeout(path string, data []byte) (time.Duration, error) {
+	var f struct {
+		Build struct {
+			TeardownTimeout any `toml:"teardown_timeout"`
+		} `toml:"build"`
+	}
+	if _, err := toml.Decode(string(data), &f); err != nil {
+		return 0, nil // the typed decode reports the syntax
+	}
+	v := f.Build.TeardownTimeout
+	if v == nil {
+		return 0, nil
+	}
+	shown := driver.EscapeOutside(path)
+	fix := "set it to a duration from 1s to 1h, such as \"90s\", or remove it to " +
+		"wait the default 60s"
+	s, ok := v.(string)
+	if !ok {
+		return 0, driver.Fixable(fix, "[build] teardown_timeout in %s: %v is not a "+
+			"duration", shown, v)
+	}
+	d, err := time.ParseDuration(s)
+	switch {
+	case err != nil:
+		return 0, driver.Fixable(fix, "[build] teardown_timeout in %s: %q is not a "+
+			"duration", shown, s)
+	case d < minTeardown:
+		return 0, driver.Fixable(fix, "[build] teardown_timeout in %s: %q is below the "+
+			"minimum of 1s", shown, s)
+	case d > maxTeardown:
+		return 0, driver.Fixable(fix, "[build] teardown_timeout in %s: %q is above the "+
+			"maximum of 1h", shown, s)
+	}
+	return d, nil
 }
 
 type OutputConfig struct {
@@ -347,7 +410,7 @@ func LoadConfig() (*Config, error) {
 		cfg.Runtime.CLI, cfg.Runtime.CLISource = cli, cliFromEnv
 	}
 	if d := os.Getenv("WARDEN_DRIVER"); d != "" {
-		cfg.Runtime.Driver = d
+		cfg.Runtime.Driver, cfg.Runtime.DriverSource = d, sourceEnv
 	}
 	if img := os.Getenv(relayImageFromEnv); img != "" {
 		cfg.Runtime.RelayImage, cfg.Runtime.RelayImageSource = img, relayImageFromEnv
@@ -370,6 +433,9 @@ func decodeConfig(file string, data []byte, cfg *Config) error {
 	md, err := toml.Decode(string(data), cfg)
 	if err != nil {
 		return driver.Fixable("fix the TOML syntax in "+path, "parsing %s: %v", path, err)
+	}
+	if cfg.Build.TeardownTimeout, err = teardownTimeout(file, data); err != nil {
+		return err
 	}
 	if md.IsDefined("vm", "build_link") {
 		if _, err := checkBuildLink(cfg.VM.BuildLink); err != nil {
@@ -575,15 +641,15 @@ func discoverDockerfile(dir string) (string, error) {
 }
 
 // resolveBuildInput resolves the build context and (optional) Dockerfile for
-// any driver. The container driver always builds a Dockerfile. VM drivers
+// any driver. A driver without capabilities.vm always builds a Dockerfile. VM drivers
 // build whichever the context provides, with the precedence the drivers apply
 // (driver.StageBuildScript): --script, then a Dockerfile (Linux guests), then
 // build.sh / build.ps1 in the context. A path may name the context directory
 // or a file in it (a Dockerfile, or a build script).
 func resolveBuildInput(
-	path, driverName, guestOS, script string,
+	path string, isVM bool, guestOS, script string,
 ) (dockerfile, contextDir, buildScript string, err error) {
-	if driverName == "" || driverName == "container" {
+	if !isVM {
 		dockerfile, contextDir, err = ResolvePath(path)
 		return dockerfile, contextDir, "", err
 	}
@@ -668,16 +734,6 @@ func isScriptName(p string) bool {
 	return false
 }
 
-func validateDriver(d string) error {
-	switch d {
-	case "", "container", "qemu", "vz", "hyperv", "firecracker":
-		return nil
-	default:
-		return driver.Fixable("",
-			"unknown driver %q (valid: container, qemu, vz, hyperv, firecracker)", d)
-	}
-}
-
 func validateCapture(c string) error {
 	switch c {
 	case "", "none", "headers", "bodies", "all":
@@ -697,8 +753,7 @@ func isVMDriver(d string) bool {
 	return false
 }
 
-func validateFlagsForDriver(d string) error {
-	isVM := isVMDriver(d)
+func validateFlagsForDriver(d string, isVM bool) error {
 	for _, f := range []struct {
 		set  bool
 		name string

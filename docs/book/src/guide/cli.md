@@ -418,12 +418,48 @@ Run it as a Hyper-V Administrator.
 |------|-------------|
 | `--cache` | Also remove warden's whole cache directory. The next VM build downloads and prepares its images again. |
 
+## warden driver list
+
+```
+warden driver list [--json]
+```
+
+Lists one entry per driver name warden can find: the five bundled drivers and
+every `warden-driver-<name>` on `PATH` or beside warden. Each entry gives the
+file that would run and where it was found (`PATH`, `beside warden`,
+`linked`, or `path (--driver)` / `path (WARDEN_DRIVER)` when the selection
+names a file), and beneath it every other copy in lookup order: the ones it
+`shadows` and the ones it `skips` because they cannot be run, with the reason.
+`*` marks the driver this invocation's `--driver`, `WARDEN_DRIVER` and config
+file select; a selection that cannot be used is said in a line under the
+table. It reads directories only and runs no driver.
+
+```
+NAME          RUNS                                        FOUND
+container  *  /home/ana/bin/warden-driver-container       PATH
+                shadows /home/ana/.local/bin/warden-driver-container (beside warden)
+qemu          (linked into warden)                        linked
+```
+
+With `--json` it prints one object:
+`{"drivers":[{"name","path","found","source","selected","shadowed":[{"path","found"}],"skipped":[{"path","reason"}]}]}`,
+where `found` is `path`, `PATH`, `beside-warden` or `linked`, and `source`
+names the flag or variable behind a `path`.
+
+## warden &lt;driver&gt; ...
+
+A first argument that is not a flag and not a warden command is looked up as a
+driver's name: `warden <name> <args...>` runs that driver's own commands with
+the arguments as typed, and `warden <name> --help` lists them. Nothing after
+`<name>` is warden's. A name that finds no driver is the unknown-command
+error.
+
 ## Global Flags
 
 | Flag | Description |
 |------|-------------|
 | `--config <path>` | The config file to read, which is then the only one read (default: the file `WARDEN_CONFIG` names, then `./warden.toml` if it exists; see [Configuration](configuration.md#the-config-file)). It has no short form. Given with an empty value it is an error |
-| `--driver <name>` | Orchestration driver (container, qemu, vz, hyperv, firecracker) |
+| `--driver <name>` | The driver to run: `container` (default), `qemu`, `vz`, `hyperv` or `firecracker`, or the name or path of another driver binary ([Drivers](drivers.md#where-a-driver-comes-from)) |
 | `--runtime <name>` | Container runtime: `finch`, `docker` or `podman`, the only values it takes (see [Configuration](configuration.md#the-container-runtime)) |
 | `--color <mode>` | Color output (auto, always, never) |
 | `-v, --verbose` | Verbose output; with upstream CA paths, also the list of the files that give a certificate and of the entries not read |

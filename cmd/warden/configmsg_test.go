@@ -19,7 +19,7 @@ func TestBadVMValueNamesTheFileRead(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolveConfig: %v", err)
 		}
-		_, err = newRequest(cfg, nil)
+		_, err = newRequest(cfg, linkedSel(cfg), nil)
 		if err == nil || !strings.HasPrefix(err.Error(),
 			path+" [vm] image_refresh_after: ") {
 			t.Errorf("newRequest = %v, want the error to name %s", err, path)
