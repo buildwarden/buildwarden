@@ -1,8 +1,8 @@
 feature: skill-areas-yaml-lines
 title: Remove the four stale skill and agent lines that say wf areas -list and -check exit 1 until loop-parallel's x4-state writes areas.yaml
-priority: 5
+priority: 1090
 kind: process
-status: queued
+status: done
 round: process
 phase: 1
 design: docs/design/skill-areas-yaml-lines.md
@@ -32,3 +32,6 @@ history:
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
     event: 'priority 63 -> 5 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'closed as merged into loop-parallel-rule-wording (Jeff, 2026-11-17): its a12 changed to fold in the four deletions (task 9, design at 823bdd5); no design, branch or PR of its own; priority 5 -> 1090, done items set aside from the open numbering'

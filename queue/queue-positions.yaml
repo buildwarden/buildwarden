@@ -20,7 +20,7 @@ steps:
 budget:
   estimate:
     runs: 2
-    steps: 12
+    steps: 5
   spent:
     runs: 0
     steps: 0
@@ -32,3 +32,6 @@ history:
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
     event: 'priority 82 -> 1 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'estimate 12 steps / 2 runs -> 5 steps / 2 runs (Jeff, 2026-11-17, from the streamlining assessment: the 4-step process template plus one state step)'

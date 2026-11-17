@@ -1,6 +1,6 @@
 feature: tier1-static-checks
 title: 'Tier-1 static-check extraction (LINT-02, Deep-dive #2)'
-priority: 1008
+priority: 1009
 status: done
 round: feature
 phase: 8
@@ -346,4 +346,7 @@ history:
     event: closed; feature done
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 8 -> 1008 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'
+    event: priority 8 -> 1008 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1008 -> 1009 (renumbered by wf new: loop-streamline-2 queued at 99)'

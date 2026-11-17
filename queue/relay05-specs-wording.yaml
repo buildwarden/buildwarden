@@ -1,6 +1,6 @@
 feature: relay05-specs-wording
 title: 'RELAY-05: environment-<type>/ family, $id policy, drop the migration note'
-priority: 1014
+priority: 1015
 kind: process
 status: done
 round: process
@@ -92,4 +92,7 @@ history:
     event: closed; feature done
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 14 -> 1014 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'
+    event: priority 14 -> 1014 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1014 -> 1015 (renumbered by wf new: loop-streamline-2 queued at 99)'

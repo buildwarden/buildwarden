@@ -1,6 +1,6 @@
 feature: design-principles
 title: 'Design principles: least surprise, explicit over implicit, minimal magic'
-priority: 1055
+priority: 1056
 kind: process
 status: done
 round: process
@@ -133,4 +133,7 @@ history:
     event: 'priority 54 -> 55 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 55 -> 1055 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'
+    event: priority 55 -> 1055 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1055 -> 1056 (renumbered by wf new: loop-streamline-2 queued at 99)'

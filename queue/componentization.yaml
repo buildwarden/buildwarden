@@ -1,6 +1,6 @@
 feature: componentization
 title: 'Componentization: relay, drivers, kit, specs and loop become separate components (umbrella design)'
-priority: 1024
+priority: 1025
 kind: process
 status: done
 round: process
@@ -239,4 +239,7 @@ history:
     event: closed; feature done
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 24 -> 1024 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'
+    event: priority 24 -> 1024 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1024 -> 1025 (renumbered by wf new: loop-streamline-2 queued at 99)'

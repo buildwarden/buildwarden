@@ -1,6 +1,6 @@
 feature: loop-contract
 title: 'Loop Contract: finish it against the running loop (spec-first and design-first work) and split docs/development/ into project invariants and loop rules (componentization P1, first part)'
-priority: 1060
+priority: 1061
 kind: process
 status: done
 round: process
@@ -401,4 +401,7 @@ history:
     event: closed; feature done
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 60 -> 1060 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'
+    event: priority 60 -> 1060 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1060 -> 1061 (renumbered by wf new: loop-streamline-2 queued at 99)'

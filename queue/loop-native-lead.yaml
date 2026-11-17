@@ -1,6 +1,6 @@
 feature: loop-native-lead
 title: 'A native machine may lead an item from its first step: the lead, general host names, any-capability work under a refreshable 20-hour lease, the wrapper and the push script (componentization P1, fourth item)'
-priority: 3
+priority: 4
 kind: process
 status: in_progress
 round: process
@@ -65,3 +65,6 @@ history:
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
     event: 'priority 64 -> 3 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'
+  - at: 2026-11-17T21:06:37Z
+    by: human/jeff
+    event: 'priority 3 -> 4 (renumbered to queue order, Jeff, 2026-11-17: loop-streamline-2 placed after queue-positions; skill-areas-yaml-lines closed)'

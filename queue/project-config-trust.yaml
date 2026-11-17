@@ -1,6 +1,6 @@
 feature: project-config-trust
 title: 'One warden.toml in the control of whoever runs the build: found by --config, WARDEN_CONFIG or the working directory; the user-level file removed; and warden''s source tree found from its executable only (security fix)'
-priority: 1068
+priority: 1069
 status: done
 round: feature
 phase: 8
@@ -597,4 +597,7 @@ history:
     event: 'priority 67 -> 68 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 68 -> 1068 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'
+    event: priority 68 -> 1068 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1068 -> 1069 (renumbered by wf new: loop-streamline-2 queued at 99)'

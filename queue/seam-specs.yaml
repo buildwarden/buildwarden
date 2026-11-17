@@ -1,6 +1,6 @@
 feature: seam-specs
 title: 'Specs repository and conformance suites: write seams 1, 2, 3, 5 and 6, build the harness against any relay and any collector, link the book and the specs, fill tier 1''s seams list (componentization S1)'
-priority: 1073
+priority: 1074
 status: done
 round: feature
 phase: 8
@@ -697,4 +697,7 @@ history:
     event: 'priority 72 -> 73 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 73 -> 1073 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'
+    event: priority 73 -> 1073 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1073 -> 1074 (renumbered by wf new: loop-streamline-2 queued at 99)'

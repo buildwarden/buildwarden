@@ -1,6 +1,6 @@
 feature: specs-migration
 title: Move the ledger spec and schemas to specs/ (RELAY-05)
-priority: 1013
+priority: 1014
 status: done
 round: feature
 phase: 8
@@ -299,4 +299,7 @@ history:
     event: closed; feature done
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 13 -> 1013 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'
+    event: priority 13 -> 1013 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1013 -> 1014 (renumbered by wf new: loop-streamline-2 queued at 99)'

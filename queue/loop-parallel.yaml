@@ -1,6 +1,6 @@
 feature: loop-parallel
 title: 'Items that do not collide run side by side: an item''s repositories and areas, the relations between items and the three limits, the claim guard, the refresh step and QUEUE.md (componentization P1, third item)'
-priority: 1061
+priority: 1062
 kind: process
 status: done
 round: process
@@ -341,4 +341,7 @@ history:
     event: closed; feature done
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 61 -> 1061 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'
+    event: priority 61 -> 1061 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1061 -> 1062 (renumbered by wf new: loop-streamline-2 queued at 99)'

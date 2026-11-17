@@ -1,6 +1,6 @@
 feature: workflow-bootstrap
 title: Stand up the feature workflow (bootstrap step 1)
-priority: 1005
+priority: 1006
 status: done
 round: merge
 phase: 8
@@ -169,4 +169,7 @@ history:
     event: archived; feature done
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 5 -> 1005 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'
+    event: priority 5 -> 1005 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1005 -> 1006 (renumbered by wf new: loop-streamline-2 queued at 99)'

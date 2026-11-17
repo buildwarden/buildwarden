@@ -1,6 +1,6 @@
 feature: flow19-design-before-plan
 title: 'FLOW-19: the design review follows Design; a second review only when planning changes the design'
-priority: 1040
+priority: 1041
 kind: process
 status: done
 round: process
@@ -100,4 +100,7 @@ history:
     event: 'priority 39 -> 40 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 40 -> 1040 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'
+    event: priority 40 -> 1040 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1040 -> 1041 (renumbered by wf new: loop-streamline-2 queued at 99)'
