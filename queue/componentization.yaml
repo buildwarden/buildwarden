@@ -1,6 +1,6 @@
 feature: componentization
 title: 'Componentization: relay, drivers, kit, specs and loop become separate components (umbrella design)'
-priority: 24
+priority: 1024
 kind: process
 status: done
 round: process
@@ -237,3 +237,6 @@ history:
   - at: 2026-11-12T23:21:57Z
     by: cloud/20261112T230554Z
     event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 24 -> 1024 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

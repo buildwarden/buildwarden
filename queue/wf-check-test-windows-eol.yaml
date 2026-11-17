@@ -1,6 +1,6 @@
 feature: wf-check-test-windows-eol
 title: 'tools/workflow/check: TestWhitespaceOnlyDifferenceFails fails on a Windows checkout'
-priority: 26
+priority: 1026
 kind: process
 follows: wf-squash-after-base-moved
 status: done
@@ -90,3 +90,6 @@ history:
   - at: 2026-11-12T20:38:14Z
     by: cloud/20261112T202355Z
     event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 26 -> 1026 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

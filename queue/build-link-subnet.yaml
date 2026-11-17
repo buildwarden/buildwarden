@@ -1,6 +1,6 @@
 feature: build-link-subnet
 title: Move every VM driver's relay-to-build link off 10.0.0.0/30
-priority: 18
+priority: 1018
 status: done
 round: feature
 phase: 8
@@ -685,3 +685,6 @@ history:
   - at: 2026-11-06T15:44:43Z
     by: cloud/20261106T105651Z
     event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 18 -> 1018 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

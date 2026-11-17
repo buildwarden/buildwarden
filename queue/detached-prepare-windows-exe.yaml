@@ -1,6 +1,6 @@
 feature: detached-prepare-windows-exe
 title: On Windows a warden whose file has no .exe ending (make build's dist/warden) cannot start the background image prepare, and says nothing; with a warden.exe beside it, that file is run instead
-priority: 69
+priority: 6
 follows: project-config-trust
 status: in_progress
 round: feature
@@ -158,3 +158,6 @@ history:
   - at: 2026-11-17T19:20:47Z
     by: human/jeff
     event: 'priority 68 -> 69 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 69 -> 6 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'

@@ -1,6 +1,6 @@
 feature: budgets-active-only
 title: 'Budgets gate active work only: done and archived items are left out of runaway checks and digests outside retrospectives'
-priority: 42
+priority: 1042
 kind: process
 status: done
 round: process
@@ -98,3 +98,6 @@ history:
   - at: 2026-11-12T18:58:10Z
     by: human/jeff
     event: 'priority 41 -> 42 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 42 -> 1042 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

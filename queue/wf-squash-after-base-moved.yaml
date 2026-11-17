@@ -1,6 +1,6 @@
 feature: wf-squash-after-base-moved
 title: wf's merged check misses a squash made after main moved
-priority: 58
+priority: 1058
 kind: process
 follows: wf-squash-merged-pr
 status: done
@@ -118,3 +118,6 @@ history:
   - at: 2026-11-12T20:23:56Z
     by: cloud/20261112T202355Z
     event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 58 -> 1058 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

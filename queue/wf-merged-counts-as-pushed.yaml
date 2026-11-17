@@ -1,6 +1,6 @@
 feature: wf-merged-counts-as-pushed
 title: 'wf: a branch already merged into main satisfies the pushed, main-merged and PR checks'
-priority: 10
+priority: 1010
 kind: process
 status: done
 round: process
@@ -89,3 +89,6 @@ history:
   - at: 2026-10-31T22:10:32Z
     by: cloud/20261031T205751Z
     event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 10 -> 1010 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

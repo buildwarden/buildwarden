@@ -1,6 +1,6 @@
 feature: loop-parallel-rule-wording
 title: 'Rule wording loop-parallel left: areas: [] is declared-empty, the PR slot paragraph, FLOW-03''s area check at phases 7-8 and before wf declare, and FLOW-16''s merge proof'
-priority: 62
+priority: 2
 kind: process
 follows: loop-parallel
 status: in_progress
@@ -49,3 +49,6 @@ history:
   - at: 2026-11-17T19:19:42Z
     by: human/jeff
     event: entered phase 2 (implement)
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 62 -> 2 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'

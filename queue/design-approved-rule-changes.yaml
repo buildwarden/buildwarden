@@ -1,6 +1,6 @@
 feature: design-approved-rule-changes
 title: Rule and enforcement changes a feature's design needs are approved in its design review and made in its Implement
-priority: 23
+priority: 1023
 kind: process
 status: done
 round: process
@@ -92,3 +92,6 @@ history:
   - at: 2026-11-05T00:10:08Z
     by: cloud/20261104T214530Z-attended
     event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 23 -> 1023 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

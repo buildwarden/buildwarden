@@ -1,6 +1,6 @@
 feature: bootstrap-firecracker-row
 title: 'bootstrap.md: the Firecracker mapping row and BOOT-07 surface list'
-priority: 17
+priority: 1017
 kind: process
 status: done
 round: process
@@ -89,3 +89,6 @@ history:
   - at: 2026-11-04T10:57:35Z
     by: cloud/20261104T105656Z
     event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 17 -> 1017 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

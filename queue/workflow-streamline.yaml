@@ -1,6 +1,6 @@
 feature: workflow-streamline
 title: 'Streamline the feature loop: one round, archive in the feature PR, human gates only for design, questions and merge'
-priority: 3
+priority: 1003
 kind: process
 status: done
 round: process
@@ -128,3 +128,6 @@ history:
   - at: 2026-10-31T20:44:59Z
     by: cloud/20261031T204458Z
     event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 3 -> 1003 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

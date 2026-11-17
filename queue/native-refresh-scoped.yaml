@@ -1,6 +1,6 @@
 feature: native-refresh-scoped
 title: A failed Hyper-V relay disk refresh skips only windows-hyperv work
-priority: 1
+priority: 1001
 kind: process
 status: done
 round: process
@@ -89,3 +89,6 @@ history:
   - at: 2026-11-01T00:20:13Z
     by: cloud/20261031T205751Z
     event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 1 -> 1001 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

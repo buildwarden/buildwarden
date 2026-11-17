@@ -1,6 +1,6 @@
 feature: hyperv-relay-per-build-channel
 title: Give the Hyper-V relay VM a per-build channel before the claim
-priority: 51
+priority: 1051
 follows: build-link-subnet
 status: done
 round: feature
@@ -996,3 +996,6 @@ history:
   - at: 2026-11-12T22:50:34Z
     by: cloud/20261112T225019Z
     event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 51 -> 1051 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

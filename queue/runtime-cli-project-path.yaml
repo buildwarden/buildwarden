@@ -1,6 +1,6 @@
 feature: runtime-cli-project-path
 title: 'A project''s warden.toml may name the container runtime, not a path to run: [runtime] cli from a build context no longer executes a file the repository ships (security fix)'
-priority: 67
+priority: 1067
 status: done
 round: feature
 phase: 8
@@ -308,3 +308,6 @@ history:
   - at: 2026-11-17T19:20:47Z
     by: human/jeff
     event: 'priority 66 -> 67 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 67 -> 1067 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

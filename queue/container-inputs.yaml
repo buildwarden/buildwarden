@@ -1,6 +1,6 @@
 feature: container-inputs
 title: Record container inputs under inputs/ (ORCH-02)
-priority: 6
+priority: 1006
 status: done
 round: merge
 phase: 8
@@ -467,3 +467,6 @@ history:
   - at: 2026-10-31T20:14:16Z
     by: cloud/20261031T201416Z
     event: archived; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 6 -> 1006 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

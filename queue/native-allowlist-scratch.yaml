@@ -1,6 +1,6 @@
 feature: native-allowlist-scratch
 title: 'Native allowlist: run branch binaries under .scratch/ and the FLOW-18 recheck'
-priority: 20
+priority: 1020
 kind: process
 holds:
   - host:*
@@ -94,3 +94,6 @@ history:
   - at: 2026-11-03T01:30:28Z
     by: human/jeff
     event: renumbered one lower so build-link-subnet goes in at 18, before security-suite (Jeff, 2026-11-02)
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 20 -> 1020 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

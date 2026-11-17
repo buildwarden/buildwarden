@@ -1,6 +1,6 @@
 feature: wf-squash-merged-pr
 title: 'wf records a squash-merged PR with a deleted branch as Publish, Merge and Close done; backlog gaps gain status: deferred'
-priority: 21
+priority: 1021
 kind: process
 status: done
 round: process
@@ -89,3 +89,6 @@ history:
   - at: 2026-11-03T21:45:02Z
     by: cloud/20261103T210005Z-attended
     event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 21 -> 1021 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

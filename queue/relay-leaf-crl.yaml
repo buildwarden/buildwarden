@@ -1,6 +1,6 @@
 feature: relay-leaf-crl
 title: Relay leaf certificates name a CRL the relay serves (Windows Schannel revocation check)
-priority: 4
+priority: 1004
 status: done
 round: merge
 phase: 8
@@ -382,3 +382,6 @@ history:
   - at: 2026-10-31T02:25:02Z
     by: cloud/20261031T013930Z
     event: archived; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 4 -> 1004 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

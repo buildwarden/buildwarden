@@ -1,6 +1,6 @@
 feature: vz-nocgo-build
 title: 'The macOS arm64 release build of warden does not compile without cgo: driver/vz excludes both its cgo file and its stub (regression on main)'
-priority: 66
+priority: 1066
 status: done
 round: feature
 phase: 8
@@ -251,3 +251,6 @@ history:
   - at: 2026-11-17T19:20:47Z
     by: human/jeff
     event: 'priority 65 -> 66 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 66 -> 1066 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

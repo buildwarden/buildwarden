@@ -1,6 +1,6 @@
 feature: alters-slot
 title: wf next and wf validate count the items that alter relationships against limits.alters_relationships (the first step of the one-queue loop; lifted from loop-contract a13)
-priority: 59
+priority: 1059
 kind: process
 status: done
 round: process
@@ -142,3 +142,6 @@ history:
   - at: 2026-11-14T20:36:37Z
     by: cloud/20261112T230554Z
     event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 59 -> 1059 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

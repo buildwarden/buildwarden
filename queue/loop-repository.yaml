@@ -1,6 +1,6 @@
 feature: loop-repository
 title: 'Work in a second repository from the one queue: wf''s gates and checks, branches and PRs per repository, and the native side (componentization P1, last part). The move to a loop repository follows as P1''s last item.'
-priority: 65
+priority: 4
 kind: process
 status: in_progress
 round: process
@@ -79,3 +79,6 @@ history:
   - at: 2026-11-17T20:37:26Z
     by: human/jeff
     event: entered phase 2 (implement)
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 65 -> 4 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'

@@ -1,6 +1,6 @@
 feature: pre-release-cleanup
 title: Clear tier 1's release-range findings before the next tag (GLOBAL-01, GLOBAL-03, FLOW-12)
-priority: 9
+priority: 1009
 status: done
 round: feature
 phase: 8
@@ -190,3 +190,6 @@ history:
   - at: 2026-10-31T22:01:47Z
     by: cloud/20261031T205751Z
     event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 9 -> 1009 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

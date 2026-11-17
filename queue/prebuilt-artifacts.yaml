@@ -1,6 +1,6 @@
 feature: prebuilt-artifacts
 title: 'warden compiles nothing: it finds its executor, relay and relay VM artifacts on PATH, then in its own directory, at or above a minimum version (security fix, F9)'
-priority: 70
+priority: 7
 status: in_progress
 round: feature
 phase: 2
@@ -253,3 +253,6 @@ history:
   - at: 2026-11-17T19:20:47Z
     by: human/jeff
     event: 'priority 69 -> 70 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 70 -> 7 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'

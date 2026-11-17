@@ -1,6 +1,6 @@
 feature: human-review-shows-design
 title: workflow-human design review puts the design and its assumptions in front of Jeff
-priority: 22
+priority: 1022
 kind: process
 status: done
 round: process
@@ -89,3 +89,6 @@ history:
   - at: 2026-11-04T23:56:38Z
     by: cloud/20261104T214530Z-attended
     event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 22 -> 1022 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

@@ -1,6 +1,6 @@
 feature: native-allowlist-scratch-tools
 title: Native allowlist covers a branch's .scratch/*/tools/* scripts and env-prefixed commands
-priority: 43
+priority: 1043
 kind: process
 holds:
   - host:*
@@ -100,3 +100,6 @@ history:
   - at: 2026-11-12T18:58:10Z
     by: human/jeff
     event: 'priority 42 -> 43 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 43 -> 1043 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

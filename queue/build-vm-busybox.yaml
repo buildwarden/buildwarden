@@ -1,6 +1,6 @@
 feature: build-vm-busybox
 title: tools/build-vm/build-initramfs.sh fetches its own static busybox
-priority: 50
+priority: 1050
 follows: build-link-subnet
 status: done
 round: feature
@@ -302,3 +302,6 @@ history:
   - at: 2026-11-12T18:58:10Z
     by: human/jeff
     event: 'priority 49 -> 50 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 50 -> 1050 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

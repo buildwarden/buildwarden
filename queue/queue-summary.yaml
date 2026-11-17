@@ -1,6 +1,6 @@
 feature: queue-summary
 title: 'QUEUE.md: a generated summary of the queue on the workflow branch'
-priority: 2
+priority: 1002
 kind: process
 status: done
 round: process
@@ -80,3 +80,6 @@ history:
   - at: 2026-10-31T21:39:57Z
     by: cloud/20261031T205751Z
     event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 2 -> 1002 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

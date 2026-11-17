@@ -1,6 +1,6 @@
 feature: regression-fixes-follow-up
 title: Queue order by class (in implementation, process, fixes, new functionality), and regression fixes queued as immediate follow-ups
-priority: 44
+priority: 1044
 kind: process
 status: done
 round: process
@@ -101,3 +101,6 @@ history:
   - at: 2026-11-12T18:58:10Z
     by: human/jeff
     event: 'priority 43 -> 44 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 44 -> 1044 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))'

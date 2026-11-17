@@ -1,6 +1,6 @@
 feature: relay-collector-failure-fails-open
 title: 'Relay: a collector failure on build-script, bootstrap or cwd is served as 404, so exclusive trust becomes append (fails open)'
-priority: 80
+priority: 10
 status: in_progress
 round: feature
 phase: 2
@@ -156,3 +156,6 @@ history:
   - at: 2026-11-17T19:20:47Z
     by: human/jeff
     event: 'priority 79 -> 80 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: 'priority 80 -> 10 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'
