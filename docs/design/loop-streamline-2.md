@@ -454,7 +454,16 @@ review", each one recorded.
 
 ## Design review
 
-None yet.
+- **r1, 2026-11-17: approved at `d1083eb`** (Jeff, workflow-human, FLOW-19),
+  as read. **Rule change FLOW-19 approved at `d1083eb`**, in its a2 (a)
+  wording; the a2 (b) and (c) variants above do not apply. Unflagged
+  assumptions a1, a3, a4, a5 and a6 confirmed as recommended in one
+  answer; flagged a2 answered (a) on its own; flagged a7 answered (a):
+  not a program item, exempted from FLOW-20 by Jeff on 2026-11-17. No
+  changes folded in. The `x4-state` step is added to the queue by hand at
+  this review.
+  sitting: about 4 minutes, asks: 4 (4 in one batch), with this design's
+  own grouping, which today's text already allows.
 
 ## Consolidation
 
