@@ -116,7 +116,7 @@ steps:
   - id: f1-answer-q2
     phase: 1
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -378,13 +378,14 @@ questions:
     answer: 'resume: project-config-trust''s PR has merged (#124, 417fabd) (Jeff, 2026-11-16)'
   - id: q2
     kind: blocking
-    status: open
+    status: answered
     question: 'A driver''s key spelled in another letter case (r3, return from f3-implement task 20; design, Questions, Blocking, and Design, A driver''s key in another letter case). On main BurntSushi/toml fills the seven driver-owned keys from a key in any letter case: [Runtime] CLI = "podman" selects podman and [runtime] CLI = "./rt" is refused (TestRuntimeKeyInOtherSpellings, cmd/warden/runtime_test.go:335). The kit looks a key up by its exact name, as TOML defines keys (driver/drivercmd/settings.go), so after task 20 both are silently not set. That breaks Behaviour 18, runtime-cli-project-path''s hand-off point 5, and GLOBAL-10/11. warden''s own keys stay decoded as main decodes them under every option. Which reading does K1 adopt?'
     options:
       - '(a) the kit, and the contract for every driver, matches keys without regard to letter case: the seven old names only (until 1.0), or every listed key. Every config that works today keeps working; a table with two spellings of one key (main picks one at random) becomes a refusal; the narrow width still needs (b) for new names. Against TOML''s case-sensitive keys (DRV-C5 names TOML v1.1.0), and a driver not built on the kit must fold case itself. Paths: driver/drivercmd/settings.go and its tests, specs/driver-contract/v1.md (DRV-C4, DRV-C5, DRV-C8, DRV-C11, Old names), conformance/driver/, cmd/warden/runtime_test.go rows kept (moved with task 22), guide/configuration.md; reworks tasks 2, 13, 14'
       - '(b) a listed key, override or old name spelled in another letter case, in a table the driver reads, is refused by the owning driver in its probe with a fixable error that names the file, the spelling found and the key to write (UX-04, GLOBAL-10); two spellings in one table are refused every time; a key the driver does not list is still ignored. A config that spells one of the seven otherwise fails once, with its fix: a nineteenth, loud Behaviour difference. Paths: driver/drivercmd/settings.go and its tests, specs/driver-contract/v1.md (DRV-C5 amended, new DRV-C12, Old names), conformance/driver/ (a static case naming DRV-C12; the fake), cmd/warden/runtime_test.go TestRuntimeKeyInOtherSpellings rewritten to the refusal (moved with task 22) plus rows for [driver.container] cli, task 1 goldens, guide/configuration.md; reworks tasks 2, 13, 14'
       - '(c) accept a nineteenth Behaviour difference: another spelling is another key, ignored (DRV-C5 as written); the user''s value is replaced by the driver''s default with no message. TestRuntimeKeyInOtherSpellings rows dropped or rewritten to not read; guide/configuration.md notes keys are case-sensitive. Nothing in the kit or v1.md'
     recommended: '(b). GLOBAL-10 rules out (c): a provided value would be replaced by the default (runtime detection) silently. GLOBAL-11 weighs against (a): case folding is a reading rule TOML does not have, every driver outside the kit would have to copy it, and it keeps a second spelling working for no gain, which is why runtime-cli-project-path rejected normalizing the runtime''s value (its Decision 1). GLOBAL-09: under (b) a user who wrote [Runtime] CLI is told once what to write. runtime-cli-project-path''s security intent (every spelling of the key is seen; what runs is the list''s own member) holds under (a) and (b); under (c) nothing a file names runs, but the refusal and its transitional message are lost for those spellings. RELAY-08 is irrelevant: none of the seven keys configures the relay, and relay_image is resolved by the kit as the others are. Tasks 20, 22 and 25 depend on the answer, 21 only under (a) or (b), 23 and 24 not.'
+    answer: '(b) refuse with a fixable error: a listed key, override or old name spelled in another letter case, in a table the driver reads, is refused by the owning driver''s probe, naming the file, the spelling and the key to write; two spellings in one table are refused (Jeff, 2026-11-17)'
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
@@ -605,3 +606,9 @@ history:
   - at: 2026-11-17T13:28:55Z
     by: cloud/20261117T105743Z
     event: 'released f1-design-r3: r3 drafted at 975e8cc; waits on blocking q2 (key letter case, a/b/c, recommended b)'
+  - at: 2026-11-17T18:17:46Z
+    by: human/jeff
+    event: 'blocking question q2 answered: (b) refuse with a fixable error: a listed key, override or old name spelled in another letter case, in a table the driver reads, is refused by the owning driver''s probe, naming the file, the spelling and the key to write; two spellings in one table are refused (Jeff, 2026-11-17)'
+  - at: 2026-11-17T18:17:46Z
+    by: human/jeff
+    event: done f1-answer-q2
