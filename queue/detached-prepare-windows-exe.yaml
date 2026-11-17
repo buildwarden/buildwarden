@@ -4,7 +4,7 @@ priority: 68
 follows: project-config-trust
 status: in_progress
 round: feature
-phase: 0
+phase: 1
 design: docs/design/detached-prepare-windows-exe.md
 branch: feat/detached-prepare-windows-exe
 alters_relationships: null
@@ -13,10 +13,17 @@ steps:
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261117T105743Z
-      expires: 2026-11-17T12:57:53.24701634Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -38,3 +45,9 @@ history:
   - at: 2026-11-17T10:57:53Z
     by: cloud/20261117T105743Z
     event: claimed f0-branch-setup until 2026-11-17T12:57:53Z
+  - at: 2026-11-17T10:58:40Z
+    by: cloud/20261117T105743Z
+    event: done f0-branch-setup
+  - at: 2026-11-17T10:58:40Z
+    by: cloud/20261117T105743Z
+    event: entered phase 1 (design)
