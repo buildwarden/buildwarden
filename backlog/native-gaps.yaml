@@ -904,6 +904,9 @@ gaps:
       2026-11-16 (host:container-any/20261116T231002Z, unattended, main 417fabd): not run. main moved
       (#123 vz-nocgo-build, #124 project-config-trust), but feat/prebuilt-artifacts is still 49b513a
       (design only), and q1 is still open: driver-contract, whose merge it waits on, is in Plan with no PR.
+      2026-11-16 (host:container-any/20261117T051002Z, unattended, main 0cd3c02): not run. main moved
+      (#125 seam-specs), but feat/prebuilt-artifacts is still 49b513a (design only), and q1 is still open:
+      driver-contract is still in Plan (cloud step f2-plan) with no PR.
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: open
