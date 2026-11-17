@@ -146,14 +146,8 @@ type staged struct {
 func (d *Driver) stage(req *driver.BuildRequest, pre *preflighted,
 	workDir, outputDir, buildID string) (*staged, error) {
 	d.status("preparing build environment...")
-	script, err := driver.StageBuildScript(req, workDir)
-	if err != nil {
-		return nil, fmt.Errorf("staging build script: %w", err)
-	}
-	if err := driver.RecordInputs(outputDir, req, script); err != nil {
-		return nil, fmt.Errorf("recording inputs: %w", err)
-	}
-	image := linuxguest.ContainerfileImage(req)
+	script := req.BuildScript
+	image := linuxguest.RequestImage(req)
 	if image != "" {
 		if err := checkDiskTools(realHost{}); err != nil {
 			return nil, err

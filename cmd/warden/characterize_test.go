@@ -30,7 +30,6 @@ import (
 	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/linuxguest"
 	"github.com/buildwarden/buildwarden/driver/qemu"
-	wscript "github.com/buildwarden/buildwarden/driver/script"
 	"github.com/buildwarden/buildwarden/ledger"
 )
 
@@ -412,56 +411,28 @@ func TestCharacterizeStagedInputs(t *testing.T) {
 	}
 }
 
-// staged is where stageForCharacterization put a build's script.
+// stagedName is the directory of the output the staged script is copied to,
+// so that the golden shows it.
 const stagedName = "staged"
 
 // stageForCharacterization stages a build's script and records its inputs as
-// the driver d does on main, before the driver starts anything: the
-// container driver translates the Containerfile itself and records it, vz
-// drops the Containerfile, and the other three call driver.StageBuildScript
-// and driver.RecordInputs. The staged script is copied to
-// <output>/staged/<its name>, so that the golden shows it.
+// warden does for driver d before the driver starts anything, and copies the
+// staged script to <output>/staged/<its name>. On main each driver did this
+// itself: the container driver translated the Containerfile and recorded it,
+// vz dropped the Containerfile, and the other three called
+// driver.StageBuildScript and driver.RecordInputs; the goldens are main's.
 func stageForCharacterization(t *testing.T, d string, req *driver.BuildRequest) error {
 	t.Helper()
-	work := t.TempDir()
-	if err := os.MkdirAll(req.OutputDir, 0o755); err != nil {
+	unstage, err := stageBuild(req, d)
+	if err != nil {
 		return err
 	}
-	var script string
-	switch d {
-	case "container":
-		script = filepath.Join(work, "build.sh")
-		res, err := wscript.Translate(req.Containerfile, req.ContextDir)
-		if err != nil {
-			return fmt.Errorf("translating dockerfile: %w", err)
-		}
-		if err := os.WriteFile(script, []byte(res.Script), 0o755); err != nil {
-			return err
-		}
-		if err := driver.RecordInputs(req.OutputDir, req, script); err != nil {
-			return err
-		}
-	case "vz":
-		scriptReq := *req
-		scriptReq.Containerfile = ""
-		var err error
-		if script, err = driver.StageBuildScript(&scriptReq, work); err != nil {
-			return err
-		}
-	default:
-		var err error
-		if script, err = driver.StageBuildScript(req, work); err != nil {
-			return err
-		}
-		if err := driver.RecordInputs(req.OutputDir, req, script); err != nil {
-			return err
-		}
-	}
-	dst := filepath.Join(req.OutputDir, stagedName, filepath.Base(script))
+	defer unstage()
+	dst := filepath.Join(req.OutputDir, stagedName, filepath.Base(req.BuildScript))
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
-	return driver.CopyFile(script, dst)
+	return driver.CopyFile(req.BuildScript, dst)
 }
 
 // listTree prints every file under root with its content, in path order.
@@ -543,7 +514,12 @@ func TestCharacterizeContainerfileImage(t *testing.T) {
 				b.WriteString(strings.TrimSpace(describeErr(err, dir)) + "\n")
 				continue
 			}
-			image := linuxguest.ContainerfileImage(req)
+			unstage, err := stageBuild(req, d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			unstage()
+			image := linuxguest.RequestImage(req)
 			fmt.Fprintf(&b, "%q\n", placeholders(image, dir))
 		}
 	}

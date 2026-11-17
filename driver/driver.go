@@ -44,7 +44,17 @@ type BuildRequest struct {
 	// ("linux" (default) or "windows"). Ignored by the container driver.
 	GuestOS string
 	// Containerfile is the path to the original Dockerfile/Containerfile.
+	// warden empties it for a driver whose guest cannot run one (vz).
 	Containerfile string
+	// BuildScript is the absolute path of the build script warden staged
+	// (driver.StageBuildScript), which the collector serves. A driver reads
+	// it to describe the environment and never stages one of its own.
+	BuildScript string
+	// BaseImage is the FROM image of Containerfile, as written there, also
+	// when the build script is the user's (--script); empty when there is no
+	// Containerfile, it cannot be parsed, or its FROM is scratch. The driver
+	// resolves it to what it boots or runs.
+	BaseImage string
 	// OutputDir is the final output directory for the build.
 	OutputDir string
 	// CaptureMode controls payload capture ("none","headers","bodies","all").

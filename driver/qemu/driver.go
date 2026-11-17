@@ -107,13 +107,7 @@ func (d *Driver) StartBuild(
 	defer driver.RemoveWorkDir(req, workDir)
 
 	d.status("preparing build environment...")
-	buildScript, err := driver.StageBuildScript(req, workDir)
-	if err != nil {
-		return nil, fmt.Errorf("staging build script: %w", err)
-	}
-	if err := driver.RecordInputs(outputDir, req, buildScript); err != nil {
-		return nil, fmt.Errorf("recording inputs: %w", err)
-	}
+	buildScript := req.BuildScript
 
 	// Resolve both VMs' boot assets before anything boots, so a missing
 	// image or asset fails in milliseconds rather than after the relay is up.
@@ -239,7 +233,7 @@ func (d *Driver) resolveBuildVMConfig(
 		MemoryMB: driver.OrDefault(req.MemoryMB, 4096),
 	}
 
-	image := linuxguest.ContainerfileImage(req)
+	image := linuxguest.RequestImage(req)
 
 	if image == "" {
 		if isWindowsGuest(req) {

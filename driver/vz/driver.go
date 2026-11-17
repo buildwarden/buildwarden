@@ -90,13 +90,9 @@ func (d *Driver) StartBuild(
 	}
 	defer driver.RemoveWorkDir(req, workDir)
 
-	// macOS guests run a shell script; a Containerfile is not translated.
-	scriptReq := *req
-	scriptReq.Containerfile = ""
-	buildScript, err := driver.StageBuildScript(&scriptReq, workDir)
-	if err != nil {
-		return nil, fmt.Errorf("staging build script: %w", err)
-	}
+	// macOS guests run a shell script: warden dropped the Containerfile
+	// before it staged this one.
+	buildScript := req.BuildScript
 	env, err := describeBuild(d.Cache.LayerCache(), diskImage, buildScript)
 	if err != nil {
 		return nil, fmt.Errorf("describing build environment: %w", err)

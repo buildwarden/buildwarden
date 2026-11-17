@@ -30,7 +30,6 @@ import (
 	"github.com/lesiw/ctrctl"
 
 	"github.com/buildwarden/buildwarden/driver"
-	"github.com/buildwarden/buildwarden/driver/script"
 	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
@@ -307,16 +306,14 @@ func (b *build) setup(ctx context.Context) error {
 	if b.workDir, err = driver.NewWorkDir(b.req, "container-"+b.buildID); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(b.stagePath(), 0755); err != nil {
-		return fmt.Errorf(
-			"error creating %s: %w",
-			b.stagePath(), err)
-	}
-	// The Containerfile is translated on the host: COPY sources are expanded
-	// against the build context. The script is a build input the guest
-	// fetches from the relay (BOOT-04).
-	if err := b.stageBuildScript(); err != nil {
-		return err
+	// warden translated the Containerfile on the host and staged the script,
+	// a build input the guest fetches from the relay (BOOT-04).
+	b.baseImage = b.req.BaseImage
+	if b.baseImage == "" {
+		return driver.Fixable("give the Containerfile a FROM image the container "+
+			"runtime can pull",
+			"%s names no base image to run (FROM scratch, or none)",
+			b.req.Containerfile)
 	}
 
 	if err := b.buildWardenIO(); err != nil {
@@ -331,10 +328,6 @@ func (b *build) setup(ctx context.Context) error {
 		return fmt.Errorf(
 			"error creating output dir: %w", err)
 	}
-	if err := driver.RecordInputs(b.outputDir, b.req, b.scriptPath()); err != nil {
-		return fmt.Errorf("recording inputs: %w", err)
-	}
-
 	if err := b.resolveRelayImage(); err != nil {
 		return err
 	}
@@ -356,23 +349,6 @@ func (b *build) setup(ctx context.Context) error {
 	b.isolatedNetwork = "warden-" + b.buildID
 
 	return b.startSessionAndRelay(ctx, env)
-}
-
-// stageBuildScript writes the build script translated from the Containerfile
-// (the same translation every driver's Linux guest runs).
-func (b *build) stageBuildScript() error {
-	result, err := script.Translate(b.req.Containerfile, b.req.ContextDir)
-	if err != nil {
-		return fmt.Errorf(
-			"translating dockerfile: %w", err)
-	}
-	b.baseImage = result.Image
-	if err := os.WriteFile(
-		b.scriptPath(), []byte(result.Script), 0755); err != nil {
-		return fmt.Errorf(
-			"writing build script: %w", err)
-	}
-	return nil
 }
 
 // startSessionAndRelay starts the collector session, boots the relay
@@ -773,15 +749,8 @@ func (b *build) buildWardenIO() error {
 	return goBuildLinux("./cmd/warden-io", dest)
 }
 
-// stagePath holds the build's staged input, build.sh, served by the collector
-// and kept as provenance.
-func (b *build) stagePath() string {
-	return filepath.Join(b.workDir, "stage")
-}
-
-func (b *build) scriptPath() string {
-	return filepath.Join(b.stagePath(), "build.sh")
-}
+// scriptPath is the build script warden staged, served by the collector.
+func (b *build) scriptPath() string { return b.req.BuildScript }
 
 // executorStagePath is warden-io, the one file the build container receives
 // from the host (BOOT-02).

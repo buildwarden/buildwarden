@@ -523,28 +523,34 @@ func buildContext() (context.Context, context.CancelFunc) {
 	return ctx, cancel
 }
 
-// prepare resolves everything a build or shell needs.
-func prepare(args []string) (driver.Driver, *driver.BuildRequest, error) {
+// prepare resolves everything a build or shell needs, then stages the build
+// script; the returned function removes the stage directory.
+func prepare(args []string) (driver.Driver, *driver.BuildRequest, func(), error) {
 	cfg, err := announcedConfig()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	req, err := newRequest(cfg, args)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	d, err := newDriver(cfg)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return d, req, nil
+	unstage, err := stageBuild(req, cfg.Runtime.Driver)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return d, req, unstage, nil
 }
 
 func runBuild(_ *cobra.Command, args []string) error {
-	d, req, err := prepare(args)
+	d, req, unstage, err := prepare(args)
 	if err != nil {
 		return err
 	}
+	defer unstage()
 	defer d.Close()
 	ctx, stop := buildContext()
 	defer stop()
@@ -558,10 +564,11 @@ func runBuild(_ *cobra.Command, args []string) error {
 }
 
 func runShell(_ *cobra.Command, args []string) error {
-	d, req, err := prepare(args)
+	d, req, unstage, err := prepare(args)
 	if err != nil {
 		return err
 	}
+	defer unstage()
 	defer d.Close()
 	ctx, stop := buildContext()
 	defer stop()
