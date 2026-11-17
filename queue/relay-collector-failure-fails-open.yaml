@@ -3,7 +3,7 @@ title: 'Relay: a collector failure on build-script, bootstrap or cwd is served a
 priority: 78
 status: in_progress
 round: feature
-phase: 0
+phase: 1
 design: docs/design/relay-collector-failure-fails-open.md
 branch: feat/relay-collector-failure-fails-open
 areas:
@@ -15,17 +15,24 @@ steps:
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
     status: pending
     lease:
       claimed_by: cloud/20261117T105743Z
-      expires: 2026-11-17T15:41:50.135639531Z
+      expires: 2026-11-17T15:41:56.715079395Z
 budget:
   estimate:
     runs: 1
     steps: 9
   spent:
     runs: 1
-    steps: 1
+    steps: 2
 questions: []
 history:
   - at: 2026-11-16T17:02:18Z
@@ -37,3 +44,12 @@ history:
   - at: 2026-11-17T13:41:50Z
     by: cloud/20261117T105743Z
     event: claimed f0-branch-setup until 2026-11-17T15:41:50Z
+  - at: 2026-11-17T13:41:56Z
+    by: cloud/20261117T105743Z
+    event: done f0-branch-setup
+  - at: 2026-11-17T13:41:56Z
+    by: cloud/20261117T105743Z
+    event: entered phase 1 (design)
+  - at: 2026-11-17T13:41:56Z
+    by: cloud/20261117T105743Z
+    event: claimed f1-design until 2026-11-17T15:41:56Z

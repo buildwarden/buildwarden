@@ -42,7 +42,7 @@ None.
 | 69 | prebuilt-artifacts | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 70 | workdir-in-context | feature | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 14 |
 | 72 | driver-contract | feature | buildwarden/buildwarden | undeclared | 1 design | f1-answer-q2 (human) | - | - | 9 / 30 |
-| 78 | relay-collector-failure-fails-open | feature | buildwarden/buildwarden | relay, executor | 0 branch-setup | f0-branch-setup (cloud, leased to cloud/20261117T105743Z) | - | - | 1 / 9 |
+| 78 | relay-collector-failure-fails-open | feature | buildwarden/buildwarden | relay, executor | 1 design | f1-design (cloud, leased to cloud/20261117T105743Z) | - | - | 2 / 9 |
 
 ## Relations
 
