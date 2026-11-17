@@ -1,0 +1,40 @@
+package container
+
+import "github.com/buildwarden/buildwarden/driver/drivercmd"
+
+var settings = []drivercmd.Setting{
+	{Name: "runtime", Type: drivercmd.String,
+		Flag: "runtime", Key: "driver.container.cli",
+		Aliases: []string{"runtime.cli"}, Env: "WARDEN_CTR_CLI",
+		Commands: drivercmd.EveryCommand,
+		Usage:    "container runtime (finch, docker, podman)"},
+	{Name: "relay-image", Type: drivercmd.String,
+		Key:     "driver.container.relay_image",
+		Aliases: []string{"runtime.relay_image"}, Env: "WARDEN_IMAGE",
+		Commands: []string{"run"},
+		Usage:    "relay image reference, or dev to build it from source"},
+}
+
+var slots = drivercmd.Setting{Name: "slots", Type: drivercmd.Int, Flag: "slots",
+	Commands: []string{"setup"}, Usage: "build slots"}
+
+var ages = append([]drivercmd.Setting{},
+	drivercmd.Setting{Name: "image-refresh-after", Type: drivercmd.Age,
+		Aliases:  []string{"vm.image_refresh_after"},
+		Common:   "image_refresh_after",
+		Commands: []string{"run"}, Usage: "age at which a prepared image is refreshed"},
+	drivercmd.Setting{Name: "image-min-grace", Type: drivercmd.Age,
+		Common:   "image_min_grace",
+		Commands: []string{"run"}, Usage: "least evaluation grace"})
+
+// Not settings: another type's literal, a flag call and a toml tag, none of
+// which is read in a driver directory.
+var other = []Other{{Flag: "not-a-setting", Key: "driver.container.not_a_setting"}}
+
+type Config struct {
+	Network string `toml:"not_read_here"`
+}
+
+func init() {
+	root.Flags().String("not-read-here", "", "")
+}
