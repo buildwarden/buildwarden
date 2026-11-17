@@ -1,7 +1,7 @@
 feature: relay-collector-failure-fails-open
 title: 'Relay: a collector failure on build-script, bootstrap or cwd is served as 404, so exclusive trust becomes append (fails open)'
 priority: 78
-status: queued
+status: in_progress
 round: feature
 phase: 0
 design: docs/design/relay-collector-failure-fails-open.md
@@ -17,17 +17,23 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261117T105743Z
+      expires: 2026-11-17T15:41:50.135639531Z
 budget:
   estimate:
     runs: 1
     steps: 9
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-11-16T17:02:18Z
     by: cloud/20261112T230554Z
     event: queued at priority 78 (intake)
+  - at: 2026-11-17T13:41:50Z
+    by: cloud/20261117T105743Z
+    event: started (FLOW-05)
+  - at: 2026-11-17T13:41:50Z
+    by: cloud/20261117T105743Z
+    event: claimed f0-branch-setup until 2026-11-17T15:41:50Z

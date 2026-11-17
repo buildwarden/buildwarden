@@ -42,6 +42,7 @@ None.
 | 69 | prebuilt-artifacts | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 70 | workdir-in-context | feature | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 14 |
 | 72 | driver-contract | feature | buildwarden/buildwarden | undeclared | 1 design | f1-answer-q2 (human) | - | - | 9 / 30 |
+| 78 | relay-collector-failure-fails-open | feature | buildwarden/buildwarden | relay, executor | 0 branch-setup | f0-branch-setup (cloud, leased to cloud/20261117T105743Z) | - | - | 1 / 9 |
 
 ## Relations
 
@@ -52,39 +53,39 @@ Open features that are not disjoint. Process items are outside the relations (FL
 | detached-prepare-windows-exe, prebuilt-artifacts | colliding | prebuilt-artifacts declares no areas |
 | detached-prepare-windows-exe, workdir-in-context | colliding | area driver-core |
 | detached-prepare-windows-exe, driver-contract | colliding | driver-contract declares no areas |
+| detached-prepare-windows-exe, relay-collector-failure-fails-open | near | driver-core reaches executor |
 | detached-prepare-windows-exe, configuration-bugfixes | colliding | configuration-bugfixes declares no areas |
 | detached-prepare-windows-exe, runtime-former-values-removal | colliding | runtime-former-values-removal declares no areas |
 | detached-prepare-windows-exe, auto-tidy-pull-request | colliding | auto-tidy-pull-request declares no areas |
-| detached-prepare-windows-exe, relay-collector-failure-fails-open | near | driver-core reaches executor |
 | detached-prepare-windows-exe, relay-exit-code-unreadable | near | driver-core reaches relay |
 | prebuilt-artifacts, workdir-in-context | colliding | prebuilt-artifacts declares no areas |
 | prebuilt-artifacts, driver-contract | colliding | driver-contract declares no areas |
+| prebuilt-artifacts, relay-collector-failure-fails-open | colliding | prebuilt-artifacts declares no areas |
 | prebuilt-artifacts, configuration-bugfixes | colliding | configuration-bugfixes declares no areas |
 | prebuilt-artifacts, runtime-former-values-removal | colliding | prebuilt-artifacts declares no areas |
 | prebuilt-artifacts, auto-tidy-pull-request | colliding | auto-tidy-pull-request declares no areas |
-| prebuilt-artifacts, relay-collector-failure-fails-open | colliding | prebuilt-artifacts declares no areas |
 | prebuilt-artifacts, relay-exit-code-unreadable | colliding | prebuilt-artifacts declares no areas |
 | workdir-in-context, driver-contract | colliding | driver-contract declares no areas |
+| workdir-in-context, relay-collector-failure-fails-open | near | driver-core reaches executor |
 | workdir-in-context, configuration-bugfixes | colliding | configuration-bugfixes declares no areas |
 | workdir-in-context, runtime-former-values-removal | colliding | runtime-former-values-removal declares no areas |
 | workdir-in-context, auto-tidy-pull-request | colliding | auto-tidy-pull-request declares no areas |
-| workdir-in-context, relay-collector-failure-fails-open | near | driver-core reaches executor |
 | workdir-in-context, relay-exit-code-unreadable | near | driver-core reaches relay |
+| driver-contract, relay-collector-failure-fails-open | colliding | driver-contract declares no areas |
 | driver-contract, configuration-bugfixes | colliding | configuration-bugfixes declares no areas |
 | driver-contract, runtime-former-values-removal | colliding | driver-contract declares no areas |
 | driver-contract, auto-tidy-pull-request | colliding | auto-tidy-pull-request declares no areas |
-| driver-contract, relay-collector-failure-fails-open | colliding | driver-contract declares no areas |
 | driver-contract, relay-exit-code-unreadable | colliding | driver-contract declares no areas |
+| relay-collector-failure-fails-open, configuration-bugfixes | colliding | configuration-bugfixes declares no areas |
+| relay-collector-failure-fails-open, runtime-former-values-removal | colliding | runtime-former-values-removal declares no areas |
+| relay-collector-failure-fails-open, auto-tidy-pull-request | colliding | auto-tidy-pull-request declares no areas |
+| relay-collector-failure-fails-open, relay-exit-code-unreadable | colliding | area relay |
 | configuration-bugfixes, runtime-former-values-removal | colliding | configuration-bugfixes declares no areas |
 | configuration-bugfixes, auto-tidy-pull-request | colliding | auto-tidy-pull-request declares no areas |
-| configuration-bugfixes, relay-collector-failure-fails-open | colliding | configuration-bugfixes declares no areas |
 | configuration-bugfixes, relay-exit-code-unreadable | colliding | configuration-bugfixes declares no areas |
 | runtime-former-values-removal, auto-tidy-pull-request | colliding | auto-tidy-pull-request declares no areas |
-| runtime-former-values-removal, relay-collector-failure-fails-open | colliding | runtime-former-values-removal declares no areas |
 | runtime-former-values-removal, relay-exit-code-unreadable | colliding | runtime-former-values-removal declares no areas |
-| auto-tidy-pull-request, relay-collector-failure-fails-open | colliding | auto-tidy-pull-request declares no areas |
 | auto-tidy-pull-request, relay-exit-code-unreadable | colliding | auto-tidy-pull-request declares no areas |
-| relay-collector-failure-fails-open, relay-exit-code-unreadable | colliding | area relay |
 
 ## Waiting on a host
 
@@ -109,5 +110,4 @@ Open features that are not disjoint. Process items are outside the relations (FL
 | 75 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
 | 76 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
 | 77 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
-| 78 | relay-collector-failure-fails-open | feature | buildwarden/buildwarden | relay, executor | 9 |
 | 79 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |
