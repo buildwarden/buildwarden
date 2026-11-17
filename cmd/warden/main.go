@@ -15,7 +15,6 @@ import (
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
-	"github.com/buildwarden/buildwarden/driver/container"
 	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
 	"github.com/buildwarden/buildwarden/driver/qemu"
@@ -259,7 +258,8 @@ func validateGuestOS(guestOS, driverName string) error {
 	return nil
 }
 
-// newDriver constructs the configured driver.
+// newDriver constructs the configured driver while it still builds through
+// driver.Driver's StartBuild; it is nil for a driver with a Run (linked.go).
 func newDriver(cfg *Config) (driver.Driver, error) {
 	switch cfg.Runtime.Driver {
 	case "vz":
@@ -279,15 +279,7 @@ func newDriver(cfg *Config) (driver.Driver, error) {
 		d.Verbose = cfg.Output.Verbose
 		return d, nil
 	default:
-		runtime, err := resolveRuntime(cfg)
-		if err != nil {
-			return nil, err
-		}
-		return &container.Driver{
-			Runtime: runtime,
-			Verbose: cfg.Output.Verbose,
-			Version: version,
-		}, nil
+		return nil, nil
 	}
 }
 
@@ -560,7 +552,7 @@ func prepare(args []string) (*prepared, error) {
 	if p.linked.Preflight != nil {
 		probe := newStart(cfg, req, p.linked.Capabilities, "", "", "")
 		probe.Probe = true
-		if err := p.linked.Preflight(context.Background(), req, probe); err != nil {
+		if err := p.linked.Preflight(context.Background(), cfg, req, probe); err != nil {
 			return nil, err
 		}
 	}
@@ -613,10 +605,10 @@ func runBuild(_ *cobra.Command, args []string) error {
 		return err
 	}
 	defer p.done()
-	defer p.d.Close()
 	if p.linked.Run != nil {
 		return runLinkedBuild(p)
 	}
+	defer p.d.Close()
 	ctx, stop := buildContext()
 	defer stop()
 
@@ -634,17 +626,20 @@ func runShell(_ *cobra.Command, args []string) error {
 		return err
 	}
 	defer p.done()
-	d, req := p.d, p.req
-	defer d.Close()
+	req := p.req
+	if !p.linked.Capabilities.Shell {
+		return driver.Fixable(
+			"use warden build, or --driver container for an interactive shell",
+			"warden shell is not supported by --driver %s", driverName(p.cfg))
+	}
+	d, err := containerDriver(p.cfg)
+	if err != nil {
+		return err
+	}
 	ctx, stop := buildContext()
 	defer stop()
 
 	if err := d.Exec(ctx, req); err != nil {
-		if err == driver.ErrExecNotSupported {
-			return driver.Fixable(
-				"use warden build, or --driver container for an interactive shell",
-				"warden shell is not supported by --driver %s", d.Name())
-		}
 		// Leaving the shell with a non-zero status is the user's own
 		// result: pass it through, quietly.
 		var ee *driver.ExitError

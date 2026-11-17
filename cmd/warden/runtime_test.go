@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -483,18 +484,18 @@ func TestDoctorIgnoresAnUnusedRuntime(t *testing.T) {
 }
 
 // runtimeCommands are the commands that resolve the container runtime, and
-// newDriver, the call through which build and shell do.
+// the container driver's probe, the call through which build and shell do.
 var runtimeCommands = []struct {
 	name string
 	run  func(t *testing.T) error
 }{
-	{"newDriver", func(t *testing.T) error {
+	{"the container driver's probe", func(t *testing.T) error {
 		cfg, err := resolveConfig()
 		if err != nil {
 			t.Fatalf("resolveConfig: %v", err)
 		}
-		_, err = newDriver(cfg)
-		return err
+		return linkedDrivers["container"].Preflight(context.Background(), cfg,
+			&driver.BuildRequest{}, &driver.Start{Probe: true})
 	}},
 	{"build", func(*testing.T) error { return runBuild(buildCmd, nil) }},
 	{"shell", func(*testing.T) error { return runShell(shellCmd, nil) }},

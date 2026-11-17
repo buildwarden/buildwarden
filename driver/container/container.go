@@ -37,9 +37,6 @@ const (
 	relayImageRepo = "ghcr.io/buildwarden/relay"
 )
 
-// Compile-time interface check.
-var _ driver.Driver = (*Driver)(nil)
-
 // Driver orchestrates builds inside containers with network
 // isolation enforced by iptables.
 type Driver struct {
@@ -61,7 +58,11 @@ type build struct {
 	netnsImage      string
 	baseImage       string
 	buildID         string
-	sess            *driver.Session
+	// sess is the shell's own collector session (Exec); a build's is
+	// warden's.
+	sess *driver.Session
+	// outputDir is where relay.log and console.log go: the build's
+	// diagnostics directory.
 	outputDir       string
 	subnet          driver.Subnet
 	isolatedNetwork string
@@ -72,74 +73,72 @@ type build struct {
 	workDir string
 }
 
-// Name implements driver.Driver; it returns "container".
+// Name returns "container".
 func (d *Driver) Name() string { return "container" }
 
-// StartBuild implements driver.Driver. It isolates the build's network
-// namespace, starts the relay and the build container, waits for the build to
-// finish within req.Timeout, and tears everything down before returning.
-func (d *Driver) StartBuild(
-	ctx context.Context, req *driver.BuildRequest,
-) (*driver.BuildResult, error) {
+// Run is the driver's run of one build (specs/driver-contract/v1.md, The
+// build): it starts the relay container with the claim token and reports it
+// through host, and once warden has claimed it isolates the build's network
+// namespace and starts the build container. It reports the build container's
+// exit (container wait) as exited, and tears everything down when host.Wait
+// returns. Run keeps nothing, so it returns no kept names.
+func (d *Driver) Run(ctx context.Context, req *driver.BuildRequest, start *driver.Start,
+	host driver.Host) ([]string, error) {
 	ctrctl.Cli = []string{d.Runtime}
-	if req.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
-		defer cancel()
-	}
-
-	b := &build{d: d, req: req}
+	b := &build{d: d, req: req, buildID: start.BuildID, outputDir: start.DiagnosticsDir}
 	defer b.teardown()
 
-	if err := b.setup(ctx); err != nil {
+	env, err := b.setup()
+	if err != nil {
+		return nil, err
+	}
+	logInfo(req, "Starting relay...")
+	claimAddr, err := b.startRelayContainer(start.ClaimToken)
+	if err != nil {
+		return nil, err
+	}
+	// The runtime assigns the relay's address, so the claim names no link.
+	if err := host.ClaimRelay(ctx, driver.RelayStarted{
+		Claim:       driver.ClaimEndpoint{Network: driver.ClaimTCP, Address: claimAddr},
+		ClaimValues: driver.ClaimValues{Environment: env},
+		GuestOS:     "linux",
+	}); err != nil {
 		return nil, err
 	}
 	logInfo(req, "Starting build container...")
 	if err := b.startEnvironment(false); err != nil {
 		return nil, err
 	}
-	logInfo(req, "Executing build...")
-	if err := b.waitBuild(ctx); err != nil {
+	stopWatch := b.watchExit(host)
+	defer stopWatch()
+	if err := host.Started(); err != nil {
 		return nil, err
 	}
-	return &driver.BuildResult{
-		OutputDir: b.outputDir,
-	}, nil
+	logInfo(req, "Executing build...")
+	host.Wait(ctx)
+	return nil, nil
 }
 
-// completionGrace is how long a build container that has exited waits for the
-// guest's completion report, which warden-io sends just before it exits.
-const completionGrace = 5 * time.Second
-
-// waitBuild waits for the build's completion report, or for the build
-// container to exit without one. The relay flushes the ledger before it
-// reports completion, so this returns as soon as the collector has everything.
-func (b *build) waitBuild(ctx context.Context) error {
-	sctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- b.sess.Wait(sctx) }()
+// watchExit reports the build container's exit through host as exited, with
+// the last lines of its console, which hold warden-io's own messages when it
+// failed before the build ran. The returned function stops the watch and
+// returns once no report can follow, so that none is made after Run returns.
+func (b *build) watchExit(host driver.Host) func() {
 	exited := make(chan int, 1)
 	go func() { exited <- b.containerWait() }()
-
-	select {
-	case err := <-done:
-		return err
-	case code := <-exited:
+	quit, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
 		select {
-		case err := <-done:
-			var ee *driver.ExitError
-			if err == nil || errors.As(err, &ee) {
-				return err
-			}
-		case <-time.After(completionGrace):
+		case code := <-exited:
+			host.Exited(driver.ExitedBuild, fmt.Sprintf(
+				"warden-io exited with code %d:\n%s", code, b.consoleTail()))
+		case <-quit:
 		}
-		return fmt.Errorf(
-			"build environment failed before the build ran "+
-				"(warden-io exited with code %d):\n%s", code, b.consoleTail())
-	case <-ctx.Done():
-		_, _ = ctrctl.ContainerStop(nil, b.buildContainer)
-		return ctx.Err()
+	}()
+	return func() {
+		close(quit)
+		<-done
 	}
 }
 
@@ -174,8 +173,8 @@ func (b *build) containerLogs() string {
 	return string(out)
 }
 
-// Exec implements driver.Driver. It sets up the same isolated environment as
-// StartBuild, but starts the build container in hold mode instead of running
+// Exec sets up the same isolated environment as Run, with a collector session
+// of its own, but starts the build container in hold mode instead of running
 // the script, waits for its setup to finish, and attaches an interactive shell;
 // the environment is torn down when the shell exits.
 func (d *Driver) Exec(
@@ -183,10 +182,20 @@ func (d *Driver) Exec(
 ) error {
 	ctrctl.Cli = []string{d.Runtime}
 
-	b := &build{d: d, req: req}
+	b := &build{d: d, req: req, buildID: driver.RandAlphaNum(8), outputDir: req.OutputDir}
 	defer b.teardown()
 
-	if err := b.setup(ctx); err != nil {
+	if b.outputDir == "" {
+		b.outputDir = "warden-output"
+	}
+	if err := os.MkdirAll(b.outputDir, 0o755); err != nil {
+		return fmt.Errorf("error creating output dir: %w", err)
+	}
+	env, err := b.setup()
+	if err != nil {
+		return err
+	}
+	if err := b.startSessionAndRelay(ctx, env); err != nil {
 		return err
 	}
 	if err := b.startEnvironment(true); err != nil {
@@ -203,7 +212,7 @@ func (d *Driver) Exec(
 	// under a wrapper that records its exit status: with a TTY, finch
 	// delivers nerdctl's "exit code N" line on the terminal stream, not
 	// stderr, and its own exit status is always 1.
-	_, err := ctrctl.ContainerExec(
+	_, err = ctrctl.ContainerExec(
 		&ctrctl.ContainerExecOpts{
 			Cmd: &exec.Cmd{
 				Stdin:  stdin,
@@ -275,10 +284,6 @@ func (b *build) shellExitCode(execErr error) (int, bool) {
 	return execExitCode(execErr, "")
 }
 
-// Close implements driver.Driver. Each build tears down its own containers,
-// so the driver holds nothing to release.
-func (d *Driver) Close() error { return nil }
-
 // stdio resolves the request's stdin, stdout and stderr, defaulting each to
 // the process's own stream when the request leaves it unset.
 func stdio(req *driver.BuildRequest) (stdin io.Reader, stdout, stderr io.Writer) {
@@ -297,62 +302,55 @@ func stdio(req *driver.BuildRequest) (stdin io.Reader, stdout, stderr io.Writer)
 
 // --- build lifecycle ---
 
-func (b *build) setup(ctx context.Context) error {
-	b.buildID = driver.RandAlphaNum(8)
+// setup readies everything the relay and the build container need: the
+// work directory, the executor, the relay and support images, the base image
+// and its environment record, and the build's network. It returns the
+// environment record, nil when it could not be read.
+func (b *build) setup() (*relaycfg.Environment, error) {
 	logInfo(b.req,
 		fmt.Sprintf("Build ID: %s", b.buildID))
 
 	var err error
 	if b.workDir, err = driver.NewWorkDir(b.req, "container-"+b.buildID); err != nil {
-		return err
+		return nil, err
 	}
 	// warden translated the Containerfile on the host and staged the script,
 	// a build input the guest fetches from the relay (BOOT-04).
 	b.baseImage = b.req.BaseImage
 	if b.baseImage == "" {
-		return driver.Fixable("give the Containerfile a FROM image the container "+
+		return nil, driver.Fixable("give the Containerfile a FROM image the container "+
 			"runtime can pull",
 			"%s names no base image to run (FROM scratch, or none)",
 			b.req.Containerfile)
 	}
 
 	if err := b.buildWardenIO(); err != nil {
-		return err
-	}
-
-	b.outputDir = b.req.OutputDir
-	if b.outputDir == "" {
-		b.outputDir = "warden-output"
-	}
-	if err = os.MkdirAll(b.outputDir, 0755); err != nil {
-		return fmt.Errorf(
-			"error creating output dir: %w", err)
+		return nil, err
 	}
 	if err := b.resolveRelayImage(); err != nil {
-		return err
+		return nil, err
 	}
 	if err := b.resolveSupportImages(); err != nil {
-		return err
+		return nil, err
 	}
 
 	env, err := b.prepareEnvironment()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	logInfo(b.req, "Allocating network...")
 	sub, err := driver.AllocateNetwork("warden-" + b.buildID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	b.subnet = sub
 	b.isolatedNetwork = "warden-" + b.buildID
-
-	return b.startSessionAndRelay(ctx, env)
+	return env, nil
 }
 
-// startSessionAndRelay starts the collector session, boots the relay
-// container and claims it with the build's configuration.
+// startSessionAndRelay starts the shell's own collector session, boots the
+// relay container and claims it with the build's configuration.
 func (b *build) startSessionAndRelay(ctx context.Context, env *relaycfg.Environment) error {
 	var err error
 	b.sess, err = driver.StartSession(driver.SessionConfig{
@@ -816,7 +814,8 @@ func (b *build) collectLogs() {
 	}
 }
 
-// collectOutput finalizes the collector's output (the same as every driver).
+// collectOutput finalizes the shell's collector output; a build's is
+// warden's.
 func (b *build) collectOutput() {
 	driver.FinalizeOutput(b.outputDir, b.req.Compress)
 }

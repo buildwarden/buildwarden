@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/container"
 )
 
 // The drivers linked into warden, until each becomes a binary (K2; the
@@ -39,27 +40,29 @@ const (
 )
 
 // linkedDriver is a driver linked into warden: its capabilities, and the
-// functions the build sequence calls. req is warden's request for the build,
-// which carries what a linked driver reads beside the start message until it
-// reads its own settings through the kit (K1, Step 6): its flags and keys,
-// and the streams it prints to.
+// functions the build sequence calls. cfg and req are warden's configuration
+// and request for the build, which carry what a linked driver reads beside
+// the start message until it reads its own settings through the kit (K1,
+// Step 6): its flags and keys, and the streams it prints to.
 type linkedDriver struct {
 	Capabilities capabilities
 	// Preflight is what a probe of run calls: the checks the driver makes
 	// before anything is created. It creates nothing. Nil makes no checks.
-	Preflight func(ctx context.Context, req *driver.BuildRequest, start *driver.Start) error
+	Preflight func(ctx context.Context, cfg *Config, req *driver.BuildRequest,
+		start *driver.Start) error
 	// Run is the driver's run: it starts the relay, reports it through
 	// host, starts the environment once host has claimed it, and tears down
 	// when host.Wait returns. Nil while the driver still builds through
 	// driver.Driver's StartBuild.
-	Run func(ctx context.Context, req *driver.BuildRequest, start *driver.Start,
-		host driver.Host) (kept []string, err error)
+	Run func(ctx context.Context, cfg *Config, req *driver.BuildRequest,
+		start *driver.Start, host driver.Host) (kept []string, err error)
 }
 
 // linkedDrivers are the drivers linked into warden, by name.
 var linkedDrivers = map[string]*linkedDriver{
 	"container": {Capabilities: capabilities{Shell: true, Keep: keepNone, Exited: true,
-		Containerfile: containerfileTranslate, GuestOS: []string{"linux"}}},
+		Containerfile: containerfileTranslate, GuestOS: []string{"linux"}},
+		Preflight: containerPreflight, Run: containerRun},
 	"qemu": {Capabilities: capabilities{VM: true, Keep: keepStopped,
 		Containerfile: containerfileTranslate, GuestOS: []string{"linux", "windows"}}},
 	"vz": {Capabilities: capabilities{VM: true, Keep: keepStopped,
@@ -68,4 +71,35 @@ var linkedDrivers = map[string]*linkedDriver{
 		Containerfile: containerfileTranslate, GuestOS: []string{"linux", "windows"}}},
 	"firecracker": {Capabilities: capabilities{VM: true, Keep: keepRunning, Exited: true,
 		Containerfile: containerfileTranslate, GuestOS: []string{"linux"}}},
+}
+
+// containerPreflight is the container driver's probe: it resolves the
+// container runtime (the configured one, else detection) and refuses one
+// that is not supported or does not answer, before anything is created.
+func containerPreflight(_ context.Context, cfg *Config, _ *driver.BuildRequest,
+	_ *driver.Start) error {
+	_, err := resolveRuntime(cfg)
+	return err
+}
+
+// containerRun is the container driver's run. It resolves the runtime once
+// more, as a build of a driver binary does after its probe.
+func containerRun(ctx context.Context, cfg *Config, req *driver.BuildRequest,
+	start *driver.Start, host driver.Host) ([]string, error) {
+	d, err := containerDriver(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return d.Run(ctx, req, start, host)
+}
+
+// containerDriver is the container driver for cfg, on the runtime it
+// resolves.
+func containerDriver(cfg *Config) (*container.Driver, error) {
+	runtime, err := resolveRuntime(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &container.Driver{Runtime: runtime, Verbose: cfg.Output.Verbose,
+		Version: version}, nil
 }

@@ -334,7 +334,7 @@ func runLinkedBuild(p *prepared) error {
 	defer signal.Stop(sigs)
 	sess := &collectorSession{req: p.req, token: token, verbose: p.cfg.Output.Verbose}
 	seq := &buildSequence{
-		start: start, peer: newLinkedPeer(p.linked, p.req), session: sess,
+		start: start, peer: newLinkedPeer(p.linked, p.cfg, p.req), session: sess,
 		timeout: p.req.Timeout, signals: sigs, stopSignals: func() { signal.Stop(sigs) },
 		after: time.After,
 	}
@@ -421,6 +421,7 @@ func newStart(cfg *Config, req *driver.BuildRequest, caps capabilities,
 // the calls of the driver.Host it is given.
 type linkedPeer struct {
 	d   *linkedDriver
+	cfg *Config
 	req *driver.BuildRequest
 	ev  chan runEvent
 
@@ -429,15 +430,16 @@ type linkedPeer struct {
 	reason string
 }
 
-func newLinkedPeer(d *linkedDriver, req *driver.BuildRequest) *linkedPeer {
-	return &linkedPeer{d: d, req: req, ev: make(chan runEvent), stopCh: make(chan struct{})}
+func newLinkedPeer(d *linkedDriver, cfg *Config, req *driver.BuildRequest) *linkedPeer {
+	return &linkedPeer{d: d, cfg: cfg, req: req, ev: make(chan runEvent),
+		stopCh: make(chan struct{})}
 }
 
 func (p *linkedPeer) begin(start *driver.Start) {
 	go func() {
 		// The driver's context is not cancelled: stop is how it is told to
 		// tear down, and its teardown needs a live context.
-		kept, err := p.d.Run(context.Background(), p.req, start, linkedHost{p})
+		kept, err := p.d.Run(context.Background(), p.cfg, p.req, start, linkedHost{p})
 		p.ev <- runEvent{kind: evEnd, kept: kept, err: err}
 	}()
 }
