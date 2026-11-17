@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
 	"time"
@@ -468,24 +467,6 @@ func vmFlagOr(flag, conf int, isVM bool) int {
 	return conf
 }
 
-func buildContext() (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(context.Background())
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt)
-	go func() {
-		select {
-		case <-sig:
-			fmt.Fprintf(os.Stderr,
-				"\nInterrupted, cleaning up... "+
-					"(press ctrl+c again to force)\n")
-			cancel()
-			signal.Stop(sig)
-		case <-ctx.Done():
-		}
-	}()
-	return ctx, cancel
-}
-
 // prepared is a build or shell that prepare readied: its configuration and
 // request, its driver, and the build's ID and hold on its lock and record.
 type prepared struct {
@@ -584,29 +565,12 @@ func runShell(_ *cobra.Command, args []string) error {
 		return err
 	}
 	defer p.done()
-	req := p.req
 	if !p.linked.Capabilities.Shell {
 		return driver.Fixable(
 			"use warden build, or --driver container for an interactive shell",
 			"warden shell is not supported by --driver %s", driverName(p.cfg))
 	}
-	d, err := containerDriver(p.cfg)
-	if err != nil {
-		return err
-	}
-	ctx, stop := buildContext()
-	defer stop()
-
-	if err := d.Exec(ctx, req); err != nil {
-		// Leaving the shell with a non-zero status is the user's own
-		// result: pass it through, quietly.
-		var ee *driver.ExitError
-		if errors.As(err, &ee) {
-			return exitStatusError(ee.Code)
-		}
-		return err
-	}
-	return nil
+	return runLinkedShell(p)
 }
 
 // exitStatusError ends warden with that exit code, the outcome already

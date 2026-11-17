@@ -64,7 +64,9 @@ runtime's VM shares; the macOS temp dir is shared by all three.
 | `130` | Interrupted (Ctrl-C) |
 | `1` | Any other failure. A known cause (missing root or Administrator, unprepared image, absent tool, bad flag) is printed with `To fix: <what to do>`; only an unexplained failure carries the issue link |
 
-`warden shell` exits with the shell's own exit status.
+`warden shell` exits with the shell's own exit status, `130` when
+interrupted (Ctrl-C), and `1` when the shell could not be attached or for any
+other failure. `--timeout` does not limit a shell.
 
 **Example:**
 ```sh

@@ -92,6 +92,15 @@ type buildOutcome struct {
 	// teardownErr is an error the driver reported after it was asked to
 	// stop: the build's result stands, and this is said beside it.
 	teardownErr error
+	// shellCode is the shell's exit code, for a shell whose attach ran.
+	shellCode int
+}
+
+// attachResult is how an attach ended: the shell's exit code, or the
+// attach's own failure.
+type attachResult struct {
+	code int
+	err  error
 }
 
 // buildSequence runs one build of a driver.
@@ -107,6 +116,10 @@ type buildSequence struct {
 	stopSignals func()
 	// after is the clock of the grace and the timeout.
 	after func(time.Duration) <-chan time.Time
+	// attach, for a start in mode shell, enters the held environment once it
+	// is reported started, and returns the shell's exit code. The sequence
+	// then waits for no completion: the shell's exit ends it.
+	attach func() (int, error)
 }
 
 // errStopped is what a claim the sequence gave up on returns to the driver.
@@ -126,6 +139,7 @@ type seqState struct {
 	cancelWait  context.CancelFunc
 	claimDone   chan error
 	waitDone    chan error
+	attachDone  chan attachResult
 	grace       <-chan time.Time
 	graceDetail string
 	relayGone   string // why a claim in progress was cancelled
@@ -141,8 +155,11 @@ func (st *seqState) decide(err error, reason string) {
 	}
 	st.stopped = true
 	detail := "the build completed"
-	if err != nil {
+	switch {
+	case err != nil:
 		detail = err.Error()
+	case reason == driver.StopShellExited:
+		detail = "the shell exited"
 	}
 	st.cancelClaim()
 	st.cancelWait()
@@ -152,7 +169,8 @@ func (st *seqState) decide(err error, reason string) {
 // run runs the sequence to its end: until the driver has torn down.
 func (s *buildSequence) run() buildOutcome {
 	st := &seqState{buildSequence: s, cancelClaim: func() {}, cancelWait: func() {},
-		claimDone: make(chan error, 1), waitDone: make(chan error, 1)}
+		claimDone: make(chan error, 1), waitDone: make(chan error, 1),
+		attachDone: make(chan attachResult, 1)}
 	defer func() { st.cancelClaim(); st.cancelWait() }()
 	var deadline <-chan time.Time
 	if s.timeout > 0 {
@@ -174,6 +192,9 @@ func (s *buildSequence) run() buildOutcome {
 				reason = driver.StopFailed
 			}
 			st.decide(err, reason)
+		case r := <-st.attachDone:
+			st.out.shellCode = r.code
+			st.decide(r.err, driver.StopShellExited)
 		case <-st.grace:
 			st.decide(fmt.Errorf("the build environment exited before the build "+
 				"completed: %s", st.graceDetail), driver.StopFailed)
@@ -195,9 +216,16 @@ func (st *seqState) onEvent(ev runEvent) bool {
 	case evRelayStarted:
 		st.onRelayStarted(ev)
 	case evStarted:
-		if !st.claimed && !st.stopped {
+		switch {
+		case st.stopped:
+		case !st.claimed:
 			st.decide(driverDefect("reported its environment started before "+
 				"warden had claimed the relay"), driver.StopFailed)
+		case st.attach != nil:
+			go func() {
+				code, err := st.attach()
+				st.attachDone <- attachResult{code, err}
+			}()
 		}
 	case evExited:
 		st.onExited(ev)
@@ -233,9 +261,11 @@ func (st *seqState) onClaimed(err error) {
 	switch {
 	case err == nil && !st.stopped:
 		st.claimed = true
-		var ctx context.Context
-		ctx, st.cancelWait = context.WithCancel(context.Background())
-		go func() { st.waitDone <- st.session.wait(ctx) }()
+		if st.attach == nil { // a shell's end is its attach's, not a completion
+			var ctx context.Context
+			ctx, st.cancelWait = context.WithCancel(context.Background())
+			go func() { st.waitDone <- st.session.wait(ctx) }()
+		}
 		reply <- nil
 		return
 	case st.relayGone != "":
@@ -323,12 +353,35 @@ func driverDefect(what string) error {
 // warden makes the claim token, starts the collector and claims the relay,
 // owns SIGINT and SIGTERM and --timeout, and reports the build.
 func runLinkedBuild(p *prepared) error {
-	token, err := driver.RandomToken()
+	out, err := runLinkedSequence(p, driver.ModeBuild)
 	if err != nil {
 		return err
 	}
+	return reportBuild(out, p.req)
+}
+
+// runLinkedShell runs warden shell with a linked driver: the sequence in
+// mode shell, which attaches once the held environment is reported started
+// and stops it when the shell exits, and reports the shell's end.
+func runLinkedShell(p *prepared) error {
+	out, err := runLinkedSequence(p, driver.ModeShell)
+	if err != nil {
+		return err
+	}
+	return reportShell(out)
+}
+
+// runLinkedSequence runs the build sequence of a linked driver in mode, and
+// finalizes the output once a claim was made. A shell has no --timeout, as
+// before the build sequence.
+func runLinkedSequence(p *prepared, mode string) (buildOutcome, error) {
+	token, err := driver.RandomToken()
+	if err != nil {
+		return buildOutcome{}, err
+	}
 	start := newStart(p.cfg, p.req, p.linked.Capabilities, p.id, token,
 		p.live.statePath())
+	start.Mode = mode
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sigs)
@@ -338,12 +391,41 @@ func runLinkedBuild(p *prepared) error {
 		timeout: p.req.Timeout, signals: sigs, stopSignals: func() { signal.Stop(sigs) },
 		after: time.After,
 	}
+	if mode == driver.ModeShell {
+		seq.timeout = 0
+		seq.attach = func() (int, error) {
+			return p.linked.Attach(context.Background(), p.cfg, p.req, p.id)
+		}
+	}
 	out := seq.run()
 	sess.close()
 	if out.claimed {
 		driver.FinalizeOutput(p.req.OutputDir, p.req.Compress)
 	}
-	return reportBuild(out, p.req)
+	return out, nil
+}
+
+// reportShell gives warden shell's exit: the shell's own code, quietly, as
+// leaving it with a non-zero status is the user's own result; 130 for
+// Ctrl-C; and 1 for SIGTERM, a failed attach and every other failure
+// (UX-09).
+func reportShell(out buildOutcome) error {
+	if out.teardownErr != nil {
+		log.Info(fmt.Sprintf("warning: the driver's teardown failed: %v", out.teardownErr))
+	}
+	switch {
+	case out.interrupted:
+		fmt.Fprintln(os.Stderr, "warden: shell interrupted")
+		return exitStatusError(exitInterrupted)
+	case out.terminated:
+		fmt.Fprintln(os.Stderr, "warden: shell terminated (SIGTERM)")
+		return exitStatusError(1)
+	case out.err != nil:
+		return out.err
+	case out.shellCode != 0:
+		return exitStatusError(out.shellCode)
+	}
+	return nil
 }
 
 // reportBuild says how the build ended and gives warden's exit: the build

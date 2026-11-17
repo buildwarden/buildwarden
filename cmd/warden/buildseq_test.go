@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -51,6 +52,8 @@ type fakeSession struct {
 	res    error
 	hasRes bool
 	claims []driver.RelayStarted
+	// waited reports that warden waited for a completion.
+	waited atomic.Bool
 }
 
 func newFakeSession(tr *trace) *fakeSession {
@@ -71,6 +74,7 @@ func (f *fakeSession) claim(ctx context.Context, r driver.RelayStarted) error {
 }
 
 func (f *fakeSession) wait(ctx context.Context) error {
+	f.waited.Store(true)
 	select {
 	case err := <-f.done:
 		f.complete(err)
@@ -620,5 +624,76 @@ func TestReportBuildExitCodes(t *testing.T) {
 	if err := reportBuild(buildOutcome{err: failed}, &driver.BuildRequest{}); !errors.Is(err,
 		failed) {
 		t.Errorf("a failure: %v, want the failure itself, which exits 1", err)
+	}
+}
+
+// warden shell (The build, warden shell): in mode shell warden attaches once
+// the held environment is reported started, waits for no completion, and
+// sends stop with shell-exited when the shell exits; the outcome is the
+// shell's exit code, or the attach's own failure (BOOT-03, UX-09).
+func TestBuildSequenceShell(t *testing.T) {
+	refused := driver.Fixable("start a shell with warden shell",
+		"no held shell environment of build k3v9x2ab")
+	for _, tc := range []struct {
+		name string
+		code int
+		err  error
+	}{
+		{"the shell exits 7", 7, nil},
+		{"the shell exits 0", 0, nil},
+		{"the attach fails", 0, refused},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newSequenceTest(wellBehaved, 0)
+			s.seq.start.Mode = driver.ModeShell
+			attached := make(chan struct{}, 1)
+			s.seq.attach = func() (int, error) {
+				attached <- struct{}{}
+				return tc.code, tc.err
+			}
+			s.begin()
+			out := s.end(t)
+			select {
+			case <-attached:
+			default:
+				t.Fatal("warden did not attach")
+			}
+			wantTrace(t, s.tr.get(), traceOf("stop shell-exited", "stopped")...)
+			if out.shellCode != tc.code || !errors.Is(out.err, tc.err) {
+				t.Errorf("outcome %+v, want code %d and %v", out, tc.code, tc.err)
+			}
+			if s.sess.waited.Load() {
+				t.Error("warden waited for a completion in a shell")
+			}
+		})
+	}
+}
+
+// A shell's exit: the shell's code, 130 for Ctrl-C, and 1 for SIGTERM and
+// for a failed attach, whose error warden prints (UX-09).
+func TestReportShellExitCodes(t *testing.T) {
+	captureLog(t)
+	refused := errors.New("no held shell environment")
+	for _, tc := range []struct {
+		name string
+		out  buildOutcome
+		want int // -1 is no exit status error
+	}{
+		{"exit 0", buildOutcome{}, -1},
+		{"exit 7", buildOutcome{shellCode: 7}, 7},
+		{"SIGINT", buildOutcome{err: context.Canceled, interrupted: true}, 130},
+		{"SIGTERM", buildOutcome{err: errors.New("terminated"), terminated: true}, 1},
+	} {
+		err := reportShell(tc.out)
+		var es exitStatusError
+		switch {
+		case tc.want < 0 && err != nil:
+			t.Errorf("%s: %v, want success", tc.name, err)
+		case tc.want >= 0 && (!errors.As(err, &es) || int(es) != tc.want):
+			t.Errorf("%s: %v, want exit %d", tc.name, err, tc.want)
+		}
+	}
+	if err := reportShell(buildOutcome{err: refused}); !errors.Is(err, refused) {
+		t.Errorf("a failed attach: %v, want its error, which exits 1", err)
 	}
 }

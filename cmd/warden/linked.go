@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"io"
+	"os"
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/container"
@@ -59,13 +61,19 @@ type linkedDriver struct {
 	// when host.Wait returns.
 	Run func(ctx context.Context, cfg *Config, req *driver.BuildRequest,
 		start *driver.Start, host driver.Host) (kept []string, err error)
+	// Attach enters the held environment of build buildID, which a Run in
+	// mode shell reported started, on the request's terminal, and returns
+	// the shell's exit code; an error is the attach's own failure. Nil for a
+	// driver without capabilities.shell.
+	Attach func(ctx context.Context, cfg *Config, req *driver.BuildRequest,
+		buildID string) (code int, err error)
 }
 
 // linkedDrivers are the drivers linked into warden, by name.
 var linkedDrivers = map[string]*linkedDriver{
 	"container": {Capabilities: capabilities{Shell: true, Keep: keepNone, Exited: true,
 		Containerfile: containerfileTranslate, GuestOS: []string{"linux"}},
-		Preflight: containerPreflight, Run: containerRun},
+		Preflight: containerPreflight, Run: containerRun, Attach: containerAttach},
 	"qemu": {Capabilities: capabilities{VM: true, Keep: keepStopped,
 		Containerfile: containerfileTranslate, GuestOS: []string{"linux", "windows"}},
 		Preflight: func(_ context.Context, _ *Config, req *driver.BuildRequest,
@@ -134,6 +142,28 @@ func containerRun(ctx context.Context, cfg *Config, req *driver.BuildRequest,
 		return nil, err
 	}
 	return d.Run(ctx, req, start, host)
+}
+
+// containerAttach is the container driver's attach, on the runtime it
+// resolves, with the request's streams, else the process's own.
+func containerAttach(_ context.Context, cfg *Config, req *driver.BuildRequest,
+	buildID string) (int, error) {
+	d, err := containerDriver(cfg)
+	if err != nil {
+		return 0, err
+	}
+	var stdin io.Reader = os.Stdin
+	var stdout, stderr io.Writer = os.Stdout, os.Stderr
+	if req.Stdin != nil {
+		stdin = req.Stdin
+	}
+	if req.Stdout != nil {
+		stdout = req.Stdout
+	}
+	if req.Stderr != nil {
+		stderr = req.Stderr
+	}
+	return d.Attach(buildID, stdin, stdout, stderr)
 }
 
 // containerDriver is the container driver for cfg, on the runtime it
