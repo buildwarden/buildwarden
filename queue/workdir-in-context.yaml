@@ -1,7 +1,7 @@
 feature: workdir-in-context
 title: A work directory inside the build context is served to the build; a Dockerfile FROM value reaches the container runtime's command line unchecked (security fix)
 priority: 70
-status: queued
+status: in_progress
 round: feature
 phase: 0
 design: docs/design/workdir-in-context.md
@@ -14,15 +14,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261117T105743Z
+      expires: 2026-11-17T15:29:09.307922319Z
 budget:
   estimate:
     runs: 2
     steps: 14
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-11-15T21:57:17Z
@@ -37,3 +37,9 @@ history:
   - at: 2026-11-16T05:27:02Z
     by: host:windows-hyperv/20261116T051002Z
     event: 'priority 69 -> 70 (renumbered by wf new: detached-prepare-windows-exe queued at 68)'
+  - at: 2026-11-17T13:29:09Z
+    by: cloud/20261117T105743Z
+    event: started (FLOW-05)
+  - at: 2026-11-17T13:29:09Z
+    by: cloud/20261117T105743Z
+    event: claimed f0-branch-setup until 2026-11-17T15:29:09Z
