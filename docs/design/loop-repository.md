@@ -340,8 +340,9 @@ checkout of this repository, with this repository's paths and commands.
     that `x2-implement` needs, for `loop-native-lead`'s merge, whose
     wrapper the native part builds on, and for
     `loop-parallel-rule-wording`'s, which also amends FLOW-02's `areas`
-    bullet and the template's `areas` comment, FLOW-03's "from Implement
-    on" sentence and its phases 7 and 8, and FLOW-16.
+    bullet, its last paragraph and the template's `areas` comment,
+    FLOW-03's "from Implement on" sentence and its phases 7 and 8, and
+    FLOW-16.
 17. **What proves the item is not its done-when** (a16). This item is done
     when its PR merges (FLOW-03, process items). The wave-1 gate is met
     later, when the relay's first item and an item here complete from the
@@ -616,12 +617,15 @@ checkout of this repository, with this repository's paths and commands.
   this one 65, on the `workflow` branch on 2026-11-17).
   `loop-native-lead` is not designed yet, and rewrites the native wrapper.
   `loop-parallel-rule-wording` is designed (its review approved, its
-  Implement pending) and amends FLOW-02's `areas` bullet and the
-  template's `areas` comment, FLOW-03's paragraph after the table (its
-  "from Implement on" sentence) and phases 7 and 8, FLOW-05, and FLOW-16
-  (the merge proof). Its approved wording already replaces two sentences
-  quoted here: FLOW-02's "A design that declares none is undeclared" and
-  FLOW-03's "from Implement on" sentence. Proceeding with (a); confirm.
+  Implement pending) and amends FLOW-02's `areas` bullet, FLOW-02's last
+  paragraph (its "from Implement on (FLOW-03)") and the template's
+  `areas` comment, FLOW-03's paragraph after the table (its "from
+  Implement on" sentence) and phases 7 and 8, FLOW-05, and FLOW-16 (the
+  merge proof). Its approved wording already replaces three sentences
+  quoted here: FLOW-02's "A design that declares none is undeclared",
+  the sentence of FLOW-02's last paragraph that ends "from Implement on
+  (FLOW-03)", and FLOW-03's "from Implement on" sentence. Proceeding with
+  (a); confirm.
   - (a) This design is reviewed now. When the design review is recorded,
     the attended session seeds a `human` step `x2-predecessors-merged`
     (phase 2, affinity `human`), and `x2-implement` lists it in `needs:
@@ -632,8 +636,8 @@ checkout of this repository, with this repository's paths and commands.
     quoted in this design. While the step is pending the item counts as
     waiting on the human (FLOW-05), which is acceptable: a process item
     starts whatever the count. The rule wording below is re-based on theirs
-    (FLOW-02's `areas` bullet and template comment, FLOW-03's "from
-    Implement on" sentence, FLOW-16) and the native part on
+    (FLOW-02's `areas` bullet, last paragraph and template comment,
+    FLOW-03's "from Implement on" sentence, FLOW-16) and the native part on
     `loop-native-lead`'s wrapper, and if either changes a sentence quoted
     here, as `loop-parallel-rule-wording`'s approved wording does, the
     design comes back for a review of that change only (FLOW-19).
@@ -669,9 +673,12 @@ checkout of this repository, with this repository's paths and commands.
     text is made neutral in the same change (LOOP-08: "made neutral when
     the rule is next changed"): the `drivers`, `surfaces`,
     `security_boundary` and `tier2_gaps` bullets are marked as keys this
-    repository's profile file adds, and `alters_relationships` and the
-    conservative-derivation paragraph name this repository's components
-    and packages as its examples (**Rule changes**, FLOW-02).
+    repository's profile file adds, `alters_relationships` and the
+    conservative-derivation paragraph name this repository's components,
+    packages, drivers and hosts as its examples, and the last paragraph
+    (what the automated part diffs and checks) names `drivers`,
+    `surfaces` and the security note as this repository's (**Rule
+    changes**, FLOW-02).
   - (b) Every component's designs carry all twelve, `none` or `[]` where
     the term is `none`.
 
@@ -1002,18 +1009,21 @@ is named in the profile file and not changed.
 Each entry quotes the current text at `0cd3c02` and gives the proposed
 text in full for each amended paragraph. Severities and check types do not
 change. Under a15 the paragraphs `loop-parallel-rule-wording` also
-amends (FLOW-02's `areas` bullet and the template's `areas` comment,
-FLOW-03's "from Implement on" sentence, FLOW-16) are re-based on its
-wording if it merges first, and come back for review only if a sentence
-quoted here changed; its approved wording changes the first two.
+amends (FLOW-02's `areas` bullet, FLOW-02's last paragraph and the
+template's `areas` comment, FLOW-03's "from Implement on" sentence,
+FLOW-16) are re-based on its wording if it merges first, and come back for
+review only if a sentence quoted here changed; its approved wording
+changes the `areas` bullet, the last paragraph and the FLOW-03 sentence.
 
 ### FLOW-02 (amend), `docs/development/process.md`, `docs/design/TEMPLATE.md`
 
 **Why:** a design names the repositories whose pull requests merge first
 (a5), and the areas it edits in each repository it works in (a8). The
-change also makes the list neutral (LOOP-08: neutral when the rule is next
+change also makes the rule neutral (LOOP-08: neutral when the rule is next
 changed), as row 3 of FLOW-03 is: the keys a profile adds are marked as
-this repository's (a17).
+this repository's in the list and in the two paragraphs after it, so no
+part of FLOW-02 treats `drivers`, `surfaces` or the security note as every
+component's (a17).
 
 **Current wording,** the `drivers` bullet (`process.md:73-74`):
 
@@ -1054,11 +1064,20 @@ this repository's (a17).
 > the TEST-02 caveat. `areas` name what the change edits, not what depends on
 > it: the area map says which area reaches which.
 
+**Current wording,** the last paragraph (`process.md:104-108`):
+
+> The automated part diffs the declared `drivers` / `seams` / `surfaces` against the
+> trees and files the change reaches. It checks the declared `areas` against
+> what `drivers`, `surfaces` and the `rule_changes` paths imply, at Design,
+> and against the paths the change edits, from Implement on (FLOW-03). The
+> agent part judges the security note.
+
 **Proposed:** the same list, with the `drivers`, `surfaces`,
 `security_boundary`, `alters_relationships` and `tier2_gaps` bullets made
 neutral, the `areas` bullet replaced, a bullet added after `repos`, and a
 sentence added after the list; the `seams`, `native_validation`, `rules`,
-`rule_changes` and `concepts` bullets are unchanged. The changed and added
+`rule_changes` and `concepts` bullets are unchanged. The two paragraphs
+after the list are made neutral too (below). The changed and added
 bullets, in the list's order:
 
 > - `drivers` — here: which drivers are touched, or `interface` for a
@@ -1093,15 +1112,33 @@ and after the list:
 > A key marked "here" is one this repository's profile file adds to the
 > loop's keys (LOOP-01, its impact keys); a design in a component whose
 > profile file does not add it leaves it out. Where a bullet says "here",
-> the rest of it is this repository's entry for that term.
+> the rest of it is this repository's entry for that term; in the
+> paragraphs below, what follows "here" is this repository's.
 
 The paragraph after the list, proposed:
 
 > Declarations are derived conservatively: a change to a shared package
-> (here `relay/`, `ledger/`, `collector/`, `driver/`) declares every
-> dependent driver and host, per the TEST-02 caveat. `areas` name what the
-> change edits, not what depends on it: the area map says which area
-> reaches which.
+> declares everything that depends on it (here a change to `relay/`,
+> `ledger/`, `collector/` or `driver/` declares every dependent driver and
+> host, per the TEST-02 caveat). `areas` name what the change edits, not
+> what depends on it: the area map says which area reaches which.
+
+The last paragraph, proposed. It is drafted on top of
+`loop-parallel-rule-wording`'s approved text for this paragraph (its
+"from Implement through Publish and at each refresh of a feature
+(FLOW-03)" in place of "from Implement on (FLOW-03)"), and is re-based on
+that item's merged wording at the refresh `x2-predecessors-merged` gates
+(a15):
+
+> The automated part diffs the declared `seams`, and the keys the profile
+> file adds that name trees or files (here `drivers` and `surfaces`),
+> against the trees and files the change reaches. It checks the declared
+> `areas` against what those keys and the `rule_changes` paths imply
+> (here `drivers`, `surfaces` and the `rule_changes` paths), at Design,
+> and against the paths the change edits, from Implement through Publish
+> and at each refresh of a feature (FLOW-03). The agent part judges the
+> security note, where the profile's keys require one (here a
+> `security_boundary` other than `none`).
 
 **Template** (`TEMPLATE.md:13-15`): after `repos:`, add verbatim
 
@@ -1632,7 +1669,9 @@ here (a15). Then, on `feat/loop-repository`:
    other (test 8; GLOBAL-10, GLOBAL-11).
 3. `work` in `queue.Feature`, `wf declare` writing it; FLOW-02's text in
    `process.md` amended (`merge_first`, prefixed `areas`, the profile's
-   keys marked as this repository's) and the
+   keys marked as this repository's, the conservative-derivation paragraph
+   and the last paragraph neutral, the latter re-based on
+   `loop-parallel-rule-wording`'s merged text) and the
    template's `merge_first` line and `areas` comment (`TEMPLATE.md:13-15`,
    prefix form) (FLOW-02 text and template, FLOW-03).
 4. `check.Env.Checkouts`, `-checkouts`, and the checker per repository
