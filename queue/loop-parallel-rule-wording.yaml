@@ -41,8 +41,8 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261118T182148Z
+      expires: 2026-11-18T20:40:08.065441007Z
     note: 'main at a094f4d: 1 commit since the branch merged it; both change .claude/skills/workflow-human/SKILL.md, .claude/skills/workflow-intake/SKILL.md, docs/development/process.md'
 budget:
   estimate:
@@ -50,7 +50,7 @@ budget:
     steps: 9
   spent:
     runs: 2
-    steps: 2
+    steps: 3
 questions: []
 history:
   - at: 2026-11-16T01:16:03Z
@@ -92,3 +92,6 @@ history:
   - at: 2026-11-18T18:23:19Z
     by: cloud/20261118T182148Z
     event: 'released x2-refresh: refreshed in merge order instead (Jeff, 2026-11-18): each merge puts the others behind main again'
+  - at: 2026-11-18T18:40:08Z
+    by: cloud/20261118T182148Z
+    event: claimed x2-refresh until 2026-11-18T20:40:08Z
