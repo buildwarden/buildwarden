@@ -151,7 +151,9 @@ both in `repos`.
 
 The **refresh**, `f6-refresh` (`x2-refresh` on a process item; `-r2`, ... as
 needed), is a `cloud` step that no phase seeds. `wf stale -state DIR -repo DIR
--worker W` first confirms merges, then seeds one on each item waiting for the
+-worker W` names an item whose PR the human has merged and seeds no refresh for
+it (the merge step is the cloud's: the tick's merge confirmation completes it,
+and an attended session cannot), then seeds one on each item waiting for the
 human's merge whose branch does not contain `origin/main`, or whose head is not
 `pr.head`, and sets `pr.ci` to `pending`. It merges `main`, runs the gates and
 the consolidation pass, pushes, and records `pr.ci` and `pr.head` for the new
@@ -194,8 +196,10 @@ out at `.dev/workflow`:
 ```bash
 (cd tools/workflow && go build -o ../../dist/wf ./cmd/wf)
 dist/wf next   -state .dev/workflow -worker cloud/$RUN
-dist/wf claim  -state .dev/workflow -worker cloud/$RUN -feature F -step S -new-run
-dist/wf commit -state .dev/workflow -worker cloud/$RUN -m "F: claim S" -claimed F/S -new-run queue/F.yaml
+dist/wf claim  -state .dev/workflow -worker cloud/$RUN -feature F -step S
+dist/wf commit -state .dev/workflow -worker cloud/$RUN -m "F: claim S" -claimed F/S queue/F.yaml
+# wf claim works out whether the claim starts a new run from the worker and the
+# item's history; -new-run is accepted and ignored (loop-streamline-2)
 # ... do the step ...
 dist/wf done   -state .dev/workflow -repo . -worker cloud/$RUN -feature F -step S -run
 dist/wf commit -state .dev/workflow -worker cloud/$RUN -m "F: done S" queue/F.yaml
