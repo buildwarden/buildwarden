@@ -243,7 +243,7 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.worker, "worker", "", "cloud, human or host:<name>, optionally /<session>")
 	fs.StringVar(&o.feature, "feature", "", "feature name")
 	fs.StringVar(&o.step, "step", "", "step id")
-	fs.Bool("new-run", false, "ignored: runs are inferred from the worker and the item's history")
+	fs.Bool("new-run", false, "ignored: runs are inferred from the worker and the history")
 	fs.StringVar(&o.why, "why", "", "reason for a release, or back's finding")
 	fs.IntVar(&o.to, "to", 1, "back: the phase to return to, 1 (Design) or 3 (Implement)")
 	fs.BoolVar(&o.run, "run", false, "run make lint / make test where a check needs them")
