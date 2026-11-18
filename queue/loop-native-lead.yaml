@@ -4,7 +4,7 @@ priority: 4
 kind: process
 status: in_progress
 round: process
-phase: 3
+phase: 4
 design: docs/design/loop-native-lead.md
 branch: feat/loop-native-lead
 alters_relationships: null
@@ -39,7 +39,7 @@ steps:
   - id: x3-merge
     phase: 3
     affinity: cloud
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -51,6 +51,15 @@ steps:
       claimed_by: ""
       expires: null
     note: 'main at a094f4d: 1 commit since the branch merged it; both change .claude/skills/workflow-human/SKILL.md, .claude/skills/workflow-intake/SKILL.md, docs/development/process.md, tools/workflow/cmd/wf/main.go, tools/workflow/queue/commit.go, tools/workflow/queue/queue.go, tools/workflow/queue/summary_test.go'
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: pending
+    needs:
+      - x4-state
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 3
@@ -111,3 +120,9 @@ history:
   - at: 2026-11-18T19:25:03Z
     by: cloud/20261118T182148Z
     event: done x2-refresh
+  - at: 2026-11-18T19:26:42Z
+    by: cloud/20261118T182148Z
+    event: done x3-merge
+  - at: 2026-11-18T19:26:42Z
+    by: cloud/20261118T182148Z
+    event: entered phase 4 (close)
