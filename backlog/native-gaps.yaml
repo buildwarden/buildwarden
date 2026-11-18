@@ -970,6 +970,9 @@ gaps:
       2026-11-17 (host:container-any/20261117T231002Z, unattended, main 0cd3c02): not run, nothing
       changed. feat/prebuilt-artifacts is still 49b513a (design only), and q1 is still open:
       driver-contract is back in Design (cloud step f1-design-r3) with no PR.
+      2026-11-18 (host:container-any/20261118T171002Z, unattended, main 0cd3c02): not run, nothing
+      changed. feat/prebuilt-artifacts is still 49b513a (design only), and q1 is still open:
+      driver-contract finished f1-design-r3 and waits on human step f2-design-review-r2, with no PR.
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: open
@@ -1019,6 +1022,9 @@ gaps:
       2026-11-17 (host:container-any/20261117T231002Z, unattended, main 0cd3c02): not run.
       feat/workdir-in-context is 24376c0, still design only (design review r1 approved), and the item
       is held on human step f2-answer-q1, waiting for driver-contract (cloud step f1-design-r3).
+      2026-11-18 (host:container-any/20261118T171002Z, unattended, main 0cd3c02): not run, nothing
+      changed. feat/workdir-in-context is still 24376c0 (design only), held on f2-answer-q1;
+      driver-contract now waits on human step f2-design-review-r2.
   - id: workdir-in-context-macos
     host: macos-finch
     status: open
