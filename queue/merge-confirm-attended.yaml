@@ -1,0 +1,31 @@
+feature: merge-confirm-attended
+title: An attended session confirms a merge it watched, with the merge step's done-when check kept
+priority: 5
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/merge-confirm-attended.md
+branch: feat/merge-confirm-attended
+alters_relationships: null
+source: 'Filed on Jeff''s word, 2026-11-18, as a follow-up named in loop-streamline-2''s design (What this item does not do; archived with #127). Today x3-merge/f7-merge is a cloud step that only the tick completes (workflow-human SKILL.md: the human worker cannot complete a cloud merge step; wf stale''s staleMerged names the item only), so a merge Jeff makes in a sitting waits for the next run. Moving it means changing the step''s affinity or who may complete it and FLOW-04''s routing (as amended by loop-native-lead), and the done-when check must keep running (it caught PR #82''s empty Archive summary, ci-path-filters). Estimate from the process size row: 4 steps + 1.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 5
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-18T19:51:48Z
+    by: human/jeff
+    event: queued at position 5 (asked 99)

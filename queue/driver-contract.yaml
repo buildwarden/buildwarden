@@ -1,6 +1,6 @@
 feature: driver-contract
 title: 'The driver command contract, its suite and the kit: warden runs a driver binary, the container driver is one, and every build runs through warden''s build sequence (componentization K1)'
-priority: 8
+priority: 10
 status: in_progress
 round: feature
 phase: 2

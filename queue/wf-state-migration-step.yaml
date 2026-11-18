@@ -1,0 +1,31 @@
+feature: wf-state-migration-step
+title: A shipped wf state-migration step in place of hand-added x4-state steps
+priority: 6
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/wf-state-migration-step.md
+branch: feat/wf-state-migration-step
+alters_relationships: null
+source: 'Filed on Jeff''s word, 2026-11-18, as a follow-up named in loop-streamline-2''s design (What this item does not do; archived with #127) and the 2026-11-17 streamlining assessment (proposal 8). Process items with state changes (loop-parallel, loop-native-lead, queue-positions) need an x4-state human step added by hand at review, and x4-close''s needs: [x4-state] added by hand when phase 4 seeds it. Instead: the design settles the migration''s parameters at review; a wf subcommand that x4-close (or a seeded step) runs, verified by wf check; and a tightly scoped exemption from FLOW-19''s delta review only for mechanical rebases wf check can prove. Estimate from the process size row: 4 steps + 1.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 5
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-18T19:51:49Z
+    by: human/jeff
+    event: queued at position 6 (asked 99)

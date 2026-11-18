@@ -1,6 +1,6 @@
 feature: runtime-former-values-removal
 title: 'Remove the transitional detection of former container runtime values at 1.0: TRANSITIONAL(runtime-former-values)'
-priority: 12
+priority: 14
 status: queued
 round: feature
 phase: 0
