@@ -137,10 +137,14 @@ func TestStampRoundTrip(t *testing.T) {
 	}
 }
 
+// TestValidateNative: two machines may serve one host name; a pending step,
+// an open gap or an open item's lead that no machine serves fails (FLOW-04).
 func TestValidateNative(t *testing.T) {
 	a := feature("a", 1, "in_progress")
 	a.Steps[0].Affinity = "host:windows-container"
-	s := nativeState(a)
+	led := feature("led", 2, "queued")
+	led.Lead = "host:linux-any"
+	s := nativeState(a, led)
 	s.Machines = append(s.Machines, Machine{Name: "other", Hosts: []string{"qemu-any"}})
 	s.Gaps = []Gap{{ID: "g1", Host: "macos-finch", Status: "open"},
 		{ID: "g2", Host: "macos-finch", Status: "done"}}
@@ -149,8 +153,8 @@ func TestValidateNative(t *testing.T) {
 		got = append(got, e.Error())
 	}
 	want := []string{
-		"host qemu-any served by both win and other",
 		"step f0-branch-setup: no machine serves host windows-container",
+		"led: lead: no machine serves host linux-any",
 		"gap g1: no machine serves host macos-finch",
 	}
 	if len(got) != len(want) {
@@ -264,6 +268,25 @@ func TestValidateMachineStatus(t *testing.T) {
 		`outcome "broken"`, "one line", "since not after last_run"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("Validate = %q, want %q", got, want)
+		}
+	}
+}
+
+// TestGateSharedHost: two machines that serve one host name both see its
+// ready step; the first claim pushed wins (FLOW-04).
+func TestGateSharedHost(t *testing.T) {
+	repo, _ := gitRepo(t)
+	a := feature("a", 1, "in_progress")
+	a.Branch = "feat/a"
+	a.Steps[0].Affinity = "host:qemu-any"
+	s := nativeState(a)
+	s.Machines[0].Hosts = append(s.Machines[0].Hosts, "qemu-any")
+	wantValidate(t, s)
+	for _, name := range []string{"mac", "win"} {
+		m, _ := s.Machine(name)
+		g, err := s.Gate(m, repo, nil, 7, now)
+		if err != nil || !g.Run || !strings.Contains(g.Reasons[0], "a\tf0-branch-setup") {
+			t.Fatalf("%s gate = %+v, %v; want the qemu-any step", name, g, err)
 		}
 	}
 }
