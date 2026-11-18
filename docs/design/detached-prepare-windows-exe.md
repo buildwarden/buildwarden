@@ -1,11 +1,14 @@
 ---
 feature: detached-prepare-windows-exe
 status: draft
-drivers: [qemu, hyperv]  # conservatively (FLOW-02): the change is in driver/detach.go, shared, and its
-                         # dependents are the two drivers that call driver.StartDetached (the hyperv
-                         # base refresh, driver/hyperv/freshness.go, and the qemu Windows layer
-                         # refresh, driver/qemu/driver.go). container, vz and firecracker do not call
-                         # it (Cross-driver impact)
+drivers: [container, qemu, vz, hyperv, firecracker]  # conservatively (FLOW-02, the TEST-02
+                         # caveat): driver/detach.go is shared (rules.yaml drivers.shared), so
+                         # every driver is declared, as project-config-trust did for the same file.
+                         # Two drivers call driver.StartDetached and change (the hyperv base
+                         # refresh, driver/hyperv/freshness.go, and the qemu Windows layer refresh,
+                         # driver/qemu/driver.go); container, vz and firecracker do not call it and
+                         # their trees are not edited: asserted unaffected (ORCH-01, Cross-driver
+                         # impact; r2, question a5)
 seams: []                # no claim, collector, executor or ledger change; the child's arguments are
                          # project-config-trust's, unchanged
 surfaces: [output]       # one new stderr line when a due refresh cannot start; the existing
@@ -20,7 +23,9 @@ security_boundary: host-env  # which executable warden runs on the host, before 
 alters_relationships: false  # inside the orchestrator's and the two drivers' existing roles; no
                          # seam, bootstrap, owner or driver.Driver / driver.Session change
 design_review: required  # FLOW-19: a security boundary, blocking native validation, assumed
-                         # questions, and areas declared where intake recorded none
+                         # questions, and areas declared where intake recorded none. r2: drivers,
+                         # an impact field, changed since approved at b7619b5, and a5 is open, so
+                         # the delta needs a re-review
 native_validation:
   - {host: windows-hyperv, blocking: true, reason: "the fault is Windows-only (os/exec's PATHEXT lookup) and the change reaches driver/hyperv; CI runs no driver tests on Windows, so only this host shows the extension-less dist/warden starting itself, a warden.exe beside it not being run, and the hyperv refresh line and log"}
   - {host: macos-qemu, blocking: false, reason: "on macOS the start is the same exec(2) of the same absolute path, which Linux CI exercises in the new test; what only this host adds is a qemu Windows layer refresh end to end, which does not complete on main today (qemu-windows-guest-package)"}
@@ -84,7 +89,10 @@ to intake and the design review: assumed question a4.
   made the detached prepare read the config file its build read
   (`detachedArgs`, its Decision 10). This item keeps `detachedArgs` and
   its test unchanged and replaces only how the process is started. Its
-  Archive summary files this item.
+  Archive summary files this item. It edited the same shared file,
+  `driver/detach.go`, and declared every driver for it, with no blocking
+  native validation for the drivers whose code it did not change: the
+  precedent a5 follows.
 - **`hyperv-windows-prepare`** (archived) designed the refresh: by age, in
   the background, the build going on with the current base; only one
   prepare at a time under the `hyperv-prepare` lock; `doctor` warns once the
@@ -179,6 +187,24 @@ None.
   FLOW-20 as a fix for a regression on `main`, filed as the follow-up of
   a security fix; (b) put it on hold until the program ends.
   Recommended: (a).
+- **a5 (r2). The `drivers` claim for a change to `driver/detach.go`.**
+  *Flagged: it widens the declaration approved at `b7619b5`, `[qemu,
+  hyperv]`; the behaviour and the "others unaffected" assertion are
+  unchanged.* Proceeding with (a); confirm. (a) declare every driver,
+  `[container, qemu, vz, hyperv, firecracker]`, as FLOW-02 asks of a change
+  to a shared package and tier 1's `drivers-claim` enforces (ORCH-01), and
+  keep "container, vz and firecracker unaffected" as ORCH-01's assertion
+  (Cross-driver impact), with no native validation added for them; (b)
+  declare `[interface]`; (c) keep `[qemu, hyperv]` and carry a
+  `Tier1-Allow: ORCH-01` trailer on the commits that edit
+  `driver/detach.go` (LINT-05). Recommended: (a). It is the precedent
+  (`project-config-trust` declared all five for the same file; `http-body-
+  path-drift` all five for a shared `relay/` change); (b) is for a change
+  at the level of `driver.Driver` or `driver.Session` (FLOW-02), which this
+  is not, and would overstate the change; (c) uses a suppression for a
+  case the rule already answers, and `pre-release-cleanup` records Jeff
+  rejecting `Tier1-Allow` trailers where a declaration or edit can satisfy
+  the check.
 
 ## Design
 
@@ -250,13 +276,26 @@ No other default, override, merge or fallback is added or changed.
 
 ## Cross-driver impact
 
+The claim is every driver (r2, a5): `driver/detach.go` is shared, and
+FLOW-02 and tier 1's `drivers-claim` count a change to it as reaching every
+driver (ORCH-01, the TEST-02 caveat). Two drivers change; the others are
+asserted unaffected:
+
 - **hyperv:** `ensureFreshBase` reports a failed start. Its refresh now
   starts from a `dist/warden` with no extension.
 - **qemu:** `ensureFreshWindowsLayer` reports a failed start and a lock
   error. On macOS and Linux the start is the same `exec` of the same path.
-- **container, vz, firecracker:** unaffected. None calls `StartDetached`;
-  `vz` refreshes its image only through `sudo warden image prepare`, by
-  hand.
+- **container, vz, firecracker:** unaffected. None calls `StartDetached`
+  (its only callers are the two above), their trees are not edited, and
+  nothing else in `driver/` changes: `detachedArgs`, `detachedAttr`
+  (`detach_unix.go`, `detach_windows.go`) and `ConfigFile` are untouched,
+  and `StartDetached`'s signature is the same. `vz` refreshes its image
+  only through `sudo warden image prepare`, by hand. Their code paths reach
+  the changed function nowhere, so no native host of theirs can observe
+  the change: no native validation is declared for them, blocking or
+  tracked (TEST-02's caveat is met by the declaration and by tier 0 and the
+  `integration` workflow, which runs on a change to the `driver/` root and
+  builds the container driver with the new `driver/`).
 
 ## Security note
 
@@ -368,6 +407,15 @@ existing `f6-validate-windows-hyperv` step and the tracked gap
 is in `driver/` (one shared file and its tests) and in the two callers in
 `driver/hyperv` and `driver/qemu`; no other driver tree changes, and no
 build-tagged file is added or edited (ORCH-01, GLOBAL-07).
+
+*r2 (2026-11-18).* `f3-implement` returned the design (FLOW-06): tier 1's
+`drivers-claim` failed on task 1 alone, because `driver/detach.go` is in
+`rules.yaml`'s `drivers.shared` and the design declared `[qemu, hyperv]`.
+The design now declares every driver (a5). No task changes: tasks 1 and 2,
+written and not pushed, are redone as planned, and task 10's `make lint`
+and `GOOS=windows make lint` now pass `drivers-claim` with no trailer. The
+areas are unchanged: `driver-core` is a shared area, which covers every
+declared driver (FLOW-02).
 
 Tasks 1 and 2 are one green checkpoint, as are 3 and 4, and 5 and 6.
 
@@ -500,6 +548,19 @@ suite is TEST-08's, not this item's. a3 is native case 3. No task changes
   security fix) confirmed as drafted, (a) each. No `rule_changes`; no changes
   folded in. Areas as declared; the area-edges check showed no difference
   from `main` at 0cd3c02.
+- **r2, 2026-11-18: pending.** A delta re-review (FLOW-19), of the `drivers`
+  field only. Finding (`f3-implement`, FLOW-06): tier 1's ORCH-01
+  `drivers-claim` fails because task 1 edits `driver/detach.go`, which
+  `tools/tier1/rules.yaml` counts as `drivers.shared`, while the design
+  approved at `b7619b5` declared `drivers: [qemu, hyperv]`. What it changes:
+  `drivers` becomes `[container, qemu, vz, hyperv, firecracker]` (a5),
+  Cross-driver impact states the claim and keeps container, vz and
+  firecracker as asserted unaffected, and `native_validation` is
+  unchanged. Every other impact field, `repos`, `areas`, `rule_changes`,
+  the decisions, a1 to a4 and the tasks are as approved; the delta to
+  review is the r2 commit (front-matter `drivers` and `design_review`,
+  a5, Prior art's precedent line, Cross-driver impact, the plan's r2
+  paragraph and this line).
 
 ## Consolidation
 
