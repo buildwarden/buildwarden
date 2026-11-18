@@ -15,10 +15,9 @@ native_validation: []    # pure functions of the queue state and git plumbing, t
 tier2_gaps: []
 rules: [FLOW-03, FLOW-04, FLOW-05, FLOW-09, FLOW-10, FLOW-13, FLOW-14, FLOW-19, LOOP-04,
         LOOP-09, GLOBAL-09, GLOBAL-10, GLOBAL-11, TEST-01, TEST-02]
-rule_changes:
-  - {rule: FLOW-05, change: amend, paths: [docs/development/process.md,
-      tools/workflow/queue/queue.go, tools/workflow/queue/commit.go,
-      tools/workflow/queue/migrate.go, tools/workflow/cmd/wf/main.go]}
+rule_changes:            # the enforcement (queue.go, commit.go, migrate.go, cmd/wf/main.go)
+                         # is the loop's machinery, changed on the process route (FLOW-14)
+  - {rule: FLOW-05, change: amend, paths: [docs/development/process.md]}
 concepts: [workflow, queue, priority, queue-order, queue-position, renumbering, done-folder,
            wf-new, wf-move, wf-commit, replay, history-noise, retrospective, process-item,
            old-wf-compatibility]
