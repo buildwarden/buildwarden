@@ -36,10 +36,11 @@ Read the latest file in `.dev/workflow/digest/`.
    with its phase, holds and branch.
 1. **Priority order.** If `config.yaml` has `priority_confirmed: false`, show
    `dist/wf status` and the proposed order with its reasons, ask Jeff to
-   confirm or reorder, renumber the `priority` fields as he says, and set
+   confirm or reorder, move each item he places with `dist/wf move
+   -feature F -to N -why "<his reason>"` (wf renumbers the rest), and set
    `priority_confirmed: true`. `wf status` lists FLOW-05's class order: in
    implementation, process items, fixes (`follows: <item>`), new
-   functionality. `priority` reorders items within a class only; an item
+   functionality. A position moves an item within its class only; an item
    moves across classes only by Jeff's word on its `follows` or `kind`,
    recorded in its history.
 2. **Blocking questions**, in FLOW-05's order (`dist/wf status`). Ask each with
