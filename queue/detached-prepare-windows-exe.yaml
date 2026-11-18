@@ -61,15 +61,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261118T105745Z
+      expires: 2026-11-18T14:30:54.16485053Z
 budget:
   estimate:
     runs: 1
     steps: 7
   spent:
     runs: 2
-    steps: 5
+    steps: 6
 questions:
   - id: a1
     kind: assumed
@@ -186,3 +186,6 @@ history:
   - at: 2026-11-18T12:30:25Z
     by: cloud/20261118T105745Z
     event: 'back to design: f3-implement: tier 1 ORCH-01 drivers-claim MUST: task 1 edits driver/detach.go, which tools/tier1/rules.yaml counts as drivers.shared, so the design''s drivers [qemu, hyperv] must also declare container, vz and firecracker, or interface (make lint and GOOS=windows make lint both fail on it alone). Design chooses: (a) drivers: [container, qemu, vz, hyperv, firecracker] or interface, keeping the others-unaffected reasoning as ORCH-01''s assertion, and any native-validation change (TEST-02 caveat); or (b) keep [qemu, hyperv] and record the ruling so the commit carries a Tier1-Allow trailer (LINT-05). Plan tasks 1-2 were written (StartDetached via os.StartProcess; TestStartDetachedRunsNamedFile, TestStartDetachedFailedStart) and not pushed (lint red); they are small and are redone after the design returns.'
+  - at: 2026-11-18T12:30:54Z
+    by: cloud/20261118T105745Z
+    event: claimed f1-design-r2 until 2026-11-18T14:30:54Z
