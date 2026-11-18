@@ -30,7 +30,8 @@ func wantPositions(t *testing.T, s *State, when string) {
 	s.Renumber()
 	for i, f := range s.Listed(false) {
 		if f.Feature != before[i] {
-			t.Fatalf("%s: Renumber changed the order: %v, now %s", when, before, order(s))
+			t.Fatalf("%s: Renumber changed the order: %v, now %s", when, before,
+				order(s))
 		}
 		if f.Priority != i+1 {
 			t.Fatalf("%s: %s is numbered %d at position %d: %s", when, f.Feature,
@@ -324,6 +325,19 @@ func TestDoneFolder(t *testing.T) {
 	if p, _ := got.Next("cloud", now); p == nil || p.Feature.Feature != "fix" {
 		t.Fatalf("next = %+v, want the fix of the done a started", p)
 	}
+	doneOrder(t, got)
+	if err := os.WriteFile(filepath.Join(s.Dir, "queue", "a.yaml"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(s.Dir); err == nil || !strings.Contains(err.Error(), "both") {
+		t.Fatalf("Load with a in both places: %v", err)
+	}
+}
+
+// doneOrder checks that Listed(true) lists done items in the order they
+// closed, an item with no done line by its last line.
+func doneOrder(t *testing.T, got *State) {
+	t.Helper()
 	legacy := &Feature{Feature: "old", Status: "done", Round: "feature"}
 	legacy.Log(now.Add(90*time.Minute), "human/jeff", "closed by hand")
 	got.Features = append(got.Features, legacy)
@@ -335,12 +349,6 @@ func TestDoneFolder(t *testing.T) {
 		t.Fatalf("Listed(true) = %v, want the done items in the order they closed", names)
 	}
 
-	if err := os.WriteFile(filepath.Join(s.Dir, "queue", "a.yaml"), data, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Load(s.Dir); err == nil || !strings.Contains(err.Error(), "both") {
-		t.Fatalf("Load with a in both places: %v", err)
-	}
 }
 
 // TestDoneFolderValidate: an item in queue/done/ is done and has no number,

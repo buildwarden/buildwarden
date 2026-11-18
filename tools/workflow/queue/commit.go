@@ -118,14 +118,8 @@ func Commit(dir string, r CommitRequest) ([]string, error) {
 		return nil, fmt.Errorf("%s is not a checkout of the %s branch", dir,
 			workflowBranch)
 	}
-	var claim *claimRef
-	if r.Claimed != "" {
-		if claim, err = parseClaimed(r.Claimed); err != nil {
-			return nil, err
-		}
-		r.Paths = append(r.Paths, "queue/"+claim.feature+".yaml")
-	}
-	if r.Paths, err = g.pairDone(r.Paths); err != nil {
+	claim, err := g.requestPaths(&r)
+	if err != nil {
 		return nil, err
 	}
 	if err := g.refuseMapChange(r); err != nil {
@@ -151,6 +145,22 @@ func Commit(dir string, r CommitRequest) ([]string, error) {
 			return out, err
 		}
 	}
+}
+
+// requestPaths adds to the session's paths the claimed item's file and the
+// done-folder counterparts (pairDone), and returns the claim.
+func (g stateGit) requestPaths(r *CommitRequest) (*claimRef, error) {
+	var claim *claimRef
+	if r.Claimed != "" {
+		var err error
+		if claim, err = parseClaimed(r.Claimed); err != nil {
+			return nil, err
+		}
+		r.Paths = append(r.Paths, "queue/"+claim.feature+".yaml")
+	}
+	paths, err := g.pairDone(r.Paths)
+	r.Paths = paths
+	return claim, err
 }
 
 type claimRef struct{ feature, step string }
@@ -289,42 +299,46 @@ func (g stateGit) generate(paths []string) ([]string, error) {
 	s.Renumber()
 	var extra []string
 	for _, f := range s.Ordered() {
-		if f.file == "" {
-			continue
+		more, err := g.settle(s, f, paths)
+		if err != nil {
+			return nil, err
 		}
-		named := slices.ContainsFunc(paths, func(p string) bool {
-			return p == f.file || strings.HasPrefix(f.file, strings.TrimSuffix(p, "/")+"/")
-		})
-		change := "named"
-		if !named {
-			if change, err = g.change(f.file); err != nil {
-				return nil, err
-			}
-			if change == "other" {
-				continue
-			}
-		}
-		switch {
-		case f.Status == "done" && s.doneDir && !strings.HasPrefix(f.file, doneFolder+"/"):
-			left := f.file
-			if err := s.put(f); err != nil {
-				return nil, err
-			}
-			extra = append(extra, left, f.file)
-		case f.Priority != f.stored:
-			if err := s.writeNumber(f); err != nil {
-				return nil, err
-			}
-			extra = append(extra, f.file)
-		case change == "priority":
-			extra = append(extra, f.file)
-		}
+		extra = append(extra, more...)
 	}
 	pages, err := s.Digest()
 	if err != nil {
 		return nil, err
 	}
 	return slices.Concat([]string{SummaryFile}, pages, extra), s.WriteSummary()
+}
+
+// settle writes what renumbering changed in one item's file, or moves a done
+// item an old wf left in queue/, as generate says, and returns the paths to
+// commit beside the session's.
+func (g stateGit) settle(s *State, f *Feature, paths []string) ([]string, error) {
+	if f.file == "" {
+		return nil, nil
+	}
+	named := slices.ContainsFunc(paths, func(p string) bool {
+		return p == f.file || strings.HasPrefix(f.file, strings.TrimSuffix(p, "/")+"/")
+	})
+	change := "named"
+	if !named {
+		var err error
+		if change, err = g.change(f.file); err != nil || change == "other" {
+			return nil, err
+		}
+	}
+	switch {
+	case f.Status == "done" && s.doneDir && !strings.HasPrefix(f.file, doneFolder+"/"):
+		left := f.file
+		return []string{left, s.fileOf(f)}, s.put(f)
+	case f.Priority != f.stored:
+		return []string{f.file}, s.writeNumber(f)
+	case change == "priority":
+		return []string{f.file}, nil
+	}
+	return nil, nil
 }
 
 // change says how a queue file differs from HEAD: none, priority when only
@@ -493,6 +507,34 @@ func (g stateGit) replay(own, worker string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	lines, err := g.cherryPick(own)
+	if err != nil {
+		return nil, err
+	}
+	_, _ = g.run("cherry-pick", "--quit")
+	if err := renumberFiles(g.dir); err != nil {
+		return nil, g.restore(own, "the replayed state does not load: "+err.Error())
+	}
+	after, err := validated(g.dir)
+	if err != nil {
+		return nil, g.restore(own, "the replayed state does not load: "+err.Error())
+	}
+	var fresh []string
+	for _, e := range after {
+		if !slices.Contains(before, e) {
+			fresh = append(fresh, e)
+		}
+	}
+	if len(fresh) > 0 {
+		return nil, g.restore(own, "wf validate fails on the replayed state:\n"+
+			strings.Join(fresh, "\n"))
+	}
+	return append(lines, "replayed onto origin/"+workflowBranch+" for "+worker), nil
+}
+
+// cherryPick applies the session's commit to the checkout without committing
+// it, and settles the conflicts replay may settle. It returns replay's lines.
+func (g stateGit) cherryPick(own string) ([]string, error) {
 	var lines []string
 	if _, err := g.run("cherry-pick", "--no-commit", own); err != nil {
 		conflicts, lerr := g.lines("diff", "--name-only", "--diff-filter=U")
@@ -529,25 +571,7 @@ func (g stateGit) replay(own, worker string) ([]string, error) {
 				strings.Join(hard, ", ")+": re-apply the change by hand")
 		}
 	}
-	_, _ = g.run("cherry-pick", "--quit")
-	if err := renumberFiles(g.dir); err != nil {
-		return nil, g.restore(own, "the replayed state does not load: "+err.Error())
-	}
-	after, err := validated(g.dir)
-	if err != nil {
-		return nil, g.restore(own, "the replayed state does not load: "+err.Error())
-	}
-	var fresh []string
-	for _, e := range after {
-		if !slices.Contains(before, e) {
-			fresh = append(fresh, e)
-		}
-	}
-	if len(fresh) > 0 {
-		return nil, g.restore(own, "wf validate fails on the replayed state:\n"+
-			strings.Join(fresh, "\n"))
-	}
-	return append(lines, "replayed onto origin/"+workflowBranch+" for "+worker), nil
+	return lines, nil
 }
 
 // placedLine matches a history line that places an item.

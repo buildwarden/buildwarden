@@ -403,29 +403,8 @@ func Load(dir string) (*State, error) {
 	if fi, err := os.Stat(filepath.Join(dir, doneFolder)); err == nil && fi.IsDir() {
 		s.doneDir = true
 	}
-	seen := map[string]bool{}
-	for _, folder := range []string{"queue", doneFolder} {
-		paths, err := filepath.Glob(filepath.Join(dir, filepath.FromSlash(folder), "*.yaml"))
-		if err != nil {
-			return nil, err
-		}
-		for _, p := range paths {
-			f := &Feature{}
-			if err := readYAML(p, f); err != nil {
-				return nil, err
-			}
-			if want := strings.TrimSuffix(filepath.Base(p), ".yaml"); f.Feature != want {
-				return nil, fmt.Errorf("%s: feature %q does not match its file name", p,
-					f.Feature)
-			}
-			if seen[f.Feature] {
-				return nil, fmt.Errorf("%s is in both queue/ and %s/: keep one", f.Feature,
-					doneFolder)
-			}
-			seen[f.Feature] = true
-			f.stored, f.file = f.Priority, folder+"/"+f.Feature+".yaml"
-			s.Features = append(s.Features, f)
-		}
+	if err := s.loadItems(); err != nil {
+		return nil, err
 	}
 	s.sortFeatures()
 	if err := s.loadNative(); err != nil {
@@ -438,6 +417,37 @@ func Load(dir string) (*State, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+// loadItems reads queue/*.yaml and queue/done/*.yaml.
+func (s *State) loadItems() error {
+	seen := map[string]bool{}
+	for _, folder := range []string{"queue", doneFolder} {
+		paths, err := filepath.Glob(filepath.Join(s.Dir, filepath.FromSlash(folder),
+			"*.yaml"))
+		if err != nil {
+			return err
+		}
+		for _, p := range paths {
+			f := &Feature{}
+			if err := readYAML(p, f); err != nil {
+				return err
+			}
+			want := strings.TrimSuffix(filepath.Base(p), ".yaml")
+			if f.Feature != want {
+				return fmt.Errorf("%s: feature %q does not match its file name",
+					p, f.Feature)
+			}
+			if seen[f.Feature] {
+				return fmt.Errorf("%s is in both queue/ and %s/: keep one",
+					f.Feature, doneFolder)
+			}
+			seen[f.Feature] = true
+			f.stored, f.file = f.Priority, folder+"/"+f.Feature+".yaml"
+			s.Features = append(s.Features, f)
+		}
+	}
+	return nil
 }
 
 // loadMain reads the optional main.yaml.
