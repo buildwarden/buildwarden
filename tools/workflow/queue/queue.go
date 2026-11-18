@@ -88,8 +88,13 @@ type Feature struct {
 	Urgent string `yaml:"urgent,omitempty"`
 	// Holds lists the affinity patterns (cloud, host:*, host:macos-vz) whose
 	// workers take no new step while this process item is in progress.
-	Holds  []string `yaml:"holds,omitempty"`
-	Status string   `yaml:"status"` // queued | in_progress | done
+	Holds []string `yaml:"holds,omitempty"`
+	// Lead is the host name, host:<name>, whose machines take a feature's
+	// cloud steps of phases 0 to 5 (FLOW-04, FLOW-09). Empty, the item is
+	// not led. Any worker may set or clear it (SetLead); each change is a
+	// history line.
+	Lead   string `yaml:"lead,omitempty"`
+	Status string `yaml:"status"` // queued | in_progress | done
 	// Round is feature or process. parallel and merge remain only on
 	// finished items from before the single round (wf migrate).
 	Round  string `yaml:"round"`
@@ -528,7 +533,11 @@ func (s *State) Add(f *Feature, now time.Time, by string) ([]*Feature, error) {
 		f.Round, f.Phase = "tracked", 1
 	}
 	Seed(f)
-	f.Log(now, by, "queued at priority %d (intake)", f.Priority)
+	if f.Lead != "" {
+		f.Log(now, by, "queued at priority %d (intake), led by %s", f.Priority, f.Lead)
+	} else {
+		f.Log(now, by, "queued at priority %d (intake)", f.Priority)
+	}
 	s.Features = append(s.Features, f)
 	s.sortFeatures()
 	return changed, nil
@@ -697,6 +706,7 @@ func (s *State) Problems(f *Feature) []error {
 	f.validate(bad, tracked)
 	s.validateDeclared(f, bad)
 	s.validateUrgent(f, bad)
+	s.validateLead(f, bad)
 	if f.PR != nil && f.PR.Head != "" && !commitRe.MatchString(f.PR.Head) {
 		bad("pr.head %q is not a commit id", f.PR.Head)
 	}

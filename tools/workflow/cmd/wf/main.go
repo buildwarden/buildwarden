@@ -16,8 +16,9 @@
 //	            -estimate-steps N -estimate-runs N [-source S] [-follows ITEM]
 //	            [-kind process -holds PATTERN,...] [-hold WHY]
 //	            [-repos OWNER/NAME,...] [-areas AREA,...] [-seams SEAM,...]
-//	            [-adopts CONSUMABLE@VERSION] [-urgent]
+//	            [-adopts CONSUMABLE@VERSION] [-urgent] [-lead host:NAME]
 //	wf urgent   -state DIR -worker human/NAME -feature F [-clear]
+//	wf lead     -state DIR -worker W -feature F (-host NAME | -clear)
 //	wf declare  -state DIR -repo DIR -worker W -feature F
 //	wf relate   -state DIR -worker human/NAME -feature A -with B [-clear]
 //	wf relations -state DIR [-feature F]
@@ -50,6 +51,13 @@
 // cannot read from its design; for an item homed here wf declare copies
 // them. new -adopts marks a reconciliation item, which FLOW-05 classes with
 // the fixes (LOOP-07).
+//
+// new -lead, and lead for an item already queued or in progress, name the
+// host name whose machines take a feature's cloud steps of Branch setup
+// through Guide (FLOW-04, FLOW-09). Any worker may set or clear a lead; lead
+// re-labels the item's pending template steps of phases 0 to 5 that no lease
+// holds and writes one history line, which the run's digest lists under
+// Moved. A process item and a tracked item are never led.
 //
 // new -urgent, and urgent for an item already queued, mark a feature so that
 // the waiting limit does not refuse its start (FLOW-05). Only a human worker
@@ -189,7 +197,7 @@ import (
 )
 
 const usage = "usage: wf " +
-	"validate|status|next|claim|release|check|done|answer|back|new|urgent|declare|" +
+	"validate|status|next|claim|release|check|done|answer|back|new|urgent|lead|declare|" +
 	"relate|relations|stale|commit|main|digest|areas|gate|budget|migrate|drops [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
@@ -198,6 +206,7 @@ var errIdle = errors.New("idle")
 type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
 	title, source, machine, stamp, kind, holds, follows, hold string
+	lead, host                                                string
 	repos, areas, seams, adopts, with, message, claimed       string
 	rev, edges                                                string
 	urgent, clear, check, list                                bool
@@ -268,7 +277,9 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.BoolVar(&o.urgent, "urgent", false,
 		"new: mark the feature urgent, a human worker only (FLOW-05)")
 	fs.BoolVar(&o.clear, "clear", false,
-		"urgent: remove the mark; relate: remove the collision")
+		"urgent: remove the mark; relate: remove the collision; lead: remove the lead")
+	fs.StringVar(&o.lead, "lead", "", "new: host:<name>, the feature's lead (FLOW-04)")
+	fs.StringVar(&o.host, "host", "", "lead: the host name that leads the feature")
 	fs.StringVar(&o.message, "m", "", "commit: the commit message")
 	fs.StringVar(&o.claimed, "claimed", "",
 		"commit: FEATURE/STEP the change claims, asked again on a rejected push")
@@ -305,7 +316,7 @@ func run(cmd string, args []string, now time.Time) error {
 	}
 	cmds := map[string]func(*queue.State, opts) error{
 		"validate": validate, "status": status, "next": next, "check": checkPhase,
-		"answer": answer, "back": back, "new": newFeature, "urgent": urgent,
+		"answer": answer, "back": back, "new": newFeature, "urgent": urgent, "lead": lead,
 		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
 		"declare": declareItem, "relate": relate, "relations": relations,
 		"digest": digest, "areas": areasCmd,
@@ -597,7 +608,7 @@ func newFeature(s *queue.State, o opts) error {
 	}
 	f := &queue.Feature{
 		Feature: o.feature, Title: o.title, Priority: o.priority, Source: o.source,
-		Kind: kind, Holds: holds, Follows: o.follows,
+		Kind: kind, Holds: holds, Follows: o.follows, Lead: o.lead,
 		Design: "docs/design/" + o.feature + ".md", Branch: "feat/" + o.feature,
 		Budget: queue.Budget{Estimate: queue.Count{Runs: o.estRuns, Steps: o.estSteps}},
 	}
@@ -667,6 +678,9 @@ func accept(s *queue.State, f *queue.Feature, o opts) error {
 			return err
 		}
 	}
+	if f.Lead != "" && !s.Serves(f.Lead) {
+		return fmt.Errorf("-lead: no machine in hosts.yaml serves %s", f.Lead)
+	}
 	if len(f.Seams) > 0 && !s.Tracked(f) {
 		return fmt.Errorf("-seams is for a tracked item: wf declare copies the seams of "+
 			"%s, which is homed here, from its design (FLOW-02)", f.Feature)
@@ -698,6 +712,29 @@ func urgent(s *queue.State, o opts) error {
 		err = s.MarkUrgent(f, o.worker, o.now)
 	}
 	if err != nil {
+		return err
+	}
+	return s.Save(f)
+}
+
+// lead sets the feature's lead, or with -clear removes it, for any worker
+// (FLOW-04, FLOW-09).
+func lead(s *queue.State, o opts) error {
+	if o.worker == "" {
+		return errors.New("lead needs -worker")
+	}
+	if o.clear == (o.host != "") {
+		return errors.New("lead needs -host NAME or -clear")
+	}
+	f, err := s.Find(o.feature)
+	if err != nil {
+		return err
+	}
+	to := ""
+	if o.host != "" {
+		to = "host:" + strings.TrimPrefix(o.host, "host:")
+	}
+	if err := s.SetLead(f, o.worker, to, o.now); err != nil {
 		return err
 	}
 	return s.Save(f)

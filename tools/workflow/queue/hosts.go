@@ -112,6 +112,17 @@ func readOptional(path string, v any) error {
 	return readYAML(path, v)
 }
 
+// served returns the host names some machine in hosts.yaml serves.
+func (s *State) served() map[string]bool {
+	out := map[string]bool{}
+	for _, m := range s.Machines {
+		for _, h := range m.Hosts {
+			out[h] = true
+		}
+	}
+	return out
+}
+
 // Machine returns the named machine from hosts.yaml.
 func (s *State) Machine(name string) (*Machine, error) {
 	for i := range s.Machines {

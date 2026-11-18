@@ -130,10 +130,11 @@ func (s *State) counted(f *Feature) bool { return !f.IsProcess() && !s.Tracked(f
 
 // takesStart reports whether the worker's claim of a step of the item takes
 // the in-progress limit: the item is a queued counted feature and the worker
-// is not a human, whose steps start no feature. Only the cloud's claim sets
-// the feature in progress today (Starts); a host's is bounded as if it did,
-// so a machine that takes an item's first step is held to the limits the
-// cloud is (FLOW-04).
+// is not a human, whose steps start no feature. The claim that sets the
+// feature in progress is the cloud's on an unled feature and that of a worker
+// serving the lead on a led one (Starts); any other host claim is bounded as
+// if it did, so a machine that takes an item's first step is held to the
+// limits the cloud is (FLOW-04).
 func (s *State) takesStart(f *Feature, worker string) bool {
 	return f.Status == "queued" && s.counted(f) && Kind(worker) != "human"
 }

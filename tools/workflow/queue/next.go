@@ -92,8 +92,9 @@ func leasedTo(f *Feature, worker string, now time.Time) *Step {
 // the item does not hold is asked, so a holder is never stopped by one. It
 // also returns why each item it passed over is blocked, for the digest: an
 // in-progress item, a fix waiting on its parent, and a queued feature the
-// waiting limit refuses. A queued feature the in-progress limit refuses is
-// passed over without a line, as it always was. An item with a pending
+// waiting limit refuses, and, for the cloud, a queued led feature, which only
+// its lead's machines start (FLOW-04). A queued feature the in-progress limit
+// refuses is passed over without a line, as it always was. An item with a pending
 // refresh step is in class 1, so open PRs are refreshed before anything new
 // starts; while main.yaml records main red its line is that, and the walk
 // goes on to the fix (FLOW-10).
@@ -112,7 +113,11 @@ func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 			why = "follows " + f.Follows + ", not yet done (FLOW-05)"
 		default:
 			var reported bool
-			if st, why, reported = s.offer(f, worker, now); st == nil && !reported {
+			st, why, reported = s.offer(f, worker, now)
+			// The cloud reports a queued led item, which it cannot start, so
+			// the digest lists it as waiting on a host.
+			reported = reported || f.Lead != "" && Kind(worker) == "cloud"
+			if st == nil && !reported {
 				continue
 			}
 		}
@@ -125,11 +130,19 @@ func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 }
 
 // Starts reports whether the worker's claim of a step of the item sets it in
-// progress: a cloud claim on a queued feature, and any claim on a queued
-// process item or tracked item, whose steps are all human.
+// progress: on a queued feature, a claim by a worker that serves its lead
+// when it is led and a cloud claim when it is not; and any claim on a queued
+// process item or tracked item, whose steps are all human (FLOW-04).
 func (s *State) Starts(f *Feature, worker string) bool {
-	return f.Status == "queued" &&
-		(Kind(worker) == "cloud" || f.IsProcess() || s.Tracked(f))
+	switch {
+	case f.Status != "queued":
+		return false
+	case f.IsProcess() || s.Tracked(f):
+		return true
+	case f.Lead != "":
+		return Kind(worker) == f.Lead
+	}
+	return Kind(worker) == "cloud"
 }
 
 // inProgressStep is the in-progress item's step for the worker, or why there
