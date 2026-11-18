@@ -62,7 +62,7 @@ func TestProcessSortsFirstAndStartsOnAnyClaim(t *testing.T) {
 		t.Fatalf("human next = %q, want the process item's step", got)
 	}
 	p := s.Features[0]
-	s.Claim(p, &p.Steps[0], "human/jeff", now, true)
+	s.Claim(p, &p.Steps[0], "human/jeff", now)
 	if p.Status != "in_progress" {
 		t.Fatalf("status = %s; a human claim starts a process item", p.Status)
 	}
@@ -137,7 +137,7 @@ func TestHoldsBlockMatchingWorkersUntilDone(t *testing.T) {
 func TestHoldLeavesAClaimedStepClaimed(t *testing.T) {
 	a := feature("a", 1, "in_progress")
 	s := state(a)
-	s.Claim(a, &a.Steps[0], "cloud/run", now, true)
+	s.Claim(a, &a.Steps[0], "cloud/run", now)
 	p := process("rules", 2, "in_progress", "cloud")
 	s.Features = append(s.Features, p)
 	s.sortFeatures()
@@ -206,7 +206,7 @@ func TestValidateKindAndHolds(t *testing.T) {
 func TestAddProcessItem(t *testing.T) {
 	s := state(feature("a", 1, "in_progress"))
 	p := &Feature{Feature: "rules", Priority: 2, Kind: "process", Holds: []string{"cloud"}}
-	if _, err := s.Add(p, now, "human/jeff"); err != nil {
+	if err := s.Add(p, now, "human/jeff"); err != nil {
 		t.Fatal(err)
 	}
 	if p.Round != "process" || p.Phase != 1 || p.Steps[0].ID != "x1-design" ||

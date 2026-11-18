@@ -5,8 +5,9 @@ description: Adds a feature to the workflow queue - checks archived designs for 
 
 # Feature intake
 
-Adds one queue item (FLOW-03). Its Design phase happens later, in the loop;
-intake only frames the item. Rules: FLOW-01, FLOW-05, FLOW-12, FLOW-13,
+Adds one queue item (FLOW-03). Its Design phase happens later, in the loop,
+unless the same-sitting lane below (step 6) is taken; intake only frames the
+item. Rules: FLOW-01, FLOW-05, FLOW-12, FLOW-13,
 FLOW-20.
 
 1. Set up as in `workflow-tick` step 1.
@@ -36,11 +37,12 @@ FLOW-20.
    agree too whether the item is a program item; one that is not is filed as
    FLOW-20's freeze says, with `-hold "<why>"`, unless it is exempt there.
    Then agree on
-   a kebab-case slug, a one-line title, the priority (show
-   `dist/wf status`, which lists FLOW-05's order: the class order decides
-   where an item can go, priority places it within its class, and a new item
-   never jumps an in-progress item of its own class without his say), and an
-   estimate in steps and runs. A fix or follow-up of another item sets
+   a kebab-case slug, a one-line title, the position (show
+   `dist/wf status`, which lists FLOW-05's order with each open item's
+   position: the class order decides where an item can go, `wf new` places
+   it as near the asked position as its class and status allow and prints
+   where it went, and a new item never goes ahead of an in-progress item of
+   its own class), and an estimate in steps and runs. A fix or follow-up of another item sets
    `-follows <item>`: it is then a fix (FLOW-05 class 3) and starts only once
    that item is done.
    When the waiting limit is reached (`dist/wf next` prints it), say so: a
@@ -53,7 +55,9 @@ FLOW-20.
    offer it for anything else, and decline it when asked for anything
    else, saying that the mark is for a security fix and that the limit is
    his to raise (FLOW-05, FLOW-20).
-   Size guide: small 7 to 9 steps, one run; medium 12 to 18; large 25 or more.
+   Size guide: small 7 to 9 steps, one run; medium 12 to 18; large 25 or more;
+   a process item 4 steps, one run, plus 1 step for each expected state step
+   (`x4-state`).
    The runaway check escalates at `runaway_factor` (2) times the step
    estimate, while the item is open (FLOW-13).
 4. Write it:
@@ -86,8 +90,24 @@ FLOW-20.
    affinity changed to `host:<name>` in the new file (FLOW-09).
 5. Push it with the same worker as step 4:
    `dist/wf commit -state .dev/workflow -worker <worker> -m "<slug>: intake" queue/`
-   (`queue/`, since `wf new` may renumber other items; `workflow-tick` step 2
+   (`queue/`, since `wf new` renumbers the open items; `workflow-tick` step 2
    gives its exit codes).
+6. **The same-sitting lane**, for a trivial process item only. It is trivial
+   when Jeff states the exact edit at intake; the change is text only
+   (rules, skills, agents, the template), with no `tools/workflow/` code, no
+   state step and no `holds`; its review fits the sitting's ask cap
+   (`workflow-human` item 3); and, while FLOW-20 stands, it is a program
+   item, exempt, or filed on hold and its `q1` answered by Jeff in this
+   sitting to let it go ahead. Otherwise do not offer it. When it holds,
+   offer to draft the design and review it now, and on Jeff's yes: create
+   `feat/<slug>` from `main` and push it (a process item has no
+   branch-setup step); draft the design there from the template (Problem,
+   Decisions, Questions, Rule changes, Implementation plan, Design review);
+   write its assumed questions to the queue file and push them with
+   `dist/wf commit` (`wf answer` refuses a question the file lacks); then
+   hold `workflow-human` item 3 on it in this session. Its asks count
+   toward the sitting's cap. LOOP-09's owner review and owner merge, and
+   every rule-change ask, stay as they are.
 
 ## A regression's follow-up
 
@@ -109,10 +129,10 @@ apply, with these defaults in place of step 3's agreement:
 - a feature, `-follows <item>`, a small estimate (7 to 9 steps, one run), and
   the evidence in `-source` (the failing command or case, and where on `main`
   it also fails); logs go under `native/` as today;
-- `-priority`: the top of the fixes. That is the lowest number held by an
-  open class-3 item (a feature with `follows` set, not yet in
-  implementation); with none, the lowest held by an open class-4 item; with
-  neither, one past the highest open number. `wf new` renumbers the rest and logs each move.
+- `-priority`: the top of the fixes: the position of the first open class-3
+  item (a feature with `follows` set, not yet in implementation); with none,
+  of the first open class-4 item; with neither, one past the last open
+  position. `wf new` renumbers the rest.
   Several found together are queued in the order found, each at the number
   after the last.
 
@@ -123,5 +143,5 @@ then among the paths step 5 passes to `wf commit`. Report each one as
 "<slug> (follows <item>)" in the step's evidence and in the run's
 **Follow-ups filed** line. Jeff's explicit word overrides the
 default and is recorded in the queue history: he may fold the fix into the
-item (`wf back` with the finding), place it elsewhere (clear `follows`, or set
-its priority), or leave it unfiled.
+item (`wf back` with the finding), place it elsewhere (clear `follows`, or move
+it with `wf move`), or leave it unfiled.
