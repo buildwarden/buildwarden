@@ -1,6 +1,6 @@
 ---
 feature: loop-native-lead
-status: draft
+status: archived
 drivers: []              # the loop's queue code, its native wrapper and settings, and its rules;
                          # no driver tree is reached
 seams: []                # no GLOBAL-08 seam changes
@@ -1574,12 +1574,125 @@ Each task cites the rules it must satisfy. All on `feat/loop-native-lead`.
 
 ## Consolidation
 
-Filled in at Publish.
+A process item has no Publish phase and no consolidation pass (FLOW-03).
+The implement step merges current `main` before it opens the PR, and its
+open PR is refreshed like a feature's (FLOW-10).
 
 ## Rollback notes
 
-None yet.
+Revert the PR. No queue file carries a `lead` or a `host_lease_minutes`
+until `x4-state` writes one after the merge, so an older `wf` reads every
+state this one writes before then. A machine that ran the new wrapper
+picks the old one up at its next scheduled start (it resets to
+`origin/main`); a lease it claimed for 20 hours before the revert runs to
+its expiry or is released by hand (`wf release`).
 
 ## Archive summary
 
-Filled in at Publish.
+Implemented on 2026-11-18 as a process item (`x2-implement`), after design
+review r1 approved the design and its eight rule changes at `74deb30` on
+2026-11-17 (Jeff; FLOW-04 and FLOW-09 each with a change, FLOW-05, -13,
+-16, -17, -18 and PROFILE-01 as drafted; a5 answered (2), refined; a16 (1)
+with the colon-reading test case; a10 (1); every other assumption as
+recommended). `main` was still at the fork point (`0cd3c02`) when the PR
+was opened, so there was nothing to merge. It is P1's fourth item under
+FLOW-20 (`componentization`).
+
+- **Rule text** (`docs/development/process.md`,
+  `docs/development/loop-profile.md`), word for word as approved: FLOW-04
+  (the lead, which any worker may set or change, each change in the item's
+  history and the run's digest; any host name served by several machines;
+  a machine's 20-hour lease, renewed and released), FLOW-05, FLOW-09 (any
+  worker may name the lead, at intake or later; a process item is never
+  led), FLOW-13 (the guards bind every unattended run; each run spends its
+  own budget), FLOW-16 (a machine's cleanup), FLOW-17 (the push script,
+  the `-F` commit form), FLOW-18, and PROFILE-01's Native hosts row.
+- **Built: the lead** (`queue/lead.go`, `queue/phases.go`,
+  `queue/next.go`, `cmd/wf`). `Feature.Lead` (`lead: host:<name>`);
+  `Seed` gives a led feature's `cloud` template steps of phases 0 to 5 to
+  the lead, so a return re-seeds with it; `Starts` lets only a worker
+  serving the lead start a queued led feature; `wf new -lead` and
+  `wf lead -worker W -feature F -host <name> | -clear` for any worker kind,
+  re-labelling pending, unleased template steps and writing a history
+  line; `validateLead` refuses a lead on a process or tracked item and a
+  lead no machine serves.
+- **Built: host names** (`queue/hosts.go`). The one-machine error is gone
+  from `validateNative`; every pending host step, open gap and lead must
+  still name a served host.
+- **Built: the lease** (`queue/lease.go`, `queue/next.go`,
+  `queue/commit.go`). `host_lease_minutes` (1200 when unset, an error
+  below 0) for a `host:` worker, `lease_minutes` for the others;
+  `wf renew` (refuses a worker that does not hold the lease, counts
+  nothing); `wf commit -renewed` through `renewAgain`; `wf release
+  -session <machine>.<run>` and `wf release -machine <m> -stale -current
+  <machine>.<run>`, sparing the current run and skipping `attended-`
+  sessions. A machine's worker is `host:<name>/<machine>.<run>`.
+- **Built: the guards.** `cloudHold` became `unattendedHold`, in `wait`
+  and in `claimAgain`: an open blocking question and a spent runaway
+  budget stop every worker but `human`; `wf gate` exits idle with the
+  reason while `priority_confirmed` is false.
+- **Built: `QUEUE.md`** (`queue/summary.go`). The Lead column, the
+  Workers section, and `wf status`'s `lead:` line; golden files updated.
+- **Built: the push script and the settings**
+  (`tools/workflow/native/`). `native-push.sh <name>` pushes
+  `.scratch/<name>`'s `feat/<item>` to the same name, one refspec, no
+  `+`, refusing an item not in progress, a detached head, another branch
+  name and extra arguments; the two push allows in `settings.native.json`
+  replaced by the denies `Bash(git push*)` and `Bash(git -C * push*)`;
+  `push_test.go` and the `TestNativeSettingsRules` colon cases (a16).
+- **Built: the wrapper** (`native-tick.sh`, the installers). The session
+  id carries the machine; a `release` stage (`-stale`) after `build wf`
+  and before the gate, and the `-session` release in `on_exit` before
+  `record_status`; the worktree cleanup with its `leftover` notes; the
+  gate's case 3 reason from `wf gate`'s `idle` line; the `entire status`
+  check and its prompt line; the installers check for the push script.
+- **Skills and agents.** `workflow-native` (worker id, attended worker and
+  its `<machine>` argument, Close release, worktrees, the push script,
+  `wf renew`, `wf commit -renewed`, the Never list, `commit -F`, the Git
+  paragraph without `push origin workflow`, lead changes under **Moved**);
+  `workflow-tick` (the trunk check, **Waiting on a host** lists leads, lead
+  changes under **Moved**); `workflow-intake` (`-lead`); `workflow-human`
+  (`wf lead`); one sentence in each of the six phase agents.
+- **Deviations from the plan, each for a reason.** (1) The cloud's `wf
+  next` reports a queued led item as a blocked line, so the tick can list
+  it under **Waiting on a host**; the design had it passed over. (2) The
+  cleanup walks `.scratch/*/` rather than parsing `git worktree list
+  --porcelain`, whose paths Git Bash spells differently. (3) The wrapper
+  commits its releases as worker `native/<machine>.<run>`. (4)
+  `lease_minutes <= 0` falls back to 120, as `host_lease_minutes <= 0`
+  falls back to 1200. (5) `wf lead` and `wf new -lead` are tested on a
+  state directory, not through `wf commit` against a bare remote.
+- **Decisions taken.** A lead is a host name and `Seed` routes phases 0-5
+  by it (1); only the lead's machines start a led item (2); only a feature
+  is led, by any worker, every change logged (3, a5 (2)); any host name
+  may be served by several machines (4); `<os>-any` names (5); the cloud
+  is a capability worker only when the table lists it (6); a machine's
+  20-hour lease, renewed and released (7); the claim names the machine
+  (8); the guards bind every unattended worker (9); a machine pushes only
+  through the push script on `main` (10); each machine cleans up after a
+  done item (11); no led step without session recording (12); no worker
+  is held (13).
+- **Rejected.** Per-phase affinities by hand; a lead naming a machine; the
+  lead taking Publish; only the human setting a lead; a heartbeat lease;
+  the 20-hour lease for every claim; one deny per bad push form; no push
+  change because `main` is protected.
+- **For future designs touching `native-lead`, `lead`, `host-names`,
+  `capability-any`, `lease`, `lease-renewal`, `wf-renew`,
+  `native-wrapper`, `push-script`, `permission-denies`, `priority-gate`
+  or `worker-identity`:** the push denies are a guard against an agent's
+  mistake, not a sandbox (`make`, `go` and `pwsh` can still push); a
+  machine's push goes only through `native-push.sh`, which lives on
+  `main`, so changing it waits for a merge. A lease is held 20 hours only
+  by a running session, a machine that lost power until its next run, or
+  an attended session closed without its Close. A lead covers phases 0-5;
+  Publish, Merge and Close stay `cloud`. Native validation of this item is
+  tracked, not done: the three `tier2_gaps` are each machine's first
+  scheduled runs after the merge. `loop-repository` moves this machinery
+  next.
+- **After the merge**, at `x4-state` (attended, on the `workflow` branch,
+  once no live lease predates the merge commit and both machines'
+  `native/status/` files show a run after it): `hosts.yaml`'s header and
+  any second machine or `<os>-any` name on Jeff's word;
+  `host_lease_minutes` in `config.yaml` on Jeff's word; `README.md`; the
+  three native gaps in `backlog/native-gaps.yaml`; the first led item.
+  `x4-close` must get `needs: [x4-state]` by hand when it is seeded.
