@@ -47,6 +47,8 @@ steps:
     phase: 4
     affinity: cloud
     status: pending
+    needs:
+      - x4-state
     lease:
       claimed_by: ""
       expires: null

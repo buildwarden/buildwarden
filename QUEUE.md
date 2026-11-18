@@ -40,7 +40,7 @@ None.
 
 | Pri | Item | Kind | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | queue-positions | process | buildwarden/buildwarden | - | 4 close | x4-state (human), x4-close (cloud) | - | [#126](https://github.com/buildwarden/buildwarden/pull/126) | 2 / 5 |
+| 1 | queue-positions | process | buildwarden/buildwarden | - | 4 close | x4-state (human) | - | [#126](https://github.com/buildwarden/buildwarden/pull/126) | 2 / 5 |
 | 2 | loop-repository | process | buildwarden/buildwarden | - | 2 implement | x2-predecessors-merged (human) | - | - | 1 / 10 |
 | 3 | loop-streamline-2 | process | buildwarden/buildwarden | - | 3 merge | x4-state (human), x3-merge (cloud), x2-refresh (cloud) | a refresh, then your merge | [#127](https://github.com/buildwarden/buildwarden/pull/127) behind `main` | 2 / 5 |
 | 4 | loop-parallel-rule-wording | process | buildwarden/buildwarden | - | 3 merge | x3-merge (cloud), x2-refresh (cloud) | a refresh, then your merge | [#128](https://github.com/buildwarden/buildwarden/pull/128) behind `main` | 2 / 9 |
