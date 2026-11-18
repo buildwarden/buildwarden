@@ -11,8 +11,8 @@ alters_relationships: null
 source: 'Jeff approved the loop change proposal''s direction on 2026-11-14 and the loop-contract design at 7af50ff, whose hand-off names this item and its order in P1 (loop-contract, alters-slot, loop-parallel, loop-native-lead, loop-repository, then the move). A program item (FLOW-20): its design lists componentization.md in related. Scope, from the proposal''s step 4 and loop-contract''s hand-off: lead, host names, Seed, the wrapper, a main-owned push script and denies; FLOW-04, -09, -13, -16, -18. Decided already and not to be reopened: work any machine with a capability can do goes to ''whichever loop supports it and next can pick it up, placing a refreshable 20-hour lease while actively working on it'' (Jeff, loop-contract a15 b, a24). Waits for main to be protected and for loop-parallel. Whether it holds any worker is its design''s to say.'
 pr:
   number: 129
-  ci: pending
-  head: bab1ebd50a242b7afa28076712e0b0c02535bd10
+  ci: green
+  head: 4dedfa976e9a061ac8c146674663197a5387a220
 steps:
   - id: x1-design
     phase: 1
@@ -46,10 +46,10 @@ steps:
   - id: x2-refresh
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261118T182148Z
-      expires: 2026-11-18T21:05:35.413593394Z
+      claimed_by: ""
+      expires: null
     note: 'main at a094f4d: 1 commit since the branch merged it; both change .claude/skills/workflow-human/SKILL.md, .claude/skills/workflow-intake/SKILL.md, docs/development/process.md, tools/workflow/cmd/wf/main.go, tools/workflow/queue/commit.go, tools/workflow/queue/queue.go, tools/workflow/queue/summary_test.go'
 budget:
   estimate:
@@ -108,3 +108,6 @@ history:
   - at: 2026-11-18T19:05:35Z
     by: cloud/20261118T182148Z
     event: claimed x2-refresh until 2026-11-18T21:05:35Z
+  - at: 2026-11-18T19:25:03Z
+    by: cloud/20261118T182148Z
+    event: done x2-refresh
