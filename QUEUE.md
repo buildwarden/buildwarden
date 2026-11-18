@@ -38,7 +38,7 @@ None.
 
 | Pri | Item | Kind | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|
-| 2 | loop-streamline-2 | process | buildwarden/buildwarden | - | 2 implement | x4-state (human), x2-implement (cloud) | - | - | 1 / 5 |
+| 2 | loop-streamline-2 | process | buildwarden/buildwarden | - | 2 implement | x4-state (human), x2-implement (cloud, leased to cloud/20261118T105745Z) | - | - | 2 / 5 |
 | 3 | loop-parallel-rule-wording | process | buildwarden/buildwarden | - | 2 implement | x2-implement (cloud) | - | - | 1 / 9 |
 | 4 | loop-native-lead | process | buildwarden/buildwarden | - | 2 implement | x4-state (human), x2-implement (cloud) | - | - | 1 / 12 |
 | 5 | loop-repository | process | buildwarden/buildwarden | - | 2 implement | x2-predecessors-merged (human) | - | - | 1 / 10 |
