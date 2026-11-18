@@ -4,11 +4,15 @@ priority: 4
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/loop-native-lead.md
 branch: feat/loop-native-lead
 alters_relationships: null
 source: 'Jeff approved the loop change proposal''s direction on 2026-11-14 and the loop-contract design at 7af50ff, whose hand-off names this item and its order in P1 (loop-contract, alters-slot, loop-parallel, loop-native-lead, loop-repository, then the move). A program item (FLOW-20): its design lists componentization.md in related. Scope, from the proposal''s step 4 and loop-contract''s hand-off: lead, host names, Seed, the wrapper, a main-owned push script and denies; FLOW-04, -09, -13, -16, -18. Decided already and not to be reopened: work any machine with a capability can do goes to ''whichever loop supports it and next can pick it up, placing a refreshable 20-hour lease while actively working on it'' (Jeff, loop-contract a15 b, a24). Waits for main to be protected and for loop-parallel. Whether it holds any worker is its design''s to say.'
+pr:
+  number: 129
+  ci: green
+  head: bab1ebd50a242b7afa28076712e0b0c02535bd10
 steps:
   - id: x1-design
     phase: 1
@@ -28,10 +32,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261118T105745Z
-      expires: 2026-11-18T13:52:16.17613348Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 3
@@ -71,3 +82,9 @@ history:
   - at: 2026-11-18T11:52:16Z
     by: cloud/20261118T105745Z
     event: claimed x2-implement until 2026-11-18T13:52:16Z
+  - at: 2026-11-18T12:22:45Z
+    by: cloud/20261118T105745Z
+    event: done x2-implement
+  - at: 2026-11-18T12:22:45Z
+    by: cloud/20261118T105745Z
+    event: entered phase 3 (merge)
