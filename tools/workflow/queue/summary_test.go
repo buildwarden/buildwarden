@@ -307,7 +307,8 @@ func TestSummary(t *testing.T) {
 		"- **loop-contract**: [PR #119](https://github.com/buildwarden/buildwarden/" +
 			"pull/119), CI green",
 		"- **loop-native-lead**: design review (`x1-design`, FLOW-19)",
-		"| 64 | seam-specs | feature | buildwarden/buildwarden | undeclared | 2 plan |",
+		"| 64 | seam-specs | feature | - | buildwarden/buildwarden | undeclared | " +
+			"2 plan |",
 		"| seam-specs, driver-contract | colliding |",
 	} {
 		if !strings.Contains(today, want) {

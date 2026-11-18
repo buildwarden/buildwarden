@@ -459,6 +459,9 @@ func status(s *queue.State, o opts) error {
 		if f.Urgent != "" {
 			fmt.Printf("\t  urgent: %s\n", f.Urgent)
 		}
+		if f.Lead != "" {
+			fmt.Printf("\t  lead: %s\n", f.Lead)
+		}
 		for _, q := range f.Questions {
 			if q.Status == "open" {
 				fmt.Printf("\t  %s question %s: %s (recommended: %s)\n",

@@ -185,3 +185,38 @@ func setLeadRefusals(t *testing.T) {
 		t.Fatal("a process item was led")
 	}
 }
+
+// TestSummaryWorkers: QUEUE.md's Active table has a Lead column, and the
+// Workers section lists each machine with its host names, its last run, the
+// items it leads and the leases its sessions hold, read from the files alone
+// (FLOW-04, FLOW-09).
+func TestSummaryWorkers(t *testing.T) {
+	k3 := ledFeature("k3", 1)
+	k3.Status = "in_progress"
+	s := nativeState(k3)
+	s.Machines[1].Name = "windows-desktop"
+	s.Claim(k3, &k3.Steps[0], lead+"/windows-desktop.20261117T101000Z", now, true)
+	since := now.Add(-48 * time.Hour)
+	s.Statuses = []MachineStatus{{File: "mac.yaml", Machine: "mac", LastRun: now,
+		Outcome: "idle", Reason: "idle: no host step ready and no open gaps",
+		Since: since}}
+	md := Summary(s)
+	for _, want := range []string{
+		"| Pri | Item | Kind | Lead | Repositories |",
+		"| 1 | k3 | feature | " + lead + " | ",
+		"## Workers\n\n| Machine | Host names | Last run | Leads | Holds |\n" +
+			"|---|---|---|---|---|\n" +
+			"| mac | macos-vz, macos-qemu | idle, 2026-10-29 10:00 " +
+			"(since 2026-10-27): " +
+			"idle: no host step ready and no open gaps | - | - |\n" +
+			"| windows-desktop | windows-hyperv, qemu-any | - | k3 | " +
+			"k3/f0-branch-setup until 2026-10-30 06:00 |\n",
+	} {
+		if !strings.Contains(md, want) {
+			t.Fatalf("QUEUE.md lacks %q:\n%s", want, md)
+		}
+	}
+	if strings.Contains(Summary(state(k3)), "## Workers") {
+		t.Fatal("a Workers section without hosts.yaml")
+	}
+}

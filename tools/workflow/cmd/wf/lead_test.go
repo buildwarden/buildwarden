@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 const hyperv = "host:windows-hyperv"
 
@@ -49,4 +52,7 @@ func TestLeadCommands(t *testing.T) {
 		"-feature", "a")
 	refused(t, dir, "lead needs -worker", "lead", "-feature", "a", "-clear")
 	must(t, dir, "validate")
+	if out := must(t, dir, "status"); !strings.Contains(out, "\t  lead: "+hyperv+"\n") {
+		t.Fatalf("wf status has no lead line:\n%s", out)
+	}
 }
