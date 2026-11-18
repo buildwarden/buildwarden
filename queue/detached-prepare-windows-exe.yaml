@@ -54,15 +54,15 @@ steps:
     needs:
       - f2-design-review
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261118T105745Z
+      expires: 2026-11-18T14:23:00.975679494Z
 budget:
   estimate:
     runs: 1
     steps: 7
   spent:
-    runs: 1
-    steps: 3
+    runs: 2
+    steps: 4
 questions:
   - id: a1
     kind: assumed
@@ -160,4 +160,7 @@ history:
     event: 'priority 68 -> 69 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 69 -> 6 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'
+    event: priority 69 -> 6 (renumbered to the item's 1-indexed queue position (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-18T12:23:00Z
+    by: cloud/20261118T105745Z
+    event: claimed f2-plan until 2026-11-18T14:23:00Z
