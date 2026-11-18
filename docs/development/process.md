@@ -669,16 +669,17 @@ reason to keep a branch; it starts from trunk on a new one.
 Deleting a branch loses any commit not on trunk, so a branch is deleted only
 after it is shown to be contained in trunk (`git branch --merged`, the PR's
 merge commit, or, for a squash merge, a commit on trunk naming the PR whose
-tree equals the branch head's tree, or a one-parent such commit whose change
-from its parent has the same `git patch-id --verbatim` as the branch head's
-change from its merge base with that parent), with git's safe forms
+tree equals the branch head's tree, or a one-parent such commit C whose
+tree is exactly what merging the branch head onto C's parent writes, from
+the single merge base B of the two:
+`git merge-tree --write-tree --merge-base=B C^ <head>`), with git's safe forms
 (`git branch -d`) and never by force-pushing. `git branch -d` refuses a
 squash-merged branch, so that case alone deletes the local branch with
-`git branch -D`, and only after `wf check` has shown the equal tree or change;
-otherwise the escalation gives the human these commands, and an agent never
-runs them. Caches a later build reuses (prepared images, support images)
-stay. An agent without permission to delete lists the exact commands for the
-human instead of skipping the step.
+`git branch -D`, and only after `wf check` has shown the equal tree or
+that merge; otherwise the escalation gives the human these commands, and
+an agent never runs them. Caches a later build reuses (prepared images,
+support images) stay. An agent without permission to delete lists the
+exact commands for the human instead of skipping the step.
 
 The automated part reports remote and local branches already merged into trunk
 that no open design claims.
