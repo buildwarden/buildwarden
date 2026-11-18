@@ -24,9 +24,13 @@ The human takes part at three points, and the loop does everything else:
 3. **The merge** of the feature's PR, which is the sign-off (FLOW-08). The PR
    carries the archived design (FLOW-12).
 
-Publish takes one feature at a time through the PR slot: it merges current
+Publish takes a feature through the PR slot (FLOW-05): no two features
+that collide or are near have pull requests open together, while
+disjoint ones may, and their pull requests merge one at a time, each
+only while its branch contains `main` (FLOW-08). Publish merges current
 `main` and runs a **consolidation pass** against every feature that landed while
-it was being built (FLOW-10, FLOW-15), and only sends the feature back when that
+it was being built (FLOW-10, FLOW-15), and a refresh runs it again whenever
+`main` moves past the branch; either sends the feature back only when the
 pass finds real work. This is the routine form of the consolidation that
 followed the Windows driver work (the claim / tunnel / collector model). Doing it
 per feature keeps the reconciliation small and keeps terminology and shared
@@ -77,8 +81,11 @@ can compare the claim against the diff and the queue can route the work:
 - `repos` — every repository the change works in, the one that holds the
   design first, when there is more than that one (LOOP-04).
 - `areas` — the areas of the repository's area map whose files the change
-  edits (FLOW-05). A design that declares none is undeclared, and FLOW-05
-  then treats the item as colliding with every item in its repositories.
+  edits (FLOW-05). A design that leaves the key out is undeclared, as
+  FLOW-05 defines it, and FLOW-05 then treats the item as colliding with
+  every item in its repositories. `areas: []` is a declaration: the
+  change edits nothing but its own design, though an item whose home
+  repository has no map is undeclared whatever it declares (FLOW-05).
 - `security_boundary` — which GLOBAL-06 boundary is altered, if any. Any value other
   than `none` requires a security note in the design.
 - `alters_relationships` — `true` when the change alters a component's role or
@@ -104,8 +111,9 @@ it: the area map says which area reaches which.
 The automated part diffs the declared `drivers` / `seams` / `surfaces` against the
 trees and files the change reaches. It checks the declared `areas` against
 what `drivers`, `surfaces` and the `rule_changes` paths imply, at Design,
-and against the paths the change edits, from Implement on (FLOW-03). The
-agent part judges the security note.
+and against the paths the change edits, from Implement through Publish
+and at each refresh of a feature (FLOW-03). The agent part judges the
+security note.
 
 ---
 
@@ -132,11 +140,20 @@ branch, the repositories it works in and what its design declares
 
 A transition happens only when the phase's done-when checks pass mechanically
 (files present, sections filled, commands green), never on an agent's own report
-that it is done. From Plan on, each done-when also checks that the queue
-still records what the design declares; from Implement on, that every
-path the branch changes lies in an area the design declares (FLOW-02). A
-path outside them is settled by widening the declaration inside the
-approved design, or by a return to Design (FLOW-06).
+that it is done. From Plan through Publish, and at each refresh of a
+feature (FLOW-10), each done-when also checks that the queue still
+records what the design declares; from Implement through Publish, and
+at each refresh of a feature, that every path the branch changes lies
+in an area the design declares (FLOW-02). A path outside them is
+settled by widening the declaration inside the approved design, or by a
+return to Design (FLOW-06). The merge confirmation (phase 7's
+done-when) and Close run neither; a feature's refresh runs both,
+including one taken while the pull request waits at Merge, and a
+process item's refresh runs neither. An item the queue records
+no declaration for, because it finished Design before the queue
+recorded declarations, is not compared with its design; its diff check
+reads the areas the queue records, so with none it is undeclared
+(FLOW-05) and no path lies outside them.
 
 A **process item** (queue `kind: process`) changes the rules the loops run
 under: `docs/development/`, `.claude/` or `tools/workflow/`. Its design is the
@@ -258,12 +275,16 @@ word: no agent changes it otherwise. Two items cannot both change an
 *exclusive* area; any number may change an *ordered* area, and the
 later to merge is put in order by its refresh (FLOW-10). Area A *reaches* area B when code in A
 depends on code in B; only exclusive areas reach and are reached. A
-repository with no map is one exclusive area, and
-an item that declares no areas is taken to change the whole of each
-repository it names. Two features are:
+repository with no map is one exclusive area. An item is *undeclared*
+when its `areas` are left out, when its home repository, the first it
+names and the one that holds its design (FLOW-02, LOOP-04), has no map,
+or when they name an area the map lacks, until the map has it;
+an undeclared item is taken to change the whole of each repository it
+names. A declared item whose areas are `[]` changes nothing but its own
+design (FLOW-02). Two features are:
 
 - **colliding** when they share an exclusive area; when they have a
-  repository in common and either declares no areas; when both change a
+  repository in common and either is undeclared; when both change a
   seam that has no specification (LOOP-02); or when the human says so in
   a design review (FLOW-19);
 - **near** when they do not collide and an area of one reaches an area of
@@ -656,16 +677,17 @@ reason to keep a branch; it starts from trunk on a new one.
 Deleting a branch loses any commit not on trunk, so a branch is deleted only
 after it is shown to be contained in trunk (`git branch --merged`, the PR's
 merge commit, or, for a squash merge, a commit on trunk naming the PR whose
-tree equals the branch head's tree, or a one-parent such commit whose change
-from its parent has the same `git patch-id --verbatim` as the branch head's
-change from its merge base with that parent), with git's safe forms
+tree equals the branch head's tree, or a one-parent such commit C whose
+tree is exactly what merging the branch head onto C's parent writes, from
+the single merge base B of the two:
+`git merge-tree --write-tree --merge-base=B C^ <head>`), with git's safe forms
 (`git branch -d`) and never by force-pushing. `git branch -d` refuses a
 squash-merged branch, so that case alone deletes the local branch with
-`git branch -D`, and only after `wf check` has shown the equal tree or change;
-otherwise the escalation gives the human these commands, and an agent never
-runs them. Caches a later build reuses (prepared images, support images)
-stay. An agent without permission to delete lists the exact commands for the
-human instead of skipping the step.
+`git branch -D`, and only after `wf check` has shown the equal tree or
+that merge; otherwise the escalation gives the human these commands, and
+an agent never runs them. Caches a later build reuses (prepared images,
+support images) stay. An agent without permission to delete lists the
+exact commands for the human instead of skipping the step.
 
 The automated part reports remote and local branches already merged into trunk
 that no open design claims.

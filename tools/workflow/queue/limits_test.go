@@ -213,7 +213,7 @@ func TestGuardPRSlot(t *testing.T) {
 }
 
 func prSlotFromClaim(t *testing.T) {
-	const held = "the PR slot, held by a (colliding: a declares no areas) (FLOW-05)"
+	const held = "the PR slot, held by a (colliding: a is undeclared) (FLOW-05)"
 	a, b := publishing("a", 2), publishing("b", 1)
 	s := mapped(t, a, b)
 	// Case 3: a claimed f6-merge-main holds the slot, as a done one does;

@@ -23,7 +23,7 @@ FLOW-20.
    Jeff which repositories the item works in, its home first (`-repos`,
    when there is more than this one, LOOP-04), and which areas it changes,
    by the names `dist/wf areas -state .dev/workflow -list` prints
-   (`-areas`; FLOW-02, FLOW-05); `wf areas -list` and `wf areas -check` exit 1 while the queue state has no `areas.yaml`, which is expected until `loop-parallel`'s `x4-state` writes it: say so and go on. Leaving `-areas` out files the item
+   (`-areas`; FLOW-02, FLOW-05). Leaving `-areas` out files the item
    undeclared, colliding with every item in its repositories until its
    design declares them. A feature whose home is a repository where the
    loop's gates do not run is tracked (FLOW-03): give it `-repos` with that

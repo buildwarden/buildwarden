@@ -39,14 +39,14 @@ Open features that are not disjoint. Process items are outside the relations (FL
 | Items | Relation | Why |
 |---|---|---|
 | relay-host-mode, driver-claim-conn | near | driver-core reaches relay |
-| relay-host-mode, relay-metrics | colliding | relay-metrics declares no areas |
-| relay-host-mode, relay-cve | colliding | relay-cve declares no areas |
+| relay-host-mode, relay-metrics | colliding | relay-metrics is undeclared |
+| relay-host-mode, relay-cve | colliding | relay-cve is undeclared |
 | driver-claim-conn, adopt-relay-qemu | near | driver-core reaches driver/qemu |
-| driver-claim-conn, relay-metrics | colliding | relay-metrics declares no areas |
-| driver-claim-conn, relay-cve | colliding | relay-cve declares no areas |
-| adopt-relay-qemu, relay-metrics | colliding | relay-metrics declares no areas |
-| adopt-relay-qemu, relay-cve | colliding | relay-cve declares no areas |
-| relay-metrics, relay-cve | colliding | relay-cve declares no areas |
+| driver-claim-conn, relay-metrics | colliding | relay-metrics is undeclared |
+| driver-claim-conn, relay-cve | colliding | relay-cve is undeclared |
+| adopt-relay-qemu, relay-metrics | colliding | relay-metrics is undeclared |
+| adopt-relay-qemu, relay-cve | colliding | relay-cve is undeclared |
+| relay-metrics, relay-cve | colliding | relay-cve is undeclared |
 
 ## Backlog
 
