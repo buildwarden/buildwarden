@@ -729,8 +729,15 @@ as a list of questions. The session goes over, at a high level:
 - the defaults, overrides and named fallbacks the design adds or changes
   (GLOBAL-09 to GLOBAL-11);
 - each `rule_changes` entry (FLOW-14), shown with its current and proposed
-  wording and asked on its own: approved, approved with a change, or rejected;
-- each assumed question, confirmed or turned into a change (FLOW-07).
+  wording and answered on its own: approved, approved with a change, or
+  rejected. Up to one question call's worth of entries may be shown
+  together;
+- each assumed question, confirmed or turned into a change (FLOW-07). The
+  human may confirm, in one answer, every assumed question that is not
+  flagged as recommended, naming any exceptions; each exception is then
+  answered on its own. A question is flagged, and always answered on its
+  own, when it touches a security boundary or a seam, or departs from
+  prior art or from an earlier decision of the human's.
 
 It ends approved, or with changes that send the feature back to Design with the
 human's notes as the finding. The design's **Design review** section records each
