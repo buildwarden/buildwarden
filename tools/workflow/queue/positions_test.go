@@ -3,6 +3,7 @@ package queue
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -59,7 +60,7 @@ func TestRenumberFollowsOrder(t *testing.T) {
 	a := added(t, s, &Feature{Feature: "a"}, 1, now)
 	b := added(t, s, &Feature{Feature: "b"}, 2, now)
 	p := added(t, s, &Feature{Feature: "p", Kind: "process"}, 3, now)
-	parent := added(t, s, &Feature{Feature: "parent"}, 4, now)
+	added(t, s, &Feature{Feature: "parent"}, 4, now)
 	wantPositions(t, s, "queued")
 	if got := order(s); got != "p:1 a:2 b:3 parent:4" {
 		t.Fatalf("after Add: %s, want the process item first", got)
@@ -84,7 +85,7 @@ func TestRenumberFollowsOrder(t *testing.T) {
 		}
 	}
 	wantPositions(t, s, "merges confirmed into Close")
-	if a.Class() != 1 || order(s) != "p:1 a:2 b:3 parent:4" {
+	if a.Class() != 1 || order(s) != "p:1 b:2 a:3 parent:4" {
 		t.Fatalf("in Close: %s, class %d", order(s), a.Class())
 	}
 	Back(b, "cloud/run", now, "a finding", 3)
@@ -317,7 +318,7 @@ func TestDoneFolder(t *testing.T) {
 	if errs := got.Validate(); len(errs) != 0 {
 		t.Fatalf("Validate: %v", errs)
 	}
-	if order(got) != "c:1 fix:2" {
+	if order(got) != "fix:1 c:2" {
 		t.Fatalf("the open items: %s", order(got))
 	}
 	if p, _ := got.Next("cloud", now); p == nil || p.Feature.Feature != "fix" {
@@ -330,7 +331,7 @@ func TestDoneFolder(t *testing.T) {
 	for _, f := range got.Listed(true) {
 		names = append(names, f.Feature)
 	}
-	if strings.Join(names, " ") != "c fix b old a" {
+	if strings.Join(names, " ") != "fix c b old a" {
 		t.Fatalf("Listed(true) = %v, want the done items in the order they closed", names)
 	}
 
@@ -366,6 +367,7 @@ func TestDoneFolderValidate(t *testing.T) {
 	for _, e := range got.Validate() {
 		lines = append(lines, e.Error())
 	}
+	slices.Sort(lines)
 	want := []string{
 		"d1: a done item in queue/done/ has no priority, not 4",
 		"d2: status queued in queue/done/, which holds done items only",
@@ -419,10 +421,10 @@ func TestMigrateDone(t *testing.T) {
 		t.Fatal(err)
 	}
 	s, _ = Load(s.Dir)
-	if _, err := s.MigrateDone("cloud/run", now); err == nil {
+	if _, err := s.MigrateDone("cloud/run"); err == nil {
 		t.Fatal("a cloud worker's migration was not refused")
 	}
-	moved, err := s.MigrateDone("human/jeff", now)
+	moved, err := s.MigrateDone("human/jeff")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -438,7 +440,7 @@ func TestMigrateDone(t *testing.T) {
 	if a.Priority != 0 || order(got) != "b:1 c:2" || len(got.Validate()) != 0 {
 		t.Fatalf("a at %d, open %s, Validate %v", a.Priority, order(got), got.Validate())
 	}
-	if _, err := got.MigrateDone("human/jeff", now); err == nil ||
+	if _, err := got.MigrateDone("human/jeff"); err == nil ||
 		!strings.Contains(err.Error(), "already") {
 		t.Fatalf("a second run: %v", err)
 	}

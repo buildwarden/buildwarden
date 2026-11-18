@@ -284,7 +284,9 @@ func areasYAML(repo, path string) string {
 
 func commitReplayInvalid(t *testing.T) {
 	a, b := stateRepos(t, "", "x", "y")
-	gitT(t, b, "rm", "-q", "queue/y.yaml")
+	if err := os.Remove(filepath.Join(b, "queue", "y.yaml")); err != nil {
+		t.Fatal(err)
+	}
 	pushed(t, b, "human/jeff", "queue: y gone", "queue/y.yaml")
 	edit(t, a, "x", func(f *queue.Feature) { f.CollidesWith = []string{"y"} })
 	out, code := commit(t, a, "human/jeff", "x: collides with y", "queue/x.yaml")

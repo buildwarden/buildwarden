@@ -1941,7 +1941,7 @@ func TestNewFieldsRoundTrip(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(dir, "config.yaml"),
 		[]byte("run_budget: {steps: 8}\nrepository: o/here\n"), 0o644)
 	s := &State{Dir: dir}
-	plain, full := feature("plain", 1, "queued"), feature("full", 2, "queued")
+	plain, full := feature("plain", 2, "queued"), feature("full", 1, "queued")
 	full.Repos = []string{"o/here", "o/specs"}
 	full.Seams, full.RulesChanged = []string{"relay-claim"}, []string{"GLOBAL-08", "TEST-05"}
 	full.Declared, full.CollidesWith = "4c1d9e2", []string{"plain"}

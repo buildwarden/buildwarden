@@ -605,8 +605,7 @@ func newFeature(s *queue.State, o opts) error {
 	if err != nil {
 		return err
 	}
-	changed, err := s.Add(f, o.now, o.worker)
-	if err != nil {
+	if err := s.Add(f, o.now, o.worker); err != nil {
 		return err
 	}
 	if taken != "" {
@@ -620,12 +619,7 @@ func newFeature(s *queue.State, o opts) error {
 			return fmt.Errorf("-hold: %w", err)
 		}
 	}
-	for _, c := range changed {
-		if err := s.Save(c); err != nil {
-			return err
-		}
-	}
-	return nil
+	return s.Save(f)
 }
 
 // declare sets what new's -repos, -areas, -seams and -adopts say on the item.
