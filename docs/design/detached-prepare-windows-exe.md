@@ -336,27 +336,159 @@ on `main` (`qemu-windows-guest-package`).
 
 ## Implementation plan
 
-1. `driver/detach.go`: `StartDetached` through `os.StartProcess` with the
-   named file, stdin the null device, stdout and stderr the log, the
-   inherited environment, `detachedAttr()`; on a failed start the error is
-   written to the log and returned (Decision 1; GLOBAL-01, GLOBAL-07,
-   GLOBAL-10, GLOBAL-11).
-2. `driver/detach_test.go`: the tier-0 cases, the helper mode selected by
-   an environment variable the test sets (TEST-01, TEST-04).
-3. `driver/hyperv/freshness.go`: report a failed start with the fix, the
-   build going on; the start function injectable for the test (Decision
-   2; UX-04, GLOBAL-11, ORCH-01).
-4. `driver/qemu/driver.go`: the same for `ensureFreshWindowsLayer`, and the
-   `TryHostLock` error (Decision 2; UX-04, ORCH-01).
-5. Tests for 3 and 4 in their packages.
-6. `docs/book/src/guide/drivers.md`: the Hyper-V refresh paragraph, and
-   the qemu Windows sentence that refers to it (UX-01).
-7. `docs/book/src/concepts/overview.md`: the `"hyperv-prepare"` line
-   (FLOW-15).
-8. `make test`, `make lint`, `GOOS=windows make lint`; push (FLOW-17).
+Plan, 2026-11-18. Written from the design as its review approved it (r1,
+**approved at `b7619b5`**; a1 to a4 confirmed as drafted, no
+`rule_changes`), on the branch at `eeed552`, which is `origin/main`
+`0cd3c02` plus this design (`main` has not moved since). Read for it:
+`driver/detach.go`, `detach_unix.go`, `detach_windows.go`,
+`detach_test.go`, `hostlock.go`; `driver/hyperv/freshness.go`,
+`prepare.go` (`activePrepared`, `prepareLockName`), `buildassets.go`
+(`hypervCacheDir`), `main_test.go`, `prepare_test.go` (`withBase`);
+`driver/qemu/driver.go` (`resolveWindowsBaseImage`,
+`ensureFreshWindowsLayer`), `prepare.go` (`prepareLockName`, `prepareFix`),
+`main_test.go`; the Hyper-V and qemu Windows paragraphs of
+`docs/book/src/guide/drivers.md`; the `"hyperv-prepare"` line of
+`overview.md`. This replaces Design's eight-step outline. One PR, one
+`f3-implement` step. Planning found the design workable as written and
+sends nothing back.
 
-No rework of other items' code beyond `StartDetached`'s body and the two
-callers' error branches.
+Tasks 1, 3 and 5 are the rework of code `main` has (FLOW-06):
+`StartDetached`'s body (from `project-config-trust` and
+`hyperv-windows-prepare`), and the two callers' dropped-error branches.
+Nothing else already implemented changes; `detachedArgs`, `detachedAttr`,
+`ConfigFile` and `TestDetachedArgs` are untouched. Tasks 8 and 9 are the
+reference doc and `overview.md` (UX-01, FLOW-15). There is no rule change
+and so no rule task (FLOW-14). Tier 0 lands with the task whose behaviour
+it tests; it stays pure Go with no network, no VM and no container
+runtime, and each test is deterministic: a wait on the child polls for
+its output to a deadline and fails at it, never retries a failed run
+(TEST-01, TEST-04). Task 10 is tier 1, task 11 the push; tier 2 is the
+existing `f6-validate-windows-hyperv` step and the tracked gap
+`detached-prepare-windows-exe-qemu` (TEST-02, TEST-03, FLOW-09). The code
+is in `driver/` (one shared file and its tests) and in the two callers in
+`driver/hyperv` and `driver/qemu`; no other driver tree changes, and no
+build-tagged file is added or edited (ORCH-01, GLOBAL-07).
+
+Tasks 1 and 2 are one green checkpoint, as are 3 and 4, and 5 and 6.
+
+**Plan notes.** Where the design is silent on how a thing is done, the
+plan takes the reading below; none changes a decision, a behaviour, an
+impact field or a rule. They are for the Review, and for Design only if
+a reading is wrong.
+
+*Note A (the seams).* The design's tier 0 injects the start (callers) and
+starts from a path that does not exist (`StartDetached`). Reading: in
+`driver/`, a package variable `executable = os.Executable` that only tests
+set; in each caller package, a package variable `startDetached =
+driver.StartDetached`, and in `driver/qemu` also `tryHostLock =
+driver.TryHostLock` for the lock-error case. No exported API is added.
+
+*Note B (qemu's progress stream).* The qemu caller's existing line goes to
+`os.Stderr`, which is that driver's progress stream (`(*Driver).status`).
+Reading: `ensureFreshWindowsLayer` takes a `progress io.Writer`, as
+`ensureFreshBase` does, and `resolveWindowsBaseImage` passes `os.Stderr`,
+so both lines reach the stream the existing one does and the test reads
+them from a buffer.
+
+*Note C (the wording).* The new line is the design's (Design, the two
+pseudocode blocks), one line, with `%v` of the error:
+"[warden] prepared base is <age> old, and its background refresh did not
+start: <err>; run \`warden image prepare --driver hyperv\` to refresh it";
+qemu's says "prepared Windows layer" and names `prepareFix(ga)`. The age
+is `winguest.RoundAge` as in the existing line; the hyperv fix is the
+`prepareFix` constant, so neither command is spelled twice (GLOBAL-01).
+The lock-error line is the same line with the lock's error.
+
+### Tasks
+
+1. **Rework `StartDetached` (`driver/detach.go`).** Per Decision 1 and the
+   Design pseudocode: `exe` from `executable()`; `MkdirAll` and open the
+   log as today; a new unexported `startDetached(exe, log, args)` opens
+   `os.DevNull`, calls `os.StartProcess(exe, append([]string{exe},
+   args...), &os.ProcAttr{Files: {null, log, log}, Env: os.Environ(), Sys:
+   detachedAttr()})` and releases the process, closing the null file
+   either way. On a failed start, `StartDetached` writes `[warden] could
+   not start <exe>: <err>` to the open log and returns the error. Drop the
+   `os/exec` import; update the doc comment to say the named file is run
+   with no lookup (Decision 1; Note A). Rules: GLOBAL-01, GLOBAL-07,
+   GLOBAL-10, GLOBAL-11, ORCH-05, SEC-01.
+2. **Tier 0 for task 1 (`driver/detach_test.go`, and a `TestMain` in a new
+   `driver/main_test.go`).** `TestMain` runs a helper mode when an
+   environment variable the test sets (e.g. `WARDEN_TEST_DETACHED_HELPER`)
+   is present: it prints its own `os.Executable()` and exits 0, before
+   `m.Run`. Cases (Validation plan, Tier 0):
+   - `TestStartDetachedRunsNamedFile`: the test binary copied to
+     `<dir>/warden` (no extension, mode 0755) and to `<dir>/warden.exe`;
+     `startDetached` on `<dir>/warden` with the helper variable set; poll
+     the log to a deadline; it names `<dir>/warden` (compared after
+     `filepath.EvalSymlinks` of both, for temp dirs behind a link). On
+     Linux the `.exe` copy is inert; on Windows this is native case 1
+     (TEST-08's unit form).
+   - `TestStartDetachedFailedStart`: `executable` set to a path that does
+     not exist; `StartDetached` returns an error and the log holds
+     `could not start <path>`.
+   - `TestDetachedArgs`, unchanged.
+   Tier 0 (TEST-02). Rules: TEST-01, TEST-02, TEST-04, TEST-08.
+3. **Rework `ensureFreshBase` (`driver/hyperv/freshness.go`).** Through
+   `startDetached` (Note A); on success the existing line, unchanged; on
+   failure the new line (Note C) on `progress`; the function returns nil
+   either way, so the build goes on on the current base (Decision 2, a2).
+   `prepareRunning` is unchanged. Rules: GLOBAL-11, UX-04, ORCH-01.
+4. **Tier 0 for task 3 (`driver/hyperv/freshness_test.go`, new).** A
+   hermetic cache with an active prepared base older than a 1m
+   `ImageRefreshAfter` (from `withBase` and the manifest helpers
+   `prepare_test.go` uses), `startDetached` replaced by one returning an
+   error: `ensureFreshBase` returns nil and the buffer holds exactly the
+   new line with the error and `warden image prepare --driver hyperv`; with
+   one returning nil, the existing "refreshing it in the background" line
+   and the args `image prepare --driver hyperv`. Untagged, so it runs on
+   Linux CI and on the Windows host (native case 1). Tier 0 (TEST-02).
+   Rules: TEST-01, TEST-02, TEST-04.
+5. **Rework `ensureFreshWindowsLayer` (`driver/qemu/driver.go`).** Takes
+   `progress` (Note B); a `tryHostLock` error prints the new line with that
+   error and returns nil (a held lock stays silent, as today); a failed
+   `startDetached` prints the new line; success prints the existing line,
+   unchanged (Decision 2, a2; Design, the qemu wording). Rules: GLOBAL-11,
+   UX-04, ORCH-01.
+6. **Tier 0 for task 5 (`driver/qemu/windows_test.go` or a new
+   `freshness_test.go`).** A `PreparedLayer` whose `PreparedAt` is past a
+   1m `ImageRefreshAfter`, with grace left: with `startDetached` failing,
+   with `tryHostLock` failing, and with both succeeding, the function
+   returns nil and writes, in turn, the new line naming the start error
+   and `prepareFix(ga)`, the new line naming the lock error, and the
+   existing line. Tier 0 (TEST-02). Rules: TEST-01, TEST-02, TEST-04.
+7. **Check that no other site re-executes warden through `os/exec`**
+   (Prior art): `grep` for `os.Executable()` and `exec.Command(exe` across
+   the tree on the branch; record the result in the PR. No edit expected;
+   a hit is a design gap and goes back to Design (FLOW-06). Rules: GLOBAL-10,
+   FLOW-06.
+8. **`docs/book/src/guide/drivers.md`.** In the Hyper-V paragraph on the
+   background re-prepare: a refresh that cannot start is reported on the
+   build's output with the command to run by hand, and the build goes on;
+   the qemu Windows sentence ("see the Hyper-V section ...") already points
+   there and gains "and the same report". Rules: UX-01.
+9. **`docs/book/src/concepts/overview.md`.** The `"hyperv-prepare"` lock
+   line gains "a refresh that does not start is reported, the build goes
+   on"; nothing else in the hyperv or qemu flows changes (Design, Docs).
+   Rules: FLOW-15.
+10. **Tier 1 and the gate.** `make test`, `make lint`, and `GOOS=windows
+    make lint` (`driver/hyperv` builds its real driver only there; the
+    Windows `detachedAttr` is compiled under it). No new CI job
+    (Decision 4). The `integration` workflow runs on the PR because it
+    reaches the `driver/` root; it must pass. Tier 0 and tier 1
+    (TEST-02). Rules: TEST-01, TEST-02, FLOW-17.
+11. **Push and open the PR to `main`.** Push the branch at each green
+    checkpoint (tasks 2, 4, 6, 10); the PR body names the blocking
+    `windows-hyperv` step and the tracked gap
+    `detached-prepare-windows-exe-qemu`, and lists the task-7 grep. Rules:
+    FLOW-08, FLOW-09, FLOW-16, FLOW-17.
+
+Every decision is carried by a task: Decision 1 by 1 and 2, Decision 2 by
+3 to 6, Decision 3 by no edit to the `Makefile` (no task touches it),
+Decision 4 by task 10's "no new CI job". The Security note's TEST-08
+case is task 2's first case and native case 3; the release's security
+suite is TEST-08's, not this item's. a3 is native case 3. No task changes
+`make build`, `.claude/`, `docs/development/` or `tools/`.
 
 ## Design review
 
