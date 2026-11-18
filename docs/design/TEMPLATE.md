@@ -50,6 +50,8 @@ recommended answer.
 ### Assumed
 
 "Proceeding with X; confirm." Each is confirmed in the design review (FLOW-19).
+Mark one `Flagged: <reason>` when it touches a security boundary or a seam, or
+departs from prior art or an earlier decision of the human's.
 
 ## Design
 

@@ -66,15 +66,15 @@ func TestRenumberFollowsOrder(t *testing.T) {
 	if got := order(s); got != "p:1 a:2 b:3 parent:4" {
 		t.Fatalf("after Add: %s, want the process item first", got)
 	}
-	s.Claim(b, &b.Steps[0], "cloud/run", now, true)
+	s.Claim(b, &b.Steps[0], "cloud/run", now)
 	wantPositions(t, s, "b started")
 	if got := order(s); got != "p:1 b:2 a:3 parent:4" {
 		t.Fatalf("after b's start: %s", got)
 	}
-	s.Claim(p, &p.Steps[0], "human/jeff", now, false)
+	s.Claim(p, &p.Steps[0], "human/jeff", now)
 	advance(p, 2)
 	wantPositions(t, s, "p in Implement")
-	s.Claim(a, &a.Steps[0], "cloud/run", now, false)
+	s.Claim(a, &a.Steps[0], "cloud/run", now)
 	advance(a, 7)
 	advance(b, 7)
 	wantPositions(t, s, "a and b waiting on the merge")
@@ -121,11 +121,11 @@ func placeState(t *testing.T) *State {
 	t.Helper()
 	s := state()
 	impl := added(t, s, &Feature{Feature: "impl"}, 1, now)
-	s.Claim(impl, &impl.Steps[0], "cloud/run", now, false)
+	s.Claim(impl, &impl.Steps[0], "cloud/run", now)
 	advance(impl, 3)
 	added(t, s, &Feature{Feature: "p", Kind: "process"}, 2, now)
 	z := added(t, s, &Feature{Feature: "z"}, 3, now)
-	s.Claim(z, &z.Steps[0], "cloud/run", now, false)
+	s.Claim(z, &z.Steps[0], "cloud/run", now)
 	for _, n := range []string{"a", "b", "c"} {
 		added(t, s, &Feature{Feature: n}, 9, now)
 	}
@@ -269,7 +269,7 @@ func closeItem(t *testing.T, s *State, name string, at time.Time) *Feature {
 		for i := range f.Steps {
 			if f.Steps[i].Status == "pending" {
 				if f.Status == "queued" {
-					s.Claim(f, &f.Steps[i], "cloud/run", at, false)
+					s.Claim(f, &f.Steps[i], "cloud/run", at)
 				}
 				Complete(f, &f.Steps[i], "cloud/run", at)
 				break

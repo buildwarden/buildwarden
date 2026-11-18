@@ -244,20 +244,20 @@ func refreshBudget(t *testing.T) {
 	s := state(a)
 	st := refresh(t, a)
 	spent := a.Budget.Spent
-	s.Claim(a, st, "cloud/run-1", now, true)
+	s.Claim(a, st, "cloud/run-1", now)
 	if got := a.Budget.Spent; got.Steps != spent.Steps || got.Runs != spent.Runs+1 {
 		t.Fatalf("the first claim: spent %+v from %+v, want the steps left alone", got,
 			spent)
 	}
 	s.Release(a, st, "cloud/run-1", now, "main moved again")
-	s.Claim(a, st, "cloud/run-2", now, false)
+	s.Claim(a, st, "cloud/run-2", now)
 	if got := a.Budget.Spent.Steps; got != spent.Steps+1 {
 		t.Fatalf("the second claim: %d steps spent, want %d", got, spent.Steps+1)
 	}
 	// The next refresh is another step, whose first claim is free again.
 	Complete(a, st, "cloud/run-2", now)
 	st = refresh(t, a)
-	s.Claim(a, st, "cloud/run-3", now, false)
+	s.Claim(a, st, "cloud/run-3", now)
 	if got := a.Budget.Spent.Steps; got != spent.Steps+1 {
 		t.Fatalf("a second refresh's first claim: %d steps spent, want %d", got,
 			spent.Steps+1)
@@ -267,20 +267,20 @@ func refreshBudget(t *testing.T) {
 	c := openPR("c", 3, 7)
 	sc := state(c)
 	st = refresh(t, c)
-	sc.Claim(c, st, "cloud/run-4", now, false)
+	sc.Claim(c, st, "cloud/run-4", now)
 	cSpent := c.Budget.Spent.Steps
 	Back(c, "cloud/run-4", now, "a merged check fails on the branch", 3)
 	st = refresh(t, c)
 	if st.ID == "f6-refresh" {
 		t.Fatal("a later refresh reused the dropped refresh's id")
 	}
-	sc.Claim(c, st, "cloud/run-5", now, false)
+	sc.Claim(c, st, "cloud/run-5", now)
 	if got := c.Budget.Spent.Steps; got != cSpent {
 		t.Fatalf("the later refresh's first claim: %d steps spent, want %d", got, cSpent)
 	}
 	// Any other step counts at once.
 	b := feature("b", 2, "in_progress")
-	s.Claim(b, &b.Steps[0], "cloud/run-3", now, false)
+	s.Claim(b, &b.Steps[0], "cloud/run-3", now)
 	if b.Budget.Spent.Steps != 1 {
 		t.Fatalf("a first claim of %s spent %d steps, want 1", b.Steps[0].ID,
 			b.Budget.Spent.Steps)

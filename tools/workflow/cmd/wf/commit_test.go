@@ -171,6 +171,8 @@ func commitClaimStands(t *testing.T) {
 	claimStep(t, b, "cloud/b", "y", "f0-branch-setup")
 	pushed(t, b, "cloud/b", "y: claim", "-claimed", "y/f0-branch-setup")
 	claimStep(t, a, "cloud/a", "x", "f0-branch-setup")
+	// -new-run is accepted and ignored: the replayed claim counts its run
+	// once, from the worker.
 	pushed(t, a, "cloud/a", "x: claim", "-claimed", "x/f0-branch-setup", "-new-run")
 	x := item(t, a, "x")
 	if x.Budget.Spent.Steps != 1 || x.Budget.Spent.Runs != 1 {

@@ -37,7 +37,6 @@ type CommitRequest struct {
 	// Claimed names the step the change claims, as FEATURE/STEP. A rejected
 	// claim is never replayed: it is asked again on the state that won.
 	Claimed string
-	NewRun  bool
 	// Paths are the files of the session's change, from the checkout's root.
 	// Nothing else but the generated files is staged.
 	Paths []string
@@ -480,7 +479,7 @@ func (g stateGit) claimAgain(r CommitRequest, c *claimRef) ([]string, error) {
 	}
 	lines := []string{fmt.Sprintf("claimed again on the new state: %s/%s", c.feature,
 		c.step)}
-	if past := s.Claim(f, st, r.Worker, r.Now, r.NewRun); past != "" {
+	if past := s.Claim(f, st, r.Worker, r.Now); past != "" {
 		lines = append(lines, past)
 	}
 	return lines, s.Save(f)
