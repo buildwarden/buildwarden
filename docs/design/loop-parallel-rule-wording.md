@@ -19,10 +19,10 @@ rule_changes:
   - {rule: FLOW-02, change: amend, paths: [docs/development/process.md,
       docs/design/TEMPLATE.md, tools/workflow/check/declared.go]}
   - {rule: FLOW-03, change: amend, paths: [docs/development/process.md]}
-  - {rule: FLOW-05, change: amend, paths: [docs/development/process.md,
-      tools/workflow/queue/relation.go, tools/workflow/queue/relation_test.go,
-      tools/workflow/queue/limits_test.go, tools/workflow/queue/testdata/queue-today.md,
-      tools/workflow/queue/testdata/queue-later.md, tools/workflow/cmd/wf/declare_test.go]}
+  - {rule: FLOW-05, change: amend, paths: [docs/development/process.md]}
+                         # FLOW-05's enforcement (queue/relation.go, its tests and golden
+                         # files, cmd/wf/declare_test.go) is the loop's machinery, changed
+                         # on the process route (FLOW-14); named in its Enforcement line
   - {rule: FLOW-16, change: amend, paths: [docs/development/process.md]}
 concepts: [workflow, queue, areas, undeclared, declared-empty, relations, pr-slot,
            done-when, wf-declare, merge-confirmation, merge-tree-proof, squash-merge,
