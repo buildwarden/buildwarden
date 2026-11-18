@@ -5,6 +5,7 @@ package queue
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
@@ -70,9 +71,10 @@ func (c Config) Budget(native bool) int {
 type Feature struct {
 	Feature string `yaml:"feature"`
 	Title   string `yaml:"title"`
-	// Priority orders items within a FLOW-05 class; 1 is the highest. Unique
-	// across the queue.
-	Priority int `yaml:"priority"`
+	// Priority is an open item's position in FLOW-05's order, 1 for the
+	// first, which wf keeps (Renumber). A done item has none once queue/done/
+	// exists; until then it holds a number past every open item's.
+	Priority int `yaml:"priority,omitempty"`
 	// Kind is feature (the default, empty) or process: a change to the rules
 	// the loops run under, which FLOW-05 classes ahead of every feature not
 	// in implementation.
@@ -131,6 +133,12 @@ type Feature struct {
 	Budget       Budget     `yaml:"budget"`
 	Questions    []Question `yaml:"questions"`
 	History      []Event    `yaml:"history"`
+
+	// stored is the number the item's file holds and file is where that file
+	// is, from the checkout's root; both are empty for an item never read or
+	// written. Save writes the items whose number moved from stored.
+	stored int
+	file   string
 }
 
 // Adopts is what a reconciliation item adopts: a release of a consumable
@@ -226,7 +234,13 @@ type State struct {
 	// Main is main.yaml, what a session last recorded about main; the file
 	// is optional. Nil, main's CI is not known, which is not read as green.
 	Main *Main
+	// doneDir records that queue/done/ exists: done items are written there
+	// and carry no number (queue-positions, Decision 8).
+	doneDir bool
 }
+
+// doneFolder is where done items live once wf migrate -done has created it.
+const doneFolder = "queue/done"
 
 // Main is main.yaml: the head of main a session saw and the result of its
 // check runs, whether GitHub requires an up-to-date branch on main, and the
@@ -379,26 +393,18 @@ func (s *State) validateMain() []string {
 	return out
 }
 
-// Load reads config.yaml and queue/*.yaml under dir.
+// Load reads config.yaml, queue/*.yaml and, when it exists, queue/done/*.yaml
+// under dir, into one list of items. An item in both places is an error.
 func Load(dir string) (*State, error) {
 	s := &State{Dir: dir}
 	if err := readYAML(filepath.Join(dir, "config.yaml"), &s.Config); err != nil {
 		return nil, err
 	}
-	paths, err := filepath.Glob(filepath.Join(dir, "queue", "*.yaml"))
-	if err != nil {
-		return nil, err
+	if fi, err := os.Stat(filepath.Join(dir, doneFolder)); err == nil && fi.IsDir() {
+		s.doneDir = true
 	}
-	for _, p := range paths {
-		f := &Feature{}
-		if err := readYAML(p, f); err != nil {
-			return nil, err
-		}
-		if want := strings.TrimSuffix(filepath.Base(p), ".yaml"); f.Feature != want {
-			return nil, fmt.Errorf("%s: feature %q does not match its file name", p,
-				f.Feature)
-		}
-		s.Features = append(s.Features, f)
+	if err := s.loadItems(); err != nil {
+		return nil, err
 	}
 	s.sortFeatures()
 	if err := s.loadNative(); err != nil {
@@ -411,6 +417,37 @@ func Load(dir string) (*State, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+// loadItems reads queue/*.yaml and queue/done/*.yaml.
+func (s *State) loadItems() error {
+	seen := map[string]bool{}
+	for _, folder := range []string{"queue", doneFolder} {
+		paths, err := filepath.Glob(filepath.Join(s.Dir, filepath.FromSlash(folder),
+			"*.yaml"))
+		if err != nil {
+			return err
+		}
+		for _, p := range paths {
+			f := &Feature{}
+			if err := readYAML(p, f); err != nil {
+				return err
+			}
+			want := strings.TrimSuffix(filepath.Base(p), ".yaml")
+			if f.Feature != want {
+				return fmt.Errorf("%s: feature %q does not match its file name",
+					p, f.Feature)
+			}
+			if seen[f.Feature] {
+				return fmt.Errorf("%s is in both queue/ and %s/: keep one",
+					f.Feature, doneFolder)
+			}
+			seen[f.Feature] = true
+			f.stored, f.file = f.Priority, folder+"/"+f.Feature+".yaml"
+			s.Features = append(s.Features, f)
+		}
+	}
+	return nil
 }
 
 // loadMain reads the optional main.yaml.
@@ -427,19 +464,180 @@ func (s *State) loadMain() error {
 // code that walks them; readers that need the current order use Ordered.
 func (s *State) sortFeatures() { sortFeatures(s.Features) }
 
-// sortFeatures sorts by class, then in-progress before queued, then priority;
-// done items have class 0 and go last, by priority.
+// sortFeatures sorts by class, then in-progress before queued, then priority,
+// then the later placement, then name; done items have class 0 and go last,
+// in the order they closed, then by name. The key is total, so the order is
+// the same however the items were listed (queue-positions, Decision 10).
 func sortFeatures(fs []*Feature) {
 	sort.SliceStable(fs, func(i, j int) bool {
 		a, b := fs[i], fs[j]
-		if ca, cb := a.Class(), b.Class(); ca != cb {
-			return cb == 0 || (ca != 0 && ca < cb)
+		if c := compareGroup(a, b); c != 0 {
+			return c < 0
 		}
-		if ia, ib := a.Status == "in_progress", b.Status == "in_progress"; ia != ib {
-			return ia
+		if a.Status == "done" {
+			if ta, tb := a.closedAt(), b.closedAt(); !ta.Equal(tb) {
+				return ta.Before(tb)
+			}
+			return a.Feature < b.Feature
 		}
-		return a.Priority < b.Priority
+		if a.Priority != b.Priority {
+			return a.Priority < b.Priority
+		}
+		if ta, tb := a.placedAt(), b.placedAt(); !ta.Equal(tb) {
+			return ta.After(tb)
+		}
+		return a.Feature < b.Feature
 	})
+}
+
+// compareGroup compares the parts of FLOW-05's order that priority does not
+// decide: the class, done last, then in progress before queued. It returns
+// -1, 0 or 1 as a sorts before, with or after b.
+func compareGroup(a, b *Feature) int {
+	rank := func(f *Feature) int {
+		c := 2 * f.Class()
+		if c == 0 {
+			c = 10
+		}
+		if f.Status != "in_progress" {
+			c++
+		}
+		return c
+	}
+	return cmp.Compare(rank(a), rank(b))
+}
+
+// placedAt is when the item was last placed: its newest "queued at
+// position", "moved to position" or, from before positions, "queued at
+// priority" line. It is zero for an item never placed.
+func (f *Feature) placedAt() time.Time {
+	for i := len(f.History) - 1; i >= 0; i-- {
+		e := f.History[i].Event
+		if strings.HasPrefix(e, "queued at position") ||
+			strings.HasPrefix(e, "moved to position") ||
+			strings.HasPrefix(e, "queued at priority") {
+			return f.History[i].At
+		}
+	}
+	return time.Time{}
+}
+
+// closedAt is when a done item closed: the time of its last "done <step>"
+// line, which Complete writes with "closed; feature done", or of its last
+// line when it has none.
+func (f *Feature) closedAt() time.Time {
+	for i := len(f.History) - 1; i >= 0; i-- {
+		if strings.HasPrefix(f.History[i].Event, "done ") {
+			return f.History[i].At
+		}
+	}
+	if len(f.History) > 0 {
+		return f.History[len(f.History)-1].At
+	}
+	return time.Time{}
+}
+
+// Renumber sets each open item's priority to its position in FLOW-05's order,
+// 1 for the first (FLOW-05). It never changes the order: after it the
+// priorities follow the order, so sorting again gives the same list. Once
+// queue/done/ exists a done item has no number. Until then a done item keeps
+// a number clear of the open ones, the next after the highest held, so the
+// numbers stay unique across every item as an old wf's Validate requires
+// (queue-positions, Decision 8).
+func (s *State) Renumber() {
+	n := 0
+	var done []*Feature
+	for _, f := range s.Ordered() {
+		if f.Status == "done" {
+			done = append(done, f)
+			continue
+		}
+		n++
+		f.Priority = n
+	}
+	if s.doneDir {
+		for _, f := range done {
+			f.Priority = 0
+		}
+		return
+	}
+	high, held := n, map[int]bool{}
+	var clash []*Feature
+	for _, f := range done {
+		if f.Priority <= n || held[f.Priority] {
+			clash = append(clash, f)
+			continue
+		}
+		held[f.Priority] = true
+		high = max(high, f.Priority)
+	}
+	for _, f := range clash {
+		high++
+		f.Priority = high
+	}
+}
+
+// place puts the item at the asked position as nearly as FLOW-05's order
+// allows: after every open item whose class, or status within the class,
+// sorts before the item's, and before every one whose sorts after it. It
+// renumbers and returns the item's position.
+func (s *State) place(f *Feature, asked int) int {
+	var open []*Feature
+	lo, hi := 0, 0
+	for _, o := range s.Ordered() {
+		if o == f || o.Status == "done" {
+			continue
+		}
+		open = append(open, o)
+		switch compareGroup(o, f) {
+		case -1:
+			lo++
+			hi++
+		case 0:
+			hi++
+		}
+	}
+	at := min(max(asked-1, lo), hi)
+	open = slices.Insert(open, at, f)
+	for i, o := range open {
+		o.Priority = i + 1
+	}
+	s.Renumber()
+	return at + 1
+}
+
+// askedNote is the history line's note of the position asked for, when the order
+// placed the item elsewhere.
+func askedNote(want, at int) string {
+	if want == at {
+		return ""
+	}
+	return fmt.Sprintf(" (asked %d)", want)
+}
+
+// Move is wf move: the human places an open item at a position, as nearly as
+// its class and status allow, and the others are renumbered (FLOW-05,
+// LOOP-04). The moved item gets the one history line.
+func (s *State) Move(f *Feature, to int, why, by string, now time.Time) error {
+	if !namedHuman(by) {
+		return fmt.Errorf("%s may not move %s: only the human places an item, as "+
+			"human/<name> (FLOW-05, LOOP-04)", by, f.Feature)
+	}
+	if f.Status == "done" {
+		return fmt.Errorf("%s is done: a done item has no position", f.Feature)
+	}
+	if to < 1 {
+		return fmt.Errorf("move -to %d: a position is 1 or more", to)
+	}
+	from := slices.Index(s.Listed(false), f) + 1
+	at := s.place(f, to)
+	line := fmt.Sprintf("moved to position %d from %d (asked %d)", at, from, to)
+	if why != "" {
+		line += ": " + why
+	}
+	f.Log(now, by, "%s", line)
+	s.sortFeatures()
+	return nil
 }
 
 // Ordered returns every item in FLOW-05 order. Class changes with status and
@@ -504,21 +702,13 @@ func (f *Feature) inImplementation() bool {
 	return f.Phase >= 3 && f.Phase != 7
 }
 
-// Add creates a queued feature at the given priority, moving the features at
-// or below it down one with a history line each, and returns every feature it
-// changed. An item homed in another repository gets the tracked round.
-func (s *State) Add(f *Feature, now time.Time, by string) ([]*Feature, error) {
+// Add creates a queued feature, placed at the position its priority asks for
+// as nearly as its class allows (place), and renumbers the others with no
+// history line on them. An item homed in another repository gets the tracked
+// round.
+func (s *State) Add(f *Feature, now time.Time, by string) error {
 	if _, err := s.Find(f.Feature); err == nil {
-		return nil, fmt.Errorf("feature %q already queued", f.Feature)
-	}
-	changed := []*Feature{f}
-	for _, o := range s.Features {
-		if o.Priority >= f.Priority {
-			o.Priority++
-			o.Log(now, by, "priority %d -> %d (renumbered by wf new: %s queued at %d)",
-				o.Priority-1, o.Priority, f.Feature, f.Priority)
-			changed = append(changed, o)
-		}
+		return fmt.Errorf("feature %q already queued", f.Feature)
 	}
 	f.Status, f.Round, f.Phase = "queued", "feature", 0
 	switch {
@@ -528,10 +718,12 @@ func (s *State) Add(f *Feature, now time.Time, by string) ([]*Feature, error) {
 		f.Round, f.Phase = "tracked", 1
 	}
 	Seed(f)
-	f.Log(now, by, "queued at priority %d (intake)", f.Priority)
+	want := f.Priority
 	s.Features = append(s.Features, f)
+	at := s.place(f, want)
+	f.Log(now, by, "queued at position %d%s", at, askedNote(want, at))
 	s.sortFeatures()
-	return changed, nil
+	return nil
 }
 
 // PutOnHold files a queued item on hold (FLOW-20's freeze): an open blocking
@@ -570,20 +762,91 @@ func (s *State) Find(name string) (*Feature, error) {
 	return nil, fmt.Errorf("no feature %q in %s/queue", name, s.Dir)
 }
 
-// Save writes one feature back to queue/<feature>.yaml and regenerates
-// QUEUE.md, so the summary is committed with the change that produced it.
+// Save renumbers the open items (Renumber), writes the feature back to its
+// queue file and the number of every other item whose number moved, and
+// regenerates QUEUE.md, so the summary is committed with the change that
+// produced it. Every command that changes state saves, so the state is in
+// positions when it returns (queue-positions, Decision 1). A done item an old
+// wf left in queue/ is not moved here: wf commit moves it.
 func (s *State) Save(f *Feature) error {
+	s.Renumber()
+	if err := s.put(f); err != nil {
+		return err
+	}
+	for _, o := range s.Features {
+		if o == f || o.file == "" || o.Priority == o.stored ||
+			(o.Status == "done" && s.doneDir) {
+			continue
+		}
+		if err := s.writeNumber(o); err != nil {
+			return err
+		}
+	}
+	return s.WriteSummary()
+}
+
+// fileOf is where the item's file belongs: queue/done/ for a done item once
+// that folder exists, queue/ otherwise.
+func (s *State) fileOf(f *Feature) string {
+	if f.Status == "done" && s.doneDir {
+		return doneFolder + "/" + f.Feature + ".yaml"
+	}
+	return "queue/" + f.Feature + ".yaml"
+}
+
+// put writes the whole item where it belongs and removes its file from the
+// other place.
+func (s *State) put(f *Feature) error {
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
 	if err := enc.Encode(f); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(s.Dir, "queue", f.Feature+".yaml"), buf.Bytes(),
+	rel := s.fileOf(f)
+	if err := os.WriteFile(filepath.Join(s.Dir, filepath.FromSlash(rel)), buf.Bytes(),
 		0o644); err != nil {
 		return err
 	}
-	return s.WriteSummary()
+	other := doneFolder + "/" + f.Feature + ".yaml"
+	if rel == other {
+		other = "queue/" + f.Feature + ".yaml"
+	}
+	err := os.Remove(filepath.Join(s.Dir, filepath.FromSlash(other)))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	f.file, f.stored = rel, f.Priority
+	return nil
+}
+
+// priorityLine is an item file's top-level priority line.
+var priorityLine = regexp.MustCompile(`(?m)^priority:.*\n?`)
+
+// writeNumber rewrites only the priority line of the item's file, so that a
+// renumber is a one-line change and a file another session or a hand edit
+// wrote keeps the rest of its text. A file with no priority line is written
+// whole.
+func (s *State) writeNumber(f *Feature) error {
+	p := filepath.Join(s.Dir, filepath.FromSlash(f.file))
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return err
+	}
+	loc := priorityLine.FindIndex(data)
+	if loc == nil {
+		return s.put(f)
+	}
+	line := ""
+	if f.Priority != 0 {
+		line = fmt.Sprintf("priority: %d\n", f.Priority)
+	}
+	data = slices.Concat(data[:loc[0]], []byte(line), data[loc[1]:])
+	if err := os.WriteFile(p, data, 0o644); err != nil {
+		return err
+	}
+	f.stored = f.Priority
+	return nil
 }
 
 func readYAML(path string, v any) error {
@@ -662,13 +925,10 @@ func (s *State) validateConfig() []error {
 // a state Guard allows has no limit finding here.
 func (s *State) Validate() []error {
 	errs := s.validateConfig()
-	prio := map[int]string{}
 	for _, f := range s.Features {
-		if other, ok := prio[f.Priority]; ok {
-			errs = append(errs, fmt.Errorf("%s: priority %d also held by %s",
-				f.Feature, f.Priority, other))
+		if err := f.validatePosition(); err != nil {
+			errs = append(errs, err)
 		}
-		prio[f.Priority] = f.Feature
 		errs = append(errs, s.Problems(f)...)
 	}
 	errs = append(errs, s.validateLimits()...)
@@ -676,6 +936,24 @@ func (s *State) Validate() []error {
 		errs = append(errs, errors.New(e))
 	}
 	return errs
+}
+
+// validatePosition checks the item's number against where its file is. A
+// number that is not yet the item's position, or that another item holds, is
+// not an error: Save and wf commit renumber it.
+func (f *Feature) validatePosition() error {
+	inDone := strings.HasPrefix(f.file, doneFolder+"/")
+	switch {
+	case inDone && f.Status != "done":
+		return fmt.Errorf("%s: status %s in %s/, which holds done items only", f.Feature,
+			f.Status, doneFolder)
+	case inDone && f.Priority != 0:
+		return fmt.Errorf("%s: a done item in %s/ has no priority, not %d", f.Feature,
+			doneFolder, f.Priority)
+	case f.Status != "done" && f.Priority < 1:
+		return fmt.Errorf("%s: priority %d is below 1", f.Feature, f.Priority)
+	}
+	return nil
 }
 
 // Problems returns Validate's findings about one item's own fields, which wf

@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -114,12 +118,9 @@ func Commit(dir string, r CommitRequest) ([]string, error) {
 		return nil, fmt.Errorf("%s is not a checkout of the %s branch", dir,
 			workflowBranch)
 	}
-	var claim *claimRef
-	if r.Claimed != "" {
-		if claim, err = parseClaimed(r.Claimed); err != nil {
-			return nil, err
-		}
-		r.Paths = append(r.Paths, "queue/"+claim.feature+".yaml")
+	claim, err := g.requestPaths(&r)
+	if err != nil {
+		return nil, err
 	}
 	if err := g.refuseMapChange(r); err != nil {
 		return nil, err
@@ -144,6 +145,22 @@ func Commit(dir string, r CommitRequest) ([]string, error) {
 			return out, err
 		}
 	}
+}
+
+// requestPaths adds to the session's paths the claimed item's file and the
+// done-folder counterparts (pairDone), and returns the claim.
+func (g stateGit) requestPaths(r *CommitRequest) (*claimRef, error) {
+	var claim *claimRef
+	if r.Claimed != "" {
+		var err error
+		if claim, err = parseClaimed(r.Claimed); err != nil {
+			return nil, err
+		}
+		r.Paths = append(r.Paths, "queue/"+claim.feature+".yaml")
+	}
+	paths, err := g.pairDone(r.Paths)
+	r.Paths = paths
+	return claim, err
 }
 
 type claimRef struct{ feature, step string }
@@ -193,10 +210,57 @@ func (g stateGit) refuseMapChange(r CommitRequest) error {
 	return nil
 }
 
+// pairDone adds to each named queue/F.yaml its counterpart queue/done/F.yaml,
+// and the reverse, so a close commits the move. A counterpart is added only
+// when the worktree, the index or HEAD has it: git add and git commit --only
+// fail on a path that matches nothing, and before wf migrate -done there is
+// no queue/done/ at all.
+func (g stateGit) pairDone(paths []string) ([]string, error) {
+	out := slices.Clone(paths)
+	for _, p := range paths {
+		var other string
+		switch name, ok := strings.CutPrefix(p, doneFolder+"/"); {
+		case ok:
+			other = "queue/" + name
+		case strings.HasPrefix(p, "queue/") && strings.Count(p, "/") == 1:
+			other = doneFolder + "/" + strings.TrimPrefix(p, "queue/")
+		default:
+			continue
+		}
+		if !strings.HasSuffix(other, ".yaml") || slices.Contains(out, other) {
+			continue
+		}
+		known, err := g.known(other)
+		if err != nil {
+			return nil, err
+		}
+		if known {
+			out = append(out, other)
+		}
+	}
+	return out, nil
+}
+
+// known reports whether the worktree, the index or HEAD has the path.
+func (g stateGit) known(p string) (bool, error) {
+	if _, err := os.Stat(filepath.Join(g.dir, filepath.FromSlash(p))); err == nil {
+		return true, nil
+	}
+	indexed, err := g.lines("ls-files", "--", p)
+	if err != nil {
+		return false, err
+	}
+	if len(indexed) > 0 {
+		return true, nil
+	}
+	_, err = g.run("cat-file", "-e", "HEAD:"+p)
+	return err == nil, nil
+}
+
 // commitOnce regenerates the generated files and commits them with the
 // session's paths. made is false when there was nothing to commit.
 func (g stateGit) commitOnce(r CommitRequest) (lines []string, made bool, err error) {
-	generated, err := generate(g.dir)
+	generated, err := g.generate(r.Paths)
 	if err != nil {
 		return nil, false, err
 	}
@@ -220,17 +284,86 @@ func (g stateGit) commitOnce(r CommitRequest) (lines []string, made bool, err er
 }
 
 // generate writes the files wf builds from the state, QUEUE.md and the
-// digest's day pages, and returns their paths.
-func generate(dir string) ([]string, error) {
-	s, err := Load(dir)
+// digest's day pages, and returns their paths with the queue files it
+// commits beside the session's. It renumbers what no command did: a hand
+// edit, an old wf's write, a replay (queue-positions, Decision 1). A queue
+// file outside the session's paths is committed when its only uncommitted
+// change is its priority line, and a done item an old wf left in queue/ is
+// moved to queue/done/ when its file has no other uncommitted change; a file
+// with other uncommitted changes is left alone, as --only leaves it.
+func (g stateGit) generate(paths []string) ([]string, error) {
+	s, err := Load(g.dir)
 	if err != nil {
 		return nil, err
+	}
+	s.Renumber()
+	var extra []string
+	for _, f := range s.Ordered() {
+		more, err := g.settle(s, f, paths)
+		if err != nil {
+			return nil, err
+		}
+		extra = append(extra, more...)
 	}
 	pages, err := s.Digest()
 	if err != nil {
 		return nil, err
 	}
-	return append([]string{SummaryFile}, pages...), s.WriteSummary()
+	return slices.Concat([]string{SummaryFile}, pages, extra), s.WriteSummary()
+}
+
+// settle writes what renumbering changed in one item's file, or moves a done
+// item an old wf left in queue/, as generate says, and returns the paths to
+// commit beside the session's.
+func (g stateGit) settle(s *State, f *Feature, paths []string) ([]string, error) {
+	if f.file == "" {
+		return nil, nil
+	}
+	named := slices.ContainsFunc(paths, func(p string) bool {
+		return p == f.file || strings.HasPrefix(f.file, strings.TrimSuffix(p, "/")+"/")
+	})
+	change := "named"
+	if !named {
+		var err error
+		if change, err = g.change(f.file); err != nil || change == "other" {
+			return nil, err
+		}
+	}
+	switch {
+	case f.Status == "done" && s.doneDir && !strings.HasPrefix(f.file, doneFolder+"/"):
+		left := f.file
+		return []string{left, s.fileOf(f)}, s.put(f)
+	case f.Priority != f.stored:
+		return []string{f.file}, s.writeNumber(f)
+	case change == "priority":
+		return []string{f.file}, nil
+	}
+	return nil, nil
+}
+
+// change says how a queue file differs from HEAD: none, priority when only
+// its priority line differs, other otherwise, a file HEAD lacks included.
+func (g stateGit) change(p string) (string, error) {
+	now, err := os.ReadFile(filepath.Join(g.dir, filepath.FromSlash(p)))
+	if err != nil {
+		return "", err
+	}
+	was, err := g.run("show", "HEAD:"+p)
+	if err != nil {
+		return "other", nil
+	}
+	switch {
+	case string(now) == was:
+		return "none", nil
+	case withoutPriority(string(now)) == withoutPriority(was):
+		return "priority", nil
+	}
+	return "other", nil
+}
+
+// withoutPriority is an item file's text without its priority line.
+func withoutPriority(text string) string {
+	return priorityLine.ReplaceAllString(text, "")
 }
 
 // push pushes the checkout's head to the workflow branch. rejected reports a
@@ -374,6 +507,34 @@ func (g stateGit) replay(own, worker string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	lines, err := g.cherryPick(own)
+	if err != nil {
+		return nil, err
+	}
+	_, _ = g.run("cherry-pick", "--quit")
+	if err := renumberFiles(g.dir); err != nil {
+		return nil, g.restore(own, "the replayed state does not load: "+err.Error())
+	}
+	after, err := validated(g.dir)
+	if err != nil {
+		return nil, g.restore(own, "the replayed state does not load: "+err.Error())
+	}
+	var fresh []string
+	for _, e := range after {
+		if !slices.Contains(before, e) {
+			fresh = append(fresh, e)
+		}
+	}
+	if len(fresh) > 0 {
+		return nil, g.restore(own, "wf validate fails on the replayed state:\n"+
+			strings.Join(fresh, "\n"))
+	}
+	return append(lines, "replayed onto origin/"+workflowBranch+" for "+worker), nil
+}
+
+// cherryPick applies the session's commit to the checkout without committing
+// it, and settles the conflicts replay may settle. It returns replay's lines.
+func (g stateGit) cherryPick(own string) ([]string, error) {
 	var lines []string
 	if _, err := g.run("cherry-pick", "--no-commit", own); err != nil {
 		conflicts, lerr := g.lines("diff", "--name-only", "--diff-filter=U")
@@ -386,6 +547,13 @@ func (g stateGit) replay(own, worker string) ([]string, error) {
 			case generatedFile(p):
 			case p == "main.yaml":
 				lines = append(lines, mainKept)
+			case strings.HasPrefix(p, "queue/"):
+				if ok, err := g.remerge(own, p); err != nil {
+					return nil, err
+				} else if !ok {
+					hard = append(hard, p)
+				}
+				continue
 			default:
 				hard = append(hard, p)
 				continue
@@ -403,22 +571,81 @@ func (g stateGit) replay(own, worker string) ([]string, error) {
 				strings.Join(hard, ", ")+": re-apply the change by hand")
 		}
 	}
-	_, _ = g.run("cherry-pick", "--quit")
-	after, err := validated(g.dir)
+	return lines, nil
+}
+
+// placedLine matches a history line that places an item.
+var placedLine = regexp.MustCompile(`(?m)^\s*event: (queued|moved) to position .*$`)
+
+// remerge settles a replay's conflict in a queue file when it is confined to
+// priority lines, which both sides may have renumbered (queue-positions,
+// Decision 11). It merges the file again with each side's priority line set
+// to the remote's value, or to the session's when the session's change
+// placed the item, and takes the result when that merges cleanly. It reports
+// whether it did.
+func (g stateGit) remerge(own, p string) (bool, error) {
+	ours, err := g.run("show", "HEAD:"+p)
 	if err != nil {
-		return nil, g.restore(own, "the replayed state does not load: "+err.Error())
+		return false, nil
 	}
-	var fresh []string
-	for _, e := range after {
-		if !slices.Contains(before, e) {
-			fresh = append(fresh, e)
+	theirs, err := g.run("show", own+":"+p)
+	if err != nil {
+		return false, nil
+	}
+	base, _ := g.run("show", own+"^:"+p)
+	keep := priorityLine.FindString(ours)
+	for _, l := range placedLine.FindAllString(theirs, -1) {
+		if !strings.Contains(base, l+"\n") {
+			keep = priorityLine.FindString(theirs)
+			break
 		}
 	}
-	if len(fresh) > 0 {
-		return nil, g.restore(own, "wf validate fails on the replayed state:\n"+
-			strings.Join(fresh, "\n"))
+	if keep == "" {
+		return false, nil
 	}
-	return append(lines, "replayed onto origin/"+workflowBranch+" for "+worker), nil
+	tmp, err := os.MkdirTemp("", "wf-remerge-")
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = os.RemoveAll(tmp) }()
+	var files []string
+	for i, text := range []string{ours, base, theirs} {
+		f := filepath.Join(tmp, strconv.Itoa(i))
+		text = priorityLine.ReplaceAllLiteralString(text, keep)
+		if err := os.WriteFile(f, []byte(text), 0o644); err != nil {
+			return false, err
+		}
+		files = append(files, f)
+	}
+	merged, err := g.run(append([]string{"merge-file", "-p"}, files...)...)
+	if err != nil {
+		return false, nil
+	}
+	if err := os.WriteFile(filepath.Join(g.dir, filepath.FromSlash(p)), []byte(merged),
+		0o644); err != nil {
+		return false, err
+	}
+	_, err = g.run("add", "--", p)
+	return err == nil, err
+}
+
+// renumberFiles renumbers the state in dir and writes each number that moved,
+// so a replayed state is validated in positions.
+func renumberFiles(dir string) error {
+	s, err := Load(dir)
+	if err != nil {
+		return err
+	}
+	s.Renumber()
+	for _, f := range s.Features {
+		if f.file == "" || f.Priority == f.stored || (f.Status == "done" && s.doneDir) {
+			continue
+		}
+		if err := s.writeNumber(f); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // restore puts the checkout back on the session's own commit, ahead of the
