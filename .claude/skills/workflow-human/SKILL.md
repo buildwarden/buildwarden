@@ -69,7 +69,7 @@ Read the latest file in `.dev/workflow/digest/`.
       areas it declares, the open items it is near or collides with and why
       (`dist/wf relations -state .dev/workflow -feature F`), and the lines of
       `tools/tier1/area-edges.sh | dist/wf areas -state .dev/workflow -check -edges -`
-      (FLOW-05, FLOW-19); `wf areas -list` and `wf areas -check` exit 1 while the queue state has no `areas.yaml`, which is expected until `loop-parallel`'s `x4-state` writes it: say so and go on. Jeff may narrow or widen the areas, name a
+      (FLOW-05, FLOW-19). Jeff may narrow or widen the areas, name a
       collision the map does not show, or have the map changed (below).
       Where the design has
       **Specification changes**, go over it: each seam's specification and
