@@ -1,6 +1,6 @@
 ---
 feature: queue-positions
-status: draft
+status: archived
 drivers: []              # the loop's queue code and skills; no driver tree is reached
 seams: []                # no GLOBAL-08 seam changes
 surfaces: []             # `wf` is the loop's tool, not a user-facing surface of the product
@@ -630,4 +630,96 @@ None.
 
 ## Archive summary
 
-Filled in at Implement, in the PR (FLOW-12).
+Implemented on 2026-11-18 as a process item (`x2-implement`), after design
+review r1 approved the design and the FLOW-05 rule change at `3660840` on
+2026-11-17 (Jeff; a1 to a11 as recommended, option (a) each). `main` was
+still at the fork point (`0cd3c02`) when the PR was opened, so there was
+nothing to merge.
+
+- **Built: positions** (`tools/workflow/queue/queue.go`). `Renumber` sets
+  each open item's `priority` to its 1-indexed place in FLOW-05's order;
+  `Save` runs it and writes every item whose number moved. The sort key is
+  (class, in progress first, priority, later placement first, name), done
+  items after every open item in the order they closed. `place` serves `Add`
+  and `Move`: the asked position, clamped to the stretch the item's class
+  and status allow. `Add` shifts nothing itself and logs one line, "queued
+  at position K" (with "(asked P)" when they differ); a renumber logs none.
+- **Built: the done folder.** `Load` reads `queue/*.yaml` and, when it
+  exists, `queue/done/*.yaml` into one list (an item in both is an error);
+  `Save` writes a done item to `queue/done/` once the folder exists and
+  removes the other file. Until then a done item in `queue/` numbered
+  inside the open range gets the number after the highest held, so an old
+  `wf`'s uniqueness check still passes. `priority` is `omitempty`.
+  `Validate` drops the uniqueness check across the queue: an open item
+  needs 1 or more, a done item in `queue/done/` none, and an open item
+  there is an error.
+- **Built: `wf commit`** (`commit.go`). `generate` renumbers and commits
+  files whose only uncommitted change is the `priority` line, and moves a
+  done item an old `wf` left in `queue/`. A named `queue/F.yaml` pairs with
+  `queue/done/F.yaml` (and the reverse) only when the counterpart exists in
+  the worktree, the index or `HEAD`. A replay settles a conflict confined to
+  `priority` lines with `git merge-file` on the remote's values (the
+  session's for an item it placed), then renumbers before validating;
+  any other conflict stays hard.
+- **Built: commands** (`cmd/wf/main.go`, `migrate.go`). `wf move -worker
+  human/<name> -feature F -to N [-why]` (human only; refused for a done item
+  and N < 1), logging "moved to position K from M (asked N): <why>".
+  `wf migrate -done` (`MigrateDone`) creates `queue/done/`, moves the done
+  items without their numbers, renumbers, and refuses a second run. `wf new`
+  prints `queued\tF\tposition K`; `wf status -all` shows `-` for done items.
+- **Built: tests.** `TestRenumberFollowsOrder`, `TestPlace`, `TestMove`,
+  `TestTieBreak`, `TestDoneFolder`, `TestDoneFolderValidate`,
+  `TestOldLayoutNumbers`, `TestMigrateDone` (`queue/positions_test.go`) and
+  `TestNewAndMovePrintPositions`, `TestMigrateDoneCommand`,
+  `TestCommitPositions` (`cmd/wf/positions_test.go`), with the existing
+  uniqueness and renumber-line expectations updated.
+- **Rule and skills.** FLOW-05 gains the approved paragraph word for word
+  (`process.md`). `workflow-intake` (steps 3 and 5, a regression's
+  follow-up) and `workflow-human` step 1 place items by position and
+  `wf move`, as under **Design**. One deviation from the approved front
+  matter: `rule_changes` lists only `docs/development/process.md`, because
+  tier 1's front-matter check refuses paths under `tools/workflow/` (as in
+  archived `loop-parallel`); the enforcement files stay named in **Rule
+  changes**, and the rule's wording is unchanged.
+- **Verified on the live queue** (a copy of the `workflow` state):
+  `main`'s and the branch's `wf status` list the same 15 open items,
+  numbered 1 to 15; after the branch's `wf migrate -done`, 45 items move
+  to `queue/done/`, `wf status` stays 1 to 15, `-all` lists the done ones in
+  close order, and `wf validate` prints `ok`; `main`'s `wf validate` on the
+  migrated copy reports exactly Decision 8's two findings
+  (`loop-parallel-rule-wording` follows `loop-parallel`;
+  `detached-prepare-windows-exe` follows `project-config-trust`).
+- **Decisions taken.** Renumber in `Save` and again in `wf commit` (1,
+  a1); no history line for a renumber, one for a placement (2, a2); past
+  priority lines kept (3, a3); `-priority` is the asked position, clamped
+  (4, a4); `wf move`, human only, replaces hand edits (5, a5);
+  `queue/done/<feature>.yaml`, no number, close order from history (6,
+  a6); numbers dropped at the move with no line (7, a7); no hold, the
+  layout changes at the attended `x4-state` (8, a8); the field stays
+  `priority` (9, a9); ties by later placement, then name (10, a10); a
+  replay settles `priority`-only conflicts (11, a11).
+- **Rejected.** Renumbering only at `wf commit`, or in each mutator; one
+  history line per renumber or per moved item; deleting old priority
+  lines; refusing a position the order does not allow; hand-edited numbers
+  winning ties; dated done file names or a stored close sequence; a
+  `holds: cloud,host:*` hold; moving the layout at the first new commit;
+  renaming the field `position`; name-only ties; leaving priority
+  conflicts hard.
+- **For future designs touching `priority`, `queue-order`,
+  `queue-position`, `renumbering`, `done-folder`, `wf-new`, `wf-move`,
+  `wf-commit` or `replay`:** a stored `priority` is derived, never a
+  source of order except as the third sort key and the tie-break; place
+  items with `place` (`wf new`, `wf move`), not by writing numbers. Any
+  reader of done items must go through `Load`, which reads both folders;
+  a tool that globs `queue/*.yaml` misses them once `queue/done/` exists.
+  The folder's existence is the layout switch. An old `wf` in the window
+  between the merge and `x4-state` may hit exit 5 on a renumbered file.
+  A general state-migration step is still to come (`loop-streamline-2`'s
+  follow-up); `wf migrate -done` should become one of its migrations.
+- **After the merge**, at `x4-state` (`human`), once Decision 8's
+  precondition holds (every pre-merge cloud run has its digest, each
+  machine's `native/status/` shows a run started and finished after the
+  merge, Jeff confirms no attended pre-merge session is open and has
+  rebuilt `dist/wf`): `dist/wf migrate -done`, `wf validate`, `wf commit`
+  of `queue/`, and the workflow `README.md` changes listed at the end of
+  the Implementation plan.
