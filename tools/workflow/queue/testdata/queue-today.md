@@ -43,7 +43,7 @@ Open features that are not disjoint. Process items are outside the relations (FL
 
 | Items | Relation | Why |
 |---|---|---|
-| seam-specs, driver-contract | colliding | driver-contract declares no areas |
+| seam-specs, driver-contract | colliding | driver-contract is undeclared |
 
 ## Waiting on a host
 

@@ -22,7 +22,7 @@ func item(name string, areas ...string) *Feature {
 	return f
 }
 
-// undeclared is a queued feature that declares no areas.
+// undeclared is a queued feature that leaves its areas out.
 func undeclared(name string) *Feature { return feature(name, 1, "queued") }
 
 func withAreas(f *Feature, areas ...string) *Feature {
@@ -113,9 +113,9 @@ func rowCases() []relationCase {
 			inRepos(undeclared("a"), here, specs), inRepos(item("b", "relay"), specs),
 			Colliding, 4, specs + " has no area map"},
 		{"row 5: a repository in common and one is undeclared",
-			item("a", "relay"), undeclared("b"), Colliding, 5, "b declares no areas"},
+			item("a", "relay"), undeclared("b"), Colliding, 5, "b is undeclared"},
 		{"row 5: both undeclared, the first by name",
-			undeclared("b"), undeclared("a"), Colliding, 5, "a declares no areas"},
+			undeclared("b"), undeclared("a"), Colliding, 5, "a is undeclared"},
 		{"row 6: they share an exclusive area",
 			item("a", "relay", "driver-core", "book"),
 			item("b", "driver-core", "relay"),
@@ -213,10 +213,10 @@ func exampleCases() []relationCase {
 			Colliding, 3, "seam relay-claim, which has no specification"},
 		{"an undeclared item and any feature here",
 			undeclared("driver-contract"), hyperv(),
-			Colliding, 5, "driver-contract declares no areas"},
+			Colliding, 5, "driver-contract is undeclared"},
 		{"seam-specs and driver-contract today, neither declared",
 			undeclared("seam-specs"), undeclared("driver-contract"),
-			Colliding, 5, "driver-contract declares no areas"},
+			Colliding, 5, "driver-contract is undeclared"},
 		{"seam-specs and driver-contract once their seams are recorded",
 			s1(), k1(), Colliding, 3, "seam collector, which has no specification"},
 		{"the same two, whatever areas they are given",
@@ -228,7 +228,7 @@ func exampleCases() []relationCase {
 			item("entry", "tier1-config", "driver/qemu"), hyperv(), Disjoint, 10, ""},
 		{"an item that declares an area the map lacks",
 			item("conformance", "tools/conformance", "book"), hyperv(),
-			Colliding, 5, "conformance declares no areas"},
+			Colliding, 5, "conformance is undeclared"},
 		{"an item here and an item homed in the relay repository",
 			hyperv(), inRepos(item("m1-task"), relay), Disjoint, 10, ""},
 		{"K1 here and the relay's M1, both on a seam that is not written",
@@ -326,9 +326,9 @@ func TestRelationUnknownArea(t *testing.T) {
 	s := mapped(t)
 	a, b := item("a", "driver/hyperv", "tools/conformance"), item("b", "relay")
 	wantRelation(t, s, relationCase{"an area the map lacks", a, b,
-		Colliding, 5, "a declares no areas"})
+		Colliding, 5, "a is undeclared"})
 	wantRelation(t, s, relationCase{"and an item that declares nothing", a, item("c"),
-		Colliding, 5, "a declares no areas"})
+		Colliding, 5, "a is undeclared"})
 	s.Areas.Areas["tools/conformance"] = Area{Mode: ModeExclusive,
 		Paths: []string{"tools/conformance/"}}
 	wantRelation(t, s, relationCase{"once the map has the area", a, b, Disjoint, 10, ""})
