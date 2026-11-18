@@ -4,11 +4,15 @@ priority: 1
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/queue-positions.md
 branch: feat/queue-positions
 alters_relationships: null
 source: 'Filed on Jeff''s word, 2026-11-17, in a workflow-human sitting. Jeff: the priority numbering should always match each item''s 1-indexed position in the active+pending queue (FLOW-05 order: class, in-progress before queued, then priority), with the highest-priority item at 1. Done items should not be in the numbering at all; once completed they should move to another folder, possibly keeping their implementation order in their naming (not a hard requirement now). Today wf new shifts every item at or below a new one''s priority, done ones included (queue.go Add), and wf validate requires priorities unique across done items too (queue.go Validate). follows, relations and other checks look done items up in queue/, so a done folder needs wf to read it. Placed first on Jeff''s word. On 2026-11-17 the open items were renumbered by hand to 2-15 in queue order, this item at 1, and the done items'' priorities set aside to 1000 + their old number until this item lands. Decide in the design: when renumbering runs (wf new, a start, a class change, a close, a merge), how history logs it without noise, the done-folder layout and naming, FLOW-05''s priority wording, and whether it holds any worker while the layout changes.'
+pr:
+  number: 126
+  ci: green
+  head: 7de4378af61ebf0d5fb5927de02acf3bd4dd7516
 steps:
   - id: x1-design
     phase: 1
@@ -28,10 +32,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261118T105745Z
-      expires: 2026-11-18T12:58:34.859897975Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -65,3 +76,9 @@ history:
   - at: 2026-11-18T10:58:34Z
     by: cloud/20261118T105745Z
     event: claimed x2-implement until 2026-11-18T12:58:34Z
+  - at: 2026-11-18T11:25:09Z
+    by: cloud/20261118T105745Z
+    event: done x2-implement
+  - at: 2026-11-18T11:25:09Z
+    by: cloud/20261118T105745Z
+    event: entered phase 3 (merge)
