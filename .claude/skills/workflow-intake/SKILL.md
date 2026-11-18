@@ -63,7 +63,7 @@ FLOW-20.
      -title "<title>" -priority <n> -estimate-steps <n> -estimate-runs <n> \
      -source "<where it came from>" [-follows <item>] \
      [-repos <home>,<other>] [-areas <a>,<b>] [-seams <s>] \
-     [-adopts <consumable>@<version>] [-urgent] \
+     [-adopts <consumable>@<version>] [-urgent] [-lead host:<name>] \
      [-kind process -holds cloud,host:*] [-hold "<why it is held>"]
    dist/wf validate -state .dev/workflow
    dist/wf relations -state .dev/workflow -feature <slug>
@@ -82,8 +82,12 @@ FLOW-20.
    commit (step 5), since the loop would be offered the item at once:
    discard the uncommitted queue change and write the item again.
 
-   Steps that need a native host for design or implementation get their
-   affinity changed to `host:<name>` in the new file (FLOW-09).
+   A feature whose design or implementation needs a native host from its
+   first step is led by that host: `-lead host:<name>`, which gives its steps
+   of Branch setup through Guide that host, and seeds each later phase so
+   (FLOW-04, FLOW-09). Never on a process item, whose native work is done in
+   an attended native session or tracked as native gaps, and never on a
+   tracked item. `dist/wf status` then shows its `lead:` line.
 5. Push it with the same worker as step 4:
    `dist/wf commit -state .dev/workflow -worker <worker> -m "<slug>: intake" queue/`
    (`queue/`, since `wf new` may renumber other items; `workflow-tick` step 2

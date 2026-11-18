@@ -46,12 +46,17 @@ output (FLOW-18). Then:
 
 ```bash
 command -v entire && entire doctor --force && entire status
-(cd tools/workflow && go build -o ../../dist/wf ./cmd/wf)
 git fetch origin main workflow
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+(cd tools/workflow && go build -o ../../dist/wf ./cmd/wf)
 git worktree add -B workflow .dev/workflow origin/workflow 2>/dev/null ||
   git -C .dev/workflow reset --hard origin/workflow
 dist/wf validate -state .dev/workflow
 ```
+
+The run takes the loop's tools from trunk (LOOP-09): if the checkout's HEAD
+is not `origin/main`, stop before the build, push nothing, and report it as
+the run's only output.
 
 Keep any `limit:` lines `wf validate` prints for the digest (step 2.5
 and step 4). The tick never edits `.dev/workflow/areas.yaml`: the
@@ -203,7 +208,9 @@ order:
   carries the line `wf claim` printed (FLOW-05). A step that changed a specification adds a **Specification
   changes** line under its own, naming each one apart from the code (LOOP-02).
   A review step's line gives tier 1's result and the tier-2 findings counted
-  by severity, with the report's path (LINT-05).
+  by severity, with the report's path (LINT-05). Each lead this run set or
+  cleared (`wf new -lead`, `wf lead`) is a line of its own, from the item's
+  history line (FLOW-04).
 - **Blocked on Jeff**: open blocking questions (options and recommendation),
   design reviews waiting (`*-design-review` steps, FLOW-19), each open PR,
   as ready to merge or as waiting for a refresh (FLOW-08, FLOW-10),
@@ -219,7 +226,9 @@ order:
 - **Design reviews skipped** this run (`design_review: skip`), each with the
   reason Design gave, so Jeff can call one back (FLOW-19).
 - **Waiting on a host**: `host:<name>` steps and open native gaps, by
-  machine (`hosts.yaml`), and any native run already in today's digest.
+  machine (`hosts.yaml`), each led item with its lead (`wf status`'s
+  `lead:` line; `wf next` reports a queued one as waiting on its lead's
+  step), and any native run already in today's digest.
 - **Spent**: steps this run against `run_budget.steps`, and each open item
   the run touched with its steps and runs spent against estimate, nothing
   flagged as over budget. An item this run closed (`f8-close`, `x4-close`)

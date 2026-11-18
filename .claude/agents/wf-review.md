@@ -52,3 +52,8 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
 5. Fixing findings is not your job. Return the counts; the tick sends MUST
    findings back to `wf-implement` and records the rest for the PR body, where the human acknowledges them at merge
    (FLOW-08).
+
+On a native machine (a led step, FLOW-04), the branch is pushed only with
+`tools/workflow/native/native-push.sh <name>` and committed with `git -C
+.scratch/<name> commit -F ../<name>.msg`, the message written to
+`.scratch/<name>.msg` first, never `-m` (FLOW-17).

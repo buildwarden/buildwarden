@@ -42,3 +42,8 @@ Return the task count and anything that needs Design. When the review is
 required, `f2-design-review` precedes `f2-plan` and is done before Plan is
 dispatched; the tick's `wf done` on `f2-plan` is the phase's gate (FLOW-03,
 FLOW-19).
+
+On a native machine (a led step, FLOW-04), the branch is pushed only with
+`tools/workflow/native/native-push.sh <name>` and committed with `git -C
+.scratch/<name> commit -F ../<name>.msg`, the message written to
+`.scratch/<name>.msg` first, never `-m` (FLOW-17).

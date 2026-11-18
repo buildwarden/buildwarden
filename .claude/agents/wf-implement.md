@@ -37,3 +37,8 @@ writing code, plus GLOBAL-01 (comments), GLOBAL-02 and TEST-01 (tests).
    force-push, or rewrite pushed history.
 
 Return the tasks done, the commands' results, and the pushed head.
+
+On a native machine (a led step, FLOW-04), the branch is pushed only with
+`tools/workflow/native/native-push.sh <name>` and committed with `git -C
+.scratch/<name> commit -F ../<name>.msg`, the message written to
+`.scratch/<name>.msg` first, never `-m` (FLOW-17).
