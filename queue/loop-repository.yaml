@@ -1,6 +1,6 @@
 feature: loop-repository
 title: 'Work in a second repository from the one queue: wf''s gates and checks, branches and PRs per repository, and the native side (componentization P1, last part). The move to a loop repository follows as P1''s last item.'
-priority: 5
+priority: 2
 kind: process
 status: in_progress
 round: process

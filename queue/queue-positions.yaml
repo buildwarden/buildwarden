@@ -4,7 +4,7 @@ priority: 1
 kind: process
 status: in_progress
 round: process
-phase: 3
+phase: 4
 design: docs/design/queue-positions.md
 branch: feat/queue-positions
 alters_relationships: null
@@ -38,6 +38,13 @@ steps:
       expires: null
   - id: x3-merge
     phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
     affinity: cloud
     status: pending
     lease:
@@ -82,3 +89,9 @@ history:
   - at: 2026-11-18T11:25:09Z
     by: cloud/20261118T105745Z
     event: entered phase 3 (merge)
+  - at: 2026-11-18T18:21:48Z
+    by: cloud/20261118T182148Z
+    event: done x3-merge
+  - at: 2026-11-18T18:21:48Z
+    by: cloud/20261118T182148Z
+    event: entered phase 4 (close)
