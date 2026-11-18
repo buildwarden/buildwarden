@@ -1,6 +1,6 @@
 ---
 feature: loop-streamline-2
-status: draft
+status: archived
 drivers: []              # the loop's review procedure, intake guide and run counting; no driver tree is reached
 seams: []
 surfaces: []             # `wf` and the skills are the loop's tools, not a user-facing surface of the product
@@ -467,6 +467,94 @@ review", each one recorded.
 
 ## Consolidation
 
+A process item has no Publish phase and no consolidation pass (FLOW-03). The
+implement step merges current `main` before it opens the PR.
+
 ## Rollback notes
 
+None. Reverting the PR restores per-entry asks, one feature per sitting and
+the `-new-run` flag; budgets counted under inference stay as recorded.
+
 ## Archive summary
+
+Implemented on 2026-11-18 as a process item (`x2-implement`), after design
+review r1 approved the design and the FLOW-19 rule change at `d1083eb` on
+2026-11-17 (Jeff; a2 (a) on its own, a7 (a) on its own, a1 and a3 to a6 as
+recommended in one answer). `main` was still at the fork point (`0cd3c02`)
+when the PR was opened, so there was nothing to merge.
+
+- **Built: FLOW-19** (`process.md`), in its a2 (a) wording word for word:
+  each `rule_changes` entry is answered on its own, up to one question
+  call's worth shown together; unflagged assumed questions may be confirmed
+  in one answer naming exceptions; a flagged one is always answered on its
+  own.
+- **Built: the review sitting** (`workflow-human`). The load cap replaces
+  "one feature per sitting": reviews in FLOW-05 order while the sitting
+  stays at or under 30 asks, a large design (more than 4 assumed questions
+  or more than 4 rule changes) alone, a stop offered at 30, intakes asked
+  for mid-review done after its outcome. The walkthrough's start is noted;
+  the claim and the done of x1-design stay together at the outcome. Rule
+  changes are grouped up to 4 per call (3.3); assumptions get the table,
+  then one batch entry ("All unflagged as recommended", "Name exceptions",
+  "One by one"), then exceptions and flagged questions as their own entries
+  (3.4), each recorded by `wf answer`, batch answers as `as recommended
+  (batch)`. The Design review entry gains `sitting: <start>-<end> UTC, asks:
+  <n> (<m> in batches)` (3.5).
+- **Built: flags** (`wf-design` step 4, `TEMPLATE.md`): a flagged assumed
+  question carries `Flagged: <reason>` (security boundary, seam, departure
+  from prior art or from an earlier decision of Jeff's); the review may add
+  a flag, never remove one.
+- **Built: intake** (`workflow-intake`): the size guide's process row (4
+  steps / 1 run, +1 per expected state step), and the same-sitting lane for a
+  trivial process item (a4): branch created and pushed, design drafted,
+  assumed questions written to the queue file through `wf commit`, and
+  `workflow-human` step 3 held on it in the same session, its asks counted
+  toward the cap.
+- **Built: run counting** (`tools/workflow/queue/next.go`, `commit.go`,
+  `cmd/wf/main.go`). `State.Claim` drops its `newRun` parameter;
+  `Feature.newRun` counts a run when the worker is not `human/*` and no
+  earlier `claimed ` event is by a worker of the same run, named by
+  `runOf` as (kind up to the first `:` or `/`, text after the first `/`).
+  `CommitRequest.NewRun` is gone. `wf claim` and `wf commit -claimed` still
+  accept `-new-run` and ignore it. `workflow-tick` sets `W` at each
+  invocation and no longer passes the flag. Tests: `TestClaimCountsRuns`
+  (`queue/runs_test.go`), `TestClaimInfersRuns` (`cmd/wf/main_test.go`), and
+  the callers of `Claim` and the `-new-run` uses in `commit_test.go` and
+  `main_test.go` updated.
+- **Deviation.** The flag's help text reads "ignored: runs are inferred from
+  the worker and the history", shortened from "... and the item's history"
+  for the line-length lint (`lll`); the meaning is the design's.
+- **Decisions taken.** One batch answer for unflagged assumed questions,
+  flagged ones on their own (1, a1); rule changes answered per entry,
+  grouped (2, a2 (a)); a 30-ask sitting cap with a large design alone (3,
+  a3); a same-sitting lane for trivial process changes that keeps LOOP-09's
+  review and merge (4, a4); the process size row (5); x1-design's cost as
+  the `sitting:`/`asks:` line, claim and done kept together (6, a6); runs
+  inferred by `wf claim`, `-new-run` accepted and ignored (7, a5); not a
+  program item, exempted from FLOW-20 by Jeff (a7 (a)).
+- **Rejected.** Grouping assumptions without a batch answer; no flags; the
+  rule-change batch with a veto (a2 (b)) and asking each in its own call
+  (a2 (c)); a hard stop at the cap; skipping x1-design for trivial items;
+  any process item Jeff calls small as trivial; keeping `-new-run` as the
+  source of runs; new queue fields for asks (`wf done -asks`); claiming at
+  the walkthrough's start; rewriting past history.
+- **For future designs touching `design-review`, `workflow-human`,
+  `assumptions`, `rule-changes`, `sitting-load`, `process-item`,
+  `estimates`, `budget` or `run-counting`:** an ask is one AskUserQuestion
+  entry Jeff answers; counts are in asks, calls named where they differ.
+  A run is identified by the worker string alone, so every session must use
+  a fresh `/<suffix>` per run (the tick sets `W` at each invocation); a
+  worker without a `/` (bare `cloud`) is one run forever on an item. Past
+  0-run spends and shared intake/close timestamps are left as recorded.
+  `-new-run` is still defined in `tools/` (flag, help, tests) for agents
+  reading the old README; a later item removes it once no text passes it.
+- **Not done here, follow-ups to file at intake on Jeff's word:** merge
+  confirmation in the observing human session (keeping the done-when check),
+  and a shipped `wf` state-migration step in place of hand-added `x4-state`
+  (queue-positions' `wf migrate -done` should become one of its migrations).
+- **After the merge**, at `x4-state` (`human`, next attended session, on the
+  `workflow` branch through `dist/wf commit`): the README's `-new-run` lines
+  (197-198) say runs are inferred and the flag is ignored, and its "`wf
+  stale` first confirms merges" lines (153-154) say it names a merged item
+  only at its merge step, which the cloud confirms. When phase 4 seeds
+  `x4-close`, add `needs: [x4-state]` to it by hand.
