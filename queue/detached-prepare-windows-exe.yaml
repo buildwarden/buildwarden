@@ -4,7 +4,7 @@ priority: 6
 follows: project-config-trust
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/detached-prepare-windows-exe.md
 branch: feat/detached-prepare-windows-exe
 areas:
@@ -13,7 +13,7 @@ areas:
   - driver/qemu
   - book
   - designs
-declared: b7619b5
+declared: 0c1cad5
 alters_relationships: false
 design_review: required
 source: 'Found by host:windows-hyperv/20261116T051002Z (unattended, windows-desktop) while validating project-config-trust''s tier-2 gap project-config-trust-hyperv; main 623131a has it too, so it is filed as the item''s follow-up (FLOW-09). driver.StartDetached runs exec.Command(os.Executable(), ...). On Windows os/exec resolves a path with no extension only by adding the PATHEXT endings, so for dist/warden (what make build writes on Windows: go build -o dist/warden) it looks for dist/warden.exe. With no such file Start fails; driver/hyperv/freshness.go (and driver/qemu) drop the error, so the build prints no ''refreshing it in the background'' line, prepare.log is left truncated to 0 bytes and no prepare runs: a prepared base then ages until the build is refused at image_min_grace. With a warden.exe beside it, that other file is started: on this host a stale dist/warden.exe of 2026-11-04 ran the prepare for main''s build of 2026-11-16. Evidence, native/windows-hyperv/2026-11-15/: main-623131a-hyperv-refresh-due.log (stale warden.exe beside: line printed, prepare ran, from the old file), main-623131a-hyperv-refresh-due-no-exe-beside.log (it moved aside: no line, prepare.log 0 bytes, no process), branch-3733c4b-hyperv-build.log (the same on the branch, no warden.exe in its dist), branch-3733c4b-hyperv-refresh-due-exe.log (run as warden.exe: works). A released warden.exe is not affected. To settle in design: start the file os.Executable names without the lookup, report a failed start, and whether make build should write dist/warden.exe on Windows.'
@@ -59,10 +59,26 @@ steps:
   - id: f1-design-r2
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review-r2
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261118T105745Z
-      expires: 2026-11-18T14:30:54.16485053Z
+      claimed_by: ""
+      expires: null
+  - id: f2-plan-r2
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review-r2
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -110,6 +126,15 @@ questions:
       - on hold until the program ends
     recommended: exempt, as a fix for a regression on main (FLOW-09), filed as the follow-up of the security fix project-config-trust
     answer: (a) as drafted (Jeff, 2026-11-17)
+  - id: a5
+    kind: assumed
+    status: open
+    question: 'r2 (flagged: widens the drivers claim approved at b7619b5): the drivers claim for a change to driver/detach.go, which tools/tier1/rules.yaml counts as drivers.shared (tier 1 ORCH-01 drivers-claim failed in f3-implement against [qemu, hyperv]).'
+    options:
+      - declare [container, qemu, vz, hyperv, firecracker] (FLOW-02, as project-config-trust did for the same file), keep container, vz and firecracker asserted unaffected (none calls StartDetached, their trees are not edited), and add no native validation for them
+      - declare [interface]
+      - keep [qemu, hyperv] and carry a Tier1-Allow ORCH-01 trailer on the commits that edit driver/detach.go (LINT-05)
+    recommended: declare [container, qemu, vz, hyperv, firecracker] (FLOW-02, as project-config-trust did for the same file), keep container, vz and firecracker asserted unaffected (none calls StartDetached, their trees are not edited), and add no native validation for them
 history:
   - at: 2026-11-16T05:27:02Z
     by: host:windows-hyperv/20261116T051002Z
@@ -189,3 +214,12 @@ history:
   - at: 2026-11-18T12:30:54Z
     by: cloud/20261118T105745Z
     event: claimed f1-design-r2 until 2026-11-18T14:30:54Z
+  - at: 2026-11-18T12:34:29Z
+    by: cloud/20261118T105745Z
+    event: 'declared at 0c1cad5: nothing changed'
+  - at: 2026-11-18T12:34:29Z
+    by: cloud/20261118T105745Z
+    event: done f1-design-r2
+  - at: 2026-11-18T12:34:29Z
+    by: cloud/20261118T105745Z
+    event: entered phase 2 (plan)
