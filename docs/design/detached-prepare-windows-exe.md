@@ -548,7 +548,8 @@ suite is TEST-08's, not this item's. a3 is native case 3. No task changes
   security fix) confirmed as drafted, (a) each. No `rule_changes`; no changes
   folded in. Areas as declared; the area-edges check showed no difference
   from `main` at 0cd3c02.
-- **r2, 2026-11-18: pending.** A delta re-review (FLOW-19), of the `drivers`
+- **r2, 2026-11-18: approved at `0c1cad5`** (Jeff, workflow-human, FLOW-19).
+  a5 (flagged) answered (a), as recommended. A delta re-review (FLOW-19), of the `drivers`
   field only. Finding (`f3-implement`, FLOW-06): tier 1's ORCH-01
   `drivers-claim` fails because task 1 edits `driver/detach.go`, which
   `tools/tier1/rules.yaml` counts as `drivers.shared`, while the design
@@ -560,7 +561,8 @@ suite is TEST-08's, not this item's. a3 is native case 3. No task changes
   the decisions, a1 to a4 and the tasks are as approved; the delta to
   review is the r2 commit (front-matter `drivers` and `design_review`,
   a5, Prior art's precedent line, Cross-driver impact, the plan's r2
-  paragraph and this line).
+  paragraph and this line). No changes folded in.
+  sitting: about 1 minute, asks: 1.
 
 ## Consolidation
 
