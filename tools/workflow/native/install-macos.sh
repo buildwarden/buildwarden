@@ -95,6 +95,9 @@ check() {
 	esac
 	[ -z "$(git -C "$repo" status --porcelain --untracked-files=no)" ] && ok "checkout is clean" ||
 		bad "checkout has local changes; use a dedicated clone"
+	# The one route by which a session pushes a feature branch (FLOW-17).
+	[ -x "$repo/tools/workflow/native/native-push.sh" ] && ok "native-push.sh is executable" ||
+		bad "tools/workflow/native/native-push.sh is missing or not executable"
 	git -C "$repo" fetch -q origin workflow && ok "can fetch origin" || bad "cannot fetch origin"
 	git -C "$repo" push --dry-run -q origin "refs/remotes/origin/workflow:refs/heads/workflow" 2>/dev/null &&
 		ok "can push the workflow branch" || bad "cannot push the workflow branch (credentials?)"
