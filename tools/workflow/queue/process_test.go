@@ -206,7 +206,7 @@ func TestValidateKindAndHolds(t *testing.T) {
 func TestAddProcessItem(t *testing.T) {
 	s := state(feature("a", 1, "in_progress"))
 	p := &Feature{Feature: "rules", Priority: 2, Kind: "process", Holds: []string{"cloud"}}
-	if _, err := s.Add(p, now, "human/jeff"); err != nil {
+	if err := s.Add(p, now, "human/jeff"); err != nil {
 		t.Fatal(err)
 	}
 	if p.Round != "process" || p.Phase != 1 || p.Steps[0].ID != "x1-design" ||

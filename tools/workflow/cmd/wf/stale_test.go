@@ -210,9 +210,11 @@ func staleMainMoved(t *testing.T) {
 		t.Fatalf("a's pending steps %q", got)
 	}
 	must(t, dir, "validate")
+	// Both are in class 1 with a refresh pending; x, queued as a process item
+	// ahead of the class-4 a, holds the earlier position.
 	if got := must(t, dir, "next", "-worker", "cloud/run"); !strings.HasPrefix(got,
-		"next\ta\tf6-refresh\tcloud") {
-		t.Fatalf("wf next = %q, want a's refresh first", got)
+		"next\tx\tx2-refresh\tcloud") {
+		t.Fatalf("wf next = %q, want x's refresh first", got)
 	}
 }
 

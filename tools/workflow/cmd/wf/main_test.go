@@ -32,13 +32,19 @@ func stateDir(t *testing.T, config string) string {
 // and its error.
 func wf(t *testing.T, dir, cmd string, args ...string) (string, error) {
 	t.Helper()
+	return wfAt(t, dir, now, cmd, args...)
+}
+
+// wfAt is wf run at the time.
+func wfAt(t *testing.T, dir string, at time.Time, cmd string, args ...string) (string, error) {
+	t.Helper()
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
 	stdout := os.Stdout
 	os.Stdout = w
-	runErr := run(cmd, append([]string{"-state", dir}, args...), now)
+	runErr := run(cmd, append([]string{"-state", dir}, args...), at)
 	os.Stdout = stdout
 	_ = w.Close()
 	out, err := io.ReadAll(r)

@@ -285,15 +285,17 @@ func areasYAML(repo, path string) string {
 }
 
 func commitReplayInvalid(t *testing.T) {
-	a, b := stateRepos(t, "")
-	queued(t, b, "two", "3")
-	pushed(t, b, "human/jeff", "queue: two", "queue/two.yaml")
-	queued(t, a, "one", "3")
-	out, code := commit(t, a, "human/jeff", "queue: one", "queue/one.yaml")
-	if code != 5 || !strings.Contains(out, "priority 3 also held by") {
+	a, b := stateRepos(t, "", "x", "y")
+	if err := os.Remove(filepath.Join(b, "queue", "y.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	pushed(t, b, "human/jeff", "queue: y gone", "queue/y.yaml")
+	edit(t, a, "x", func(f *queue.Feature) { f.CollidesWith = []string{"y"} })
+	out, code := commit(t, a, "human/jeff", "x: collides with y", "queue/x.yaml")
+	if code != 5 || !strings.Contains(out, `collides_with "y"`) {
 		t.Fatalf("exit %d, want 5 with Validate's line:\n%s", code, out)
 	}
-	if got := gitT(t, a, "log", "-1", "--format=%s"); got != "queue: one" {
+	if got := gitT(t, a, "log", "-1", "--format=%s"); got != "x: collides with y" {
 		t.Fatalf("the session's commit was not restored: HEAD is %q", got)
 	}
 }

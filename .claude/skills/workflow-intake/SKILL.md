@@ -37,11 +37,12 @@ FLOW-20.
    agree too whether the item is a program item; one that is not is filed as
    FLOW-20's freeze says, with `-hold "<why>"`, unless it is exempt there.
    Then agree on
-   a kebab-case slug, a one-line title, the priority (show
-   `dist/wf status`, which lists FLOW-05's order: the class order decides
-   where an item can go, priority places it within its class, and a new item
-   never jumps an in-progress item of its own class without his say), and an
-   estimate in steps and runs. A fix or follow-up of another item sets
+   a kebab-case slug, a one-line title, the position (show
+   `dist/wf status`, which lists FLOW-05's order with each open item's
+   position: the class order decides where an item can go, `wf new` places
+   it as near the asked position as its class and status allow and prints
+   where it went, and a new item never goes ahead of an in-progress item of
+   its own class), and an estimate in steps and runs. A fix or follow-up of another item sets
    `-follows <item>`: it is then a fix (FLOW-05 class 3) and starts only once
    that item is done.
    When the waiting limit is reached (`dist/wf next` prints it), say so: a
@@ -89,7 +90,7 @@ FLOW-20.
    affinity changed to `host:<name>` in the new file (FLOW-09).
 5. Push it with the same worker as step 4:
    `dist/wf commit -state .dev/workflow -worker <worker> -m "<slug>: intake" queue/`
-   (`queue/`, since `wf new` may renumber other items; `workflow-tick` step 2
+   (`queue/`, since `wf new` renumbers the open items; `workflow-tick` step 2
    gives its exit codes).
 6. **The same-sitting lane**, for a trivial process item only. It is trivial
    when Jeff states the exact edit at intake; the change is text only
@@ -128,10 +129,10 @@ apply, with these defaults in place of step 3's agreement:
 - a feature, `-follows <item>`, a small estimate (7 to 9 steps, one run), and
   the evidence in `-source` (the failing command or case, and where on `main`
   it also fails); logs go under `native/` as today;
-- `-priority`: the top of the fixes. That is the lowest number held by an
-  open class-3 item (a feature with `follows` set, not yet in
-  implementation); with none, the lowest held by an open class-4 item; with
-  neither, one past the highest open number. `wf new` renumbers the rest and logs each move.
+- `-priority`: the top of the fixes: the position of the first open class-3
+  item (a feature with `follows` set, not yet in implementation); with none,
+  of the first open class-4 item; with neither, one past the last open
+  position. `wf new` renumbers the rest.
   Several found together are queued in the order found, each at the number
   after the last.
 
@@ -142,5 +143,5 @@ then among the paths step 5 passes to `wf commit`. Report each one as
 "<slug> (follows <item>)" in the step's evidence and in the run's
 **Follow-ups filed** line. Jeff's explicit word overrides the
 default and is recorded in the queue history: he may fold the fix into the
-item (`wf back` with the finding), place it elsewhere (clear `follows`, or set
-its priority), or leave it unfiled.
+item (`wf back` with the finding), place it elsewhere (clear `follows`, or move
+it with `wf move`), or leave it unfiled.

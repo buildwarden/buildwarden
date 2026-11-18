@@ -222,6 +222,14 @@ class in-progress items come before queued ones, then the higher priority:
    says otherwise.
 4. **New functionality**: every other feature.
 
+An open item's priority is its position in this order, 1 for the first;
+a done item has none. The queue's tooling (`wf`) renumbers the open items
+whenever a change moves one: an item queued or moved, started, changing
+class, or done. Renumbering changes the numbers, never the order. Only
+the human places an item, at intake or by moving it, except where a rule
+places it (FLOW-09, LOOP-04), and the position asked for is kept as nearly
+as the item's class, and its status within that class, allow.
+
 While a process item is in progress, a worker matching one of its `holds`
 (affinity patterns such as `cloud` or `host:*`) takes no new step, whatever
 the class of the item the step belongs to, so disruptive work waits for the
