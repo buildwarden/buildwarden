@@ -2,6 +2,8 @@ package queue
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -106,4 +108,41 @@ func (f *Feature) migrateProcess() bool {
 		moved = true
 	}
 	return moved
+}
+
+// MigrateDone is wf migrate -done, run once at queue-positions' x4-state: it
+// creates queue/done/, moves every done item into it without its number, and
+// renumbers the open items (queue-positions, Decision 7). It writes the files
+// and returns the items it moved. The move is the layout's, so it logs no
+// history line. It refuses a worker that is not a named human, and a second
+// run.
+func (s *State) MigrateDone(by string) ([]*Feature, error) {
+	if !namedHuman(by) {
+		return nil, fmt.Errorf("migrate -done is run by a human worker, human/<name>, "+
+			"not %s", by)
+	}
+	dir := filepath.Join(s.Dir, filepath.FromSlash(doneFolder))
+	if _, err := os.Stat(dir); err == nil {
+		return nil, fmt.Errorf("%s already exists: the done items were moved", doneFolder)
+	}
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		return nil, err
+	}
+	s.doneDir = true
+	s.Renumber()
+	var moved []*Feature
+	for _, f := range s.Ordered() {
+		switch {
+		case f.Status == "done":
+			if err := s.put(f); err != nil {
+				return nil, err
+			}
+			moved = append(moved, f)
+		case f.file != "" && f.Priority != f.stored:
+			if err := s.writeNumber(f); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return moved, s.WriteSummary()
 }
