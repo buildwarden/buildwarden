@@ -5,15 +5,15 @@ kind: process
 follows: loop-parallel
 status: in_progress
 round: process
-phase: 3
+phase: 4
 design: docs/design/loop-parallel-rule-wording.md
 branch: feat/loop-parallel-rule-wording
 alters_relationships: null
 source: 'Jeff''s decisions of 2026-11-16 on the review of loop-parallel''s implementation: F4, F6 and F5''s wording for phases 7-8 go to one follow-up rule-change item, not changed on loop-parallel''s branch. A program item (FLOW-20): it amends rules loop-parallel changes; its design lists componentization.md in related. Scope: (F4) FLOW-02/FLOW-05''s approved wording reads as if areas: [] were undeclared, while wf treats it as declared-empty (relation.go''s ''declares no areas'' text and its tests move with it); (F6) process.md''s ''one feature at a time through the PR slot'' (line 27) predates the limits; (F5) FLOW-03 ''from Implement on'' overclaims for phases 7-8 and does not name the exemption before wf declare; (review F-P2 / design-code 2) FLOW-16 (process.md 648-656) still names the patch-id proof (''the equal tree or change''), while wf now proves a squash by merge-tree onto the squash''s parent (loop-parallel a14 (d), Decision 23). Holds no worker: rule text only.'
 pr:
   number: 128
-  ci: pending
-  head: d643a117899d3a90657c7711b50c1d5e984f4f08
+  ci: green
+  head: fe7199354d99b53cb7d9ea5eb6e61b87ce0bac92
 steps:
   - id: x1-design
     phase: 1
@@ -32,18 +32,17 @@ steps:
   - id: x3-merge
     phase: 3
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
     status: pending
     lease:
       claimed_by: ""
       expires: null
-  - id: x2-refresh
-    phase: 2
-    affinity: cloud
-    status: pending
-    lease:
-      claimed_by: cloud/20261118T182148Z
-      expires: 2026-11-18T20:40:08.065441007Z
-    note: 'main at a094f4d: 1 commit since the branch merged it; both change .claude/skills/workflow-human/SKILL.md, .claude/skills/workflow-intake/SKILL.md, docs/development/process.md'
 budget:
   estimate:
     runs: 1
@@ -95,3 +94,12 @@ history:
   - at: 2026-11-18T18:40:08Z
     by: cloud/20261118T182148Z
     event: claimed x2-refresh until 2026-11-18T20:40:08Z
+  - at: 2026-11-18T19:05:08Z
+    by: cloud/20261118T182148Z
+    event: done x3-merge
+  - at: 2026-11-18T19:05:08Z
+    by: cloud/20261118T182148Z
+    event: 'dropped x2-refresh: the PR merged first (FLOW-10)'
+  - at: 2026-11-18T19:05:08Z
+    by: cloud/20261118T182148Z
+    event: entered phase 4 (close)
