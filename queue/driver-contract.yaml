@@ -3,7 +3,7 @@ title: 'The driver command contract, its suite and the kit: warden runs a driver
 priority: 9
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/driver-contract.md
 branch: feat/driver-contract
 seams:
@@ -23,7 +23,7 @@ rules_changed:
   - ORCH-03
   - PROFILE-01
   - UX-08
-declared: 975e8cc
+declared: 028ffe2
 alters_relationships: true
 design_review: required
 source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase K1 (wave 2 by the order table; the design says it does not depend on the relay and can start as soon as P0 merges). Done when adding a driver touches only its own directory. Jeff, attended session 2026-11-12: go ahead.'
@@ -123,12 +123,28 @@ steps:
   - id: f1-design-r3
     phase: 1
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f1-answer-q2
     lease:
-      claimed_by: cloud/20261118T105745Z
-      expires: 2026-11-18T14:34:45.56379639Z
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review-r2
+    phase: 2
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan-r2
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review-r2
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -386,6 +402,16 @@ questions:
       - '(c) accept a nineteenth Behaviour difference: another spelling is another key, ignored (DRV-C5 as written); the user''s value is replaced by the driver''s default with no message. TestRuntimeKeyInOtherSpellings rows dropped or rewritten to not read; guide/configuration.md notes keys are case-sensitive. Nothing in the kit or v1.md'
     recommended: '(b). GLOBAL-10 rules out (c): a provided value would be replaced by the default (runtime detection) silently. GLOBAL-11 weighs against (a): case folding is a reading rule TOML does not have, every driver outside the kit would have to copy it, and it keeps a second spelling working for no gain, which is why runtime-cli-project-path rejected normalizing the runtime''s value (its Decision 1). GLOBAL-09: under (b) a user who wrote [Runtime] CLI is told once what to write. runtime-cli-project-path''s security intent (every spelling of the key is seen; what runs is the list''s own member) holds under (a) and (b); under (c) nothing a file names runs, but the refusal and its transitional message are lost for those spellings. RELAY-08 is irrelevant: none of the seven keys configures the relay, and relay_image is resolved by the kit as the others are. Tasks 20, 22 and 25 depend on the answer, 21 only under (a) or (b), 23 and 24 not.'
     answer: '(b) refuse with a fixable error: a listed key, override or old name spelled in another letter case, in a table the driver reads, is refused by the owning driver''s probe, naming the file, the spelling and the key to write; two spellings in one table are refused (Jeff, 2026-11-17)'
+  - id: a27
+    kind: assumed
+    status: open
+    question: 'The reach of q2''s refusal (design, Questions, Assumed, a27; Decision 24). Flagged: it fixes the wording of a requirement of the driver contract, a seam (DRV-C12), and leaves warden''s own keys read in any letter case, as main reads them, beside driver keys that are not. Proceeding with: (1) another letter case is a key path equal to a listed place when ASCII letters are folded and not equal byte for byte; the whole path is compared, table names included, in any TOML form (header, dotted, inline), on the decoded tree; only ASCII is folded. (2) The places are a listed key''s name, the override driver.<name>.<key> of a common key it lists, and each old name the contract lists; an unlisted key in any case is ignored (DRV-C5), and so is a driver''s key while another driver is selected (Behaviour 13). (3) At the DRV-C7 points (probe of run and clean, first in other commands); not in reap or attach (DRV-C10). (4) Before the value is read and before DRV-C11''s both-names refusal, so [runtime] CLI = "./rt" gets this error and nothing is run. (5) A requirement of contract v1 for every listed key, not transitional; under an old name it goes with the old name at 1.0; no UX-03 window. (6) warden''s own keys are unchanged, read in any letter case.'
+    options:
+      - (i) as stated
+      - (ii) as stated, but fold Unicode letters too (every driver outside the kit needs the same table)
+      - (iii) as stated, but refuse warden's own keys in another letter case too (a change to warden's surface that no finding asks for; breaks configs that work today)
+      - (iv) as stated, but transitional under a marker and removed at 1.0 for new names too (a miscased new name would then be silently ignored)
+    recommended: '(i): the answer as given, made precise; each detail is the narrowest that keeps GLOBAL-10 and lets a driver on any TOML library meet it with ASCII folding of a decoded tree.'
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
@@ -624,3 +650,12 @@ history:
   - at: 2026-11-18T12:34:45Z
     by: cloud/20261118T105745Z
     event: claimed f1-design-r3 until 2026-11-18T14:34:45Z
+  - at: 2026-11-18T12:43:09Z
+    by: cloud/20261118T105745Z
+    event: 'declared at 028ffe2: nothing changed'
+  - at: 2026-11-18T12:43:09Z
+    by: cloud/20261118T105745Z
+    event: done f1-design-r3
+  - at: 2026-11-18T12:43:09Z
+    by: cloud/20261118T105745Z
+    event: entered phase 2 (plan)
