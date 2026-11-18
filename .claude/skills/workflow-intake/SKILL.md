@@ -5,8 +5,9 @@ description: Adds a feature to the workflow queue - checks archived designs for 
 
 # Feature intake
 
-Adds one queue item (FLOW-03). Its Design phase happens later, in the loop;
-intake only frames the item. Rules: FLOW-01, FLOW-05, FLOW-12, FLOW-13,
+Adds one queue item (FLOW-03). Its Design phase happens later, in the loop,
+unless the same-sitting lane below (step 6) is taken; intake only frames the
+item. Rules: FLOW-01, FLOW-05, FLOW-12, FLOW-13,
 FLOW-20.
 
 1. Set up as in `workflow-tick` step 1.
@@ -53,7 +54,9 @@ FLOW-20.
    offer it for anything else, and decline it when asked for anything
    else, saying that the mark is for a security fix and that the limit is
    his to raise (FLOW-05, FLOW-20).
-   Size guide: small 7 to 9 steps, one run; medium 12 to 18; large 25 or more.
+   Size guide: small 7 to 9 steps, one run; medium 12 to 18; large 25 or more;
+   a process item 4 steps, one run, plus 1 step for each expected state step
+   (`x4-state`).
    The runaway check escalates at `runaway_factor` (2) times the step
    estimate, while the item is open (FLOW-13).
 4. Write it:
@@ -88,6 +91,22 @@ FLOW-20.
    `dist/wf commit -state .dev/workflow -worker <worker> -m "<slug>: intake" queue/`
    (`queue/`, since `wf new` may renumber other items; `workflow-tick` step 2
    gives its exit codes).
+6. **The same-sitting lane**, for a trivial process item only. It is trivial
+   when Jeff states the exact edit at intake; the change is text only
+   (rules, skills, agents, the template), with no `tools/workflow/` code, no
+   state step and no `holds`; its review fits the sitting's ask cap
+   (`workflow-human` item 3); and, while FLOW-20 stands, it is a program
+   item, exempt, or filed on hold and its `q1` answered by Jeff in this
+   sitting to let it go ahead. Otherwise do not offer it. When it holds,
+   offer to draft the design and review it now, and on Jeff's yes: create
+   `feat/<slug>` from `main` and push it (a process item has no
+   branch-setup step); draft the design there from the template (Problem,
+   Decisions, Questions, Rule changes, Implementation plan, Design review);
+   write its assumed questions to the queue file and push them with
+   `dist/wf commit` (`wf answer` refuses a question the file lacks); then
+   hold `workflow-human` item 3 on it in this session. Its asks count
+   toward the sitting's cap. LOOP-09's owner review and owner merge, and
+   every rule-change ask, stay as they are.
 
 ## A regression's follow-up
 
