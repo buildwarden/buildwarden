@@ -24,9 +24,13 @@ The human takes part at three points, and the loop does everything else:
 3. **The merge** of the feature's PR, which is the sign-off (FLOW-08). The PR
    carries the archived design (FLOW-12).
 
-Publish takes one feature at a time through the PR slot: it merges current
+Publish takes a feature through the PR slot (FLOW-05): no two features
+that collide or are near have pull requests open together, while
+disjoint ones may, and their pull requests merge one at a time, each
+only while its branch contains `main` (FLOW-08). Publish merges current
 `main` and runs a **consolidation pass** against every feature that landed while
-it was being built (FLOW-10, FLOW-15), and only sends the feature back when that
+it was being built (FLOW-10, FLOW-15), and a refresh runs it again whenever
+`main` moves past the branch; either sends the feature back only when the
 pass finds real work. This is the routine form of the consolidation that
 followed the Windows driver work (the claim / tunnel / collector model). Doing it
 per feature keeps the reconciliation small and keeps terminology and shared
@@ -263,12 +267,16 @@ word: no agent changes it otherwise. Two items cannot both change an
 *exclusive* area; any number may change an *ordered* area, and the
 later to merge is put in order by its refresh (FLOW-10). Area A *reaches* area B when code in A
 depends on code in B; only exclusive areas reach and are reached. A
-repository with no map is one exclusive area, and
-an item that declares no areas is taken to change the whole of each
-repository it names. Two features are:
+repository with no map is one exclusive area. An item is *undeclared*
+when its `areas` are left out, when its home repository, the first it
+names and the one that holds its design (FLOW-02, LOOP-04), has no map,
+or when they name an area the map lacks, until the map has it;
+an undeclared item is taken to change the whole of each repository it
+names. A declared item whose areas are `[]` changes nothing but its own
+design (FLOW-02). Two features are:
 
 - **colliding** when they share an exclusive area; when they have a
-  repository in common and either declares no areas; when both change a
+  repository in common and either is undeclared; when both change a
   seam that has no specification (LOOP-02); or when the human says so in
   a design review (FLOW-19);
 - **near** when they do not collide and an area of one reaches an area of
