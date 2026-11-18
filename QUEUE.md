@@ -41,7 +41,7 @@ None.
 | 1 | queue-positions | process | buildwarden/buildwarden | - | 4 close | x4-state (human) | - | [#126](https://github.com/buildwarden/buildwarden/pull/126) | 2 / 5 |
 | 2 | loop-repository | process | buildwarden/buildwarden | - | 2 implement | x2-predecessors-merged (human) | - | - | 1 / 10 |
 | 3 | loop-streamline-2 | process | buildwarden/buildwarden | - | 4 close | x4-state (human) | - | [#127](https://github.com/buildwarden/buildwarden/pull/127) | 2 / 5 |
-| 4 | loop-native-lead | process | buildwarden/buildwarden | - | 3 merge | x4-state (human), x3-merge (cloud), x2-refresh (cloud) | a refresh, then your merge | [#129](https://github.com/buildwarden/buildwarden/pull/129) behind `main` | 2 / 12 |
+| 4 | loop-native-lead | process | buildwarden/buildwarden | - | 3 merge | x4-state (human), x3-merge (cloud), x2-refresh (cloud, leased to cloud/20261118T182148Z) | a refresh, then your merge | [#129](https://github.com/buildwarden/buildwarden/pull/129) behind `main` | 3 / 12 |
 | 5 | detached-prepare-windows-exe | fix (follows project-config-trust) | buildwarden/buildwarden | driver-core, driver/hyperv, driver/qemu, book, designs | 2 plan | f2-design-review-r2 (human) | - | - | 6 / 7 |
 | 6 | prebuilt-artifacts | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 7 | workdir-in-context | feature | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
