@@ -48,15 +48,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261118T182148Z
+      expires: 2026-11-18T20:22:55.154283542Z
     note: 'main at a094f4d: 1 commit since the branch merged it; both change .claude/skills/workflow-human/SKILL.md, .claude/skills/workflow-intake/SKILL.md, docs/development/process.md, tools/workflow/cmd/wf/commit_test.go, tools/workflow/cmd/wf/main.go, tools/workflow/cmd/wf/main_test.go, tools/workflow/queue/commit.go, tools/workflow/queue/process_test.go, tools/workflow/queue/queue_test.go'
 budget:
   estimate:
     runs: 2
     steps: 5
   spent:
-    runs: 1
+    runs: 2
     steps: 2
 questions: []
 history:
@@ -90,3 +90,6 @@ history:
   - at: 2026-11-18T18:22:27Z
     by: cloud/20261118T182148Z
     event: 'seeded x2-refresh: main at a094f4d: 1 commit since the branch merged it; both change .claude/skills/workflow-human/SKILL.md, .claude/skills/workflow-intake/SKILL.md, docs/development/process.md, tools/workflow/cmd/wf/commit_test.go, tools/workflow/cmd/wf/main.go, tools/workflow/cmd/wf/main_test.go, tools/workflow/queue/commit.go, tools/workflow/queue/process_test.go, tools/workflow/queue/queue_test.go'
+  - at: 2026-11-18T18:22:55Z
+    by: cloud/20261118T182148Z
+    event: claimed x2-refresh until 2026-11-18T20:22:55Z
