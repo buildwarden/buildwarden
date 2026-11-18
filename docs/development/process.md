@@ -136,11 +136,20 @@ branch, the repositories it works in and what its design declares
 
 A transition happens only when the phase's done-when checks pass mechanically
 (files present, sections filled, commands green), never on an agent's own report
-that it is done. From Plan on, each done-when also checks that the queue
-still records what the design declares; from Implement on, that every
-path the branch changes lies in an area the design declares (FLOW-02). A
-path outside them is settled by widening the declaration inside the
-approved design, or by a return to Design (FLOW-06).
+that it is done. From Plan through Publish, and at each refresh of a
+feature (FLOW-10), each done-when also checks that the queue still
+records what the design declares; from Implement through Publish, and
+at each refresh of a feature, that every path the branch changes lies
+in an area the design declares (FLOW-02). A path outside them is
+settled by widening the declaration inside the approved design, or by a
+return to Design (FLOW-06). The merge confirmation (phase 7's
+done-when) and Close run neither; a feature's refresh runs both,
+including one taken while the pull request waits at Merge, and a
+process item's refresh runs neither. An item the queue records
+no declaration for, because it finished Design before the queue
+recorded declarations, is not compared with its design; its diff check
+reads the areas the queue records, so with none it is undeclared
+(FLOW-05) and no path lies outside them.
 
 A **process item** (queue `kind: process`) changes the rules the loops run
 under: `docs/development/`, `.claude/` or `tools/workflow/`. Its design is the
