@@ -40,7 +40,7 @@ None.
 
 | Pri | Item | Kind | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|
-| 4 | loop-native-lead | process | buildwarden/buildwarden | - | 2 implement | x4-state (human), x2-implement (cloud) | - | - | 1 / 12 |
+| 4 | loop-native-lead | process | buildwarden/buildwarden | - | 2 implement | x4-state (human), x2-implement (cloud, leased to cloud/20261118T105745Z) | - | - | 2 / 12 |
 | 5 | loop-repository | process | buildwarden/buildwarden | - | 2 implement | x2-predecessors-merged (human) | - | - | 1 / 10 |
 | 1 | queue-positions | process | buildwarden/buildwarden | - | 3 merge | x4-state (human), x3-merge (cloud) | your merge | [#126](https://github.com/buildwarden/buildwarden/pull/126) | 2 / 5 |
 | 2 | loop-streamline-2 | process | buildwarden/buildwarden | - | 3 merge | x4-state (human), x3-merge (cloud) | your merge | [#127](https://github.com/buildwarden/buildwarden/pull/127) | 2 / 5 |

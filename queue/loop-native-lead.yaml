@@ -30,15 +30,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261118T105745Z
+      expires: 2026-11-18T13:52:16.17613348Z
 budget:
   estimate:
     runs: 3
     steps: 12
   spent:
-    runs: 0
-    steps: 1
+    runs: 1
+    steps: 2
 questions: []
 history:
   - at: 2026-11-14T20:57:45Z
@@ -64,7 +64,10 @@ history:
     event: entered phase 2 (implement)
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 64 -> 3 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'
+    event: priority 64 -> 3 (renumbered to the item's 1-indexed queue position (Jeff, 2026-11-17; queue-positions))
   - at: 2026-11-17T21:06:37Z
     by: human/jeff
     event: 'priority 3 -> 4 (renumbered to queue order, Jeff, 2026-11-17: loop-streamline-2 placed after queue-positions; skill-areas-yaml-lines closed)'
+  - at: 2026-11-18T11:52:16Z
+    by: cloud/20261118T105745Z
+    event: claimed x2-implement until 2026-11-18T13:52:16Z
