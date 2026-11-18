@@ -20,11 +20,11 @@ steps:
   - id: x2-predecessors-merged
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
-    note: 'Done in an attended session once wf shows both loop-native-lead and loop-parallel-rule-wording done with their PRs merged (design loop-repository a15, Decision 16). Then compare the merged text of each overlapping paragraph in docs/development/ (FLOW-02 areas bullet and last paragraph, TEMPLATE.md areas comment, FLOW-03 paragraph after the table, FLOW-04 paragraph on taking steps, FLOW-16 first bullet and machine bullet, FLOW-17 second paragraph, PROFILE-01 Native hosts row) with the approved text quoted under the design''s Rule changes; if any differs, the design goes back for a review of that delta only (FLOW-19).'
+    note: Done in an attended session once wf shows both loop-native-lead and loop-parallel-rule-wording done with their PRs merged (design loop-repository a15, Decision 16). Then compare the merged text of each overlapping paragraph in docs/development/ (FLOW-02 areas bullet and last paragraph, TEMPLATE.md areas comment, FLOW-03 paragraph after the table, FLOW-04 paragraph on taking steps, FLOW-16 first bullet and machine bullet, FLOW-17 second paragraph, PROFILE-01 Native hosts row) with the approved text quoted under the design's Rule changes; if any differs, the design goes back for a review of that delta only (FLOW-19).
   - id: x2-implement
     phase: 2
     affinity: cloud
@@ -40,7 +40,7 @@ budget:
     steps: 10
   spent:
     runs: 0
-    steps: 1
+    steps: 2
 questions: []
 history:
   - at: 2026-11-12T23:22:53Z
@@ -81,7 +81,16 @@ history:
     event: entered phase 2 (implement)
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 65 -> 4 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'
+    event: priority 65 -> 4 (renumbered to the item's 1-indexed queue position (Jeff, 2026-11-17; queue-positions))
   - at: 2026-11-17T21:06:37Z
     by: human/jeff
     event: 'priority 4 -> 5 (renumbered to queue order, Jeff, 2026-11-17: loop-streamline-2 placed after queue-positions; skill-areas-yaml-lines closed)'
+  - at: 2026-11-18T19:50:52Z
+    by: human/jeff
+    event: claimed x2-predecessors-merged until 2026-11-18T21:50:52Z
+  - at: 2026-11-18T19:50:52Z
+    by: human/jeff
+    event: done x2-predecessors-merged
+  - at: 2026-11-18T19:50:52Z
+    by: human/jeff
+    event: 'x2-predecessors-merged: loop-native-lead (#129, e9315c2) and loop-parallel-rule-wording (#128, 89c0fdc) merged; all eight overlapping paragraphs on main at e9315c2 equal the approved text the design quotes (whitespace-normalized), and no other merged item touches them; no delta review needed (FLOW-19)'
