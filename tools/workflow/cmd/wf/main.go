@@ -8,6 +8,9 @@
 //	wf next     -state DIR -worker cloud [-feature F]
 //	wf claim    -state DIR -worker W -feature F -step S [-new-run]
 //	wf release  -state DIR -worker W -feature F -step S -why TEXT
+//	wf release  -state DIR -session MACHINE.RUN -why TEXT
+//	wf release  -state DIR -machine M -stale -current M.RUN -why TEXT
+//	wf renew    -state DIR -worker W -feature F -step S
 //	wf check    -state DIR -repo DIR -feature F [-run]
 //	wf done     -state DIR -repo DIR -worker W -feature F -step S [-run]
 //	wf answer   -state DIR -worker W -feature F -question Q -answer TEXT
@@ -23,7 +26,8 @@
 //	wf relate   -state DIR -worker human/NAME -feature A -with B [-clear]
 //	wf relations -state DIR [-feature F]
 //	wf stale    -state DIR -repo DIR -worker W
-//	wf commit   -state DIR -worker W -m MESSAGE [-claimed FEATURE/STEP [-new-run]] [PATH...]
+//	wf commit   -state DIR -worker W -m MESSAGE [-claimed FEATURE/STEP [-new-run]]
+//	            [-renewed FEATURE/STEP] [PATH...]
 //	wf main     -state DIR [-sha SHA -ci green|red|pending [-gates] [-run URL]]
 //	            [-followup ITEM] [-up-to-date required|not-required]
 //	wf digest   -state DIR
@@ -58,6 +62,17 @@
 // re-labels the item's pending template steps of phases 0 to 5 that no lease
 // holds and writes one history line, which the run's digest lists under
 // Moved. A process item and a tracked item are never led.
+//
+// claim leases a step for lease_minutes (120 when unset), or, for a host
+// worker host:<name>/<machine>.<run>, for host_lease_minutes (1200 when
+// unset). renew sets a lease the worker holds to now plus that length; it
+// counts nothing against the item's budget, and commit -renewed pushes it,
+// renewing again on the new state after a rejected push, never claiming
+// (FLOW-04). release -session releases every live lease of the session, as a
+// machine's wrapper does when its session ends and an attended session at its
+// Close; release -machine M -stale releases every live lease of a host worker
+// whose session is M.<run>, other than -current and any attended-<UTC> run,
+// as the wrapper does before the gate. Each release writes a history line.
 //
 // new -urgent, and urgent for an item already queued, mark a feature so that
 // the waiting limit does not refuse its start (FLOW-05). Only a human worker
@@ -197,7 +212,8 @@ import (
 )
 
 const usage = "usage: wf " +
-	"validate|status|next|claim|release|check|done|answer|back|new|urgent|lead|declare|" +
+	"validate|status|next|claim|renew|release|check|done|answer|back|new|urgent|lead|" +
+	"declare|" +
 	"relate|relations|stale|commit|main|digest|areas|gate|budget|migrate|drops [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
@@ -206,7 +222,7 @@ var errIdle = errors.New("idle")
 type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
 	title, source, machine, stamp, kind, holds, follows, hold string
-	lead, host                                                string
+	lead, host, session, current, renewed                     string
 	repos, areas, seams, adopts, with, message, claimed       string
 	rev, edges                                                string
 	urgent, clear, check, list                                bool
@@ -216,6 +232,7 @@ type opts struct {
 	base, head, mainReport, branchReport       string
 	priority, estSteps, estRuns, sweepDays, to int
 	newRun, run, record, native, md, all, held bool
+	stale                                      bool
 	now                                        time.Time
 }
 
@@ -283,6 +300,13 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.message, "m", "", "commit: the commit message")
 	fs.StringVar(&o.claimed, "claimed", "",
 		"commit: FEATURE/STEP the change claims, asked again on a rejected push")
+	fs.StringVar(&o.renewed, "renewed", "",
+		"commit: FEATURE/STEP whose lease the change renews, renewed again if rejected")
+	fs.StringVar(&o.session, "session", "",
+		"release: release every live lease of this session, <machine>.<run>")
+	fs.BoolVar(&o.stale, "stale", false,
+		"release: with -machine, release the leases earlier sessions of it left")
+	fs.StringVar(&o.current, "current", "", "release -stale: the session to spare")
 	fs.StringVar(&o.with, "with", "", "relate: the item the feature collides with")
 	fs.IntVar(&o.priority, "priority", 0, "new: priority, 1 highest")
 	fs.IntVar(&o.estSteps, "estimate-steps", 0, "new: estimated steps")
@@ -321,8 +345,13 @@ func run(cmd string, args []string, now time.Time) error {
 		"declare": declareItem, "relate": relate, "relations": relations,
 		"digest": digest, "areas": areasCmd,
 	}
-	for _, c := range []string{"claim", "release", "done"} {
-		cmds[c] = func(s *queue.State, o opts) error { return stepCmd(c, s, o) }
+	for _, c := range []string{"claim", "release", "renew", "done"} {
+		cmds[c] = func(s *queue.State, o opts) error {
+			if c == "release" && (o.session != "" || o.stale) {
+				return releaseLeases(s, o)
+			}
+			return stepCmd(c, s, o)
+		}
 	}
 	f, ok := cmds[cmd]
 	if !ok {
@@ -335,8 +364,9 @@ func run(cmd string, args []string, now time.Time) error {
 // files, and on a rejected push replays the change or asks the claim again.
 func commitCmd(o opts, paths []string) error {
 	lines, err := queue.Commit(o.state, queue.CommitRequest{
-		Worker: o.worker, Message: o.message, Claimed: o.claimed, NewRun: o.newRun,
-		Paths: paths, Now: o.now,
+		Worker: o.worker, Message: o.message, Claimed: o.claimed, Renewed: o.renewed,
+		NewRun: o.newRun,
+		Paths:  paths, Now: o.now,
 	})
 	for _, l := range lines {
 		fmt.Println(l)
@@ -502,12 +532,46 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 		}
 	case "release":
 		s.Release(f, st, o.worker, o.now, o.why)
+	case "renew":
+		if err := s.Renew(f, st, o.worker, o.now); err != nil {
+			return err
+		}
 	case "done":
 		if err := finish(s, f, st, o); err != nil {
 			return err
 		}
 	}
 	return s.Save(f)
+}
+
+// releaseLeases is release -session and release -machine -stale: it releases
+// every live lease of the session, or those earlier sessions of the machine
+// left, saves each item it changed, and prints a line for each (FLOW-04).
+func releaseLeases(s *queue.State, o opts) error {
+	if o.why == "" {
+		return errors.New("release needs -why")
+	}
+	var rs []queue.Released
+	switch {
+	case o.stale && o.session == "" && o.machine != "" && o.current != "":
+		rs = s.ReleaseStale(o.machine, o.current, o.why, o.now)
+	case !o.stale && o.machine == "" && o.session != "":
+		rs = s.ReleaseSession(o.session, o.why, o.now)
+	default:
+		return errors.New("release takes -session MACHINE.RUN, or -machine M -stale " +
+			"-current M.RUN")
+	}
+	saved := map[*queue.Feature]bool{}
+	for _, r := range rs {
+		fmt.Printf("released\t%s\t%s\t%s\n", r.Feature.Feature, r.Step, r.ClaimedBy)
+		if !saved[r.Feature] {
+			saved[r.Feature] = true
+			if err := s.Save(r.Feature); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // finish is wf done: it completes the step once its done-when passes. A gate

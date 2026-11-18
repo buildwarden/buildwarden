@@ -170,16 +170,7 @@ func (s *State) validateNative() []string {
 	}
 	served := s.served()
 	for _, f := range s.Features {
-		for _, st := range f.Steps {
-			h, ok := strings.CutPrefix(st.Affinity, "host:")
-			if ok && st.Status == "pending" && !served[h] {
-				bad("%s: step %s: no machine serves host %s", f.Feature, st.ID, h)
-			}
-		}
-		if h, ok := strings.CutPrefix(f.Lead, "host:"); ok && f.Status != "done" &&
-			!served[h] {
-			bad("%s: lead: no machine serves host %s", f.Feature, h)
-		}
+		f.validateServed(served, bad)
 	}
 	for _, g := range s.Gaps {
 		if g.Status == "open" && !served[g.Host] {
@@ -187,6 +178,20 @@ func (s *State) validateNative() []string {
 		}
 	}
 	return errs
+}
+
+// validateServed checks that each pending host step of the item, and its
+// lead while it is open, names a host some machine serves.
+func (f *Feature) validateServed(served map[string]bool, bad func(string, ...any)) {
+	for _, st := range f.Steps {
+		h, ok := strings.CutPrefix(st.Affinity, "host:")
+		if ok && st.Status == "pending" && !served[h] {
+			bad("%s: step %s: no machine serves host %s", f.Feature, st.ID, h)
+		}
+	}
+	if h, ok := strings.CutPrefix(f.Lead, "host:"); ok && f.Status != "done" && !served[h] {
+		bad("%s: lead: no machine serves host %s", f.Feature, h)
+	}
 }
 
 // Gate is the scheduled native session's go/no-go, decided without an agent so

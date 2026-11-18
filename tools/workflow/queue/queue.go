@@ -48,8 +48,13 @@ type Config struct {
 		// means "no cap".
 		WaitingOnHuman *int `yaml:"waiting_on_human,omitempty"`
 	} `yaml:"limits"`
-	LeaseMinutes  int     `yaml:"lease_minutes"`
-	RunawayFactor float64 `yaml:"runaway_factor"`
+	// LeaseMinutes is a cloud or human claim's lease; 0 is 120 (FLOW-04).
+	LeaseMinutes int `yaml:"lease_minutes"`
+	// HostLeaseMinutes is a machine's claim's lease, which its session
+	// renews while it works (wf renew); 0 or unset is 1200, Jeff's 20 hours
+	// (FLOW-04). A value below 0 is an error.
+	HostLeaseMinutes int     `yaml:"host_lease_minutes,omitempty"`
+	RunawayFactor    float64 `yaml:"runaway_factor"`
 }
 
 // StepBudget is how many steps one run may take.
@@ -648,6 +653,9 @@ func (s *State) validateConfig() []error {
 	if s.Config.RunBudget.Steps < 1 {
 		errs = append(errs, fmt.Errorf("config: run_budget.steps %d is below 1",
 			s.Config.RunBudget.Steps))
+	}
+	if m := s.Config.HostLeaseMinutes; m < 0 {
+		errs = append(errs, fmt.Errorf("config: host_lease_minutes %d is below 0", m))
 	}
 	if nb := s.Config.NativeBudget; nb != nil && nb.Steps < 1 {
 		errs = append(errs, fmt.Errorf("config: native_budget.steps %d is below 1",

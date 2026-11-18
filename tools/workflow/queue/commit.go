@@ -33,6 +33,10 @@ type CommitRequest struct {
 	// Claimed names the step the change claims, as FEATURE/STEP. A rejected
 	// claim is never replayed: it is asked again on the state that won.
 	Claimed string
+	// Renewed names the step whose lease the change renews, as
+	// FEATURE/STEP. A rejected renewal is renewed again on the state that
+	// won, and never claims (FLOW-04).
+	Renewed string
 	NewRun  bool
 	// Paths are the files of the session's change, from the checkout's root.
 	// Nothing else but the generated files is staged.
@@ -114,11 +118,11 @@ func Commit(dir string, r CommitRequest) ([]string, error) {
 		return nil, fmt.Errorf("%s is not a checkout of the %s branch", dir,
 			workflowBranch)
 	}
-	var claim *claimRef
-	if r.Claimed != "" {
-		if claim, err = parseClaimed(r.Claimed); err != nil {
-			return nil, err
-		}
+	claim, err := r.ref()
+	if err != nil {
+		return nil, err
+	}
+	if claim != nil {
 		r.Paths = append(r.Paths, "queue/"+claim.feature+".yaml")
 	}
 	if err := g.refuseMapChange(r); err != nil {
@@ -146,14 +150,36 @@ func Commit(dir string, r CommitRequest) ([]string, error) {
 	}
 }
 
-type claimRef struct{ feature, step string }
+// claimRef is the step a change claims or, with renew, whose lease it renews.
+type claimRef struct {
+	feature, step string
+	renew         bool
+}
 
-func parseClaimed(v string) (*claimRef, error) {
+// what is the claim or renewal as wf commit's messages name it.
+func (c *claimRef) what() string {
+	if c.renew {
+		return "renewal"
+	}
+	return "claim"
+}
+
+// ref parses -claimed or -renewed, which exclude each other.
+func (r CommitRequest) ref() (*claimRef, error) {
+	flag, v := "-claimed", r.Claimed
+	switch {
+	case r.Claimed != "" && r.Renewed != "":
+		return nil, errors.New("commit takes -claimed or -renewed, not both")
+	case r.Renewed != "":
+		flag, v = "-renewed", r.Renewed
+	case v == "":
+		return nil, nil
+	}
 	feature, step, ok := strings.Cut(v, "/")
 	if !ok || feature == "" || step == "" {
-		return nil, fmt.Errorf("-claimed is FEATURE/STEP, not %q", v)
+		return nil, fmt.Errorf("%s is FEATURE/STEP, not %q", flag, v)
 	}
-	return &claimRef{feature, step}, nil
+	return &claimRef{feature, step, flag == "-renewed"}, nil
 }
 
 // refuseMapChange refuses a change to areas.yaml from a worker that is not
@@ -260,7 +286,7 @@ func (g stateGit) giveUp(claim *claimRef) error {
 	if err := g.resetToRemote(); err != nil {
 		return err
 	}
-	return &CommitError{5, msg + ": the claim is dropped; ask wf next again"}
+	return &CommitError{5, msg + ": the " + claim.what() + " is dropped; ask wf next again"}
 }
 
 func (g stateGit) resetToRemote() error {
@@ -302,7 +328,10 @@ func (g stateGit) bringOnto(r CommitRequest, claim *claimRef) ([]string, error) 
 	if _, err := g.run("reset", "-q", "--hard", "origin/"+workflowBranch); err != nil {
 		return nil, err
 	}
-	if claim != nil {
+	switch {
+	case claim != nil && claim.renew:
+		return g.renewAgain(r, claim)
+	case claim != nil:
 		return g.claimAgain(r, claim)
 	}
 	return g.replay(own, r.Worker)
@@ -351,6 +380,33 @@ func (g stateGit) claimAgain(r CommitRequest, c *claimRef) ([]string, error) {
 		lines = append(lines, past)
 	}
 	return lines, s.Save(f)
+}
+
+// renewAgain renews the lease again on the remote's state through Renew, the
+// check wf renew makes: refused unless the step is still pending and its live
+// lease the worker's. It never claims, so the item's budget is unchanged.
+func (g stateGit) renewAgain(r CommitRequest, c *claimRef) ([]string, error) {
+	s, err := Load(g.dir)
+	if err != nil {
+		return nil, err
+	}
+	refuse := func(why string) error {
+		return &CommitError{4, fmt.Sprintf("the renewal of %s/%s is refused on the new "+
+			"state: %s; stop working on the step", c.feature, c.step, why)}
+	}
+	f, err := s.Find(c.feature)
+	if err != nil {
+		return nil, refuse(err.Error())
+	}
+	st, err := f.Step(c.step)
+	if err != nil {
+		return nil, refuse(err.Error())
+	}
+	if err := s.Renew(f, st, r.Worker, r.Now); err != nil {
+		return nil, refuse(err.Error())
+	}
+	return []string{fmt.Sprintf("renewed again on the new state: %s/%s", c.feature,
+		c.step)}, s.Save(f)
 }
 
 // mainKept is wf commit's line for a conflict in main.yaml: what it holds is a

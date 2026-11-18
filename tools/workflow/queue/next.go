@@ -304,7 +304,21 @@ func allDone(ids []string, done map[string]bool) bool {
 	return true
 }
 
-// Claim leases the step to worker for the configured lease time and counts it
+// leaseLength is how long the worker's claim or renewal holds a step: a
+// machine's host_lease_minutes, 1200 when unset, and lease_minutes, 120 when
+// unset, for every other worker (FLOW-04).
+func (s *State) leaseLength(worker string) time.Duration {
+	mins, fallback := s.Config.LeaseMinutes, 120
+	if strings.HasPrefix(Kind(worker), "host:") {
+		mins, fallback = s.Config.HostLeaseMinutes, 1200
+	}
+	if mins <= 0 {
+		mins = fallback
+	}
+	return time.Duration(mins) * time.Minute
+}
+
+// Claim leases the step to worker for its lease length (leaseLength) and counts it
 // against the feature's budget. newRun counts a run too, the first time a run
 // touches the feature. The first claim of a refresh step is not counted
 // against the item: other items' merges cause it, and the run that takes it
@@ -317,11 +331,7 @@ func allDone(ids []string, done map[string]bool) bool {
 func (s *State) Claim(
 	f *Feature, st *Step, worker string, now time.Time, newRun bool,
 ) string {
-	mins := s.Config.LeaseMinutes
-	if mins == 0 {
-		mins = 120
-	}
-	exp := now.Add(time.Duration(mins) * time.Minute).UTC()
+	exp := now.Add(s.leaseLength(worker)).UTC()
 	st.Lease = Lease{ClaimedBy: worker, Expires: &exp}
 	past := ""
 	if s.Starts(f, worker) {
