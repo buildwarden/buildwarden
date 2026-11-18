@@ -77,8 +77,11 @@ can compare the claim against the diff and the queue can route the work:
 - `repos` — every repository the change works in, the one that holds the
   design first, when there is more than that one (LOOP-04).
 - `areas` — the areas of the repository's area map whose files the change
-  edits (FLOW-05). A design that declares none is undeclared, and FLOW-05
-  then treats the item as colliding with every item in its repositories.
+  edits (FLOW-05). A design that leaves the key out is undeclared, as
+  FLOW-05 defines it, and FLOW-05 then treats the item as colliding with
+  every item in its repositories. `areas: []` is a declaration: the
+  change edits nothing but its own design, though an item whose home
+  repository has no map is undeclared whatever it declares (FLOW-05).
 - `security_boundary` — which GLOBAL-06 boundary is altered, if any. Any value other
   than `none` requires a security note in the design.
 - `alters_relationships` — `true` when the change alters a component's role or
@@ -104,8 +107,9 @@ it: the area map says which area reaches which.
 The automated part diffs the declared `drivers` / `seams` / `surfaces` against the
 trees and files the change reaches. It checks the declared `areas` against
 what `drivers`, `surfaces` and the `rule_changes` paths imply, at Design,
-and against the paths the change edits, from Implement on (FLOW-03). The
-agent part judges the security note.
+and against the paths the change edits, from Implement through Publish
+and at each refresh of a feature (FLOW-03). The agent part judges the
+security note.
 
 ---
 
