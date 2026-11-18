@@ -145,7 +145,7 @@ func (c *checker) declaredAtDesign(d *Design) {
 	m := c.state().Areas
 	switch {
 	case d.Front.Areas == nil:
-		c.add(implied, true, "undeclared: the design declares no areas, and the item "+
+		c.add(implied, true, "undeclared: the design leaves areas out, and the item "+
 			"collides with every item in its repositories (FLOW-05)")
 		return
 	case m == nil:

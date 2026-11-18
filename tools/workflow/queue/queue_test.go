@@ -68,7 +68,7 @@ func TestNextIsDepthFirst(t *testing.T) {
 	if got := next(t, s, "host:macos-vz"); got != "q f0-branch-setup" {
 		t.Fatalf("host next = %q, want the queued feature's host step", got)
 	}
-	s.Claim(q, &q.Steps[0], "host:macos-vz", now, true)
+	s.Claim(q, &q.Steps[0], "host:macos-vz", now)
 	if q.Status != "queued" {
 		t.Fatal("a host claim started a queued feature")
 	}
@@ -160,7 +160,7 @@ func TestHumanStartsProcessItemAtLimit(t *testing.T) {
 	if p == nil || p.Feature != x || p.Step.ID != "x1-design" {
 		t.Fatalf("human pick = %+v, want x x1-design", p)
 	}
-	s.Claim(p.Feature, p.Step, "human/jeff", now, true)
+	s.Claim(p.Feature, p.Step, "human/jeff", now)
 	if x.Status != "in_progress" {
 		t.Fatalf("status = %s, want the claim to start x", x.Status)
 	}
@@ -284,7 +284,7 @@ func TestOrderFollowsPhaseChanges(t *testing.T) {
 	if got := names(s); got != "p a z q" {
 		t.Fatalf("Ordered = %q", got)
 	}
-	s.Claim(q, &q.Steps[0], "cloud/run", now, true)
+	s.Claim(q, &q.Steps[0], "cloud/run", now)
 	if got := names(s); got != "p a q z" {
 		t.Fatalf("after q's claim Ordered = %q, want q among the in-progress items",
 			got)
@@ -298,7 +298,7 @@ func TestOrderFollowsPhaseChanges(t *testing.T) {
 func TestLeasesAndRunaway(t *testing.T) {
 	a := feature("a", 1, "in_progress")
 	s := state(a)
-	s.Claim(a, &a.Steps[0], "cloud/run-1", now, true)
+	s.Claim(a, &a.Steps[0], "cloud/run-1", now)
 	if a.Budget.Spent.Steps != 1 || a.Budget.Spent.Runs != 1 {
 		t.Fatalf("spent = %+v", a.Budget.Spent)
 	}
@@ -393,28 +393,25 @@ func TestValidateFollows(t *testing.T) {
 	}
 }
 
-func TestAddLogsRenumbering(t *testing.T) {
+// TestAddLogsOnlyThePlacedItem: wf new places the item and renumbers the
+// rest with no history line on them (Decision 2 of queue-positions).
+func TestAddLogsOnlyThePlacedItem(t *testing.T) {
 	a, b, c := feature("a", 1, "in_progress"), feature("b", 2, "queued"),
 		feature("c", 3, "queued")
 	s := state(a, b, c)
 	fix := &Feature{Feature: "fix", Priority: 2, Follows: "a"}
-	changed, err := s.Add(fix, now, "cloud/run")
-	if err != nil {
+	if err := s.Add(fix, now, "cloud/run"); err != nil {
 		t.Fatal(err)
 	}
-	if len(changed) != 3 || len(a.History) != 0 {
-		t.Fatalf("changed %d, a's history %v; want fix, b and c, and a untouched",
-			len(changed), a.History)
-	}
-	for _, f := range []*Feature{b, c} {
-		want := fmt.Sprintf("priority %d -> %d (renumbered by wf new: fix queued at 2)",
-			f.Priority-1, f.Priority)
-		if len(f.History) != 1 || f.History[0].Event != want ||
-			f.History[0].By != "cloud/run" {
-			t.Errorf("%s history %+v, want %q", f.Feature, f.History, want)
+	for _, f := range []*Feature{a, b, c} {
+		if len(f.History) != 0 {
+			t.Errorf("%s history %+v, want none", f.Feature, f.History)
 		}
 	}
-	if fix.Class() != 3 || s.Features[0] != fix {
+	if got := fix.History[len(fix.History)-1].Event; got != "queued at position 1 (asked 2)" {
+		t.Fatalf("fix's line is %q", got)
+	}
+	if fix.Class() != 3 || s.Features[0] != fix || a.Priority != 2 || c.Priority != 4 {
 		t.Fatalf("fix is class %d, first is %s; want class 3, ahead of the class-4 a",
 			fix.Class(), s.Features[0].Feature)
 	}
@@ -429,7 +426,7 @@ func held(t *testing.T, kind, why string) (*State, *Feature) {
 	_ = os.MkdirAll(filepath.Join(s.Dir, "queue"), 0o755)
 	f := &Feature{Feature: "held", Priority: 1, Kind: kind,
 		Budget: Budget{Estimate: Count{Runs: 1, Steps: 7}}}
-	if _, err := s.Add(f, now, "human/jeff"); err != nil {
+	if err := s.Add(f, now, "human/jeff"); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.PutOnHold(why, now, "human/jeff"); err != nil {
@@ -587,7 +584,7 @@ func plan(t *testing.T, f *Feature) *Step {
 // cloud/<feature>, so that another run's Next passes over the lease.
 func claimPlan(t *testing.T, s *State, f *Feature) {
 	t.Helper()
-	s.Claim(f, plan(t, f), "cloud/"+f.Feature, now, true)
+	s.Claim(f, plan(t, f), "cloud/"+f.Feature, now)
 }
 
 // finishPlan claims and completes the feature's Plan step, which puts it in
@@ -999,7 +996,7 @@ func TestAltersSlotSkipsProcessItems(t *testing.T) {
 	s := state(p, f, g)
 	claimPlan(t, s, f)
 	wantNext(t, s, "cloud/run", "p x2-implement")
-	s.Claim(p, &p.Steps[len(p.Steps)-1], "cloud/p", now, true)
+	s.Claim(p, &p.Steps[len(p.Steps)-1], "cloud/p", now)
 	wantOffer(t, s, "g", slotWait(1, "f"))
 	wantValidate(t, s)
 	s.Release(f, plan(t, f), "cloud/f", now, "done-when failed")
@@ -1455,7 +1452,7 @@ func TestHeldWorkerKeepsOnlyAnOfferedLease(t *testing.T) {
 	s := nativeState(f, process("rules", 0, "in_progress", "host:*"))
 	s.sortFeatures()
 	worker := "host:macos-vz/s"
-	s.Claim(f, &f.Steps[1], worker, now, true)
+	s.Claim(f, &f.Steps[1], worker, now)
 	if got := next(t, s, worker); got != "none" {
 		t.Fatalf("next = %q, want no lease on a later-phase step", got)
 	}
@@ -1485,7 +1482,7 @@ func publishWithValidation(t *testing.T) (*Feature, *State) {
 	merge, _ := f.Step("f6-merge-main")
 	Complete(f, merge, "test", now)
 	v, _ := f.Step("f6-validate-macos-vz")
-	s.Claim(f, v, "host:macos-vz/s", now, true)
+	s.Claim(f, v, "host:macos-vz/s", now)
 	if errs := s.Validate(); len(errs) != 0 {
 		t.Fatalf("Validate: %v", errs)
 	}
@@ -1944,7 +1941,7 @@ func TestNewFieldsRoundTrip(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(dir, "config.yaml"),
 		[]byte("run_budget: {steps: 8}\nrepository: o/here\n"), 0o644)
 	s := &State{Dir: dir}
-	plain, full := feature("plain", 1, "queued"), feature("full", 2, "queued")
+	plain, full := feature("plain", 2, "queued"), feature("full", 1, "queued")
 	full.Repos = []string{"o/here", "o/specs"}
 	full.Seams, full.RulesChanged = []string{"relay-claim"}, []string{"GLOBAL-08", "TEST-05"}
 	full.Declared, full.CollidesWith = "4c1d9e2", []string{"plain"}
@@ -2026,7 +2023,7 @@ func TestTrackedRound(t *testing.T) {
 	}
 	f := away("m1", 9)
 	s := declaredState()
-	if _, err := s.Add(f, now, "human/jeff"); err != nil {
+	if err := s.Add(f, now, "human/jeff"); err != nil {
 		t.Fatal(err)
 	}
 	if adopting(away("m2", 2)).Class() != 3 || fixing(away("m3", 3), "m1").Class() != 3 {
@@ -2071,7 +2068,7 @@ func trackedOutsideLimits(t *testing.T, s *State, f *Feature) {
 	if why := s.Guard(f, pick.Step, "human/jeff"); why != "" {
 		t.Fatalf("Guard refuses a tracked item: %s", why)
 	}
-	s.Claim(f, pick.Step, "human/jeff", now, false)
+	s.Claim(f, pick.Step, "human/jeff", now)
 	if f.Status != "in_progress" || f.Class() != 4 {
 		t.Fatalf("after its first claim m1 is %s, class %d", f.Status, f.Class())
 	}

@@ -32,13 +32,19 @@ func stateDir(t *testing.T, config string) string {
 // and its error.
 func wf(t *testing.T, dir, cmd string, args ...string) (string, error) {
 	t.Helper()
+	return wfAt(t, dir, now, cmd, args...)
+}
+
+// wfAt is wf run at the time.
+func wfAt(t *testing.T, dir string, at time.Time, cmd string, args ...string) (string, error) {
+	t.Helper()
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
 	stdout := os.Stdout
 	os.Stdout = w
-	runErr := run(cmd, append([]string{"-state", dir}, args...), now)
+	runErr := run(cmd, append([]string{"-state", dir}, args...), at)
 	os.Stdout = stdout
 	_ = w.Close()
 	out, err := io.ReadAll(r)
@@ -345,6 +351,7 @@ func TestUrgentCommands(t *testing.T) {
 	// refused its start, and the marked one's claim prints why it started.
 	queued(t, dir, "p", "3", "-kind", "process")
 	must(t, dir, "claim", "-worker", "human/jeff", "-feature", "p", "-step", "x1-design")
+	// -new-run is accepted and ignored (TestClaimInfersRuns).
 	start := func(name string) []string {
 		return []string{"-worker", "cloud/tick-1", "-feature", name, "-step",
 			"f0-branch-setup", "-new-run"}
@@ -387,5 +394,34 @@ func TestTrackedDone(t *testing.T) {
 	}
 	if got := item(t, dir, "m1").Status; got != "done" {
 		t.Fatalf("after t2-merge the tracked item is %s", got)
+	}
+}
+
+// TestClaimInfersRuns: wf claim counts a run on the first claim by the
+// worker's run, and -new-run is accepted without changing the count.
+func TestClaimInfersRuns(t *testing.T) {
+	dir := stateDir(t, here)
+	queued(t, dir, "a", "1")
+	step := func(worker string, more ...string) []string {
+		return append([]string{"-worker", worker, "-feature", "a", "-step",
+			"f0-branch-setup"}, more...)
+	}
+	release := step("cloud/s1", "-why", "retry")
+	for _, c := range []struct {
+		worker      string
+		flag        []string
+		steps, runs int
+	}{
+		{"cloud/s1", []string{"-new-run"}, 1, 1},
+		{"cloud/s1", []string{"-new-run"}, 2, 1},
+		{"cloud/s2", nil, 3, 2},
+	} {
+		must(t, dir, "claim", step(c.worker, c.flag...)...)
+		if sp := item(t, dir, "a").Budget.Spent; sp.Steps != c.steps || sp.Runs != c.runs {
+			t.Fatalf("after %s's claim %v: spent %+v, want %d steps and %d runs",
+				c.worker, c.flag, sp, c.steps, c.runs)
+		}
+		release[1] = c.worker
+		must(t, dir, "release", release...)
 	}
 }

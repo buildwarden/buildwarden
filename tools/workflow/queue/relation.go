@@ -91,9 +91,9 @@ func (s *State) ReposOf(f *Feature) []string {
 	return []string{s.Config.Repository}
 }
 
-// Undeclared reports whether the item declares no areas the map can be read
-// with: its areas are absent, or name an area the map lacks, or there is no
-// map of its home repository, whose areas they name. An undeclared item
+// Undeclared reports whether the item has no areas the map can read: its
+// areas are absent, or name an area the map lacks, or there is no map of
+// its home repository, whose areas they name. An undeclared item
 // collides with every item it shares a repository with. An empty list is a
 // declaration.
 func (s *State) Undeclared(f *Feature) bool {
@@ -177,7 +177,7 @@ func (p pair) undeclared() (string, bool) {
 	if len(names) == 0 {
 		return "", false
 	}
-	return slices.Min(names) + " declares no areas", true
+	return slices.Min(names) + " is undeclared", true
 }
 
 // areas returns the two items' areas when the map relates them: they have a

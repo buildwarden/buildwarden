@@ -19,8 +19,8 @@ func TestLeadCommands(t *testing.T) {
 			[]string{"1", "2", "3"}[i], "-estimate-steps", "9", "-lead", hyperv)
 		f := item(t, dir, name)
 		if f.Lead != hyperv || f.Steps[0].Affinity != hyperv ||
-			events(f)[0] != w+": queued at priority "+[]string{"1", "2", "3"}[i]+
-				" (intake), led by "+hyperv {
+			events(f)[0] != w+": queued at position "+[]string{"1", "2", "3"}[i]+
+				", led by "+hyperv {
 			t.Fatalf("new -lead by %s: lead %q, steps %+v, history %q", w, f.Lead,
 				f.Steps, events(f))
 		}

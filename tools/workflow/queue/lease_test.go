@@ -24,7 +24,7 @@ func TestLeaseLength(t *testing.T) {
 		f.Steps[0].Affinity = Kind(c.worker)
 		s := state(f)
 		s.Config.LeaseMinutes, s.Config.HostLeaseMinutes = c.lease, c.host
-		s.Claim(f, &f.Steps[0], c.worker, now, false)
+		s.Claim(f, &f.Steps[0], c.worker, now)
 		if got := f.Steps[0].Lease.Expires.Sub(now); got != c.want {
 			t.Errorf("%s with lease %d, host %d: %v, want %v", c.worker, c.lease,
 				c.host, got, c.want)
@@ -43,7 +43,7 @@ func TestRenew(t *testing.T) {
 	f.Steps[0].Affinity = "host:macos-vz"
 	s := state(f)
 	st := &f.Steps[0]
-	s.Claim(f, st, w, now, true)
+	s.Claim(f, st, w, now)
 	spent := f.Budget.Spent
 	later := now.Add(10 * time.Hour)
 	if err := s.Renew(f, st, w, later); err != nil {

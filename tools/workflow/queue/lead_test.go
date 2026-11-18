@@ -66,7 +66,7 @@ func TestLedStart(t *testing.T) {
 	if p == nil || p.Step.ID != "f0-branch-setup" || !p.Starts {
 		t.Fatalf("lead's machine: pick %+v, want a start on f0-branch-setup", p)
 	}
-	s.Claim(p.Feature, p.Step, lead+"/windows-desktop.r1", now, true)
+	s.Claim(p.Feature, p.Step, lead+"/windows-desktop.r1", now)
 	if k3.Status != "in_progress" {
 		t.Fatalf("the lead's claim left k3 %s", k3.Status)
 	}
@@ -101,7 +101,7 @@ func TestValidateLead(t *testing.T) {
 
 	s := declaredState()
 	away := &Feature{Feature: "m1", Priority: 1, Repos: []string{"o/relay"}}
-	if _, err := s.Add(away, now, "human/jeff"); err != nil {
+	if err := s.Add(away, now, "human/jeff"); err != nil {
 		t.Fatal(err)
 	}
 	away.Lead = lead
@@ -137,7 +137,7 @@ func setLeadRelabels(t *testing.T) {
 	f := working("k3", 1, 2)
 	s := state(f)
 	plan, _ := f.Step("f2-plan")
-	s.Claim(f, plan, "cloud/run", now, true)
+	s.Claim(f, plan, "cloud/run", now)
 	if err := s.SetLead(f, "cloud/run", lead, now); err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestSummaryWorkers(t *testing.T) {
 	k3.Status = "in_progress"
 	s := nativeState(k3)
 	s.Machines[1].Name = "windows-desktop"
-	s.Claim(k3, &k3.Steps[0], lead+"/windows-desktop.20261117T101000Z", now, true)
+	s.Claim(k3, &k3.Steps[0], lead+"/windows-desktop.20261117T101000Z", now)
 	since := now.Add(-48 * time.Hour)
 	s.Statuses = []MachineStatus{{File: "mac.yaml", Machine: "mac", LastRun: now,
 		Outcome: "idle", Reason: "idle: no host step ready and no open gaps",

@@ -1578,6 +1578,53 @@ A process item has no Publish phase and no consolidation pass (FLOW-03).
 The implement step merges current `main` before it opens the PR, and its
 open PR is refreshed like a feature's (FLOW-10).
 
+**2026-11-18, refresh onto `main` 89c0fdc** (FLOW-10). The merge brought
+in `queue-positions` (#126), `loop-streamline-2` (#127) and
+`loop-parallel-rule-wording` (#128). Git merged the rule text
+(`process.md`), the agents (`wf-design`, `wf-review`) and the
+`workflow-human`, `workflow-intake` and `workflow-tick` skills with no
+conflicts. This item's FLOW-04, FLOW-05 (the blocking clause), FLOW-09,
+FLOW-13, FLOW-16 (the machine bullet), FLOW-17, FLOW-18 and PROFILE-01
+text stands beside queue-positions' FLOW-05 priority paragraph,
+loop-streamline-2's FLOW-19 bullets and loop-parallel-rule-wording's
+FLOW-02, FLOW-03, FLOW-05 and FLOW-16 wording, each word for word. The
+stale `wf areas` "expected until loop-parallel's x4-state writes it"
+clause stays deleted. `workflow-tick` keeps this item's trunk check and
+its **Waiting on a host** and **Moved** lead lines with
+loop-streamline-2's run inference: it passes no `-new-run`.
+
+Four Go files conflicted, and each was settled by putting this item's
+change on `main`'s shape:
+
+- `queue/next.go`: `Claim` takes no `newRun` (loop-streamline-2) and
+  infers the run from the worker; it keeps this item's `leaseLength`, the
+  lead in `Starts` and `unattendedHold`.
+- `queue/commit.go`: `CommitRequest` loses `NewRun` and keeps `Renewed`.
+  queue-positions' `requestPaths` now parses `-claimed` or `-renewed`
+  through `ref`, so a renewal also stages the item's file and its
+  done-folder counterparts. `renewAgain` saves through queue-positions'
+  `Save`, which renumbers.
+- `queue/queue.go`: `Add` places the item by queue-positions' `place`
+  and logs `queued at position N[ (asked M)][, led by host:<name>]`. The
+  lead suffix is the one this item added to the old `queued at priority`
+  line.
+- `cmd/wf/main.go`: the usage carries `move`, `renew` and `lead`; the
+  `-new-run` flag is main's accepted-and-ignored one; `wf commit`'s
+  synopsis drops `[-new-run]` and keeps `[-renewed FEATURE/STEP]`.
+
+Tests were brought onto the new signatures: `Claim` without its last
+argument (`lease_test.go`, `lead_test.go`), `Add` returning only an error
+(`lead_test.go`), and `TestLeadCommands`' history line reading `queued at
+position N, led by`. The `QUEUE.md` golden files merged cleanly. A
+regeneration with `go test ./queue -update` changes nothing: the Lead
+column and the Workers section sit on the position numbering. The FLOW-15
+sweep is clean. `make deadcode` reports only the per-platform functions
+outside `tools/workflow/` that it reported before, and this item changes
+none of them. The item changes no component flow, so `overview.md` needs
+no change, and no wording is duplicated across the merged rules.
+`make test`, `make lint` and `make enforcement` pass. The merge changes
+no shell script, so shellcheck has nothing new to check.
+
 ## Rollback notes
 
 Revert the PR. No queue file carries a `lead` or a `host_lease_minutes`
@@ -1595,7 +1642,9 @@ review r1 approved the design and its eight rule changes at `74deb30` on
 -16, -17, -18 and PROFILE-01 as drafted; a5 answered (2), refined; a16 (1)
 with the colon-reading test case; a10 (1); every other assumption as
 recommended). `main` was still at the fork point (`0cd3c02`) when the PR
-was opened, so there was nothing to merge. It is P1's fourth item under
+was opened, so there was nothing to merge. Its refresh onto `89c0fdc`
+(Consolidation) put the claim, renewal and intake code on queue-positions'
+numbering and loop-streamline-2's inferred runs. It is P1's fourth item under
 FLOW-20 (`componentization`).
 
 - **Rule text** (`docs/development/process.md`,
