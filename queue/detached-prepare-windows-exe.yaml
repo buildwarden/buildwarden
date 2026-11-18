@@ -4,7 +4,7 @@ priority: 6
 follows: project-config-trust
 status: in_progress
 round: feature
-phase: 3
+phase: 1
 design: docs/design/detached-prepare-windows-exe.md
 branch: feat/detached-prepare-windows-exe
 areas:
@@ -56,13 +56,13 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: f3-implement
-    phase: 3
+  - id: f1-design-r2
+    phase: 1
     affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261118T105745Z
-      expires: 2026-11-18T14:26:07.702645441Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -180,3 +180,9 @@ history:
   - at: 2026-11-18T12:26:07Z
     by: cloud/20261118T105745Z
     event: claimed f3-implement until 2026-11-18T14:26:07Z
+  - at: 2026-11-18T12:30:25Z
+    by: cloud/20261118T105745Z
+    event: kept f6-validate-windows-hyperv pending for phase 6
+  - at: 2026-11-18T12:30:25Z
+    by: cloud/20261118T105745Z
+    event: 'back to design: f3-implement: tier 1 ORCH-01 drivers-claim MUST: task 1 edits driver/detach.go, which tools/tier1/rules.yaml counts as drivers.shared, so the design''s drivers [qemu, hyperv] must also declare container, vz and firecracker, or interface (make lint and GOOS=windows make lint both fail on it alone). Design chooses: (a) drivers: [container, qemu, vz, hyperv, firecracker] or interface, keeping the others-unaffected reasoning as ORCH-01''s assertion, and any native-validation change (TEST-02 caveat); or (b) keep [qemu, hyperv] and record the ruling so the commit carries a Tier1-Allow trailer (LINT-05). Plan tasks 1-2 were written (StartDetached via os.StartProcess; TestStartDetachedRunsNamedFile, TestStartDetachedFailedStart) and not pushed (lint red); they are small and are redone after the design returns.'
