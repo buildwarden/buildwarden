@@ -1,9 +1,9 @@
 feature: loop-parallel-rule-wording
 title: 'Rule wording loop-parallel left: areas: [] is declared-empty, the PR slot paragraph, FLOW-03''s area check at phases 7-8 and before wf declare, and FLOW-16''s merge proof'
-priority: 4
+priority: 1091
 kind: process
 follows: loop-parallel
-status: in_progress
+status: done
 round: process
 phase: 4
 design: docs/design/loop-parallel-rule-wording.md
@@ -39,7 +39,7 @@ steps:
   - id: x4-close
     phase: 4
     affinity: cloud
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -49,7 +49,7 @@ budget:
     steps: 9
   spent:
     runs: 2
-    steps: 3
+    steps: 4
 questions: []
 history:
   - at: 2026-11-16T01:16:03Z
@@ -103,3 +103,12 @@ history:
   - at: 2026-11-18T19:05:08Z
     by: cloud/20261118T182148Z
     event: entered phase 4 (close)
+  - at: 2026-11-18T19:05:23Z
+    by: cloud/20261118T182148Z
+    event: claimed x4-close until 2026-11-18T21:05:23Z
+  - at: 2026-11-18T19:05:23Z
+    by: cloud/20261118T182148Z
+    event: done x4-close
+  - at: 2026-11-18T19:05:23Z
+    by: cloud/20261118T182148Z
+    event: closed; feature done

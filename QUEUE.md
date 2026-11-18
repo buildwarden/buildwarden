@@ -41,13 +41,12 @@ None.
 | 1 | queue-positions | process | buildwarden/buildwarden | - | 4 close | x4-state (human) | - | [#126](https://github.com/buildwarden/buildwarden/pull/126) | 2 / 5 |
 | 2 | loop-repository | process | buildwarden/buildwarden | - | 2 implement | x2-predecessors-merged (human) | - | - | 1 / 10 |
 | 3 | loop-streamline-2 | process | buildwarden/buildwarden | - | 4 close | x4-state (human) | - | [#127](https://github.com/buildwarden/buildwarden/pull/127) | 2 / 5 |
-| 4 | loop-parallel-rule-wording | process | buildwarden/buildwarden | - | 4 close | x4-close (cloud) | - | [#128](https://github.com/buildwarden/buildwarden/pull/128) | 3 / 9 |
-| 5 | loop-native-lead | process | buildwarden/buildwarden | - | 3 merge | x4-state (human), x3-merge (cloud), x2-refresh (cloud) | a refresh, then your merge | [#129](https://github.com/buildwarden/buildwarden/pull/129) behind `main` | 2 / 12 |
-| 6 | detached-prepare-windows-exe | fix (follows project-config-trust) | buildwarden/buildwarden | driver-core, driver/hyperv, driver/qemu, book, designs | 2 plan | f2-design-review-r2 (human) | - | - | 6 / 7 |
-| 7 | prebuilt-artifacts | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
-| 8 | workdir-in-context | feature | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
-| 9 | driver-contract | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-design-review-r2 (human) | - | - | 10 / 30 |
-| 10 | relay-collector-failure-fails-open | feature | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 9 |
+| 4 | loop-native-lead | process | buildwarden/buildwarden | - | 3 merge | x4-state (human), x3-merge (cloud), x2-refresh (cloud) | a refresh, then your merge | [#129](https://github.com/buildwarden/buildwarden/pull/129) behind `main` | 2 / 12 |
+| 5 | detached-prepare-windows-exe | fix (follows project-config-trust) | buildwarden/buildwarden | driver-core, driver/hyperv, driver/qemu, book, designs | 2 plan | f2-design-review-r2 (human) | - | - | 6 / 7 |
+| 6 | prebuilt-artifacts | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
+| 7 | workdir-in-context | feature | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
+| 8 | driver-contract | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-design-review-r2 (human) | - | - | 10 / 30 |
+| 9 | relay-collector-failure-fails-open | feature | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 9 |
 
 ## Relations
 
@@ -120,8 +119,8 @@ No queued feature starts: 9 items wait on you (limit 8). Fixes, process items an
 
 | Pri | Item | Kind | Repositories | Areas | Est. steps |
 |---|---|---|---|---|---|
-| 11 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
-| 12 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
-| 13 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
-| 14 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
-| 15 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |
+| 10 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
+| 11 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
+| 12 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
+| 13 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
+| 14 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |
