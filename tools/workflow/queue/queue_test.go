@@ -393,28 +393,25 @@ func TestValidateFollows(t *testing.T) {
 	}
 }
 
-func TestAddLogsRenumbering(t *testing.T) {
+// TestAddLogsOnlyThePlacedItem: wf new places the item and renumbers the
+// rest with no history line on them (Decision 2 of queue-positions).
+func TestAddLogsOnlyThePlacedItem(t *testing.T) {
 	a, b, c := feature("a", 1, "in_progress"), feature("b", 2, "queued"),
 		feature("c", 3, "queued")
 	s := state(a, b, c)
 	fix := &Feature{Feature: "fix", Priority: 2, Follows: "a"}
-	changed, err := s.Add(fix, now, "cloud/run")
-	if err != nil {
+	if err := s.Add(fix, now, "cloud/run"); err != nil {
 		t.Fatal(err)
 	}
-	if len(changed) != 3 || len(a.History) != 0 {
-		t.Fatalf("changed %d, a's history %v; want fix, b and c, and a untouched",
-			len(changed), a.History)
-	}
-	for _, f := range []*Feature{b, c} {
-		want := fmt.Sprintf("priority %d -> %d (renumbered by wf new: fix queued at 2)",
-			f.Priority-1, f.Priority)
-		if len(f.History) != 1 || f.History[0].Event != want ||
-			f.History[0].By != "cloud/run" {
-			t.Errorf("%s history %+v, want %q", f.Feature, f.History, want)
+	for _, f := range []*Feature{a, b, c} {
+		if len(f.History) != 0 {
+			t.Errorf("%s history %+v, want none", f.Feature, f.History)
 		}
 	}
-	if fix.Class() != 3 || s.Features[0] != fix {
+	if got := fix.History[len(fix.History)-1].Event; got != "queued at position 1 (asked 2)" {
+		t.Fatalf("fix's line is %q", got)
+	}
+	if fix.Class() != 3 || s.Features[0] != fix || a.Priority != 2 || c.Priority != 4 {
 		t.Fatalf("fix is class %d, first is %s; want class 3, ahead of the class-4 a",
 			fix.Class(), s.Features[0].Feature)
 	}
@@ -429,7 +426,7 @@ func held(t *testing.T, kind, why string) (*State, *Feature) {
 	_ = os.MkdirAll(filepath.Join(s.Dir, "queue"), 0o755)
 	f := &Feature{Feature: "held", Priority: 1, Kind: kind,
 		Budget: Budget{Estimate: Count{Runs: 1, Steps: 7}}}
-	if _, err := s.Add(f, now, "human/jeff"); err != nil {
+	if err := s.Add(f, now, "human/jeff"); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.PutOnHold(why, now, "human/jeff"); err != nil {
@@ -2026,7 +2023,7 @@ func TestTrackedRound(t *testing.T) {
 	}
 	f := away("m1", 9)
 	s := declaredState()
-	if _, err := s.Add(f, now, "human/jeff"); err != nil {
+	if err := s.Add(f, now, "human/jeff"); err != nil {
 		t.Fatal(err)
 	}
 	if adopting(away("m2", 2)).Class() != 3 || fixing(away("m3", 3), "m1").Class() != 3 {
