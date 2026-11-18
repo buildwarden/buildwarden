@@ -887,6 +887,23 @@ A process item has no Publish phase and no consolidation pass (FLOW-03).
 The implement step merges current `main` before it opens the PR, and its
 open PR is refreshed like a feature's (FLOW-10).
 
+**2026-11-18, refresh onto `main` 111c9be** (FLOW-10). The merge brought
+in `queue-positions` (#126) and `loop-streamline-2` (#127). Both also edit
+`process.md` and the `workflow-human`, `workflow-intake` and
+`workflow-tick` skills. Git merged them with no conflicts. Each side's
+added lines are in the merged files word for word, and no line either side
+removed came back. That covers this item's FLOW-02, FLOW-03, FLOW-05 and
+FLOW-16 wording, queue-positions' FLOW-05 paragraph (priority is
+position), and loop-streamline-2's FLOW-19 bullets. In FLOW-05, the
+priority paragraph follows the class list, and this item's
+undeclared/`[]`/colliding text follows the limits paragraph. Neither
+repeats or contradicts the other. The stale `wf areas` "expected until
+loop-parallel's x4-state writes it" clause is still gone from all four
+agent and skill files. The FLOW-15 sweep is clean: `make deadcode`
+reports nothing, the item changes no component flow, so `overview.md`
+needs no change, and no wording is duplicated across the merged rules.
+`make test`, `make lint` and `make enforcement` pass.
+
 ## Rollback notes
 
 None.
