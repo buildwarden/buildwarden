@@ -66,7 +66,7 @@ steps:
   - id: f2-design-review-r2
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -85,7 +85,7 @@ budget:
     steps: 7
   spent:
     runs: 2
-    steps: 6
+    steps: 7
 questions:
   - id: a1
     kind: assumed
@@ -128,13 +128,14 @@ questions:
     answer: (a) as drafted (Jeff, 2026-11-17)
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: 'r2 (flagged: widens the drivers claim approved at b7619b5): the drivers claim for a change to driver/detach.go, which tools/tier1/rules.yaml counts as drivers.shared (tier 1 ORCH-01 drivers-claim failed in f3-implement against [qemu, hyperv]).'
     options:
       - declare [container, qemu, vz, hyperv, firecracker] (FLOW-02, as project-config-trust did for the same file), keep container, vz and firecracker asserted unaffected (none calls StartDetached, their trees are not edited), and add no native validation for them
       - declare [interface]
       - keep [qemu, hyperv] and carry a Tier1-Allow ORCH-01 trailer on the commits that edit driver/detach.go (LINT-05)
     recommended: declare [container, qemu, vz, hyperv, firecracker] (FLOW-02, as project-config-trust did for the same file), keep container, vz and firecracker asserted unaffected (none calls StartDetached, their trees are not edited), and add no native validation for them
+    answer: declare [container, qemu, vz, hyperv, firecracker], keep container, vz and firecracker asserted unaffected, no native validation added (Jeff, 2026-11-18, as recommended)
 history:
   - at: 2026-11-16T05:27:02Z
     by: host:windows-hyperv/20261116T051002Z
@@ -223,3 +224,12 @@ history:
   - at: 2026-11-18T12:34:29Z
     by: cloud/20261118T105745Z
     event: entered phase 2 (plan)
+  - at: 2026-11-18T19:51:32Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: declare [container, qemu, vz, hyperv, firecracker], keep container, vz and firecracker asserted unaffected, no native validation added (Jeff, 2026-11-18, as recommended)'
+  - at: 2026-11-18T19:51:32Z
+    by: human/jeff
+    event: claimed f2-design-review-r2 until 2026-11-18T21:51:32Z
+  - at: 2026-11-18T19:51:32Z
+    by: human/jeff
+    event: done f2-design-review-r2
