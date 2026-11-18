@@ -5,11 +5,15 @@ kind: process
 follows: loop-parallel
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/loop-parallel-rule-wording.md
 branch: feat/loop-parallel-rule-wording
 alters_relationships: null
 source: 'Jeff''s decisions of 2026-11-16 on the review of loop-parallel''s implementation: F4, F6 and F5''s wording for phases 7-8 go to one follow-up rule-change item, not changed on loop-parallel''s branch. A program item (FLOW-20): it amends rules loop-parallel changes; its design lists componentization.md in related. Scope: (F4) FLOW-02/FLOW-05''s approved wording reads as if areas: [] were undeclared, while wf treats it as declared-empty (relation.go''s ''declares no areas'' text and its tests move with it); (F6) process.md''s ''one feature at a time through the PR slot'' (line 27) predates the limits; (F5) FLOW-03 ''from Implement on'' overclaims for phases 7-8 and does not name the exemption before wf declare; (review F-P2 / design-code 2) FLOW-16 (process.md 648-656) still names the patch-id proof (''the equal tree or change''), while wf now proves a squash by merge-tree onto the squash''s parent (loop-parallel a14 (d), Decision 23). Holds no worker: rule text only.'
+pr:
+  number: 128
+  ci: green
+  head: d643a117899d3a90657c7711b50c1d5e984f4f08
 steps:
   - id: x1-design
     phase: 1
@@ -21,10 +25,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261118T105745Z
-      expires: 2026-11-18T13:41:15.65504642Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -58,3 +69,9 @@ history:
   - at: 2026-11-18T11:41:15Z
     by: cloud/20261118T105745Z
     event: claimed x2-implement until 2026-11-18T13:41:15Z
+  - at: 2026-11-18T11:52:04Z
+    by: cloud/20261118T105745Z
+    event: done x2-implement
+  - at: 2026-11-18T11:52:04Z
+    by: cloud/20261118T105745Z
+    event: entered phase 3 (merge)
