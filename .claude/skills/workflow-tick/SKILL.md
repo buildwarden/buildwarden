@@ -60,7 +60,8 @@ area map changes only on Jeff's word (FLOW-05).
 `entire doctor --force` installs Entire's git hooks, which a fresh clone lacks;
 `entire status` must name `buildwarden/buildwarden-sessions` as the
 checkpoint remote. If `entire` is missing, carry on but make "sessions not recorded (FLOW-18)"
-the digest's first line. Set `W=cloud/<UTC timestamp>` as this run's worker.
+the digest's first line. Set `W=cloud/<UTC timestamp>` as this run's worker, at each invocation:
+`wf claim` counts a run from the worker, on its first claim of each item.
 
 Read `.dev/workflow/config.yaml`. Unattended and `priority_confirmed: false`:
 write the digest (step 4) saying the loop waits on the human's confirmation of
@@ -102,7 +103,7 @@ never `git commit` and `git push`:
 
 ```bash
 dist/wf commit -state .dev/workflow -worker $W -m "<message>" \
-  [-claimed F/S [-new-run]] <paths changed>
+  [-claimed F/S] <paths changed>
 ```
 
 It pushes only the paths given and the files it generates (FLOW-13). Exit 4:
@@ -121,8 +122,8 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
    `-feature <feature>`). `none` ends the loop; keep the `blocked` lines for
    the digest.
 2. Claim it: `dist/wf claim -state .dev/workflow -worker $W -feature F -step S`,
-   adding `-new-run` on this run's first claim of F, then
-   `dist/wf commit ... -m "F: claim S" -claimed F/S [-new-run] queue/F.yaml`.
+   then
+   `dist/wf commit ... -m "F: claim S" -claimed F/S queue/F.yaml`.
    Keep any line `wf claim` printed for a start past the waiting limit
    (FLOW-05) for the step's **Moved** line.
 3. Check out the feature branch in the code checkout (`git switch <branch>`

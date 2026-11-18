@@ -6,7 +6,7 @@
 //	wf validate -state DIR [-areas CANDIDATE [-repo DIR]]
 //	wf status   -state DIR [-all | -md]
 //	wf next     -state DIR -worker cloud [-feature F]
-//	wf claim    -state DIR -worker W -feature F -step S [-new-run]
+//	wf claim    -state DIR -worker W -feature F -step S
 //	wf release  -state DIR -worker W -feature F -step S -why TEXT
 //	wf check    -state DIR -repo DIR -feature F [-run]
 //	wf done     -state DIR -repo DIR -worker W -feature F -step S [-run]
@@ -22,7 +22,7 @@
 //	wf relate   -state DIR -worker human/NAME -feature A -with B [-clear]
 //	wf relations -state DIR [-feature F]
 //	wf stale    -state DIR -repo DIR -worker W
-//	wf commit   -state DIR -worker W -m MESSAGE [-claimed FEATURE/STEP [-new-run]] [PATH...]
+//	wf commit   -state DIR -worker W -m MESSAGE [-claimed FEATURE/STEP] [PATH...]
 //	wf main     -state DIR [-sha SHA -ci green|red|pending [-gates] [-run URL]]
 //	            [-followup ITEM] [-up-to-date required|not-required]
 //	wf digest   -state DIR
@@ -58,6 +58,10 @@
 // any item. wf does not check what the item fixes: FLOW-05 says what the
 // mark is for. claim prints the history line of a start past the waiting
 // limit.
+//
+// claim and commit -claimed count a run on the first claim of the item by the
+// worker's run, worked out from the worker and the item's history. -new-run
+// is accepted and ignored, for callers that still pass it.
 //
 // next and claim apply FLOW-05's limits to every worker: no step is offered
 // or claimed whose claim would put an item's set over the in-progress limit,
@@ -206,7 +210,7 @@ type opts struct {
 	given                                      map[string]bool
 	base, head, mainReport, branchReport       string
 	priority, estSteps, estRuns, sweepDays, to int
-	newRun, run, record, native, md, all, held bool
+	run, record, native, md, all, held         bool
 	now                                        time.Time
 }
 
@@ -239,7 +243,7 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.worker, "worker", "", "cloud, human or host:<name>, optionally /<session>")
 	fs.StringVar(&o.feature, "feature", "", "feature name")
 	fs.StringVar(&o.step, "step", "", "step id")
-	fs.BoolVar(&o.newRun, "new-run", false, "first claim of this feature in this run")
+	fs.Bool("new-run", false, "ignored: runs are inferred from the worker and the item's history")
 	fs.StringVar(&o.why, "why", "", "reason for a release, or back's finding")
 	fs.IntVar(&o.to, "to", 1, "back: the phase to return to, 1 (Design) or 3 (Implement)")
 	fs.BoolVar(&o.run, "run", false, "run make lint / make test where a check needs them")
@@ -324,7 +328,7 @@ func run(cmd string, args []string, now time.Time) error {
 // files, and on a rejected push replays the change or asks the claim again.
 func commitCmd(o opts, paths []string) error {
 	lines, err := queue.Commit(o.state, queue.CommitRequest{
-		Worker: o.worker, Message: o.message, Claimed: o.claimed, NewRun: o.newRun,
+		Worker: o.worker, Message: o.message, Claimed: o.claimed,
 		Paths: paths, Now: o.now,
 	})
 	for _, l := range lines {
@@ -486,7 +490,7 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 		if err := s.MayClaim(f, st, o.worker, o.now); err != nil {
 			return err
 		}
-		if line := s.Claim(f, st, o.worker, o.now, o.newRun); line != "" {
+		if line := s.Claim(f, st, o.worker, o.now); line != "" {
 			fmt.Println(line)
 		}
 	case "release":

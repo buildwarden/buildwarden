@@ -62,7 +62,7 @@ func TestGateRunsForAReadyHostStep(t *testing.T) {
 		t.Fatalf("win gate ran with no step or gap of its own: %+v", g)
 	}
 	// A step another worker holds is not ready.
-	s.Claim(a, &a.Steps[0], "host:macos-qemu/attended", now, true)
+	s.Claim(a, &a.Steps[0], "host:macos-qemu/attended", now)
 	if g, _ := s.Gate(mac, repo, nil, 7, now); g.Run {
 		t.Fatalf("gate ran on a leased step: %+v", g)
 	}

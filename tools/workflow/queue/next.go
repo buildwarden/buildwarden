@@ -292,17 +292,17 @@ func allDone(ids []string, done map[string]bool) bool {
 }
 
 // Claim leases the step to worker for the configured lease time and counts it
-// against the feature's budget. newRun counts a run too, the first time a run
-// touches the feature. The first claim of a refresh step is not counted
-// against the item: other items' merges cause it, and the run that takes it
-// counts it in its own budget. A refresh that is released and claimed again
+// against the feature's budget. It counts a run too when the claim is the
+// first of its run on the feature (newRun). The first claim of a refresh step
+// is not counted against the item: other items' merges cause it, and the run
+// that takes it counts it in its own budget. A refresh that is released and claimed again
 // counts like any retried step, so one that keeps failing still ends at the
 // runaway check (FLOW-13). A claim that starts the item (Starts) sets it in
 // progress and logs the start. When that start is a marked feature's past the
 // waiting limit, the history line says so, and Claim returns it for wf claim
 // to print; otherwise it returns "".
 func (s *State) Claim(
-	f *Feature, st *Step, worker string, now time.Time, newRun bool,
+	f *Feature, st *Step, worker string, now time.Time,
 ) string {
 	mins := s.Config.LeaseMinutes
 	if mins == 0 {
@@ -324,11 +324,37 @@ func (s *State) Claim(
 	if !IsRefresh(st) || f.claimedBefore(st) {
 		f.Budget.Spent.Steps++
 	}
-	if newRun {
+	if f.newRun(worker) {
 		f.Budget.Spent.Runs++
 	}
 	f.Log(now, worker, "claimed %s until %s", st.ID, exp.Format(time.RFC3339))
 	return past
+}
+
+// newRun reports whether a claim by worker is the first of its run on the
+// item. A human's claim is never a run. Otherwise the run is the worker's
+// kind and the text after its first "/", so one native session's claims of
+// two host steps (host:macos-vz/S, host:macos-qemu/S) are one run, while
+// cloud/S and host:x/S are two.
+func (f *Feature) newRun(worker string) bool {
+	if strings.HasPrefix(worker, "human/") {
+		return false
+	}
+	run := runOf(worker)
+	return !slices.ContainsFunc(f.History, func(e Event) bool {
+		return strings.HasPrefix(e.Event, "claimed ") && runOf(e.By) == run
+	})
+}
+
+// runOf names a worker's run: its kind, up to the first ":" or "/", and the
+// text after its first "/".
+func runOf(worker string) [2]string {
+	kind := worker
+	if i := strings.IndexAny(worker, ":/"); i >= 0 {
+		kind = worker[:i]
+	}
+	_, id, _ := strings.Cut(worker, "/")
+	return [2]string{kind, id}
 }
 
 // claimedBefore reports whether the item's history has a claim of the step.
