@@ -49,8 +49,13 @@ type Config struct {
 		// means "no cap".
 		WaitingOnHuman *int `yaml:"waiting_on_human,omitempty"`
 	} `yaml:"limits"`
-	LeaseMinutes  int     `yaml:"lease_minutes"`
-	RunawayFactor float64 `yaml:"runaway_factor"`
+	// LeaseMinutes is a cloud or human claim's lease; 0 is 120 (FLOW-04).
+	LeaseMinutes int `yaml:"lease_minutes"`
+	// HostLeaseMinutes is a machine's claim's lease, which its session
+	// renews while it works (wf renew); 0 or unset is 1200, Jeff's 20 hours
+	// (FLOW-04). A value below 0 is an error.
+	HostLeaseMinutes int     `yaml:"host_lease_minutes,omitempty"`
+	RunawayFactor    float64 `yaml:"runaway_factor"`
 }
 
 // StepBudget is how many steps one run may take.
@@ -90,8 +95,13 @@ type Feature struct {
 	Urgent string `yaml:"urgent,omitempty"`
 	// Holds lists the affinity patterns (cloud, host:*, host:macos-vz) whose
 	// workers take no new step while this process item is in progress.
-	Holds  []string `yaml:"holds,omitempty"`
-	Status string   `yaml:"status"` // queued | in_progress | done
+	Holds []string `yaml:"holds,omitempty"`
+	// Lead is the host name, host:<name>, whose machines take a feature's
+	// cloud steps of phases 0 to 5 (FLOW-04, FLOW-09). Empty, the item is
+	// not led. Any worker may set or clear it (SetLead); each change is a
+	// history line.
+	Lead   string `yaml:"lead,omitempty"`
+	Status string `yaml:"status"` // queued | in_progress | done
 	// Round is feature or process. parallel and merge remain only on
 	// finished items from before the single round (wf migrate).
 	Round  string `yaml:"round"`
@@ -721,7 +731,11 @@ func (s *State) Add(f *Feature, now time.Time, by string) error {
 	want := f.Priority
 	s.Features = append(s.Features, f)
 	at := s.place(f, want)
-	f.Log(now, by, "queued at position %d%s", at, askedNote(want, at))
+	led := ""
+	if f.Lead != "" {
+		led = ", led by " + f.Lead
+	}
+	f.Log(now, by, "queued at position %d%s%s", at, askedNote(want, at), led)
 	s.sortFeatures()
 	return nil
 }
@@ -903,6 +917,9 @@ func (s *State) validateConfig() []error {
 		errs = append(errs, fmt.Errorf("config: run_budget.steps %d is below 1",
 			s.Config.RunBudget.Steps))
 	}
+	if m := s.Config.HostLeaseMinutes; m < 0 {
+		errs = append(errs, fmt.Errorf("config: host_lease_minutes %d is below 0", m))
+	}
 	if nb := s.Config.NativeBudget; nb != nil && nb.Steps < 1 {
 		errs = append(errs, fmt.Errorf("config: native_budget.steps %d is below 1",
 			nb.Steps))
@@ -975,6 +992,7 @@ func (s *State) Problems(f *Feature) []error {
 	f.validate(bad, tracked)
 	s.validateDeclared(f, bad)
 	s.validateUrgent(f, bad)
+	s.validateLead(f, bad)
 	if f.PR != nil && f.PR.Head != "" && !commitRe.MatchString(f.PR.Head) {
 		bad("pr.head %q is not a commit id", f.PR.Head)
 	}

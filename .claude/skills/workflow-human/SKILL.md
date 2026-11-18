@@ -163,6 +163,12 @@ Read the latest file in `.dev/workflow/digest/`.
   declined for anything else, saying that the mark is for a security fix and
   that the limit is his to raise.
 
+A lead is routing, not placement: any worker may set or clear one, and Jeff
+may change one back with
+`dist/wf lead -state .dev/workflow -worker human/<name> -feature F -host <name>`
+(`-clear` to remove it, FLOW-04, FLOW-09). Each change is a history line,
+and the run that made it lists it under **Moved**.
+
 Push the workflow branch after each decision with
 `dist/wf commit -state .dev/workflow -worker $W -m "<what was decided>" <paths>`
 (`workflow-tick` step 2 gives its exit codes). Finish with a short

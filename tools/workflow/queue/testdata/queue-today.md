@@ -30,12 +30,12 @@ None.
 
 ## Active
 
-| Pri | Item | Kind | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
-|---|---|---|---|---|---|---|---|---|---|
-| 60 | loop-contract | process | buildwarden/buildwarden | - | 3 merge | x3-merge (cloud) | your merge | [#119](https://github.com/buildwarden/buildwarden/pull/119) | 2 / 8 |
-| 61 | loop-parallel | process | buildwarden/buildwarden | - | 1 design | x1-design (human, leased to human/jeff) | - | - | 1 / 12 |
-| 64 | seam-specs | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-design-review (human) | - | - | 2 / 30 |
-| 65 | driver-contract | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-design-review (human, leased to human/jeff) | - | - | 5 / 30 |
+| Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 60 | loop-contract | process | - | buildwarden/buildwarden | - | 3 merge | x3-merge (cloud) | your merge | [#119](https://github.com/buildwarden/buildwarden/pull/119) | 2 / 8 |
+| 61 | loop-parallel | process | - | buildwarden/buildwarden | - | 1 design | x1-design (human, leased to human/jeff) | - | - | 1 / 12 |
+| 64 | seam-specs | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-design-review (human) | - | - | 2 / 30 |
+| 65 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-design-review (human, leased to human/jeff) | - | - | 5 / 30 |
 
 ## Relations
 

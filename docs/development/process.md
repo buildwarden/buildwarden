@@ -199,21 +199,41 @@ Every pending step carries an affinity:
   human's merge there (FLOW-08).
 - `host:<name>` — work that needs native hardware, for example `host:macos-vz`
   (the macOS/arm64 laptop) or `host:windows-hyperv` (the Windows desktop). A
-  name `<os>-<driver>` is specific to that platform; `<capability>-any` (such as
-  `qemu-any` or `container-any`) runs on any native machine that has the
-  capability. The workflow branch's `hosts.yaml` gives each host name to exactly
-  one machine.
+  name `<os>-<driver>` is specific to that platform; `<os>-any` needs the
+  platform and no one driver; `<capability>-any` (such as `qemu-any` or
+  `container-any`) runs on any native machine that has the capability. The
+  workflow branch's `hosts.yaml` lists the machines that serve each host
+  name, one or more, and only the human changes it.
 
-A worker takes only steps whose affinity it satisfies. A step is offered when
+A feature may be **led** by a host name, which any worker may set or
+change, each change recorded in the item's history and the run's digest
+(FLOW-09). Its steps of Branch setup through Guide that would be `cloud`
+carry that `host:<name>` instead; its design review stays `human`, and its
+Publish, Merge and Close stay `cloud`. A claim by a worker that serves the
+lead starts a queued led feature, and no other claim does.
+
+A worker takes only steps whose affinity it satisfies: a machine satisfies
+each host name the table lists for it, and a `host:<name>` step goes to
+whichever such worker next takes steps. A step is offered when
 every step it needs is done and, unless it is `human`, its feature has reached
 the step's phase; no worker may claim or complete a host or cloud step of a
 later phase. A step is claimed with a
 lease (claimant plus expiry) recorded on the `workflow` branch, and only
-when FLOW-05's limits allow the claim, whoever the worker is. When the
+when FLOW-05's limits allow the claim, whoever the worker is. A claim
+names the worker's kind and session, and a machine's session names the
+machine. When the
 push of a claim is rejected because the branch moved, the claim is asked
 again on the new state: it stands if the step may still be claimed
-there, and otherwise it is lost and the worker re-reads state. An
-expired lease may be reclaimed.
+there, and otherwise it is lost and the worker re-reads state. A
+machine's lease lasts 20 hours, or what the human sets in `config.yaml`;
+its session renews it while it is actively working on the step, and a
+renewal counts nothing against the item's budget. A `cloud` or `human`
+lease lasts what the human sets, 120 minutes when he sets none. When a
+machine's scheduled session ends, the machine releases every lease that
+session still holds, and a machine releases at its next run any lease an
+earlier scheduled session of it left; an attended session releases its
+leases at its close, and a lease it leaves runs to its expiry. An expired
+lease may be reclaimed.
 
 ---
 
@@ -254,10 +274,10 @@ rules to settle; a step it already claimed stays claimed, and finishing the
 process item releases the hold. A hold names workers and covers work in
 every repository. Otherwise a worker takes the next ready step
 of the first item in that order, and keeps taking that item's steps until it
-blocks: on a `human` or `host:<name>` step, an exhausted budget, a limit
-below, or the human's merge (FLOW-08). Only then does it take steps from the
-next item down, and it returns to the earlier item as soon as that one has a
-ready step again.
+blocks: on a step whose affinity it does not satisfy (FLOW-04), an
+exhausted budget, a limit below, or the human's merge (FLOW-08). Only then
+does it take steps from the next item down, and it returns to the earlier
+item as soon as that one has a ready step again.
 
 A worker starts a queued item only when every item ahead of it is
 blocked. Two items that change the same thing are likely to need an
@@ -448,10 +468,11 @@ Native sessions drain their host's steps and backlog in batches, testing `main` 
 every waiting branch in one sitting rather than one session per feature. Each
 native machine also runs a scheduled session that starts an agent only when a
 host step it serves is ready, or when `main` or a waiting branch has moved since
-its last sweep of open backlog entries; it is bound by the unattended loop's limits
-(FLOW-13) and records what it did in the digest. Every scheduled run, including
-one that stops before an agent starts, also records the machine's outcome and a
-one-line reason in `native/status/<machine>.yaml` on the `workflow` branch, so a
+its last sweep of open backlog entries, and never while the human has not
+confirmed the priority order; it starts from trunk, is bound by the
+unattended loop's limits (FLOW-13) and records what it did in the digest.
+Every scheduled run, including one that stops before an agent starts, also
+records the machine's outcome and a one-line reason in `native/status/<machine>.yaml` on the `workflow` branch, so a
 silent failure is still visible. A failure
 the feature's branch causes returns the feature to Design or Implement with the
 logs attached (FLOW-06). A regression `main` already has, found while the
@@ -467,8 +488,15 @@ repositories and areas of the item it follows (FLOW-02), for its design
 to confirm. The full matrix before a release (TEST-02) is the backstop for every
 tracked gap.
 
-Work whose design or implementation itself needs the native host (for example a
-platform or hypervisor update) carries `host:<name>` affinity on those phases too.
+A feature whose design or implementation itself needs a native host (for
+example a platform or hypervisor update, or a driver only that platform
+builds) is **led** by that host from its first step (FLOW-04): any worker
+may name the host name as the item's lead, at intake or later, and a
+machine that serves it takes the item's steps through Guide that would
+otherwise be `cloud` (FLOW-04). Its Publish runs on the cloud, and its
+native validation is blocking or tracked as its design says. A process
+item's native work is done in an attended native session or tracked as
+native gaps, as its design says; it is never led.
 
 ---
 
@@ -552,18 +580,26 @@ front-matter and are retrofitted when a new design first relies on them.
 **Severity:** SHOULD
 **Check:** automated
 
-The unattended loop runs once a day. Each run takes steps one at a time (read
-state, claim, work, write state) until no `cloud` step is ready or the run's
-budget is spent, and writes state after every step so an interrupted run loses at
-most the step in progress. All state it needs lives in the repository, never in a
-long-running conversation. A run spends its budget in FLOW-05 order, so the
-first item in FLOW-05's order can use all of it. A scheduled native session (FLOW-09)
-spends its own budget, `native_budget`, which falls back to the run's budget when
-unset, so native and integration testing never compete with the cloud loop. Each
+The unattended loop runs once a day in the cloud, and each native machine runs
+its scheduled session on its own schedule (FLOW-09). Each run takes steps one
+at a time (read state, claim, work, write state) until no step it may take is
+ready or the run's budget is spent, and writes state after every step so an
+interrupted run loses at most the step in progress. All state it needs lives in
+the repository, never in a long-running conversation. No unattended run takes a
+step while the human has not confirmed the priority order. A run spends its
+budget in FLOW-05 order, so the first item in FLOW-05's order can use all of it.
+The cloud run spends `run_budget`. A scheduled native session spends its own
+budget, `native_budget`, which falls back to `run_budget` when unset, so
+native and integration testing never compete with the cloud loop; a step it
+takes for an item a machine leads counts against it like any other. Each
 feature also has a work budget, which is a runaway check rather than a share of
 the run: an open (queued or in-progress) item that spends `runaway_factor` times
-its estimated steps escalates to a `human` step, and the unattended loop takes no
-more of its steps. Runs are counted but never trip it. The loop posts a periodic
+its estimated steps escalates to a `human` step, and no unattended run takes
+more of its steps, nor any step of an item with an open blocking question
+(FLOW-07). Every claim counts against the work budget, whichever worker makes
+it, except the first claim of a refresh (FLOW-10); renewing a lease does not
+(FLOW-04). Runs are counted but never trip it. The
+loop posts a periodic
 digest (what moved, what is blocked on a human, what is waiting on a native host,
 what open items spent), and notifies when a new blocking question appears. Done
 items are left out of the runaway check, of the digest's blocked and spent lines,
@@ -662,6 +698,12 @@ longer needs, with no PR and no human step:
   GitHub deletes the remote branch on merge (the repository's "Automatically
   delete head branches" setting); Close confirms it is gone, and escalates to a
   `human` step with the exact command if it is not;
+- on each native machine, the worktrees and local branch its sessions made for
+  the item: not by Close, which cannot reach them, but by the machine at its
+  next scheduled run once the item is done or its branch is gone from the
+  remote, with `git worktree remove` and `git branch -d` only, reporting a
+  worktree with uncommitted changes or a branch `-d` refuses instead of
+  removing it;
 - the branches it was stacked on, once they are merged too;
 - the leftovers of its validation: test images and containers, downloaded
   media, scratch output, and anything created outside the documented cache
@@ -706,7 +748,11 @@ the change touches). The pushed branch is the backup and the hand-off point.
 
 Opening the PR to `main` needs no confirmation either (FLOW-08). Pushing
 never includes `main` itself, a force-push, rewriting history that is already on
-the remote, or deleting a remote branch (FLOW-16).
+the remote, or deleting a remote branch (FLOW-16). An unattended session on a
+native machine pushes a feature branch only through the loop's push script
+on trunk, which pushes one branch of an item in progress, fast-forward only,
+and the queue state only through the loop's state commit; it runs no other
+push.
 
 ---
 
@@ -721,6 +767,9 @@ three uses: a daily run resumes the previous run's session instead of starting
 cold (`entire session resume`), the Review phase and the human's design review and
 merge read why a
 change was made alongside the diff, and past sessions become searchable memory.
+Every worker records its sessions this way, on whichever machine it runs. A
+native machine whose session cannot be recorded takes no step of an item it
+leads in that run, and its report says so.
 
 The recordings go only to the private `buildwarden/buildwarden-sessions`
 repository, named by the `checkpoint_remote` setting in `.entire/settings.json`.

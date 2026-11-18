@@ -8,6 +8,9 @@
 //	wf next     -state DIR -worker cloud [-feature F]
 //	wf claim    -state DIR -worker W -feature F -step S
 //	wf release  -state DIR -worker W -feature F -step S -why TEXT
+//	wf release  -state DIR -session MACHINE.RUN -why TEXT
+//	wf release  -state DIR -machine M -stale -current M.RUN -why TEXT
+//	wf renew    -state DIR -worker W -feature F -step S
 //	wf check    -state DIR -repo DIR -feature F [-run]
 //	wf done     -state DIR -repo DIR -worker W -feature F -step S [-run]
 //	wf answer   -state DIR -worker W -feature F -question Q -answer TEXT
@@ -16,14 +19,16 @@
 //	            -estimate-steps N -estimate-runs N [-source S] [-follows ITEM]
 //	            [-kind process -holds PATTERN,...] [-hold WHY]
 //	            [-repos OWNER/NAME,...] [-areas AREA,...] [-seams SEAM,...]
-//	            [-adopts CONSUMABLE@VERSION] [-urgent]
+//	            [-adopts CONSUMABLE@VERSION] [-urgent] [-lead host:NAME]
 //	wf move     -state DIR -worker human/NAME -feature F -to N [-why TEXT]
 //	wf urgent   -state DIR -worker human/NAME -feature F [-clear]
+//	wf lead     -state DIR -worker W -feature F (-host NAME | -clear)
 //	wf declare  -state DIR -repo DIR -worker W -feature F
 //	wf relate   -state DIR -worker human/NAME -feature A -with B [-clear]
 //	wf relations -state DIR [-feature F]
 //	wf stale    -state DIR -repo DIR -worker W
-//	wf commit   -state DIR -worker W -m MESSAGE [-claimed FEATURE/STEP] [PATH...]
+//	wf commit   -state DIR -worker W -m MESSAGE [-claimed FEATURE/STEP]
+//	            [-renewed FEATURE/STEP] [PATH...]
 //	wf main     -state DIR [-sha SHA -ci green|red|pending [-gates] [-run URL]]
 //	            [-followup ITEM] [-up-to-date required|not-required]
 //	wf digest   -state DIR
@@ -66,6 +71,24 @@
 // cannot read from its design; for an item homed here wf declare copies
 // them. new -adopts marks a reconciliation item, which FLOW-05 classes with
 // the fixes (LOOP-07).
+//
+// new -lead, and lead for an item already queued or in progress, name the
+// host name whose machines take a feature's cloud steps of Branch setup
+// through Guide (FLOW-04, FLOW-09). Any worker may set or clear a lead; lead
+// re-labels the item's pending template steps of phases 0 to 5 that no lease
+// holds and writes one history line, which the run's digest lists under
+// Moved. A process item and a tracked item are never led.
+//
+// claim leases a step for lease_minutes (120 when unset), or, for a host
+// worker host:<name>/<machine>.<run>, for host_lease_minutes (1200 when
+// unset). renew sets a lease the worker holds to now plus that length; it
+// counts nothing against the item's budget, and commit -renewed pushes it,
+// renewing again on the new state after a rejected push, never claiming
+// (FLOW-04). release -session releases every live lease of the session, as a
+// machine's wrapper does when its session ends and an attended session at its
+// Close; release -machine M -stale releases every live lease of a host worker
+// whose session is M.<run>, other than -current and any attended-<UTC> run,
+// as the wrapper does before the gate. Each release writes a history line.
 //
 // new -urgent, and urgent for an item already queued, mark a feature so that
 // the waiting limit does not refuse its start (FLOW-05). Only a human worker
@@ -215,7 +238,8 @@ import (
 )
 
 const usage = "usage: wf " +
-	"validate|status|next|claim|release|check|done|answer|back|new|move|urgent|declare|" +
+	"validate|status|next|claim|renew|release|check|done|answer|back|new|move|urgent|lead|" +
+	"declare|" +
 	"relate|relations|stale|commit|main|digest|areas|gate|budget|migrate|drops [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
@@ -224,6 +248,7 @@ var errIdle = errors.New("idle")
 type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
 	title, source, machine, stamp, kind, holds, follows, hold string
+	lead, host, session, current, renewed                     string
 	repos, areas, seams, adopts, with, message, claimed       string
 	rev, edges                                                string
 	urgent, clear, check, list                                bool
@@ -233,6 +258,7 @@ type opts struct {
 	base, head, mainReport, branchReport       string
 	priority, estSteps, estRuns, sweepDays, to int
 	run, record, native, md, all, held, done   bool
+	stale                                      bool
 	now                                        time.Time
 }
 
@@ -295,10 +321,19 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.BoolVar(&o.urgent, "urgent", false,
 		"new: mark the feature urgent, a human worker only (FLOW-05)")
 	fs.BoolVar(&o.clear, "clear", false,
-		"urgent: remove the mark; relate: remove the collision")
+		"urgent: remove the mark; relate: remove the collision; lead: remove the lead")
+	fs.StringVar(&o.lead, "lead", "", "new: host:<name>, the feature's lead (FLOW-04)")
+	fs.StringVar(&o.host, "host", "", "lead: the host name that leads the feature")
 	fs.StringVar(&o.message, "m", "", "commit: the commit message")
 	fs.StringVar(&o.claimed, "claimed", "",
 		"commit: FEATURE/STEP the change claims, asked again on a rejected push")
+	fs.StringVar(&o.renewed, "renewed", "",
+		"commit: FEATURE/STEP whose lease the change renews, renewed again if rejected")
+	fs.StringVar(&o.session, "session", "",
+		"release: release every live lease of this session, <machine>.<run>")
+	fs.BoolVar(&o.stale, "stale", false,
+		"release: with -machine, release the leases earlier sessions of it left")
+	fs.StringVar(&o.current, "current", "", "release -stale: the session to spare")
 	fs.StringVar(&o.with, "with", "", "relate: the item the feature collides with")
 	fs.IntVar(&o.priority, "priority", 0,
 		"new: the position asked for, 1 first, kept as nearly as the item's class allows")
@@ -336,12 +371,18 @@ func run(cmd string, args []string, now time.Time) error {
 	cmds := map[string]func(*queue.State, opts) error{
 		"validate": validate, "status": status, "next": next, "check": checkPhase,
 		"answer": answer, "back": back, "new": newFeature, "move": move, "urgent": urgent,
+		"lead": lead,
 		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
 		"declare": declareItem, "relate": relate, "relations": relations,
 		"digest": digest, "areas": areasCmd,
 	}
-	for _, c := range []string{"claim", "release", "done"} {
-		cmds[c] = func(s *queue.State, o opts) error { return stepCmd(c, s, o) }
+	for _, c := range []string{"claim", "release", "renew", "done"} {
+		cmds[c] = func(s *queue.State, o opts) error {
+			if c == "release" && (o.session != "" || o.stale) {
+				return releaseLeases(s, o)
+			}
+			return stepCmd(c, s, o)
+		}
 	}
 	f, ok := cmds[cmd]
 	if !ok {
@@ -354,7 +395,7 @@ func run(cmd string, args []string, now time.Time) error {
 // files, and on a rejected push replays the change or asks the claim again.
 func commitCmd(o opts, paths []string) error {
 	lines, err := queue.Commit(o.state, queue.CommitRequest{
-		Worker: o.worker, Message: o.message, Claimed: o.claimed,
+		Worker: o.worker, Message: o.message, Claimed: o.claimed, Renewed: o.renewed,
 		Paths: paths, Now: o.now,
 	})
 	for _, l := range lines {
@@ -454,6 +495,9 @@ func status(s *queue.State, o opts) error {
 		if f.Urgent != "" {
 			fmt.Printf("\t  urgent: %s\n", f.Urgent)
 		}
+		if f.Lead != "" {
+			fmt.Printf("\t  lead: %s\n", f.Lead)
+		}
 		for _, q := range f.Questions {
 			if q.Status == "open" {
 				fmt.Printf("\t  %s question %s: %s (recommended: %s)\n",
@@ -527,12 +571,46 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 		}
 	case "release":
 		s.Release(f, st, o.worker, o.now, o.why)
+	case "renew":
+		if err := s.Renew(f, st, o.worker, o.now); err != nil {
+			return err
+		}
 	case "done":
 		if err := finish(s, f, st, o); err != nil {
 			return err
 		}
 	}
 	return s.Save(f)
+}
+
+// releaseLeases is release -session and release -machine -stale: it releases
+// every live lease of the session, or those earlier sessions of the machine
+// left, saves each item it changed, and prints a line for each (FLOW-04).
+func releaseLeases(s *queue.State, o opts) error {
+	if o.why == "" {
+		return errors.New("release needs -why")
+	}
+	var rs []queue.Released
+	switch {
+	case o.stale && o.session == "" && o.machine != "" && o.current != "":
+		rs = s.ReleaseStale(o.machine, o.current, o.why, o.now)
+	case !o.stale && o.machine == "" && o.session != "":
+		rs = s.ReleaseSession(o.session, o.why, o.now)
+	default:
+		return errors.New("release takes -session MACHINE.RUN, or -machine M -stale " +
+			"-current M.RUN")
+	}
+	saved := map[*queue.Feature]bool{}
+	for _, r := range rs {
+		fmt.Printf("released\t%s\t%s\t%s\n", r.Feature.Feature, r.Step, r.ClaimedBy)
+		if !saved[r.Feature] {
+			saved[r.Feature] = true
+			if err := s.Save(r.Feature); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // finish is wf done: it completes the step once its done-when passes. A gate
@@ -641,7 +719,7 @@ func newFeature(s *queue.State, o opts) error {
 	}
 	f := &queue.Feature{
 		Feature: o.feature, Title: o.title, Priority: o.priority, Source: o.source,
-		Kind: kind, Holds: holds, Follows: o.follows,
+		Kind: kind, Holds: holds, Follows: o.follows, Lead: o.lead,
 		Design: "docs/design/" + o.feature + ".md", Branch: "feat/" + o.feature,
 		Budget: queue.Budget{Estimate: queue.Count{Runs: o.estRuns, Steps: o.estSteps}},
 	}
@@ -728,6 +806,9 @@ func accept(s *queue.State, f *queue.Feature, o opts) error {
 			return err
 		}
 	}
+	if f.Lead != "" && !s.Serves(f.Lead) {
+		return fmt.Errorf("-lead: no machine in hosts.yaml serves %s", f.Lead)
+	}
 	if len(f.Seams) > 0 && !s.Tracked(f) {
 		return fmt.Errorf("-seams is for a tracked item: wf declare copies the seams of "+
 			"%s, which is homed here, from its design (FLOW-02)", f.Feature)
@@ -759,6 +840,29 @@ func urgent(s *queue.State, o opts) error {
 		err = s.MarkUrgent(f, o.worker, o.now)
 	}
 	if err != nil {
+		return err
+	}
+	return s.Save(f)
+}
+
+// lead sets the feature's lead, or with -clear removes it, for any worker
+// (FLOW-04, FLOW-09).
+func lead(s *queue.State, o opts) error {
+	if o.worker == "" {
+		return errors.New("lead needs -worker")
+	}
+	if o.clear == (o.host != "") {
+		return errors.New("lead needs -host NAME or -clear")
+	}
+	f, err := s.Find(o.feature)
+	if err != nil {
+		return err
+	}
+	to := ""
+	if o.host != "" {
+		to = "host:" + strings.TrimPrefix(o.host, "host:")
+	}
+	if err := s.SetLead(f, o.worker, to, o.now); err != nil {
 		return err
 	}
 	return s.Save(f)

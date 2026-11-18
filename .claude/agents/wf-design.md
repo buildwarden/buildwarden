@@ -86,3 +86,8 @@ Commit on the feature branch. Return: what you wrote, the questions raised, the
 `design_review` decision with its reason, and which phase-1 done-when items you
 expect `wf done` to find met. Do not mark the step done yourself; the tick runs
 the check (FLOW-03).
+
+On a native machine (a led step, FLOW-04), the branch is pushed only with
+`tools/workflow/native/native-push.sh <name>` and committed with `git -C
+.scratch/<name> commit -F ../<name>.msg`, the message written to
+`.scratch/<name>.msg` first, never `-m` (FLOW-17).

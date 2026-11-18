@@ -25,12 +25,12 @@ None.
 
 ## Active
 
-| Pri | Item | Kind | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
-|---|---|---|---|---|---|---|---|---|---|
-| 70 | relay-host-mode | feature | buildwarden/buildwarden | relay, book | 7 merge | f7-merge (cloud), f6-refresh (cloud) | a refresh, then your merge | [#131](https://github.com/buildwarden/buildwarden/pull/131) behind `main` | 16 / 18 |
-| 71 | driver-claim-conn | feature | buildwarden/buildwarden | driver-core, rules | 6 publish | f6-merge-main (cloud) | the PR slot, held by relay-host-mode (near: driver-core reaches relay) (FLOW-05) | - | 20 / 25 |
-| 72 | adopt-relay-qemu | adoption (buildwarden-relay v0.3.0) | buildwarden/buildwarden | driver/qemu, book | 2 plan | f2-design-review (human) | - | - | 3 / 12 |
-| 74 | relay-m1a | tracked | buildwarden/buildwarden-relay | - | 2 merge | t2-merge (human) | your merge | buildwarden/buildwarden-relay#12 | 2 / 2 |
+| Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 70 | relay-host-mode | feature | - | buildwarden/buildwarden | relay, book | 7 merge | f7-merge (cloud), f6-refresh (cloud) | a refresh, then your merge | [#131](https://github.com/buildwarden/buildwarden/pull/131) behind `main` | 16 / 18 |
+| 71 | driver-claim-conn | feature | - | buildwarden/buildwarden | driver-core, rules | 6 publish | f6-merge-main (cloud) | the PR slot, held by relay-host-mode (near: driver-core reaches relay) (FLOW-05) | - | 20 / 25 |
+| 72 | adopt-relay-qemu | adoption (buildwarden-relay v0.3.0) | - | buildwarden/buildwarden | driver/qemu, book | 2 plan | f2-design-review (human) | - | - | 3 / 12 |
+| 74 | relay-m1a | tracked | - | buildwarden/buildwarden-relay | - | 2 merge | t2-merge (human) | your merge | buildwarden/buildwarden-relay#12 | 2 / 2 |
 
 ## Relations
 

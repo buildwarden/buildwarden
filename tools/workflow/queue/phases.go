@@ -401,7 +401,8 @@ func Landed(f *Feature, by string, now time.Time) {
 // needs every pending step already added to the phase, and each added host
 // step needs what the gate needs (consolidate), so validation runs on the
 // branch the PR opens on (FLOW-03, FLOW-09). A step added after seeding is
-// not linked.
+// not linked. A led feature's cloud template steps of phases 0 to 5 get its
+// lead (FLOW-04).
 func Seed(f *Feature) {
 	ts := templates[f.Round]
 	if f.Phase >= len(ts) || len(ts[f.Phase]) == 0 {
@@ -425,7 +426,7 @@ func Seed(f *Feature) {
 			continue
 		}
 		st := Step{ID: StepID(f.Round, f.Phase, t.name) + suffix, Phase: f.Phase,
-			Affinity: t.affinity, Status: "pending"}
+			Affinity: f.leads(f.Phase, t.affinity), Status: "pending"}
 		for _, n := range t.needs {
 			if in[n] {
 				st.Needs = append(st.Needs, StepID(f.Round, f.Phase, n)+suffix)
