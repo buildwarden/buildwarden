@@ -127,15 +127,15 @@ steps:
     needs:
       - f1-answer-q2
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261118T105745Z
+      expires: 2026-11-18T14:34:45.56379639Z
 budget:
   estimate:
     runs: 5
     steps: 30
   spent:
-    runs: 2
-    steps: 9
+    runs: 3
+    steps: 10
 questions:
   - id: a16
     kind: assumed
@@ -620,4 +620,7 @@ history:
     event: 'priority 73 -> 74 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 74 -> 9 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'
+    event: priority 74 -> 9 (renumbered to the item's 1-indexed queue position (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-18T12:34:45Z
+    by: cloud/20261118T105745Z
+    event: claimed f1-design-r3 until 2026-11-18T14:34:45Z

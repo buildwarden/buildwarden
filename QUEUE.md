@@ -50,7 +50,7 @@ None.
 | 6 | detached-prepare-windows-exe | fix (follows project-config-trust) | buildwarden/buildwarden | driver-core, driver/hyperv, driver/qemu, book, designs | 2 plan | f2-design-review-r2 (human) | - | - | 6 / 7 |
 | 7 | prebuilt-artifacts | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 8 | workdir-in-context | feature | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
-| 9 | driver-contract | feature | buildwarden/buildwarden | undeclared | 1 design | f1-design-r3 (cloud) | - | - | 9 / 30 |
+| 9 | driver-contract | feature | buildwarden/buildwarden | undeclared | 1 design | f1-design-r3 (cloud, leased to cloud/20261118T105745Z) | - | - | 10 / 30 |
 | 10 | relay-collector-failure-fails-open | feature | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 9 |
 
 ## Relations
