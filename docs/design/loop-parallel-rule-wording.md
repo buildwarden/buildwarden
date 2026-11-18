@@ -1,6 +1,6 @@
 ---
 feature: loop-parallel-rule-wording
-status: draft
+status: archived
 drivers: []              # the loop's rules and two printed strings in wf (queue/relation.go, check/declared.go); no driver tree is reached
 seams: []                # no GLOBAL-08 seam changes
 surfaces: []             # `wf` is the loop's tool, not a user-facing surface of the product
@@ -893,4 +893,90 @@ None.
 
 ## Archive summary
 
-(Filled in at Implement, before the PR opens: FLOW-12.)
+Implemented on 2026-11-18 as a process item (`x2-implement`), after design
+review r1 approved the design and its four rule changes at `d0b4d46` on
+2026-11-17 (Jeff; FLOW-02, FLOW-03 and FLOW-05 each with a change, FLOW-16
+as drafted; a1 to a12 as recommended, a12 then changed to fold in by the r1
+addendum). `main` was still at the fork point (`0cd3c02`) when the PR was
+opened, so there was nothing to merge. The code was kept as `loop-parallel`
+built it, and the rules now say what it does (Decision 1).
+
+- **Rule text** (`docs/development/process.md`), word for word as
+  approved. FLOW-02's `areas` bullet: leaving the key out is undeclared,
+  as FLOW-05 defines it; `areas: []` declares that the change edits
+  nothing but its own design, though an item whose home repository has no
+  map is undeclared whatever it declares; its last paragraph gives the
+  diff check's range as "from Implement through Publish and at each
+  refresh of a feature". FLOW-03's paragraph after the phase table: the
+  comparison runs from Plan through Publish and at each refresh of a
+  feature, the diff check from Implement through Publish and at each
+  refresh; the merge confirmation and Close run neither; a feature's
+  refresh runs both, at Merge too, a process item's neither; an item with
+  no recorded declaration is not compared and its diff check reads the
+  queue's areas. FLOW-05's **How two items relate** defines *undeclared*
+  by `wf`'s three cases (key absent, a home with no map, an area the map
+  lacks until it has it), says a declared item's `[]` changes only its
+  design, and its **colliding** bullet reads "either is undeclared"; the
+  opening paragraph (lines 27-35) describes the PR slot by relation, with
+  disjoint PRs open together and merging one at a time while each branch
+  contains `main`, and the refresh repeating the consolidation pass.
+  FLOW-16 names the merge-tree proof `wf` runs: a one-parent commit C on
+  trunk naming the PR whose tree is what
+  `git merge-tree --write-tree --merge-base=B C^ <head>` writes, B the
+  single merge base; "the equal tree or that merge".
+- **`wf`'s strings.** Relation row 5's reason is `<item> is undeclared`
+  (`queue/relation.go`, its `Undeclared` comment reworded), with
+  `relation_test.go`, `limits_test.go`, the `queue-today.md` and
+  `queue-later.md` golden files and `cmd/wf/declare_test.go` updated.
+  Design's done-when for a design without the key prints "undeclared: the
+  design leaves areas out, ..." (`check/declared.go`). No decision `wf`
+  makes changed.
+- **Template.** `docs/design/TEMPLATE.md`'s `areas` comment adds "`[]`: the
+  change edits nothing but its own design" (a9).
+- **Stale clauses removed** (a12, the r1 addendum). The clause that `wf
+  areas -list` and `-check` "exit 1 while the queue state has no
+  `areas.yaml`, which is expected until `loop-parallel`'s `x4-state` writes
+  it" is gone from `.claude/agents/wf-review.md` and the `workflow-intake`,
+  `workflow-tick` and `workflow-human` skills; nothing else in them
+  changed. `skill-areas-yaml-lines` was closed as merged into this item.
+- **One deviation from the approved front matter.** `rule_changes` for
+  FLOW-05 lists only `docs/development/process.md` (`08e7971`), because
+  tier 1's front-matter check refuses paths under `tools/workflow/`, as in
+  archived `loop-parallel` and `queue-positions`; the enforcement files
+  stay named in **Rule changes**. The wording is unchanged.
+- **Text checks.** The Validation plan's four `grep` checks find nothing,
+  and each of the six proposed blocks appears in the changed files byte
+  for byte.
+- **Decisions taken.** The rules move to the code (1, a1); *undeclared* is
+  defined once in FLOW-05 with all three cases (2, a2); `[]` is a
+  declaration of design-only change for a declared item (3, a3); row 5's
+  reason and the Design text use the term (4, a4); FLOW-02 and FLOW-03
+  give the checks' ranges as the code runs them, with the exemption before
+  `wf declare` named (5, a5, a6); the opening paragraph is part of
+  FLOW-05's change, in full (6, a7); FLOW-16 names the command and the
+  single merge base, not the merge-driver override (7, a8); no neutral
+  rewording (8, a10); no holds (9, a11).
+- **Rejected.** Making `wf` match the old wording (`[]` undeclared, the
+  checks at Merge and Close, the patch-id proof back); defining
+  undeclared by the absent key alone; refusing `areas: []` in
+  `wf declare`; a reason per cause of undeclared; leaving the reason or
+  `declared.go` as they were; listing the opening paragraph under FLOW-10,
+  or the smallest edit to it; naming the override in FLOW-16, or no
+  command; closing the pre-`wf declare` exemption here; making the four
+  rules neutral here; filing the stale clauses separately.
+- **For future designs touching `areas`, `undeclared`, `declared-empty`,
+  `relations`, `pr-slot`, `done-when`, `wf-declare`, `merge-tree-proof`
+  or `squash-merge`:** FLOW-02, -03, -05 and -16 now describe `wf` as
+  built, so a change to either side changes both. `areas: []` is a
+  declaration only where the home repository has a map. The sentence on
+  items with no recorded declaration describes `prebuilt-artifacts` today
+  and nothing once every open item has `declared`; a later item may
+  retire it with `declaredStill`'s branch (a6 (b): a human `wf declare`
+  on `prebuilt-artifacts` closes it without a rule change).
+  `loop-native-lead` also amends FLOW-16 and quotes this wording if this
+  merges first; otherwise whichever merges second re-quotes the other at
+  its refresh (a11). The four rules keep their this-repository names until
+  the neutral-rewording item after P1 (a10).
+- **After the merge.** The next `wf` build on the workflow branch
+  regenerates `QUEUE.md` with `is undeclared` in its relations table; no
+  attended step is needed.
