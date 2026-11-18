@@ -4,15 +4,15 @@ priority: 3
 kind: process
 status: in_progress
 round: process
-phase: 3
+phase: 4
 design: docs/design/loop-streamline-2.md
 branch: feat/loop-streamline-2
 alters_relationships: null
 source: 'Filed on Jeff''s word, 2026-11-17, from the out-of-band streamlining assessment of that day (108 questions in one sitting, ~90 required by FLOW-07/FLOW-19 and workflow-human SKILL.md:92; ~83-86% of assumed questions historically accepted as recommended, the overrides substantive; process items otherwise cheap: 23 of 25 done ones spent 3 counted steps). One item bundling the review-grain proposals: (1) an ''all as recommended / name exceptions'' answer for assumed questions, individual asks kept for flagged ones (FLOW-07, FLOW-19 process.md:733, workflow-human SKILL.md:92); (2) as an option for Jeff, since it reverses his 2026-11-04 rule (design-approved-rule-changes.md), approving a design''s rule changes as one batch with a veto; (3) a sitting load cap (one large design, ~30 asks; SKILL.md:50); (4) a same-sitting intake-plus-review lane for trivial process changes that keeps LOOP-09''s review; (5) a process row in the intake size guide (4 steps / 1 run, +1 per state step) and honest x1-design accounting plus the bookkeeping fixes (0-run spends, shared timestamps). Merge confirmation in the observing human session (keeping its done-when check) and a shipped wf state migration in place of hand-added x4-state ride along only if the design finds them small; otherwise they are filed separately. Prior art: docs/design/workflow-streamline.md, design-approved-rule-changes.md, flow19-design-before-plan.md, human-review-shows-design.md. The assessment: artifact ''Loop streamlining assessment'' of 2026-11-17.'
 pr:
   number: 127
-  ci: pending
-  head: 7f14792548e4ae7880991f9e05154618f8285302
+  ci: green
+  head: e422bd50e43a9a1efffb101d00c80857b5a79641
 steps:
   - id: x1-design
     phase: 1
@@ -39,18 +39,19 @@ steps:
   - id: x3-merge
     phase: 3
     affinity: cloud
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
-  - id: x2-refresh
-    phase: 2
+  - id: x4-close
+    phase: 4
     affinity: cloud
     status: pending
+    needs:
+      - x4-state
     lease:
-      claimed_by: cloud/20261118T182148Z
-      expires: 2026-11-18T20:22:55.154283542Z
-    note: 'main at a094f4d: 1 commit since the branch merged it; both change .claude/skills/workflow-human/SKILL.md, .claude/skills/workflow-intake/SKILL.md, docs/development/process.md, tools/workflow/cmd/wf/commit_test.go, tools/workflow/cmd/wf/main.go, tools/workflow/cmd/wf/main_test.go, tools/workflow/queue/commit.go, tools/workflow/queue/process_test.go, tools/workflow/queue/queue_test.go'
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -93,3 +94,12 @@ history:
   - at: 2026-11-18T18:22:55Z
     by: cloud/20261118T182148Z
     event: claimed x2-refresh until 2026-11-18T20:22:55Z
+  - at: 2026-11-18T18:39:40Z
+    by: cloud/20261118T182148Z
+    event: done x3-merge
+  - at: 2026-11-18T18:39:40Z
+    by: cloud/20261118T182148Z
+    event: 'dropped x2-refresh: the PR merged first (FLOW-10)'
+  - at: 2026-11-18T18:39:40Z
+    by: cloud/20261118T182148Z
+    event: entered phase 4 (close)
