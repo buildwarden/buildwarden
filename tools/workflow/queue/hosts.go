@@ -211,8 +211,14 @@ type GateStamp struct {
 // Gate decides whether machine m has native work: a ready step for one of its
 // hosts, or open backlog gaps on its hosts when main or a waiting branch has
 // moved since the last session (stamp), or when sweepDays have passed since it.
+// While the human has not confirmed the priority order it is idle, with that
+// reason, as the cloud is (FLOW-13).
 func (s *State) Gate(m *Machine, repo string, last *GateStamp, sweepDays int,
 	now time.Time) (*Gate, error) {
+	if !s.Config.PriorityConfirmed {
+		return &Gate{Reasons: []string{
+			"idle\tthe priority order is not confirmed (FLOW-13)"}}, nil
+	}
 	g := &Gate{}
 	for _, h := range m.Hosts {
 		if p, _ := s.Next("host:"+h+"/gate", now); p != nil {

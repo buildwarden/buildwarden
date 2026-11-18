@@ -107,7 +107,7 @@ func renewalRefused(t *testing.T) {
 // -machine -stale frees an earlier scheduled session's, sparing the current
 // run and an attended session, and the gate then offers the step (FLOW-04).
 func TestReleaseCommands(t *testing.T) {
-	dir := stateDir(t, "")
+	dir := stateDir(t, "priority_confirmed: true\n")
 	write(t, dir, "hosts.yaml", "machines:\n  - name: macbook\n    hosts: [macos-vz]\n")
 	for i, name := range []string{"old", "cur", "att"} {
 		queued(t, dir, name, string(rune('1'+i)))
@@ -143,5 +143,51 @@ func TestReleaseCommands(t *testing.T) {
 	}
 	if st, _ := item(t, dir, "cur").Step("f0-branch-setup"); st.Lease.ClaimedBy == "" {
 		t.Fatal("the current run's lease was released")
+	}
+}
+
+// openQuestion gives the item an open blocking question q1.
+func openQuestion(f *queue.Feature) {
+	f.Questions = append(f.Questions, queue.Question{ID: "q1", Kind: "blocking",
+		Status: "open", Question: "Which?", Options: []string{"a"}, Recommended: "a"})
+}
+
+// TestHostClaimAskedAgain: a machine's claim whose push is rejected because
+// another session pushed an open blocking question, or spent the item's
+// runaway budget, is refused on the new state (exit 4) with the reason; a
+// human's claim in the same situation is claimed again (FLOW-07, FLOW-13).
+func TestHostClaimAskedAgain(t *testing.T) {
+	spent := func(f *queue.Feature) { f.Budget.Spent.Steps = 18 }
+	for _, c := range []hostClaim{
+		{machineWorker, "host:macos-vz", "blocking question q1", openQuestion},
+		{machineWorker, "host:macos-vz", "runaway budget", spent},
+		{"human/jeff", "human", "", openQuestion},
+	} {
+		t.Run(c.worker+" "+c.want, c.run)
+	}
+}
+
+// hostClaim is a claim by worker of a step of affinity, rejected because
+// another session pushed win; want is the refusal, "" when it stands.
+type hostClaim struct {
+	worker, affinity, want string
+	win                    func(*queue.Feature)
+}
+
+func (c hostClaim) run(t *testing.T) {
+	a, b := stateRepos(t, "", "x")
+	edit(t, a, "x", func(f *queue.Feature) { f.Steps[0].Affinity = c.affinity })
+	pushed(t, a, "human/jeff", "x: affinity", "queue/x.yaml")
+	gitT(t, b, "pull", "-q", "origin", "workflow")
+	edit(t, b, "x", c.win)
+	pushed(t, b, "human/jeff", "x: win", "queue/x.yaml")
+	claimStep(t, a, c.worker, "x", "f0-branch-setup")
+	out, code := commit(t, a, c.worker, "x: claim", "-claimed", "x/f0-branch-setup")
+	switch {
+	case c.want == "" && (code != 0 || !strings.Contains(out, "claimed again")):
+		t.Fatalf("exit %d, want the claim asked again:\n%s", code, out)
+	case c.want != "" && (code != 4 || !strings.Contains(out,
+		"the claim of x/f0-branch-setup is refused on the new state: "+c.want)):
+		t.Fatalf("exit %d, want 4 with %q:\n%s", code, c.want, out)
 	}
 }

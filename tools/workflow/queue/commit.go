@@ -346,7 +346,7 @@ func porcelainPaths(ls []string) []string {
 }
 
 // claimAgain asks the claim again on the remote's state, through what wf claim
-// checks and, for a cloud worker, the refusals wf next adds, and claims the
+// checks and, for any worker but human, the refusals wf next adds, and claims the
 // step once more when nothing refuses it. The first claim's commit is gone,
 // so the step is counted once.
 func (g stateGit) claimAgain(r CommitRequest, c *claimRef) ([]string, error) {
@@ -369,8 +369,8 @@ func (g stateGit) claimAgain(r CommitRequest, c *claimRef) ([]string, error) {
 	if err := s.MayClaim(f, st, r.Worker, r.Now); err != nil {
 		return nil, refuse(err.Error())
 	}
-	if Kind(r.Worker) == "cloud" {
-		if why, _ := s.cloudHold(f, st); why != "" {
+	if Kind(r.Worker) != "human" {
+		if why, _ := s.unattendedHold(f, st); why != "" {
 			return nil, refuse(why)
 		}
 	}

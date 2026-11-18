@@ -182,7 +182,7 @@ func (s *State) Guard(f *Feature, st *Step, worker string) string {
 // refusal is why a step is not offered: Guard's reason, and whether it is the
 // waiting limit's, which wf next reports for a queued item where it passes
 // over the in-progress limit's in silence; or, with red set, that the step is
-// a refresh and main is recorded red (cloudHold).
+// a refresh and main is recorded red (unattendedHold).
 type refusal struct {
 	why     string
 	waiting bool

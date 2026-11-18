@@ -228,8 +228,8 @@ func (s *State) wait(f *Feature, st *Step, worker string, now time.Time) (string
 	case st.Lease.Held(now) && st.Lease.ClaimedBy != worker:
 		return fmt.Sprintf("step %s leased to %s", st.ID, st.Lease.ClaimedBy), refusal{}
 	}
-	if Kind(worker) == "cloud" {
-		if why, red := s.cloudHold(f, st); why != "" {
+	if Kind(worker) != "human" {
+		if why, red := s.unattendedHold(f, st); why != "" {
 			return why, refusal{red: red}
 		}
 	}
@@ -245,11 +245,12 @@ func mergeWait(f *Feature) string {
 	return "the human's merge (no PR recorded, FLOW-08)"
 }
 
-// cloudHold returns why the unattended loop must not take the item's step
-// yet: an open blocking question (FLOW-07), a spent runaway budget (FLOW-13),
-// or, for a refresh step, a main that main.yaml records red (FLOW-10), which
-// red reports. These are the cloud's alone and are not limits; the limits are
-// Guard's, for every worker.
+// unattendedHold returns why an unattended worker, any but a human, must not
+// take the item's step yet: an open blocking question (FLOW-07), a spent
+// runaway budget (FLOW-13), or, for a refresh step, a main that main.yaml
+// records red (FLOW-10), which red reports; a refresh is cloud, so only the
+// cloud meets the last. These are not limits; the limits are Guard's, for
+// every worker.
 //
 // A refresh onto a red main fails on main's failure and is released, and a
 // released step is the first one wf next offers again, ahead of the fix: so
@@ -257,7 +258,7 @@ func mergeWait(f *Feature) string {
 // result is not red. The refresh of the item main.yaml names as the fix is
 // exempt: its PR, too, must contain main before it can merge, and it is the
 // PR that makes main green.
-func (s *State) cloudHold(f *Feature, st *Step) (why string, red bool) {
+func (s *State) unattendedHold(f *Feature, st *Step) (why string, red bool) {
 	if q := f.OpenBlocking(); len(q) > 0 {
 		return fmt.Sprintf("blocking question %s", q[0].ID), false
 	}

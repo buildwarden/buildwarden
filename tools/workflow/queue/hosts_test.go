@@ -36,8 +36,11 @@ func gitRepo(t *testing.T) (string, func()) {
 	}
 }
 
+// nativeState is a state with two machines whose priority order is
+// confirmed, so the gate decides on the work.
 func nativeState(fs ...*Feature) *State {
 	s := state(fs...)
+	s.Config.PriorityConfirmed = true
 	s.Machines = []Machine{
 		{Name: "mac", Hosts: []string{"macos-vz", "macos-qemu"}},
 		{Name: "win", Hosts: []string{"windows-hyperv", "qemu-any"}},
@@ -269,6 +272,23 @@ func TestValidateMachineStatus(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("Validate = %q, want %q", got, want)
 		}
+	}
+}
+
+// TestGatePriorityUnconfirmed: while the human has not confirmed the
+// priority order the gate is idle with that reason, whatever is ready
+// (FLOW-13).
+func TestGatePriorityUnconfirmed(t *testing.T) {
+	repo, _ := gitRepo(t)
+	a := feature("a", 1, "in_progress")
+	a.Steps[0].Affinity = "host:macos-vz"
+	s := nativeState(a)
+	s.Config.PriorityConfirmed = false
+	mac, _ := s.Machine("mac")
+	g, err := s.Gate(mac, repo, nil, 7, now)
+	if err != nil || g.Run || len(g.Reasons) != 1 ||
+		g.Reasons[0] != "idle\tthe priority order is not confirmed (FLOW-13)" {
+		t.Fatalf("gate = %+v, %v; want idle on the unconfirmed order", g, err)
 	}
 }
 
