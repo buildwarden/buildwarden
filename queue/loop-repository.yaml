@@ -32,15 +32,15 @@ steps:
     needs:
       - x2-predecessors-merged
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261119T105705Z
+      expires: 2026-11-19T12:58:23.066491604Z
 budget:
   estimate:
     runs: 3
     steps: 10
   spent:
-    runs: 0
-    steps: 2
+    runs: 1
+    steps: 3
 questions: []
 history:
   - at: 2026-11-12T23:22:53Z
@@ -94,3 +94,6 @@ history:
   - at: 2026-11-18T19:50:52Z
     by: human/jeff
     event: 'x2-predecessors-merged: loop-native-lead (#129, e9315c2) and loop-parallel-rule-wording (#128, 89c0fdc) merged; all eight overlapping paragraphs on main at e9315c2 equal the approved text the design quotes (whitespace-normalized), and no other merged item touches them; no delta review needed (FLOW-19)'
+  - at: 2026-11-19T10:58:23Z
+    by: cloud/20261119T105705Z
+    event: claimed x2-implement until 2026-11-19T12:58:23Z
