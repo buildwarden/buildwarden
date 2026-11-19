@@ -1,0 +1,67 @@
+{
+  "feature": "detached-prepare-windows-exe",
+  "branch": "feat/detached-prepare-windows-exe",
+  "head": "cc6a52a1a086",
+  "base": "e9315c2e7b1d",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": null,
+  "scope": "git diff origin/main...feat/detached-prepare-windows-exe: 10 files, +974/-26, 15 commits (design r1/r2, merge of origin/main e9315c2, plan r2, tasks 1-10). The merge base is e9315c2, which is origin/main. First tier-2 pass for this feature. Judged against the design as approved at 0c1cad5 (r2; a1-a5 confirmed (a)) and the plan's 11 tasks with Notes A-C.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": "Headers extracted from docs/development/*.md (LINT-01): 100 rules, 44 agent-judgment, no hybrid. The branch changes no rule (rule_changes: []). Reached by the diff: GLOBAL-01, -06, -07, -09, -10, -11, ORCH-01, -04, -05, UX-01, -04, TEST-01, -02, -04, -08, SEC-01, FLOW-06, FLOW-15, FLOW-17. Not reached: BOOT, EXEC, RELAY (no relay, claim or relay setting change), LOOP and the other process rules beyond FLOW-06/15/17.",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass (linux, $HOME/go/bin golangci-lint 2.15.0 built with go1.26.10): 0 issues in the root module, tools/workflow and tools/tier1; dist/tier1 -base origin/main (e9315c2e7b1d...cc6a52a1a086): 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed",
+    "make_lint_per_platform": "GOOS=windows make lint: pass, same tier-1 result (plan task 10; driver/hyperv builds its real driver only there, detach_windows.go compiled). GOOS=windows go test -c of ./driver/, ./driver/hyperv/, ./driver/qemu/ and GOOS=darwin go test -c ./driver/: build",
+    "make_test": "pass: exit 0, no FAIL. Uncached with -race -count=1: TestDetachedArgs, TestStartDetachedRunsNamedFile, TestStartDetachedFailedStart (driver), TestEnsureFreshBaseReportsFailedStart, TestEnsureFreshBaseStartsRefresh (driver/hyperv), TestEnsureFreshWindowsLayerReports/{start_fails,lock_fails,starts} (driver/qemu) pass",
+    "make_enforcement": "not run: the branch changes neither tools/tier1/ nor tools/workflow/check/ (FLOW-14); rules.yaml and .golangci.yml untouched",
+    "make_deadcode": "exit 0; no entry in a file the diff touches",
+    "wf_check": "dist/wf check -feature detached-prepare-windows-exe -state .dev/workflow -repo .: ok checkout is the clean branch head (cc6a52a); ok rule changes cleared (FLOW-14): the branch changes no rule or its enforcement; ok queue records what the design declares (FLOW-03): as declared at 0c1cad5; ok diff inside the declared areas (FLOW-03): every changed path is in [driver-core driver/hyperv driver/qemu book designs]. FAIL make lint / make test: skipped (no -run), run above and green. FAIL tier-2 report .md/.json: missing before this report. 'wf: phase 4 done-when not met' on those lines only",
+    "trial_merge_flow10": "no trial-merge line printed: origin/main e9315c2 is the merge base and an ancestor of the branch head (merged in by plan r2), so the merge is a no-op",
+    "area_edges": "tools/tier1/area-edges.sh | dist/wf areas -state .dev/workflow -check -rev HEAD -edges -: 'no difference from HEAD at cc6a52a' (exit 0)",
+    "merge_base_wf_check": "not built separately: the branch changes neither tools/tier1/ nor tools/workflow/check/",
+    "integration_test": "not run here; the PR's integration workflow runs because the diff reaches the driver/ root (plan task 10)",
+    "fixes_made": "none; the code checkout is still clean at cc6a52a"
+  },
+  "rule_changes_flow14": [],
+  "findings": [
+    {
+      "id": "F1",
+      "rule": "GLOBAL-06",
+      "severity": "MUST-review",
+      "file": "driver/detach.go:53",
+      "lines": "driver/detach.go:23-62 (StartDetached, startDetached); driver/hyperv/freshness.go:23-47 (ensureFreshBase); driver/qemu/driver.go:344-379 (ensureFreshWindowsLayer, reportRefreshNotStarted)",
+      "what": "The change alters which executable warden runs on the host to produce the prepared base or layer that every later build environment boots (security_boundary: host-env). os/exec's Windows PATHEXT lookup, which ran <exe>.exe or another extension beside an extension-less dist/warden in its place, is replaced by os.StartProcess of exactly os.Executable(). This is a security-boundary change by GLOBAL-06's definition. The design carries the Security note the rule asks for (posture before and after, SEC-01 cell, TEST-08 case), reviewed at r1 and r2; the TEST-08 unit form is TestStartDetachedRunsNamedFile and its native form is the blocking windows-hyperv step's case 3.",
+      "fix": "Nothing to change in the code. The human acknowledges at merge with the Security note in the PR body; the blocking f6-validate-windows-hyperv step (cases 1 and 3) is the evidence on the only OS where the fault exists."
+    }
+  ],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 1,
+    "SHOULD": 0
+  },
+  "resolved_since_previous": [],
+  "carried_forward": [],
+  "new_since_previous": [
+    "F1"
+  ],
+  "suppressions": [],
+  "suppressions_note": "None: no previous report for this feature, no Tier1-Allow trailers on the branch.",
+  "back_to_design": false,
+  "back_to_design_note": "The diff is the design as approved at 0c1cad5: StartDetached runs os.StartProcess(exe, [exe]+args) with {null, log, log}, os.Environ() and detachedAttr(), releases it, and on a failed start writes '[warden] could not start <exe>: <err>' to the open log and returns the error; os/exec is dropped from detach.go; detachedArgs, detachedAttr, ConfigFile and TestDetachedArgs are unchanged; ensureFreshBase and ensureFreshWindowsLayer print the Note C line on progress on a failed start (qemu also on a TryHostLock error, a held lock still silent) and return nil; the success lines are unchanged; ensureFreshWindowsLayer takes progress and resolveWindowsBaseImage passes os.Stderr (Note B); the seams are unexported package variables (Note A). No path outside the declared areas.",
+  "routing": "No MUST for wf-implement. F1 (MUST-review) goes to the PR body for the human's acknowledgement at merge (FLOW-08).",
+  "follow_ups_filed": [],
+  "follow_ups_note": "No behaviour on main found that this diff does not cause and that needs filing. The qemu end-to-end gap is already tracked (detached-prepare-windows-exe-qemu).",
+  "informational": [
+    "GLOBAL-09/10/11: no default, merge or fallback is added beyond those the Defaults and overrides section lists. The null device as stdin and the inherited environment are what exec.Cmd did with nil Stdin and nil Env, so the child's start conditions are unchanged; Decision 1 names both. 'The build goes on' after a failed start is named there as not a fallback (both outcomes continue on the current base, nothing runs in place of the start). The PATHEXT lookup, an unnamed fallback, is removed.",
+    "UX-04: both new lines say what failed, the error, and the exact command that refreshes by hand (prepareFix constant for hyperv, prepareFix(ga) for qemu, so neither command is spelled twice). It is a warning on a build that continues, not a returned error, so no FixableError is called for; the min-grace refusal stays the stop.",
+    "Hyperv lock errors: prepareRunning (unchanged) treats a TryHostLock error as 'not running' and goes on to start the prepare, so hyperv never dropped a lock error silently the way qemu did; the asymmetry the design handles (qemu only) is the right one. No finding.",
+    "Task 7 (no other self-exec through os/exec): os.Executable() call sites outside tests are hostutil.go (lookups beside the executable, ModuleRoot), relayvm/assets.go, vz/driver.go:403 (codesign -d of the path, not an exec of it), container/container.go:763 (reads warden-io beside it), hyperv/service_windows.go (SCM registration) and cmd/warden-io/initialize.go (PATH prepend, its own path); no exec.Command(exe ...) anywhere. Holds as the design says; the PR body should carry this.",
+    "TEST-04: the detached-start test spawns a real child and polls its log line to a 30s deadline, failing there, never retrying; the freshness tests use ages 2h old against a 1m refresh age, far from any RoundAge boundary. Deterministic. On Windows the released child may still be exiting when t.TempDir's cleanup deletes the copied 'warden'; testing.removeAll retries Windows-retryable errors for 2s, which covers it. Worth watching in native case 1, not a finding.",
+    "ORCH-04: no transient resource is added; the null-device handle is closed by defer either way and the log by StartDetached's defer, as before.",
+    "ORCH-01 / TEST-02: drivers declares all five (a5); container, vz and firecracker trees are not edited and none calls StartDetached, as the Cross-driver impact section asserts; tier 1's drivers-claim passes with no trailer.",
+    "GLOBAL-01: the new exported change (StartDetached's comment) is documented; reportRefreshNotStarted (driver/qemu/driver.go:375) has no comment, but it is unexported and so outside GLOBAL-01. A one-line comment would match the file's style. Not a finding.",
+    "UX-01 / FLOW-15: drivers.md (Hyper-V paragraph and the qemu Windows cross-reference) and the overview's hyperv-prepare lock line change with the code, as tasks 8 and 9 plan; the overview has no qemu refresh flow to update.",
+    "Front matter status is still 'draft'; wf check's FLOW-03 declaration line is ok, so this is the loop's field to move, not a finding."
+  ]
+}
