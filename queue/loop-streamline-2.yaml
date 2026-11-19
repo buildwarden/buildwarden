@@ -1,6 +1,6 @@
 feature: loop-streamline-2
 title: 'Fewer round-trips in the human review: batch answers for assumed questions and (optionally) rule changes, a sitting load cap, a same-sitting lane for trivial process changes, a process size row and honest x1-design accounting'
-priority: 3
+priority: 2
 kind: process
 status: in_progress
 round: process

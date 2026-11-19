@@ -1,14 +1,18 @@
 feature: loop-repository
 title: 'Work in a second repository from the one queue: wf''s gates and checks, branches and PRs per repository, and the native side (componentization P1, last part). The move to a loop repository follows as P1''s last item.'
-priority: 2
+priority: 4
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/loop-repository.md
 branch: feat/loop-repository
 alters_relationships: null
 source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase P1, wave 1, after loop-contract. Holds cloud and host:* while in progress: the design''s risk ''P1 pauses the loop while the queue moves''. The repository''s name (provisional: buildwarden-ai-workflow) is confirmed with Jeff right before it is created (a11). Jeff, attended session 2026-11-12: go ahead.'
+pr:
+  number: 130
+  ci: green
+  head: 5d33806b1bccc7b271f067314ddfd0838895f3f9
 steps:
   - id: x1-design
     phase: 1
@@ -28,12 +32,19 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - x2-predecessors-merged
     lease:
-      claimed_by: cloud/20261119T105705Z
-      expires: 2026-11-19T13:53:58.251716256Z
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 3
@@ -100,3 +111,9 @@ history:
   - at: 2026-11-19T11:53:58Z
     by: cloud/20261119T105705Z
     event: claimed x2-implement until 2026-11-19T13:53:58Z
+  - at: 2026-11-19T12:32:44Z
+    by: cloud/20261119T105705Z
+    event: done x2-implement
+  - at: 2026-11-19T12:32:44Z
+    by: cloud/20261119T105705Z
+    event: entered phase 3 (merge)
