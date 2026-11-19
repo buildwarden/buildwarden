@@ -1,0 +1,205 @@
+package check
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/buildwarden/buildwarden/tools/workflow/queue"
+)
+
+// specsProfile is a second repository's profile file: a fast gate of its
+// own and a guide directory.
+const specsProfile = "version: 1\ntrunk: main\nfast_gate:\n  - [git, --version]\n" +
+	"reference_docs:\n  guides: [guide/]\n"
+
+// second makes a clone of a second repository o/specs under checkouts, with
+// main pushed, and returns the clone. With profile, main carries it as the
+// repository's profile file.
+func second(t *testing.T, checkouts, profile string) string {
+	t.Helper()
+	root := t.TempDir()
+	origin := filepath.Join(root, "origin.git")
+	clone := filepath.Join(checkouts, "o", "specs")
+	git(t, root, "init", "-q", "--bare", "-b", "main", origin)
+	git(t, root, "clone", "-q", origin, clone)
+	git(t, clone, "checkout", "-q", "-b", "main")
+	files := map[string]string{"spec.md": "v1\n"}
+	if profile != "" {
+		files["loop-profile.yaml"] = profile
+	}
+	for p, text := range files {
+		if err := os.WriteFile(filepath.Join(clone, p), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git(t, clone, "add", ".")
+	git(t, clone, "commit", "-q", "-m", "base")
+	git(t, clone, "push", "-q", "origin", "main")
+	return clone
+}
+
+// branchIn commits a change to file on feat/demo in the clone and pushes it.
+func branchIn(t *testing.T, clone, file string) {
+	t.Helper()
+	git(t, clone, "checkout", "-q", "-B", "feat/demo")
+	full := filepath.Join(clone, filepath.FromSlash(file))
+	_ = os.MkdirAll(filepath.Dir(full), 0o755)
+	if err := os.WriteFile(full, []byte("changed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, clone, "add", ".")
+	git(t, clone, "commit", "-q", "-m", "change "+file)
+	git(t, clone, "push", "-q", "origin", "feat/demo")
+	git(t, clone, "fetch", "-q", "origin")
+}
+
+// twoRepos is an item homed here with a work entry in o/specs, and the
+// environment that reads both.
+func twoRepos(t *testing.T, phase int, profile string) (Env, *queue.Feature, string) {
+	t.Helper()
+	checkouts := t.TempDir()
+	clone := second(t, checkouts, profile)
+	env := here(repo(t, design))
+	env.Checkouts = checkouts
+	entry := queue.RepositoryEntry{Name: "o/specs", Trunk: "main"}
+	if profile != "" {
+		entry.Profile = "loop-profile.yaml"
+	}
+	env.State.Config.Repositories = append(env.State.Config.Repositories, entry)
+	f := demo(phase)
+	f.Repos = []string{hereRepo, "o/specs"}
+	f.Work = []queue.Work{{Repo: "o/specs", Branch: "feat/demo"}}
+	return env, f, clone
+}
+
+// named returns the results whose name ends with " in o/specs".
+func named(rs []Result) []Result {
+	var out []Result
+	for _, r := range rs {
+		if strings.HasSuffix(r.Name, " in o/specs") {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// TestGatesPerRepository: an item with a work entry is checked in each
+// repository it has a branch in, through that repository's profile and
+// against its trunk; a repository with no profile gets no fast gate and no
+// reference-document check (Validation plan test 4, Decision 5).
+func TestGatesPerRepository(t *testing.T) {
+	env, f, clone := twoRepos(t, 0, specsProfile)
+	if got := failures(named(Phase(env, f))); !strings.Contains(got,
+		"branch on remote in o/specs") {
+		t.Fatalf("phase 0 with no branch in o/specs: failures %q", got)
+	}
+	branchIn(t, clone, "spec.md")
+	if rs := Phase(env, f); !OK(rs) || len(named(rs)) != 1 {
+		t.Fatalf("phase 0 with both branches: %+v", rs)
+	}
+
+	f.Phase = 3
+	gate := result(t, Phase(env, f), "git --version in o/specs")
+	if gate.OK || gate.Info != "skipped (run with -run)" {
+		t.Errorf("phase 3 fast gate in o/specs: %+v", gate)
+	}
+	env.Run = true
+	if r := result(t, Phase(env, f), "git --version in o/specs"); !r.OK {
+		t.Errorf("phase 3 fast gate in o/specs, run: %+v", r)
+	}
+	env.Run = false
+
+	// The design declares surfaces, so each adopted repository's guides
+	// must change.
+	f.Phase = 5
+	if r := result(t, Phase(env, f), "guides or examples updated in o/specs"); r.OK {
+		t.Errorf("phase 5 with no guide changed in o/specs: %+v", r)
+	}
+	branchIn(t, clone, "guide/spec.md")
+	if r := result(t, Phase(env, f), "guides or examples updated in o/specs"); !r.OK {
+		t.Errorf("phase 5 with a guide changed in o/specs: %+v", r)
+	}
+
+	f.Phase = 6
+	if r := result(t, Phase(env, f), "PR open with CI green (FLOW-11) in o/specs"); r.OK {
+		t.Errorf("phase 6 with no PR in o/specs: %+v", r)
+	}
+	f.Work[0].PR = greenPR(t, clone, 7)
+	if r := result(t, Phase(env, f), "PR open with CI green (FLOW-11) in o/specs"); !r.OK {
+		t.Errorf("phase 6 with a green PR in o/specs: %+v", r)
+	}
+	if r := result(t, Phase(env, f), "current main merged in o/specs"); !r.OK {
+		t.Errorf("phase 6, trunk merged in o/specs: %+v", r)
+	}
+
+	f.Phase = 8
+	if got := failures(named(Phase(env, f))); !strings.Contains(got,
+		"remote branch deleted (FLOW-16) in o/specs") {
+		t.Errorf("phase 8 with the branch left in o/specs: failures %q", got)
+	}
+}
+
+// TestNoProfileNoGate: a repository whose entry names no profile has no fast
+// gate and no reference documents, and its branch checks still run.
+func TestNoProfileNoGate(t *testing.T) {
+	env, f, clone := twoRepos(t, 3, "")
+	branchIn(t, clone, "spec.md")
+	for _, r := range named(Phase(env, f)) {
+		if r.Name != "checkout is the clean branch head in o/specs" {
+			t.Errorf("phase 3 in a repository with no profile: %+v", r)
+		}
+	}
+	f.Phase = 5
+	if rs := named(Phase(env, f)); len(rs) != 0 {
+		t.Errorf("phase 5 in a repository with no profile: %+v", rs)
+	}
+	f.Phase = 0
+	if rs := named(Phase(env, f)); len(rs) != 1 || !rs[0].OK {
+		t.Errorf("phase 0 in a repository with no profile: %+v", rs)
+	}
+}
+
+// TestCloneNeeded: a check that needs a second repository's clone fails,
+// naming -checkouts and the expected path, both with no flag and with no
+// clone under it; an item homed in a repository with no entry fails the
+// same way (Validation plan test 15, GLOBAL-11).
+func TestCloneNeeded(t *testing.T) {
+	env, f, _ := twoRepos(t, 0, specsProfile)
+	dir := env.Checkouts
+	env.Checkouts = ""
+	if got := failures(Phase(env, f)); !strings.Contains(got, "o/specs is not the queue's "+
+		"own repository, and no -checkouts is given: wf reads it in DIR/o/specs") {
+		t.Errorf("no -checkouts: failures %q", got)
+	}
+	env.Checkouts = t.TempDir()
+	want := "no clone of o/specs at " + filepath.Join(env.Checkouts, "o", "specs")
+	if got := failures(Phase(env, f)); !strings.Contains(got, want) {
+		t.Errorf("no clone: failures %q, want %q", got, want)
+	}
+	env.Checkouts = dir
+	env.State.Config.Repositories = env.State.Config.Repositories[:1]
+	if got := failures(Phase(env, f)); !strings.Contains(got,
+		"config.yaml's repositories has no entry for o/specs") {
+		t.Errorf("no entry: failures %q", got)
+	}
+	f.Repos, f.Work = []string{"o/specs"}, nil
+	if got := failures(Phase(env, f)); !strings.HasPrefix(got,
+		"repository (LOOP-01): config.yaml's repositories has no entry for o/specs") {
+		t.Errorf("homed with no entry: failures %q", got)
+	}
+}
+
+// TestProfileTrunkDiffers: a profile file whose trunk is not the entry's
+// fails the checks that read it, naming both (LOOP-01).
+func TestProfileTrunkDiffers(t *testing.T) {
+	env, f, clone := twoRepos(t, 3, strings.Replace(specsProfile, "trunk: main",
+		"trunk: feat/demo", 1))
+	branchIn(t, clone, "spec.md")
+	r := result(t, Phase(env, f), "fast gate (LOOP-01) in o/specs")
+	if r.OK || !strings.Contains(r.Info, `gives trunk "feat/demo", but config.yaml's `+
+		`entry gives "main"`) {
+		t.Errorf("trunk differs: %+v", r)
+	}
+}

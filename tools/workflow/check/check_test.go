@@ -179,6 +179,7 @@ func repoWith(t *testing.T, template, designText string) string {
 	_ = os.MkdirAll(filepath.Join(work, "docs", "design"), 0o755)
 	_ = os.WriteFile(filepath.Join(work, "docs", "design", "TEMPLATE.md"), []byte(template),
 		0o644)
+	writeProfile(t, work)
 	git(t, work, "add", ".")
 	git(t, work, "commit", "-q", "-m", "template")
 	git(t, work, "push", "-q", "origin", "main")
@@ -191,6 +192,41 @@ func repoWith(t *testing.T, template, designText string) string {
 	git(t, work, "fetch", "-q", "origin")
 	return work
 }
+
+// hereRepo is the queue's own repository in the tests' states.
+const hereRepo = "o/here"
+
+// profilePath is where the tests' repositories keep their profile file, as
+// this repository does.
+const profilePath = "docs/development/loop-profile.yaml"
+
+// writeProfile writes this repository's own profile file into the checkout
+// at profilePath.
+func writeProfile(t *testing.T, work string) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", filepath.FromSlash(profilePath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	full := filepath.Join(work, filepath.FromSlash(profilePath))
+	_ = os.MkdirAll(filepath.Dir(full), 0o755)
+	if err := os.WriteFile(full, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// hereState is a queue state whose own repository is hereRepo, adopted, with
+// trunk main.
+func hereState(fs ...*queue.Feature) *queue.State {
+	s := &queue.State{Features: fs}
+	s.Config.Repository = hereRepo
+	s.Config.Repositories = []queue.RepositoryEntry{{Name: hereRepo, Trunk: "main",
+		Profile: profilePath}}
+	return s
+}
+
+// here is the environment of a checkout of the queue's own repository.
+func here(work string) Env { return Env{Repo: work, State: hereState()} }
 
 func demo(phase int) *queue.Feature {
 	no := false
@@ -210,7 +246,7 @@ func failures(rs []Result) string {
 }
 
 func TestDesignAndPlanPass(t *testing.T) {
-	env := Env{Repo: repo(t, design)}
+	env := here(repo(t, design))
 	for _, phase := range []int{0, 1, 2} {
 		if rs := Phase(env, demo(phase)); !OK(rs) {
 			t.Errorf("phase %d: %s", phase, failures(rs))
@@ -226,7 +262,7 @@ func TestDesignFailures(t *testing.T) {
 	bad = strings.Replace(bad, "security_boundary: none", "security_boundary: env-beyond", 1)
 	bad = strings.Replace(bad, "concepts: [inputs]\n", "", 1)
 	bad = strings.Replace(bad, "   (UX-01).", "   and the getting-started page.", 1)
-	env := Env{Repo: repo(t, bad)}
+	env := here(repo(t, bad))
 	f := demo(1)
 	f.Questions = []queue.Question{{ID: "q1", Kind: "blocking", Status: "open"}}
 	got := failures(Phase(env, f))
@@ -259,7 +295,7 @@ func withoutDefaults(t *testing.T, text string) string {
 // TestDefaultsSectionOnOlderTemplate: a feature branch cut before the
 // template had Defaults and overrides still needs the section at phase 1.
 func TestDefaultsSectionOnOlderTemplate(t *testing.T) {
-	env := Env{Repo: repoWith(t, withoutDefaults(t, tmpl), withoutDefaults(t, design))}
+	env := here(repoWith(t, withoutDefaults(t, tmpl), withoutDefaults(t, design)))
 	got := failures(Phase(env, demo(1)))
 	if !strings.Contains(got, "section filled: Defaults and overrides") {
 		t.Errorf("phase 1 failures %q lack the Defaults and overrides section", got)
@@ -267,7 +303,7 @@ func TestDefaultsSectionOnOlderTemplate(t *testing.T) {
 }
 
 func TestMakeSkippedWithoutRun(t *testing.T) {
-	env := Env{Repo: repo(t, design)}
+	env := here(repo(t, design))
 	if rs := Phase(env, demo(3)); OK(rs) || !strings.Contains(failures(rs), "skipped") {
 		t.Fatalf("phase 3 without -run: %s", failures(rs))
 	}
@@ -278,7 +314,7 @@ func TestMakeSkippedWithoutRun(t *testing.T) {
 
 func TestPublishArchivesOnTheBranch(t *testing.T) {
 	work := repo(t, design)
-	env := Env{Repo: work}
+	env := here(work)
 	f := demo(6)
 	f.PR = greenPR(t, work, 5)
 	got := failures(Phase(env, f))
@@ -296,7 +332,7 @@ func TestPublishArchivesOnTheBranch(t *testing.T) {
 
 func TestMergedByPRAfterBranchDeleted(t *testing.T) {
 	work := repo(t, design)
-	env := Env{Repo: work}
+	env := here(work)
 	f := demo(7)
 	f.Branch, f.PR = "feat/gone", &queue.PR{Number: 5, CI: "green"}
 	if rs := Phase(env, f); OK(rs) {
@@ -319,7 +355,7 @@ func TestMergedByPRAfterBranchDeleted(t *testing.T) {
 func TestDesignReviewRequired(t *testing.T) {
 	req := strings.Replace(design, "design_review: skip", "design_review: required", 1)
 	work := repo(t, req)
-	env := Env{Repo: work}
+	env := here(work)
 	f := demo(2)
 	f.DesignReview = "required"
 	f.Steps = []queue.Step{{ID: "f2-design-review", Phase: 2}}
@@ -348,7 +384,7 @@ func TestDesignReviewRequired(t *testing.T) {
 // its own line, at a commit that has it, passes (FLOW-19).
 func TestPlanGateGuardsTheApprovedDesign(t *testing.T) {
 	work := repo(t, ruled)
-	env := Env{Repo: work}
+	env := here(work)
 	f := demo(2)
 	f.DesignReview = "required"
 	f.Steps = []queue.Step{{ID: "f2-design-review", Phase: 2, Status: "done"},
@@ -414,11 +450,11 @@ func TestPlanGateGuardsTheApprovedDesign(t *testing.T) {
 
 func TestSkipCriteria(t *testing.T) {
 	seams := strings.Replace(design, "seams: []", "seams: [relay-claim]", 1)
-	env := Env{Repo: repo(t, seams)}
+	env := here(repo(t, seams))
 	if got := failures(Phase(env, demo(1))); !strings.Contains(got, "seams") {
 		t.Errorf("skip with seams: %q", got)
 	}
-	env = Env{Repo: repo(t, design)}
+	env = here(repo(t, design))
 	f := demo(1)
 	f.Questions = []queue.Question{{ID: "a1", Kind: "assumed", Status: "open"}}
 	if got := failures(Phase(env, f)); !strings.Contains(got, "a1") {
@@ -437,7 +473,7 @@ func TestReReviewJudgesTheDeltaFromTheApproval(t *testing.T) {
 	req := strings.Replace(design, "seams: []", "seams: [relay-claim]", 1)
 	req = strings.Replace(req, "design_review: skip", "design_review: required", 1)
 	work := repo(t, req)
-	env := Env{Repo: work}
+	env := here(work)
 	approved := commit(t, work, req+"\n<!-- reviewed -->\n")
 	review := "\n## Design review\n\n- r1: approved at `" + approved + "`.\n"
 	skip := strings.Replace(req, "design_review: required", "design_review: skip", 1)
@@ -457,7 +493,7 @@ func TestReReviewJudgesTheDeltaFromTheApproval(t *testing.T) {
 
 func TestProcessChecks(t *testing.T) {
 	work := repo(t, design+"\n## Design review\n\n- r1: approved at `abc1234`.\n")
-	env := Env{Repo: work}
+	env := here(work)
 	f := demo(1)
 	f.Kind, f.Round = "process", "process"
 	if rs := Phase(env, f); !OK(rs) {
@@ -526,7 +562,7 @@ func TestApprovalMayWrap(t *testing.T) {
 func TestPublishPassesOnAnEarlyMerge(t *testing.T) {
 	work := repo(t, design)
 	commit(t, work, archived)
-	env := Env{Repo: work}
+	env := here(work)
 	f := demo(6)
 	f.PR = &queue.PR{Number: 7, CI: "pending"}
 	if got := failures(Phase(env, f)); !strings.Contains(got, "PR open with CI green") {
@@ -564,7 +600,7 @@ func squash(t *testing.T, work string, pr string) {
 // PR whose tree is the head's tree (FLOW-08, FLOW-16).
 func TestMergedBySquash(t *testing.T) {
 	work := repo(t, design)
-	env := Env{Repo: work}
+	env := here(work)
 	f := demo(7)
 	f.PR = &queue.PR{Number: 9, CI: "green"}
 	squash(t, work, "#9")
@@ -641,7 +677,7 @@ func x3(pr int) *queue.Feature {
 
 // proof is the merge-tree proof the check makes for ref and PR commit sha.
 func proof(work, ref, sha string) (string, bool) {
-	return (&checker{env: Env{Repo: work}}).mergeTreeProof(ref, sha)
+	return (&checker{env: here(work)}).mergeTreeProof(ref, sha)
 }
 
 // TestSquashAfterMainMoved: main moved under the branch before the squash,
@@ -652,7 +688,7 @@ func proof(work, ref, sha string) (string, bool) {
 func TestSquashAfterMainMoved(t *testing.T) {
 	work := mainMoved(t)
 	squash(t, work, "#9")
-	rs := Phase(Env{Repo: work}, x3(9))
+	rs := Phase(here(work), x3(9))
 	if !OK(rs) {
 		t.Fatalf("x3 on a squash made after main moved: %s", failures(rs))
 	}
@@ -679,7 +715,7 @@ func TestSquashWithADifferentChangeFails(t *testing.T) {
 	git(t, work, "commit", "-q", "-m", "Demo (#9)")
 	git(t, work, "push", "-q", "origin", "main")
 	git(t, work, "fetch", "-q", "origin")
-	got := failures(Phase(Env{Repo: work}, x3(9)))
+	got := failures(Phase(here(work), x3(9)))
 	ids := regexp.MustCompile(`tree ([0-9a-f]{7})`).FindAllStringSubmatch(got, -1)
 	if len(ids) != 3 || ids[1][1] == ids[2][1] {
 		t.Errorf("detail %q, want the squash's tree and a different merged tree", got)
@@ -699,7 +735,7 @@ func TestSquashWithADifferentChangeFails(t *testing.T) {
 		t.Errorf("detail %q names %q while the remote branch exists", got, drop)
 	}
 	git(t, work, "push", "-q", "origin", ":feat/demo")
-	if got := failures(Phase(Env{Repo: work}, x3(9))); !strings.Contains(got, drop) {
+	if got := failures(Phase(here(work), x3(9))); !strings.Contains(got, drop) {
 		t.Errorf("detail %q, want %q once the remote branch is gone", got, drop)
 	}
 }
@@ -713,7 +749,7 @@ func TestPushedPastASquashAfterMainMovedFails(t *testing.T) {
 	commitEdit(t, work, "late.txt", "pushed after the squash", func(string) string {
 		return "late\n"
 	})
-	got := failures(Phase(Env{Repo: work}, x3(9)))
+	got := failures(Phase(here(work), x3(9)))
 	if !strings.Contains(got, "refs/heads/feat/demo (tree ") ||
 		!strings.Contains(got, "no PR commit has its tree or is its merge") {
 		t.Errorf("head past the squash: %q, want it named as unmerged", got)
@@ -735,7 +771,7 @@ func TestTwoParentPRCommitNotCompared(t *testing.T) {
 	if info, ok := proof(work, "refs/heads/feat/demo", fullHead(t, work, "side")); !ok {
 		t.Fatalf("the squash on side is not proven (%s): the case needs it proven", info)
 	}
-	got := failures(Phase(Env{Repo: work}, x3(9)))
+	got := failures(Phase(here(work), x3(9)))
 	if !strings.Contains(got, "(2 parents, not compared)") {
 		t.Errorf("x3 on a two-parent PR commit: %q, want it not compared", got)
 	}
@@ -753,7 +789,7 @@ func TestWhitespaceOnlyDifferenceFails(t *testing.T) {
 	git(t, work, "commit", "-q", "-am", "Demo (#9)")
 	git(t, work, "push", "-q", "origin", "main")
 	git(t, work, "fetch", "-q", "origin")
-	if got := failures(Phase(Env{Repo: work}, x3(9))); !strings.Contains(got,
+	if got := failures(Phase(here(work), x3(9))); !strings.Contains(got,
 		"no PR commit has its tree or is its merge") {
 		t.Errorf("x3 on a whitespace-only difference: %q, want it unmerged", got)
 	}
@@ -780,7 +816,7 @@ func TestCrissCrossMergeBasesFail(t *testing.T) {
 	})
 	git(t, work, "push", "-q", "origin", "main")
 	squash(t, work, "#9")
-	got := failures(Phase(Env{Repo: work}, x3(9)))
+	got := failures(Phase(here(work), x3(9)))
 	if !strings.Contains(got, "merge bases ") || !strings.Contains(got, d) ||
 		!strings.Contains(got, m) {
 		t.Errorf("x3 on a criss-cross history: %q, want merge bases %s and %s named",
@@ -803,7 +839,7 @@ func head(t *testing.T, work string) string {
 func TestSquashAfterMainMovedIgnoresDiffConfig(t *testing.T) {
 	work := mainMoved(t)
 	squash(t, work, "#9")
-	plain := Phase(Env{Repo: work}, x3(9))
+	plain := Phase(here(work), x3(9))
 	if !OK(plain) {
 		t.Fatalf("x3 with no config: %s", failures(plain))
 	}
@@ -811,7 +847,7 @@ func TestSquashAfterMainMovedIgnoresDiffConfig(t *testing.T) {
 	git(t, work, "config", "diff.relative", "true")
 	git(t, work, "config", "diff.indentHeuristic", "false")
 	for _, dir := range []string{work, filepath.Join(work, "docs")} {
-		rs := Phase(Env{Repo: dir}, x3(9))
+		rs := Phase(here(dir), x3(9))
 		if !OK(rs) || rs[0].Info != plain[0].Info {
 			t.Errorf("x3 from %s with diff config: %q (ok %v), want %q", dir,
 				rs[0].Info, OK(rs), plain[0].Info)
@@ -825,7 +861,7 @@ func TestSquashAfterMainMovedIgnoresDiffConfig(t *testing.T) {
 func TestCloseAfterASquash(t *testing.T) {
 	work := repo(t, design)
 	commit(t, work, archived)
-	env := Env{Repo: work}
+	env := here(work)
 	p := demo(4)
 	p.Kind, p.Round, p.PR = "process", "process", &queue.PR{Number: 9}
 	squash(t, work, "#9")
@@ -880,7 +916,7 @@ func greenPR(t *testing.T, work string, n int) *queue.PR {
 // branch's pushed head (FLOW-08).
 func TestPRGreenIsForTheHead(t *testing.T) {
 	work := repo(t, archived)
-	env, f := Env{Repo: work}, demo(6)
+	env, f := here(work), demo(6)
 	f.PR = greenPR(t, work, 5)
 	if rs := Phase(env, f); !OK(rs) {
 		t.Fatalf("phase 6 with CI green for the head: %s", failures(rs))
@@ -958,7 +994,7 @@ func TestSquashBesideEdit(t *testing.T) {
 		git(t, work, "commit", "-q", "-m", "Demo (#9)")
 		git(t, work, "push", "-q", "origin", "main")
 		git(t, work, "fetch", "-q", "origin")
-		rs := Phase(Env{Repo: work}, x3(9))
+		rs := Phase(here(work), x3(9))
 		if !OK(rs) {
 			t.Fatalf("x3 after a refresh beside an edit: %s", failures(rs))
 		}
@@ -974,7 +1010,7 @@ func TestSquashBesideEdit(t *testing.T) {
 	t.Run("no refresh", func(t *testing.T) {
 		work, _ := besideEdit(t)
 		squash(t, work, "#9")
-		rs := Phase(Env{Repo: work}, x3(9))
+		rs := Phase(here(work), x3(9))
 		if !OK(rs) {
 			t.Fatalf("x3 on a squash made behind main beside an edit: %s",
 				failures(rs))
@@ -1019,7 +1055,7 @@ func refreshed(t *testing.T, work string) string {
 // pushed head (FLOW-03, FLOW-10).
 func TestRefreshDoneWhen(t *testing.T) {
 	work := repo(t, archived)
-	env, f := Env{Repo: work}, demo(7)
+	env, f := here(work), demo(7)
 	wantFails := func(why string, want ...string) {
 		t.Helper()
 		got := failures(Refresh(env, f))

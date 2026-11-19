@@ -43,7 +43,7 @@ func (fm *Front) rulePaths() []string {
 // A design whose review was skipped has no approved commit and is read on the
 // branch. With neither an approval nor a skip, Within is empty.
 func Declarations(env Env, f *queue.Feature) (queue.Declaration, error) {
-	c := &checker{env: env, f: f}
+	c := newChecker(env, f)
 	commit, err := c.git("rev-parse", "--short", "refs/heads/"+f.Branch)
 	if err != nil {
 		return queue.Declaration{}, err

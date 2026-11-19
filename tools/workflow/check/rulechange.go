@@ -187,7 +187,7 @@ func (c *checker) ruleClearance() {
 		c.add(name, true, "process item: the FLOW-14 process route")
 		return
 	}
-	files, err := c.ruleChangeFiles("origin/main", c.f.Branch)
+	files, err := c.ruleChangeFiles(c.trunk(), c.f.Branch)
 	if err != nil {
 		c.add(name, false, "%v", err)
 		return

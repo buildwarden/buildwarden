@@ -186,7 +186,7 @@ func (c *checker) skipValid(d *Design) {
 			return
 		}
 	}
-	base := "origin/main"
+	base := c.trunk()
 	if a := approvals(d); len(a) > 0 {
 		base = a[len(a)-1]
 		prev, err := c.loadDesign(base)

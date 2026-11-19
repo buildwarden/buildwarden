@@ -25,7 +25,7 @@ func (c *checker) insideAreas() {
 			"repositories, and no path is outside it (FLOW-05)")
 		return
 	}
-	files, err := c.git("diff", "--name-only", "--no-renames", "origin/main..."+c.f.Branch)
+	files, err := c.git("diff", "--name-only", "--no-renames", c.trunk()+"..."+c.f.Branch)
 	if err != nil {
 		c.add(name, false, "%v", err)
 		return
@@ -64,7 +64,7 @@ func (c *checker) trialMerge() {
 	s := c.state()
 	for _, o := range s.Ordered() {
 		if o == c.f || o.Feature == c.f.Feature || o.Status != "in_progress" ||
-			o.IsProcess() || s.Tracked(o) || o.Branch == "" ||
+			o.IsProcess() || s.Tracked(o) || o.Branch == "" || !c.worksIn(s, o, c.at.name) ||
 			s.Relation(c.f, o).Kind != queue.Disjoint {
 			continue
 		}
@@ -81,7 +81,7 @@ func (c *checker) tryMerge(o *queue.Feature) string {
 	}
 	cmd := exec.Command("git", "merge-tree", "--write-tree", "--name-only", "--no-messages",
 		"refs/heads/"+c.f.Branch, ref)
-	cmd.Dir = c.env.Repo
+	cmd.Dir = c.dir()
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()

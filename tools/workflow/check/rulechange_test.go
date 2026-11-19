@@ -79,11 +79,11 @@ func TestRuleChangeProblems(t *testing.T) {
 
 func TestSkipRefusedWithRuleChanges(t *testing.T) {
 	skip := strings.Replace(ruled, "design_review: required", "design_review: skip", 1)
-	env := Env{Repo: repo(t, skip)}
+	env := here(repo(t, skip))
 	if got := failures(Phase(env, demo(1))); !strings.Contains(got, "1 rule_changes") {
 		t.Errorf("skip with a rule change: %q", got)
 	}
-	env = Env{Repo: repo(t, strings.Replace(ruled, "TEST-09 is new: ...", "", 1))}
+	env = here(repo(t, strings.Replace(ruled, "TEST-09 is new: ...", "", 1)))
 	f := demo(1)
 	f.DesignReview = "required"
 	if got := failures(Phase(env, f)); !strings.Contains(got, "section filled: Rule changes") {
@@ -110,7 +110,7 @@ func TestRuleChangeApprovalIsNotADesignApproval(t *testing.T) {
 
 func TestRuleClearance(t *testing.T) {
 	work := repo(t, ruled)
-	env := Env{Repo: work}
+	env := here(work)
 	sha := commit(t, work, ruled+"\n<!-- as reviewed -->\n")
 	review := "\n## Design review\n\n- r1: approved at `" + sha +
 		"`;\n  rule change TEST-09 approved at `" + sha + "`.\n"
@@ -172,7 +172,7 @@ func TestRuleClearance(t *testing.T) {
 // clears with no rule_changes.
 func TestRuleClearanceWorkflowJobs(t *testing.T) {
 	work := repo(t, design)
-	env := Env{Repo: work}
+	env := here(work)
 	git(t, work, "checkout", "-q", "main")
 	_ = os.MkdirAll(filepath.Join(work, ".github", "workflows"), 0o755)
 	if err := os.WriteFile(filepath.Join(work, ".github", "workflows", "main.yml"),
