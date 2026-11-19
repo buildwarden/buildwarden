@@ -12,7 +12,8 @@ repos: []                # every repository the item works in, home first, when 
                          # more than this one (LOOP-04); empty or absent: only this one
 # areas: []              # the areas the change edits (FLOW-02), by the names of the
                          # area map (`wf areas -list`). Left out, the item is undeclared
-                         # and collides with every item in its repositories (FLOW-05)
+                         # and collides with every item in its repositories (FLOW-05);
+                         # []: the change edits nothing but its own design
 security_boundary: none  # none | host-env | env-relay | env-beyond (GLOBAL-06)
 alters_relationships: false  # true if a component's role or interactions change (FLOW-02, FLOW-05)
 design_review: required  # required | skip (FLOW-19: skip only when its criteria hold)
@@ -50,6 +51,8 @@ recommended answer.
 ### Assumed
 
 "Proceeding with X; confirm." Each is confirmed in the design review (FLOW-19).
+Mark one `Flagged: <reason>` when it touches a security boundary or a seam, or
+departs from prior art or an earlier decision of the human's.
 
 ## Design
 

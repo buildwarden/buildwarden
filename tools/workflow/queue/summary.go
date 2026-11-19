@@ -12,7 +12,7 @@ import (
 const SummaryFile = "QUEUE.md"
 
 // Summary renders the queue as Markdown: main's state, what needs the human
-// first, then what is active, the relations, what waits on a host and the
+// first, then what is active, the machines (Workers), the relations, what waits on a host and the
 // backlog, each in FLOW-05 order. Done items are left out (FLOW-13). It reads
 // only the state, never the clock or git, so the same state always renders
 // the same text.
@@ -25,6 +25,7 @@ func Summary(s *State) string {
 
 	s.writeNeedsHuman(&b)
 	s.writeActive(&b)
+	s.writeWorkers(&b)
 	s.writeRelations(&b)
 	if hosts := s.hostSteps(); len(hosts) > 0 {
 		section(&b, "Waiting on a host", hosts, "")
@@ -478,21 +479,86 @@ func (s *State) writeActive(b *strings.Builder) {
 			next = append(next, n+")")
 		}
 		bu := f.Budget
-		rows = append(rows, fmt.Sprintf("| %d | %s | %s | %s | %s | %d %s | %s | %s | "+
-			"%s | %d / %d |", f.Priority, f.Feature, s.kindLabel(f), s.reposLabel(f),
-			s.areasLabel(f), f.Phase, PhaseName(f), orDash(strings.Join(next, ", ")),
+		rows = append(rows, fmt.Sprintf("| %d | %s | %s | %s | %s | %s | %d %s | %s | "+
+			"%s | %s | %d / %d |", f.Priority, f.Feature, s.kindLabel(f),
+			orDash(f.Lead), s.reposLabel(f), s.areasLabel(f), f.Phase, PhaseName(f),
+			orDash(strings.Join(next, ", ")),
 			s.waitsFor(f), s.prColumn(f), bu.Spent.Steps, bu.Estimate.Steps))
 	}
 	if len(rows) == 0 {
 		fmt.Fprintf(b, "Nothing in progress.\n")
 		return
 	}
-	fmt.Fprintf(b, "| Pri | Item | Kind | Repositories | Areas | Phase | Next steps | "+
-		"Waits for | PR | Steps |\n")
-	fmt.Fprintf(b, "|---|---|---|---|---|---|---|---|---|---|\n")
+	fmt.Fprintf(b, "| Pri | Item | Kind | Lead | Repositories | Areas | Phase | "+
+		"Next steps | Waits for | PR | Steps |\n")
+	fmt.Fprintf(b, "|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, r := range rows {
 		fmt.Fprintf(b, "%s\n", r)
 	}
+}
+
+// writeWorkers is the Workers section, after Active: each machine of
+// hosts.yaml with its host names, its last run from native/status/, the open
+// items whose lead it serves and the pending steps leased to one of its
+// sessions (FLOW-04, FLOW-09). The times are the files'; no clock is read, so
+// an expired lease still shows until it is released or claimed again.
+func (s *State) writeWorkers(b *strings.Builder) {
+	if len(s.Machines) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\n## Workers\n\n")
+	fmt.Fprintf(b, "| Machine | Host names | Last run | Leads | Holds |\n")
+	fmt.Fprintf(b, "|---|---|---|---|---|\n")
+	for _, m := range s.Machines {
+		var leads, holds []string
+		serves := map[string]bool{}
+		for _, h := range m.Hosts {
+			serves["host:"+h] = true
+		}
+		for _, f := range s.Ordered() {
+			if f.Status == "done" {
+				continue
+			}
+			if serves[f.Lead] {
+				leads = append(leads, f.Feature)
+			}
+			holds = append(holds, leasedOn(f, m.Name)...)
+		}
+		fmt.Fprintf(b, "| %s | %s | %s | %s | %s |\n", m.Name, strings.Join(m.Hosts, ", "),
+			s.lastRun(m.Name), orDash(strings.Join(leads, ", ")),
+			orDash(strings.Join(holds, ", ")))
+	}
+}
+
+// leasedOn lists the item's pending steps leased to a session of the machine,
+// with the lease's expiry.
+func leasedOn(f *Feature, machine string) []string {
+	var out []string
+	for _, st := range f.Steps {
+		if st.Status == "pending" && st.Lease.Expires != nil &&
+			strings.HasPrefix(Session(st.Lease.ClaimedBy), machine+".") {
+			out = append(out, fmt.Sprintf("%s/%s until %s", f.Feature, st.ID,
+				st.Lease.Expires.UTC().Format("2006-01-02 15:04")))
+		}
+	}
+	return out
+}
+
+// lastRun is the Workers table's Last run: native/status/<machine>.yaml's
+// outcome, time, since when it has been so, and reason.
+func (s *State) lastRun(machine string) string {
+	for _, st := range s.Statuses {
+		if st.Machine != machine {
+			continue
+		}
+		const at = "2006-01-02 15:04"
+		l := st.Outcome + ", " + st.LastRun.UTC().Format(at)
+		if !st.Since.Equal(st.LastRun) {
+			l += " (since " + st.Since.UTC().Format("2006-01-02") + ")"
+		}
+		return l + ": " + strings.ReplaceAll(st.Reason, "|", "\\|")
+	}
+	return "-"
 }
 
 // waitsFor is the Active table's Waits for: the human's merge, a refresh and

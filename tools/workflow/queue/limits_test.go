@@ -68,7 +68,7 @@ func take(t *testing.T, s *State, f *Feature) *Step {
 		t.Fatalf("%s: Guard refuses %s: %s", f.Feature, st.ID, why)
 	}
 	wantOfferTo(t, s, f.Feature, "cloud/"+f.Feature, st.ID)
-	s.Claim(f, st, "cloud/"+f.Feature, now, true)
+	s.Claim(f, st, "cloud/"+f.Feature, now)
 	return st
 }
 
@@ -213,17 +213,17 @@ func TestGuardPRSlot(t *testing.T) {
 }
 
 func prSlotFromClaim(t *testing.T) {
-	const held = "the PR slot, held by a (colliding: a declares no areas) (FLOW-05)"
+	const held = "the PR slot, held by a (colliding: a is undeclared) (FLOW-05)"
 	a, b := publishing("a", 2), publishing("b", 1)
 	s := mapped(t, a, b)
 	// Case 3: a claimed f6-merge-main holds the slot, as a done one does;
 	// released, it is the higher priority's again.
-	s.Claim(a, taking(t, a), "cloud/a", now, false)
+	s.Claim(a, taking(t, a), "cloud/a", now)
 	st := taking(t, a)
 	wantRefused(t, s, b, held)
 	s.Release(a, st, "cloud/a", now, "the merge conflicts")
 	wantOffer(t, s, "b", "f6-merge-main")
-	s.Claim(a, st, "cloud/a", now, false)
+	s.Claim(a, st, "cloud/a", now)
 	Complete(a, st, "cloud/a", now)
 	wantRefused(t, s, b, held)
 	// A holder is never refused its own step.
@@ -285,7 +285,7 @@ func prSlotAcrossReturn(t *testing.T) {
 	if st.ID != "f6-merge-main-r2" {
 		t.Fatalf("a entered Publish again with %s pending", st.ID)
 	}
-	s.Claim(a, st, "cloud/a", now, false)
+	s.Claim(a, st, "cloud/a", now)
 	Complete(a, st, "cloud/a", now)
 	wantRefused(t, s, b, held)
 
@@ -376,7 +376,7 @@ func tieBreakArrivals(t *testing.T) {
 		var left []*Feature
 		for _, f := range waiting {
 			if s.Guard(f, taking(t, f), "cloud/sim") == "" {
-				s.Claim(f, taking(t, f), "cloud/sim", now, false)
+				s.Claim(f, taking(t, f), "cloud/sim", now)
 				continue
 			}
 			left = append(left, f)
@@ -520,7 +520,7 @@ func (sim *simulation) move() {
 		sim.t.Fatalf("%s: offered %s, which Guard refuses: %s", f.Feature, pick.Step.ID,
 			why)
 	}
-	s.Claim(f, pick.Step, worker, now, false)
+	s.Claim(f, pick.Step, worker, now)
 	switch rng.IntN(6) {
 	case 0: // The claim is left to expire.
 	case 1:
@@ -586,7 +586,7 @@ func TestGuardThenValidate(t *testing.T) {
 	s, x := star(t)
 	wantValidate(t, s)
 	// Had the claim been made round Guard, H's set would be the finding.
-	s.Claim(x, taking(t, x), "cloud/x", now, false)
+	s.Claim(x, taking(t, x), "cloud/x", now)
 	wantValidate(t, s, overLimit(3, "h", "p1", "p2", "x"))
 }
 
@@ -689,7 +689,7 @@ func TestValidateLimitsPerSet(t *testing.T) {
 		take(t, s, f)
 	}
 	wantValidate(t, s)
-	s.Claim(c, taking(t, c), "cloud/c", now, false)
+	s.Claim(c, taking(t, c), "cloud/c", now)
 	wantValidate(t, s, overLimit(2, "a", "b", "c"))
 
 	// The PR slot: a disjoint pair holds it; a colliding and a near pair
@@ -701,17 +701,17 @@ func TestValidateLimitsPerSet(t *testing.T) {
 	take(t, s, p)
 	take(t, s, q)
 	wantValidate(t, s)
-	s.Claim(r, taking(t, r), "cloud/r", now, false)
+	s.Claim(r, taking(t, r), "cloud/r", now)
 	wantValidate(t, s, "limit: p holds the PR slot with r (near: driver/vz reaches "+
 		"driver-core), limit 1 (FLOW-05)")
 	s.Release(r, taking(t, r), "cloud/r", now, "generated")
-	s.Claim(u, taking(t, u), "cloud/u", now, false)
+	s.Claim(u, taking(t, u), "cloud/u", now)
 	wantValidate(t, s, "limit: p holds the PR slot with u (colliding: area driver-core), "+
 		"limit 1 (FLOW-05)")
 
 	// A limit below 1 is the finding; no count is compared with it.
 	s = limited(mapped(t, alter("a", 1)), 0)
-	s.Claim(s.Features[0], taking(t, s.Features[0]), "cloud/a", now, false)
+	s.Claim(s.Features[0], taking(t, s.Features[0]), "cloud/a", now)
 	wantValidate(t, s, "config: limits.alters_relationships 0 is below 1")
 }
 
@@ -951,7 +951,7 @@ func waitingCounts(t *testing.T) {
 	wantWaiting(t, s, 7)
 	wantStarts(t, s, q)
 	advance(later, 6)
-	s.Claim(later, taking(t, later), "cloud/later", now, false)
+	s.Claim(later, taking(t, later), "cloud/later", now)
 	wantWaiting(t, s, 8)
 	wantHeld(t, s, q, 8)
 }
@@ -1027,7 +1027,7 @@ func waitingMarked(t *testing.T) {
 	m = queuedItem("m", 20)
 	m.Urgent = "human/jeff"
 	s = waitingState(t, 8, m)
-	s.Claim(m, &m.Steps[0], "cloud/run", now, true)
+	s.Claim(m, &m.Steps[0], "cloud/run", now)
 	m.Questions = []Question{{ID: "q1", Kind: "blocking", Status: "open"}}
 	wantWaiting(t, s, 9)
 }
@@ -1233,7 +1233,7 @@ func TestUrgentStartLine(t *testing.T) {
 		if why := s.Guard(m, &m.Steps[0], "cloud/run"); why != "" {
 			t.Fatalf("%d waiting, urgent %q: %s", c.waiting, c.urgent, why)
 		}
-		line := s.Claim(m, &m.Steps[0], "cloud/run", now, true)
+		line := s.Claim(m, &m.Steps[0], "cloud/run", now)
 		want := c.line
 		if want == "" {
 			want = "started (FLOW-05)"
@@ -1252,7 +1252,7 @@ func TestUrgentStartLine(t *testing.T) {
 	m.Urgent = "human/jeff"
 	s := waitingState(t, 8, m)
 	s.Main = &Main{SHA: "0a1b2c3", CI: "red", Followup: "m"}
-	if line := s.Claim(m, &m.Steps[0], "cloud/run", now, true); line != "" {
+	if line := s.Claim(m, &m.Steps[0], "cloud/run", now); line != "" {
 		t.Fatalf("the fix for a red main: Claim returned %q", line)
 	}
 }

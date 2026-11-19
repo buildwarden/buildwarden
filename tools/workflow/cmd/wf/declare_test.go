@@ -126,17 +126,17 @@ func TestRelateAndRelations(t *testing.T) {
 	must(t, dir, "new", "-worker", "human/jeff", "-feature", "x", "-title", "X", "-priority",
 		"5", "-estimate-steps", "9", "-kind", "process")
 	const pairs = "a, c: near (driver-core reaches relay)\n" +
-		"a, u: colliding (u declares no areas)\n" +
+		"a, u: colliding (u is undeclared)\n" +
 		"b, c: near (driver/vz reaches driver-core)\n" +
-		"b, u: colliding (u declares no areas)\n" +
-		"c, u: colliding (u declares no areas)\n"
+		"b, u: colliding (u is undeclared)\n" +
+		"c, u: colliding (u is undeclared)\n"
 	if got := must(t, dir, "relations"); got != pairs {
 		t.Fatalf("wf relations = %q, want %q", got, pairs)
 	}
 	if got := must(t, dir, "relations", "-feature", "c"); got !=
 		"c, a: near (driver-core reaches relay)\n"+
 			"c, b: near (driver/vz reaches driver-core)\n"+
-			"c, u: colliding (u declares no areas)\n" {
+			"c, u: colliding (u is undeclared)\n" {
 		t.Fatalf("wf relations -feature c = %q", got)
 	}
 	if got := must(t, dir, "relations", "-feature", "x"); got !=

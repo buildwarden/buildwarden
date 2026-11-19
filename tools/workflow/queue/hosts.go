@@ -15,8 +15,9 @@ import (
 )
 
 // Machine is one native machine in hosts.yaml: the host names (FLOW-04) its
-// scheduled native session serves. Each host name is served by one machine,
-// so routing a capability (say, qemu-any) to a machine is a state edit.
+// scheduled native session serves. A host name may be listed on several
+// machines, and a step of it goes to whichever serving worker next takes
+// steps; routing a capability (say, qemu-any) to a machine is a state edit.
 type Machine struct {
 	Name  string   `yaml:"name"`
 	Hosts []string `yaml:"hosts"`
@@ -112,6 +113,17 @@ func readOptional(path string, v any) error {
 	return readYAML(path, v)
 }
 
+// served returns the host names some machine in hosts.yaml serves.
+func (s *State) served() map[string]bool {
+	out := map[string]bool{}
+	for _, m := range s.Machines {
+		for _, h := range m.Hosts {
+			out[h] = true
+		}
+	}
+	return out
+}
+
 // Machine returns the named machine from hosts.yaml.
 func (s *State) Machine(name string) (*Machine, error) {
 	for i := range s.Machines {
@@ -140,40 +152,46 @@ func (s *State) validateGaps() []string {
 	return errs
 }
 
-// validateNative checks the gaps, and that each host name has one machine and
-// that every host step and open gap names a host some machine serves.
+// validateNative checks the gaps, the host names, and that every pending host
+// step, open gap and open item's lead names a host some machine serves. A
+// name several machines list is valid (FLOW-04).
 func (s *State) validateNative() []string {
 	errs := append(s.validateStatus(), s.validateGaps()...)
 	if len(s.Machines) == 0 {
 		return errs
 	}
 	bad := func(format string, a ...any) { errs = append(errs, fmt.Sprintf(format, a...)) }
-	servedBy := map[string]string{}
 	for _, m := range s.Machines {
 		for _, h := range m.Hosts {
 			if !affinityRe.MatchString("host:" + h) {
 				bad("hosts.yaml: %s: bad host name %q", m.Name, h)
 			}
-			if o, dup := servedBy[h]; dup {
-				bad("hosts.yaml: host %s served by both %s and %s", h, o, m.Name)
-			}
-			servedBy[h] = m.Name
 		}
 	}
+	served := s.served()
 	for _, f := range s.Features {
-		for _, st := range f.Steps {
-			h, ok := strings.CutPrefix(st.Affinity, "host:")
-			if ok && st.Status == "pending" && servedBy[h] == "" {
-				bad("%s: step %s: no machine serves host %s", f.Feature, st.ID, h)
-			}
-		}
+		f.validateServed(served, bad)
 	}
 	for _, g := range s.Gaps {
-		if g.Status == "open" && servedBy[g.Host] == "" {
+		if g.Status == "open" && !served[g.Host] {
 			bad("backlog: gap %s: no machine serves host %s", g.ID, g.Host)
 		}
 	}
 	return errs
+}
+
+// validateServed checks that each pending host step of the item, and its
+// lead while it is open, names a host some machine serves.
+func (f *Feature) validateServed(served map[string]bool, bad func(string, ...any)) {
+	for _, st := range f.Steps {
+		h, ok := strings.CutPrefix(st.Affinity, "host:")
+		if ok && st.Status == "pending" && !served[h] {
+			bad("%s: step %s: no machine serves host %s", f.Feature, st.ID, h)
+		}
+	}
+	if h, ok := strings.CutPrefix(f.Lead, "host:"); ok && f.Status != "done" && !served[h] {
+		bad("%s: lead: no machine serves host %s", f.Feature, h)
+	}
 }
 
 // Gate is the scheduled native session's go/no-go, decided without an agent so
@@ -193,8 +211,14 @@ type GateStamp struct {
 // Gate decides whether machine m has native work: a ready step for one of its
 // hosts, or open backlog gaps on its hosts when main or a waiting branch has
 // moved since the last session (stamp), or when sweepDays have passed since it.
+// While the human has not confirmed the priority order it is idle, with that
+// reason, as the cloud is (FLOW-13).
 func (s *State) Gate(m *Machine, repo string, last *GateStamp, sweepDays int,
 	now time.Time) (*Gate, error) {
+	if !s.Config.PriorityConfirmed {
+		return &Gate{Reasons: []string{
+			"idle\tthe priority order is not confirmed (FLOW-13)"}}, nil
+	}
 	g := &Gate{}
 	for _, h := range m.Hosts {
 		if p, _ := s.Next("host:"+h+"/gate", now); p != nil {

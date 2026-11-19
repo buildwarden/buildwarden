@@ -17,6 +17,16 @@
 # or unpushed are saved under $BW_STATE_DIR/leftover/<run>/ and reported as a
 # failure, never reset away.
 #
+# The session's worker is host:<name>/<machine>.<run>, and its claims hold a
+# 20-hour lease it renews while it works (FLOW-04). Before the gate the
+# wrapper releases every lease an earlier scheduled session of this machine
+# left, since the gate does not offer a leased step; when a session it
+# started ends, it releases every lease that session still holds. Before the
+# gate it also removes each .scratch/ worktree whose item is done or whose
+# branch is gone from origin, and its local branch, with git's safe forms
+# only: a worktree with changes and a branch git branch -d refuses are kept
+# and named in the status reason and the session's prompt (FLOW-16).
+#
 # Environment (all optional):
 #   BW_MIN_FREE_GB  free disk needed to start (default 40)
 #   BW_SWEEP_DAYS   re-sweep open backlog gaps after this many days (default 7)
@@ -53,7 +63,7 @@ if ! mkdir "$lock" 2>/dev/null; then
 fi
 echo $$ >"$lock/pid"
 
-outcome="" reason="" stage="setup"
+outcome="" reason="" stage="setup" session_started="" leftover="" dirty_worktree=""
 # skip and stop end the run with a fixed one-line reason, so an unchanged
 # situation writes an unchanged status file.
 skip() { outcome=skipped reason="skip: $1"; echo "$reason"; exit 0; }
@@ -151,12 +161,81 @@ record_status() {
 	echo "status: not pushed after 3 attempts"
 }
 
+# release_leases runs dist/wf release with the arguments given on an
+# up-to-date workflow checkout and pushes what it released with wf commit.
+# A checkout with a session's leftovers is not reset; record_status saves them.
+release_leases() {
+	local wt=.dev/workflow out paths
+	cd "$repo" || return 1
+	if [ -z "$(git -C "$wt" status --porcelain)" ] &&
+		[ -z "$(git -C "$wt" rev-list origin/workflow..HEAD 2>/dev/null)" ] &&
+		fetch origin workflow; then
+		git -C "$wt" reset -q --hard origin/workflow
+	fi
+	out=$(dist/wf release -state "$wt" "$@") || return 1
+	[ -n "$out" ] || return 0
+	printf '%s\n' "$out"
+	paths=$(printf '%s\n' "$out" | awk -F '\t' '$1 == "released" { print "queue/" $2 ".yaml" }' |
+		sort -u)
+	# shellcheck disable=SC2086 # one queue file per line, names without spaces
+	dist/wf commit -state "$wt" -worker "native/$machine.$run" \
+		-m "$machine: release leases ($machine.$run)" $paths
+}
+
+# note_leftover adds one note to leftover, the cleanup's "; "-separated list.
+note_leftover() { leftover="${leftover:+$leftover; }$1"; }
+
+# clean_worktrees removes each .scratch/ worktree on a branch feat/<item>
+# whose item is done or whose branch is gone from origin after the prune
+# fetch, and then the local branch, with git's safe forms only (FLOW-16).
+clean_worktrees() {
+	local d name branch item q
+	for d in .scratch/*/; do
+		[ -d "$d" ] || continue
+		name=$(basename "$d")
+		[ "$(git -C "$d" rev-parse --show-prefix 2>/dev/null)" = "" ] || continue
+		[ -f "$d.git" ] || continue
+		branch=$(git -C "$d" symbolic-ref -q --short HEAD) || continue
+		item=${branch#feat/}
+		[ "$item" != "$branch" ] || continue
+		q=.dev/workflow/queue/$item.yaml
+		if ! grep -qx 'status: done' "$q" 2>/dev/null &&
+			git rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null; then
+			continue
+		fi
+		if [ -n "$(git -C "$d" status --porcelain)" ]; then
+			note_leftover "leftover worktree .scratch/$name has changes"
+			dirty_worktree=1
+			continue
+		fi
+		git worktree remove ".scratch/$name" || {
+			note_leftover "leftover worktree .scratch/$name not removed"
+			continue
+		}
+		echo "cleanup: removed .scratch/$name ($branch)"
+		git branch -d "$branch" ||
+			note_leftover "branch $branch not deleted (not merged; FLOW-16)"
+	done
+}
+
+# with_leftover appends the cleanup's notes to reason, and records a dirty
+# worktree as a failure whatever the run's outcome was.
+with_leftover() {
+	[ -n "$leftover" ] || return 0
+	reason="$reason; $leftover"
+	[ -z "$dirty_worktree" ] || outcome=failed
+}
+
 # shellcheck disable=SC2329 # called from the EXIT trap
 on_exit() {
 	local rc=$?
 	set +e
 	if [ -z "$reason" ]; then
 		outcome=failed reason="exit $rc during $stage"
+	fi
+	if [ -x "$repo/dist/wf" ] && [ -n "$session_started" ]; then
+		release_leases -session "$machine.$run" -why "session ended (exit $rc)" ||
+			echo "release: the session's leases were not released"
 	fi
 	reason=$(printf '%s' "$reason" | tr -d '"\134' | tr '\n' ' ' | cut -c1-120)
 	record_status
@@ -196,11 +275,29 @@ if [ -d .dev/workflow ]; then
 else
 	git worktree add -q -B workflow .dev/workflow origin/workflow
 fi
+stage="worktrees"
+clean_worktrees
+[ -z "$leftover" ] || echo "cleanup: $leftover"
 stage="flow18-check"
 tools/workflow/flow18-check.sh
+# A session that cannot be recorded takes no led step (FLOW-18).
+recorded=""
+entire_status=$(entire status 2>&1 || true)
+case $entire_status in
+*buildwarden/buildwarden-sessions*) ;;
+*)
+	recorded=" Sessions not recorded (FLOW-18): entire status does not name buildwarden/buildwarden-sessions; take no led step this run, and put that line first in your digest file."
+	echo "flow18: entire status does not name the private sessions remote"
+	;;
+esac
 stage="build wf"
 mkdir -p dist
 (cd tools/workflow && go build -o ../../dist/wf ./cmd/wf)
+# The gate does not offer a step leased to another worker, so the leases an
+# earlier scheduled session of this machine left are released first.
+stage="release"
+release_leases -machine "$machine" -stale -current "$machine.$run" \
+	-why "an earlier session on $machine left it" || stop "wf release of stale leases failed"
 stage="gate"
 
 stamp="$state/gate-$machine.json"
@@ -208,13 +305,22 @@ if [ "${BW_FORCE:-}" = 1 ]; then
 	echo "gate: skipped (BW_FORCE=1)"
 else
 	set +e
-	dist/wf gate -state .dev/workflow -repo . -machine "$machine" -stamp "$stamp" \
-		-sweep-days "${BW_SWEEP_DAYS:-7}"
+	gate_out=$(dist/wf gate -state .dev/workflow -repo . -machine "$machine" -stamp "$stamp" \
+		-sweep-days "${BW_SWEEP_DAYS:-7}")
 	rc=$?
 	set -e
+	printf '%s\n' "$gate_out"
 	case $rc in
 	0) ;;
-	3) outcome=idle reason="idle: gate found no work"; echo "idle: no agent started"; exit 0 ;;
+	3)
+		outcome=idle
+		reason=$(printf '%s\n' "$gate_out" | awk -F '\t' '$1 == "idle" { print "idle: " $2; exit }')
+		[ -n "$reason" ] || reason="idle: gate found no work"
+		[ -z "$recorded" ] || reason="$reason; sessions not recorded (FLOW-18)"
+		with_leftover
+		echo "idle: no agent started"
+		exit 0
+		;;
 	*) stop "wf gate failed" ;;
 	esac
 fi
@@ -238,6 +344,8 @@ case "$served" in
 esac
 skip=""
 [ -z "$stale" ] || skip=" Stale hosts: $stale (relay boot VHDX refresh failed); skip their steps and gaps this run and say why in the digest."
+leftovers=""
+[ -z "$leftover" ] || leftovers=" Leftovers: $leftover."
 
 command -v claude >/dev/null || stop "claude is not on PATH"
 stage="claude"
@@ -245,7 +353,8 @@ stage="claude"
 # triggers the next one.
 dist/wf gate -state .dev/workflow -repo . -machine "$machine" -stamp "$stamp.pending" -record
 set +e
-claude -p "Invoke the workflow-native skill with the arguments \"unattended $machine\" and follow it exactly. Worker session id: $run.$skip" \
+session_started=1
+claude -p "Invoke the workflow-native skill with the arguments \"unattended $machine\" and follow it exactly. Worker session id: $machine.$run.$skip$leftovers$recorded" \
 	--settings tools/workflow/native/settings.native.json \
 	--permission-mode acceptEdits \
 	--max-turns "${BW_MAX_TURNS:-400}"
@@ -259,6 +368,8 @@ else
 fi
 reason="claude exited $rc"
 [ -z "$stale" ] || reason="$reason; skipped $stale (relay boot VHDX refresh failed)"
+[ -z "$recorded" ] || reason="$reason; sessions not recorded (FLOW-18)"
+with_leftover
 stage="cleanup"
 
 # Leave the checkout on main and clean, whatever the session did.

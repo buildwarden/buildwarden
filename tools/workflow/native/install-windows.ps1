@@ -115,6 +115,9 @@ function Check {
     if ($url -match 'buildwarden/buildwarden(\.git)?$') { Ok "origin is $url" } else { Bad "origin is '$url', want buildwarden/buildwarden" }
     if ((In-Bash $bash "git -C '$($script:UnixRepo)' status --porcelain --untracked-files=no") -eq '') { Ok 'checkout is clean' }
     else { Bad 'checkout has local changes; use a dedicated clone' }
+    # The one route by which a session pushes a feature branch (FLOW-17).
+    if (In-Bash $bash "test -x '$($script:UnixRepo)/tools/workflow/native/native-push.sh' && echo yes") { Ok 'native-push.sh is executable' }
+    else { Bad 'tools/workflow/native/native-push.sh is missing or not executable' }
     if ($null -ne (In-Bash $bash "git -C '$($script:UnixRepo)' fetch -q origin workflow")) { Ok 'can fetch origin' } else { Bad 'cannot fetch origin' }
     if ($null -ne (In-Bash $bash "git -C '$($script:UnixRepo)' push --dry-run -q origin refs/remotes/origin/workflow:refs/heads/workflow")) {
         Ok 'can push the workflow branch'

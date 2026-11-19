@@ -26,7 +26,7 @@ or `none` (LOOP-01).
 | Fast gate | `make lint` and `make test` (TEST-01). `make lint` is also run as `GOOS=<os> make lint` for each platform whose build-tagged files the change touches (FLOW-17). |
 | Checks | The table below. |
 | Test tiers | TEST-02, which says where each tier runs. |
-| Native hosts | The host names in the loop's `hosts.yaml`. All of them serve this repository's drivers today. |
+| Native hosts | The host names in the loop's `hosts.yaml`. All of them serve this repository's drivers or its platform builds today. |
 | Reference documents | The surface and its documents are the `surface` entry of `tools/tier1/rules.yaml` (UX-01, ORCH-03). Guides: `docs/book/src/guide/`, `docs/book/src/getting-started/`, `examples/`, `README.md`. |
 | Sweep | `make deadcode`, on Linux, macOS and Windows. Kept with a stated reason: the exported API of `relay/`, `collector/`, `ledger/`, `relaycfg/` and `bootstrap/`, and the cgo-only code of `driver/vz`. The overview is `docs/book/src/concepts/overview.md`. |
 | Boundary rule | GLOBAL-06. |

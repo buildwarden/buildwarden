@@ -14,3 +14,8 @@ user reads to learn the change. Follow the UX rules the design cites
    in line with the new behavior.
 2. A design with no surfaces needs no guide change; return `no-surfaces`.
 3. Commit and push the branch (FLOW-17). Return the pages changed.
+
+On a native machine (a led step, FLOW-04), the branch is pushed only with
+`tools/workflow/native/native-push.sh <name>` and committed with `git -C
+.scratch/<name> commit -F ../<name>.msg`, the message written to
+`.scratch/<name>.msg` first, never `-m` (FLOW-17).
