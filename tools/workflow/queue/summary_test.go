@@ -122,8 +122,8 @@ func TestSaveWritesClassOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, a := strings.Index(string(got), "| 2 | review |"),
-		strings.Index(string(got), "| 1 | asked |")
+	r, a := strings.Index(string(got), "| 1 | review |"),
+		strings.Index(string(got), "| 4 | asked |")
 	if r < 0 || a < 0 || r > a {
 		t.Fatalf("QUEUE.md lists review at %d, asked at %d; want review (now in "+
 			"Implement) first:\n%s", r, a, got)
@@ -307,7 +307,8 @@ func TestSummary(t *testing.T) {
 		"- **loop-contract**: [PR #119](https://github.com/buildwarden/buildwarden/" +
 			"pull/119), CI green",
 		"- **loop-native-lead**: design review (`x1-design`, FLOW-19)",
-		"| 64 | seam-specs | feature | buildwarden/buildwarden | undeclared | 2 plan |",
+		"| 64 | seam-specs | feature | - | buildwarden/buildwarden | undeclared | " +
+			"2 plan |",
 		"| seam-specs, driver-contract | colliding |",
 	} {
 		if !strings.Contains(today, want) {

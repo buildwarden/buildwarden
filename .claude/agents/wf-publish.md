@@ -78,3 +78,8 @@ Never merge, approve, or enable auto-merge (FLOW-08, LINT-03). Never push
 `main`, force-push, or delete a remote branch (FLOW-17); GitHub deletes the
 branch on merge. Before any push, run `tools/workflow/flow18-check.sh` and stop
 if it fails (FLOW-18).
+
+On a native machine (a led step, FLOW-04), the branch is pushed only with
+`tools/workflow/native/native-push.sh <name>` and committed with `git -C
+.scratch/<name> commit -F ../<name>.msg`, the message written to
+`.scratch/<name>.msg` first, never `-m` (FLOW-17).

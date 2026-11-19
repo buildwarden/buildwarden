@@ -21,7 +21,6 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
    checkout). Record each result. Record too, in the report, the trial
    merge's lines `dist/wf check` prints (FLOW-10) and those of
    `tools/tier1/area-edges.sh | dist/wf areas -state <workflow checkout> -check -rev HEAD -edges -`.
-   `wf areas -list` and `wf areas -check` exit 1 while the queue state has no `areas.yaml`, which is expected until `loop-parallel`'s `x4-state` writes it: say so and go on.
    A path outside the declared areas: widen it with `dist/wf declare` when
    the approved design covers it, otherwise `back-to-design` (FLOW-03,
    FLOW-06).
@@ -52,3 +51,8 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
 5. Fixing findings is not your job. Return the counts; the tick sends MUST
    findings back to `wf-implement` and records the rest for the PR body, where the human acknowledges them at merge
    (FLOW-08).
+
+On a native machine (a led step, FLOW-04), the branch is pushed only with
+`tools/workflow/native/native-push.sh <name>` and committed with `git -C
+.scratch/<name> commit -F ../<name>.msg`, the message written to
+`.scratch/<name>.msg` first, never `-m` (FLOW-17).

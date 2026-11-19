@@ -46,12 +46,17 @@ output (FLOW-18). Then:
 
 ```bash
 command -v entire && entire doctor --force && entire status
-(cd tools/workflow && go build -o ../../dist/wf ./cmd/wf)
 git fetch origin main workflow
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+(cd tools/workflow && go build -o ../../dist/wf ./cmd/wf)
 git worktree add -B workflow .dev/workflow origin/workflow 2>/dev/null ||
   git -C .dev/workflow reset --hard origin/workflow
 dist/wf validate -state .dev/workflow
 ```
+
+The run takes the loop's tools from trunk (LOOP-09): if the checkout's HEAD
+is not `origin/main`, stop before the build, push nothing, and report it as
+the run's only output.
 
 Keep any `limit:` lines `wf validate` prints for the digest (step 2.5
 and step 4). The tick never edits `.dev/workflow/areas.yaml`: the
@@ -60,7 +65,8 @@ area map changes only on Jeff's word (FLOW-05).
 `entire doctor --force` installs Entire's git hooks, which a fresh clone lacks;
 `entire status` must name `buildwarden/buildwarden-sessions` as the
 checkpoint remote. If `entire` is missing, carry on but make "sessions not recorded (FLOW-18)"
-the digest's first line. Set `W=cloud/<UTC timestamp>` as this run's worker.
+the digest's first line. Set `W=cloud/<UTC timestamp>` as this run's worker, at each invocation:
+`wf claim` counts a run from the worker, on its first claim of each item.
 
 Read `.dev/workflow/config.yaml`. Unattended and `priority_confirmed: false`:
 write the digest (step 4) saying the loop waits on the human's confirmation of
@@ -87,7 +93,7 @@ dist/wf main -state .dev/workflow -sha <sha> -ci green|red|pending \
 tools/tier1/area-edges.sh | dist/wf areas -state .dev/workflow -repo . -check -edges -
 ```
 
-Keep the lines `wf areas -check` prints for the digest; `wf areas -list` and `wf areas -check` exit 1 while the queue state has no `areas.yaml`, which is expected until `loop-parallel`'s `x4-state` writes it: say so and go on. On a red `main`
+Keep the lines `wf areas -check` prints for the digest. On a red `main`
 that `wf status` shows with no follow-up recorded, file the fix by the
 `workflow-intake` skill's follow-up path (FLOW-09), as the follow-up of the
 item whose PR that merge was, and record it with
@@ -102,7 +108,7 @@ never `git commit` and `git push`:
 
 ```bash
 dist/wf commit -state .dev/workflow -worker $W -m "<message>" \
-  [-claimed F/S [-new-run]] <paths changed>
+  [-claimed F/S] <paths changed>
 ```
 
 It pushes only the paths given and the files it generates (FLOW-13). Exit 4:
@@ -121,8 +127,8 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
    `-feature <feature>`). `none` ends the loop; keep the `blocked` lines for
    the digest.
 2. Claim it: `dist/wf claim -state .dev/workflow -worker $W -feature F -step S`,
-   adding `-new-run` on this run's first claim of F, then
-   `dist/wf commit ... -m "F: claim S" -claimed F/S [-new-run] queue/F.yaml`.
+   then
+   `dist/wf commit ... -m "F: claim S" -claimed F/S queue/F.yaml`.
    Keep any line `wf claim` printed for a start past the waiting limit
    (FLOW-05) for the step's **Moved** line.
 3. Check out the feature branch in the code checkout (`git switch <branch>`
@@ -203,7 +209,9 @@ order:
   carries the line `wf claim` printed (FLOW-05). A step that changed a specification adds a **Specification
   changes** line under its own, naming each one apart from the code (LOOP-02).
   A review step's line gives tier 1's result and the tier-2 findings counted
-  by severity, with the report's path (LINT-05).
+  by severity, with the report's path (LINT-05). Each lead this run set or
+  cleared (`wf new -lead`, `wf lead`) is a line of its own, from the item's
+  history line (FLOW-04).
 - **Blocked on Jeff**: open blocking questions (options and recommendation),
   design reviews waiting (`*-design-review` steps, FLOW-19), each open PR,
   as ready to merge or as waiting for a refresh (FLOW-08, FLOW-10),
@@ -219,7 +227,9 @@ order:
 - **Design reviews skipped** this run (`design_review: skip`), each with the
   reason Design gave, so Jeff can call one back (FLOW-19).
 - **Waiting on a host**: `host:<name>` steps and open native gaps, by
-  machine (`hosts.yaml`), and any native run already in today's digest.
+  machine (`hosts.yaml`), each led item with its lead (`wf status`'s
+  `lead:` line; `wf next` reports a queued one as waiting on its lead's
+  step), and any native run already in today's digest.
 - **Spent**: steps this run against `run_budget.steps`, and each open item
   the run touched with its steps and runs spent against estimate, nothing
   flagged as over budget. An item this run closed (`f8-close`, `x4-close`)

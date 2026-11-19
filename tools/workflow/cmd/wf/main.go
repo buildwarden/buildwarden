@@ -6,23 +6,29 @@
 //	wf validate -state DIR [-areas CANDIDATE [-repo DIR]]
 //	wf status   -state DIR [-all | -md]
 //	wf next     -state DIR -worker cloud [-feature F]
-//	wf claim    -state DIR -worker W -feature F -step S [-new-run]
+//	wf claim    -state DIR -worker W -feature F -step S
 //	wf release  -state DIR -worker W -feature F -step S -why TEXT
+//	wf release  -state DIR -session MACHINE.RUN -why TEXT
+//	wf release  -state DIR -machine M -stale -current M.RUN -why TEXT
+//	wf renew    -state DIR -worker W -feature F -step S
 //	wf check    -state DIR -repo DIR -feature F [-run]
 //	wf done     -state DIR -repo DIR -worker W -feature F -step S [-run]
 //	wf answer   -state DIR -worker W -feature F -question Q -answer TEXT
 //	wf back     -state DIR -worker W -feature F -why FINDING [-to 1|3]
-//	wf new      -state DIR -worker W -feature F -title T -priority N
+//	wf new      -state DIR -worker W -feature F -title T -priority P
 //	            -estimate-steps N -estimate-runs N [-source S] [-follows ITEM]
 //	            [-kind process -holds PATTERN,...] [-hold WHY]
 //	            [-repos OWNER/NAME,...] [-areas AREA,...] [-seams SEAM,...]
-//	            [-adopts CONSUMABLE@VERSION] [-urgent]
+//	            [-adopts CONSUMABLE@VERSION] [-urgent] [-lead host:NAME]
+//	wf move     -state DIR -worker human/NAME -feature F -to N [-why TEXT]
 //	wf urgent   -state DIR -worker human/NAME -feature F [-clear]
+//	wf lead     -state DIR -worker W -feature F (-host NAME | -clear)
 //	wf declare  -state DIR -repo DIR -worker W -feature F
 //	wf relate   -state DIR -worker human/NAME -feature A -with B [-clear]
 //	wf relations -state DIR [-feature F]
 //	wf stale    -state DIR -repo DIR -worker W
-//	wf commit   -state DIR -worker W -m MESSAGE [-claimed FEATURE/STEP [-new-run]] [PATH...]
+//	wf commit   -state DIR -worker W -m MESSAGE [-claimed FEATURE/STEP]
+//	            [-renewed FEATURE/STEP] [PATH...]
 //	wf main     -state DIR [-sha SHA -ci green|red|pending [-gates] [-run URL]]
 //	            [-followup ITEM] [-up-to-date required|not-required]
 //	wf digest   -state DIR
@@ -30,7 +36,22 @@
 //	wf areas    -state DIR -check -repo DIR [-rev REV] [-edges FILE|-]
 //	wf gate     -state DIR -repo DIR -machine M -stamp FILE [-sweep-days N] [-record]
 //	wf budget   -state DIR [-native]
+//	wf migrate  -state DIR -worker W [-done]
 //	wf drops    -repo DIR -base REV -main FILE -branch FILE [-head REV]
+//
+// An open item's priority is its position in FLOW-05's order, 1 for the
+// first; a done item has none once queue/done/ exists (FLOW-05). Every
+// command that changes state renumbers the open items when it saves, and
+// commit renumbers what no command did. new -priority P places the item at
+// position P as nearly as its class and status allow, prints "queued F
+// position K" and logs that line on the item alone, with "(asked P)" when K
+// is not P. move, a human's only (LOOP-04), places an open item the same way
+// and logs "moved to position K from M (asked N)" with -why's reason. status
+// prints each item's position, and -all a dash for a done item with no
+// number, done items in the order they closed. migrate -done, run once by a
+// human after queue-positions merges, creates queue/done/, moves every done
+// item into it without its number and renumbers the open items; until then
+// a done item keeps a number past every open item's.
 //
 // new -follows ITEM queues a fix or follow-up of ITEM: FLOW-05 classes it
 // with the fixes, and wf next starts it only once ITEM is done. new -hold WHY
@@ -51,6 +72,24 @@
 // them. new -adopts marks a reconciliation item, which FLOW-05 classes with
 // the fixes (LOOP-07).
 //
+// new -lead, and lead for an item already queued or in progress, name the
+// host name whose machines take a feature's cloud steps of Branch setup
+// through Guide (FLOW-04, FLOW-09). Any worker may set or clear a lead; lead
+// re-labels the item's pending template steps of phases 0 to 5 that no lease
+// holds and writes one history line, which the run's digest lists under
+// Moved. A process item and a tracked item are never led.
+//
+// claim leases a step for lease_minutes (120 when unset), or, for a host
+// worker host:<name>/<machine>.<run>, for host_lease_minutes (1200 when
+// unset). renew sets a lease the worker holds to now plus that length; it
+// counts nothing against the item's budget, and commit -renewed pushes it,
+// renewing again on the new state after a rejected push, never claiming
+// (FLOW-04). release -session releases every live lease of the session, as a
+// machine's wrapper does when its session ends and an attended session at its
+// Close; release -machine M -stale releases every live lease of a host worker
+// whose session is M.<run>, other than -current and any attended-<UTC> run,
+// as the wrapper does before the gate. Each release writes a history line.
+//
 // new -urgent, and urgent for an item already queued, mark a feature so that
 // the waiting limit does not refuse its start (FLOW-05). Only a human worker
 // sets the mark, never on a process item, a tracked item or an item that
@@ -58,6 +97,10 @@
 // any item. wf does not check what the item fixes: FLOW-05 says what the
 // mark is for. claim prints the history line of a start past the waiting
 // limit.
+//
+// claim and commit -claimed count a run on the first claim of the item by the
+// worker's run, worked out from the worker and the item's history. -new-run
+// is accepted and ignored, for callers that still pass it.
 //
 // next and claim apply FLOW-05's limits to every worker: no step is offered
 // or claimed whose claim would put an item's set over the in-progress limit,
@@ -112,15 +155,21 @@
 // state write the queue file; the caller pushes it with wf commit.
 //
 // commit regenerates QUEUE.md and the digest pages (digest), commits them
-// with the PATHs given and nothing else, and pushes the workflow branch. With
-// nothing to commit it exits 0. On
+// with the PATHs given and nothing else, and pushes the workflow branch. A
+// PATH queue/F.yaml also names queue/done/F.yaml, and the reverse, when that
+// exists, so a close commits the move. It renumbers the queue, and commits
+// besides each queue file whose only uncommitted change is its priority line
+// and the move of a done item an old wf left in queue/ with no other change.
+// With nothing to commit it exits 0. On
 // a rejected push it fetches and, when the checkout holds no uncommitted
 // change that a reset would discard, resets to origin/workflow: a change is
 // replayed with cherry-pick and checked with Validate; a claim (-claimed) is
 // not replayed but asked again on the new state through what claim and, for
 // a cloud worker, next check, and claimed once more when nothing refuses it.
 // A conflict in a generated file, or in main.yaml, keeps the remote's copy;
-// one in any other file stops it. It tries three times. Exit 4: the claim is
+// one in a queue file confined to priority lines is merged again with the
+// remote's numbers (the session's, for an item it placed) and renumbered; one
+// in any other file stops it. It tries three times. Exit 4: the claim is
 // refused on the new state, and the worker asks next again. Exit 5: settle it
 // by hand (a conflict, a new Validate error, another session's uncommitted
 // files, three rejections). A change to areas.yaml is committed for a human
@@ -189,7 +238,8 @@ import (
 )
 
 const usage = "usage: wf " +
-	"validate|status|next|claim|release|check|done|answer|back|new|urgent|declare|" +
+	"validate|status|next|claim|renew|release|check|done|answer|back|new|move|urgent|lead|" +
+	"declare|" +
 	"relate|relations|stale|commit|main|digest|areas|gate|budget|migrate|drops [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
@@ -198,6 +248,7 @@ var errIdle = errors.New("idle")
 type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
 	title, source, machine, stamp, kind, holds, follows, hold string
+	lead, host, session, current, renewed                     string
 	repos, areas, seams, adopts, with, message, claimed       string
 	rev, edges                                                string
 	urgent, clear, check, list                                bool
@@ -206,7 +257,8 @@ type opts struct {
 	given                                      map[string]bool
 	base, head, mainReport, branchReport       string
 	priority, estSteps, estRuns, sweepDays, to int
-	newRun, run, record, native, md, all, held bool
+	run, record, native, md, all, held, done   bool
+	stale                                      bool
 	now                                        time.Time
 }
 
@@ -239,9 +291,10 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.worker, "worker", "", "cloud, human or host:<name>, optionally /<session>")
 	fs.StringVar(&o.feature, "feature", "", "feature name")
 	fs.StringVar(&o.step, "step", "", "step id")
-	fs.BoolVar(&o.newRun, "new-run", false, "first claim of this feature in this run")
+	fs.Bool("new-run", false, "ignored: runs are inferred from the worker and the history")
 	fs.StringVar(&o.why, "why", "", "reason for a release, or back's finding")
-	fs.IntVar(&o.to, "to", 1, "back: the phase to return to, 1 (Design) or 3 (Implement)")
+	fs.IntVar(&o.to, "to", 1, "back: the phase to return to, 1 (Design) or 3 (Implement); "+
+		"move: the position asked for")
 	fs.BoolVar(&o.run, "run", false, "run make lint / make test where a check needs them")
 	fs.StringVar(&o.question, "question", "", "question id")
 	fs.StringVar(&o.answer, "answer", "", "the human's answer")
@@ -268,12 +321,22 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.BoolVar(&o.urgent, "urgent", false,
 		"new: mark the feature urgent, a human worker only (FLOW-05)")
 	fs.BoolVar(&o.clear, "clear", false,
-		"urgent: remove the mark; relate: remove the collision")
+		"urgent: remove the mark; relate: remove the collision; lead: remove the lead")
+	fs.StringVar(&o.lead, "lead", "", "new: host:<name>, the feature's lead (FLOW-04)")
+	fs.StringVar(&o.host, "host", "", "lead: the host name that leads the feature")
 	fs.StringVar(&o.message, "m", "", "commit: the commit message")
 	fs.StringVar(&o.claimed, "claimed", "",
 		"commit: FEATURE/STEP the change claims, asked again on a rejected push")
+	fs.StringVar(&o.renewed, "renewed", "",
+		"commit: FEATURE/STEP whose lease the change renews, renewed again if rejected")
+	fs.StringVar(&o.session, "session", "",
+		"release: release every live lease of this session, <machine>.<run>")
+	fs.BoolVar(&o.stale, "stale", false,
+		"release: with -machine, release the leases earlier sessions of it left")
+	fs.StringVar(&o.current, "current", "", "release -stale: the session to spare")
 	fs.StringVar(&o.with, "with", "", "relate: the item the feature collides with")
-	fs.IntVar(&o.priority, "priority", 0, "new: priority, 1 highest")
+	fs.IntVar(&o.priority, "priority", 0,
+		"new: the position asked for, 1 first, kept as nearly as the item's class allows")
 	fs.IntVar(&o.estSteps, "estimate-steps", 0, "new: estimated steps")
 	fs.IntVar(&o.estRuns, "estimate-runs", 0, "new: estimated runs")
 	fs.StringVar(&o.machine, "machine", "", "gate: the machine's name in hosts.yaml")
@@ -283,6 +346,8 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.BoolVar(&o.native, "native", false, "budget: the native session's budget")
 	fs.BoolVar(&o.md, "md", false, "status: print the QUEUE.md summary instead")
 	fs.BoolVar(&o.all, "all", false, "status: add done items, for a retrospective (FLOW-13)")
+	fs.BoolVar(&o.done, "done", false,
+		"migrate: move the done items to queue/done/, once (queue-positions)")
 	fs.StringVar(&o.base, "base", "origin/main", "drops: the diff's base")
 	fs.StringVar(&o.head, "head", "HEAD", "drops: the diff's head")
 	fs.StringVar(&o.mainReport, "main", "", "drops: the merge base's tier1 -json report")
@@ -305,13 +370,19 @@ func run(cmd string, args []string, now time.Time) error {
 	}
 	cmds := map[string]func(*queue.State, opts) error{
 		"validate": validate, "status": status, "next": next, "check": checkPhase,
-		"answer": answer, "back": back, "new": newFeature, "urgent": urgent,
+		"answer": answer, "back": back, "new": newFeature, "move": move, "urgent": urgent,
+		"lead": lead,
 		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
 		"declare": declareItem, "relate": relate, "relations": relations,
 		"digest": digest, "areas": areasCmd,
 	}
-	for _, c := range []string{"claim", "release", "done"} {
-		cmds[c] = func(s *queue.State, o opts) error { return stepCmd(c, s, o) }
+	for _, c := range []string{"claim", "release", "renew", "done"} {
+		cmds[c] = func(s *queue.State, o opts) error {
+			if c == "release" && (o.session != "" || o.stale) {
+				return releaseLeases(s, o)
+			}
+			return stepCmd(c, s, o)
+		}
 	}
 	f, ok := cmds[cmd]
 	if !ok {
@@ -324,7 +395,7 @@ func run(cmd string, args []string, now time.Time) error {
 // files, and on a rejected push replays the change or asks the claim again.
 func commitCmd(o opts, paths []string) error {
 	lines, err := queue.Commit(o.state, queue.CommitRequest{
-		Worker: o.worker, Message: o.message, Claimed: o.claimed, NewRun: o.newRun,
+		Worker: o.worker, Message: o.message, Claimed: o.claimed, Renewed: o.renewed,
 		Paths: paths, Now: o.now,
 	})
 	for _, l := range lines {
@@ -392,10 +463,16 @@ func status(s *queue.State, o opts) error {
 		fmt.Print(queue.Summary(s))
 		return nil
 	}
+	// The positions as the order has them now, whatever a hand edit wrote.
+	s.Renumber()
 	for _, f := range s.Listed(o.all) {
 		b := f.Budget
-		fmt.Printf("%d\t%s\t%s\t%s/%d %s\tsteps %d/%d\truns %d/%d\n",
-			f.Priority, f.Feature, f.Status, f.Round, f.Phase, queue.PhaseName(f),
+		pos := "-"
+		if f.Priority > 0 {
+			pos = fmt.Sprint(f.Priority)
+		}
+		fmt.Printf("%s\t%s\t%s\t%s/%d %s\tsteps %d/%d\truns %d/%d\n",
+			pos, f.Feature, f.Status, f.Round, f.Phase, queue.PhaseName(f),
 			b.Spent.Steps, b.Estimate.Steps, b.Spent.Runs, b.Estimate.Runs)
 		if f.IsProcess() {
 			fmt.Printf("\t  process item, holds: %s\n", holdList(f.Holds))
@@ -417,6 +494,9 @@ func status(s *queue.State, o opts) error {
 		}
 		if f.Urgent != "" {
 			fmt.Printf("\t  urgent: %s\n", f.Urgent)
+		}
+		if f.Lead != "" {
+			fmt.Printf("\t  lead: %s\n", f.Lead)
 		}
 		for _, q := range f.Questions {
 			if q.Status == "open" {
@@ -486,17 +566,51 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 		if err := s.MayClaim(f, st, o.worker, o.now); err != nil {
 			return err
 		}
-		if line := s.Claim(f, st, o.worker, o.now, o.newRun); line != "" {
+		if line := s.Claim(f, st, o.worker, o.now); line != "" {
 			fmt.Println(line)
 		}
 	case "release":
 		s.Release(f, st, o.worker, o.now, o.why)
+	case "renew":
+		if err := s.Renew(f, st, o.worker, o.now); err != nil {
+			return err
+		}
 	case "done":
 		if err := finish(s, f, st, o); err != nil {
 			return err
 		}
 	}
 	return s.Save(f)
+}
+
+// releaseLeases is release -session and release -machine -stale: it releases
+// every live lease of the session, or those earlier sessions of the machine
+// left, saves each item it changed, and prints a line for each (FLOW-04).
+func releaseLeases(s *queue.State, o opts) error {
+	if o.why == "" {
+		return errors.New("release needs -why")
+	}
+	var rs []queue.Released
+	switch {
+	case o.stale && o.session == "" && o.machine != "" && o.current != "":
+		rs = s.ReleaseStale(o.machine, o.current, o.why, o.now)
+	case !o.stale && o.machine == "" && o.session != "":
+		rs = s.ReleaseSession(o.session, o.why, o.now)
+	default:
+		return errors.New("release takes -session MACHINE.RUN, or -machine M -stale " +
+			"-current M.RUN")
+	}
+	saved := map[*queue.Feature]bool{}
+	for _, r := range rs {
+		fmt.Printf("released\t%s\t%s\t%s\n", r.Feature.Feature, r.Step, r.ClaimedBy)
+		if !saved[r.Feature] {
+			saved[r.Feature] = true
+			if err := s.Save(r.Feature); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // finish is wf done: it completes the step once its done-when passes. A gate
@@ -567,10 +681,18 @@ func back(s *queue.State, o opts) error {
 }
 
 // migrate moves every unfinished item onto the single feature round and the
-// new process phases, once, after workflow-streamline merges.
+// new process phases, once, after workflow-streamline merges. With -done it
+// moves the done items to queue/done/, once, after queue-positions merges.
 func migrate(s *queue.State, o opts) error {
 	if o.worker == "" {
 		return fmt.Errorf("migrate needs -worker")
+	}
+	if o.done {
+		moved, err := s.MigrateDone(o.worker)
+		for _, f := range moved {
+			fmt.Printf("moved\t%s\tqueue/done/%s.yaml\n", f.Feature, f.Feature)
+		}
+		return err
 	}
 	changed, err := s.Migrate(o.worker, o.now)
 	if err != nil {
@@ -597,7 +719,7 @@ func newFeature(s *queue.State, o opts) error {
 	}
 	f := &queue.Feature{
 		Feature: o.feature, Title: o.title, Priority: o.priority, Source: o.source,
-		Kind: kind, Holds: holds, Follows: o.follows,
+		Kind: kind, Holds: holds, Follows: o.follows, Lead: o.lead,
 		Design: "docs/design/" + o.feature + ".md", Branch: "feat/" + o.feature,
 		Budget: queue.Budget{Estimate: queue.Count{Runs: o.estRuns, Steps: o.estSteps}},
 	}
@@ -605,8 +727,7 @@ func newFeature(s *queue.State, o opts) error {
 	if err != nil {
 		return err
 	}
-	changed, err := s.Add(f, o.now, o.worker)
-	if err != nil {
+	if err := s.Add(f, o.now, o.worker); err != nil {
 		return err
 	}
 	if taken != "" {
@@ -620,11 +741,29 @@ func newFeature(s *queue.State, o opts) error {
 			return fmt.Errorf("-hold: %w", err)
 		}
 	}
-	for _, c := range changed {
-		if err := s.Save(c); err != nil {
-			return err
-		}
+	if err := s.Save(f); err != nil {
+		return err
 	}
+	fmt.Printf("queued\t%s\tposition %d\n", f.Feature, f.Priority)
+	return nil
+}
+
+// move is wf move: the human places an open item (FLOW-05, LOOP-04).
+func move(s *queue.State, o opts) error {
+	f, err := s.Find(o.feature)
+	if err != nil {
+		return err
+	}
+	if !o.given["to"] {
+		return errors.New("move needs -to, the position asked for")
+	}
+	if err := s.Move(f, o.to, o.why, o.worker, o.now); err != nil {
+		return err
+	}
+	if err := s.Save(f); err != nil {
+		return err
+	}
+	fmt.Printf("moved\t%s\tposition %d\n", f.Feature, f.Priority)
 	return nil
 }
 
@@ -667,6 +806,9 @@ func accept(s *queue.State, f *queue.Feature, o opts) error {
 			return err
 		}
 	}
+	if f.Lead != "" && !s.Serves(f.Lead) {
+		return fmt.Errorf("-lead: no machine in hosts.yaml serves %s", f.Lead)
+	}
 	if len(f.Seams) > 0 && !s.Tracked(f) {
 		return fmt.Errorf("-seams is for a tracked item: wf declare copies the seams of "+
 			"%s, which is homed here, from its design (FLOW-02)", f.Feature)
@@ -698,6 +840,29 @@ func urgent(s *queue.State, o opts) error {
 		err = s.MarkUrgent(f, o.worker, o.now)
 	}
 	if err != nil {
+		return err
+	}
+	return s.Save(f)
+}
+
+// lead sets the feature's lead, or with -clear removes it, for any worker
+// (FLOW-04, FLOW-09).
+func lead(s *queue.State, o opts) error {
+	if o.worker == "" {
+		return errors.New("lead needs -worker")
+	}
+	if o.clear == (o.host != "") {
+		return errors.New("lead needs -host NAME or -clear")
+	}
+	f, err := s.Find(o.feature)
+	if err != nil {
+		return err
+	}
+	to := ""
+	if o.host != "" {
+		to = "host:" + strings.TrimPrefix(o.host, "host:")
+	}
+	if err := s.SetLead(f, o.worker, to, o.now); err != nil {
 		return err
 	}
 	return s.Save(f)

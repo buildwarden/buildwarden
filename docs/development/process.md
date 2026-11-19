@@ -24,9 +24,13 @@ The human takes part at three points, and the loop does everything else:
 3. **The merge** of the feature's PR, which is the sign-off (FLOW-08). The PR
    carries the archived design (FLOW-12).
 
-Publish takes one feature at a time through the PR slot: it merges current
+Publish takes a feature through the PR slot (FLOW-05): no two features
+that collide or are near have pull requests open together, while
+disjoint ones may, and their pull requests merge one at a time, each
+only while its branch contains `main` (FLOW-08). Publish merges current
 `main` and runs a **consolidation pass** against every feature that landed while
-it was being built (FLOW-10, FLOW-15), and only sends the feature back when that
+it was being built (FLOW-10, FLOW-15), and a refresh runs it again whenever
+`main` moves past the branch; either sends the feature back only when the
 pass finds real work. This is the routine form of the consolidation that
 followed the Windows driver work (the claim / tunnel / collector model). Doing it
 per feature keeps the reconciliation small and keeps terminology and shared
@@ -77,8 +81,11 @@ can compare the claim against the diff and the queue can route the work:
 - `repos` — every repository the change works in, the one that holds the
   design first, when there is more than that one (LOOP-04).
 - `areas` — the areas of the repository's area map whose files the change
-  edits (FLOW-05). A design that declares none is undeclared, and FLOW-05
-  then treats the item as colliding with every item in its repositories.
+  edits (FLOW-05). A design that leaves the key out is undeclared, as
+  FLOW-05 defines it, and FLOW-05 then treats the item as colliding with
+  every item in its repositories. `areas: []` is a declaration: the
+  change edits nothing but its own design, though an item whose home
+  repository has no map is undeclared whatever it declares (FLOW-05).
 - `security_boundary` — which GLOBAL-06 boundary is altered, if any. Any value other
   than `none` requires a security note in the design.
 - `alters_relationships` — `true` when the change alters a component's role or
@@ -104,8 +111,9 @@ it: the area map says which area reaches which.
 The automated part diffs the declared `drivers` / `seams` / `surfaces` against the
 trees and files the change reaches. It checks the declared `areas` against
 what `drivers`, `surfaces` and the `rule_changes` paths imply, at Design,
-and against the paths the change edits, from Implement on (FLOW-03). The
-agent part judges the security note.
+and against the paths the change edits, from Implement through Publish
+and at each refresh of a feature (FLOW-03). The agent part judges the
+security note.
 
 ---
 
@@ -132,11 +140,20 @@ branch, the repositories it works in and what its design declares
 
 A transition happens only when the phase's done-when checks pass mechanically
 (files present, sections filled, commands green), never on an agent's own report
-that it is done. From Plan on, each done-when also checks that the queue
-still records what the design declares; from Implement on, that every
-path the branch changes lies in an area the design declares (FLOW-02). A
-path outside them is settled by widening the declaration inside the
-approved design, or by a return to Design (FLOW-06).
+that it is done. From Plan through Publish, and at each refresh of a
+feature (FLOW-10), each done-when also checks that the queue still
+records what the design declares; from Implement through Publish, and
+at each refresh of a feature, that every path the branch changes lies
+in an area the design declares (FLOW-02). A path outside them is
+settled by widening the declaration inside the approved design, or by a
+return to Design (FLOW-06). The merge confirmation (phase 7's
+done-when) and Close run neither; a feature's refresh runs both,
+including one taken while the pull request waits at Merge, and a
+process item's refresh runs neither. An item the queue records
+no declaration for, because it finished Design before the queue
+recorded declarations, is not compared with its design; its diff check
+reads the areas the queue records, so with none it is undeclared
+(FLOW-05) and no path lies outside them.
 
 A **process item** (queue `kind: process`) changes the rules the loops run
 under: `docs/development/`, `.claude/` or `tools/workflow/`. Its design is the
@@ -182,21 +199,41 @@ Every pending step carries an affinity:
   human's merge there (FLOW-08).
 - `host:<name>` — work that needs native hardware, for example `host:macos-vz`
   (the macOS/arm64 laptop) or `host:windows-hyperv` (the Windows desktop). A
-  name `<os>-<driver>` is specific to that platform; `<capability>-any` (such as
-  `qemu-any` or `container-any`) runs on any native machine that has the
-  capability. The workflow branch's `hosts.yaml` gives each host name to exactly
-  one machine.
+  name `<os>-<driver>` is specific to that platform; `<os>-any` needs the
+  platform and no one driver; `<capability>-any` (such as `qemu-any` or
+  `container-any`) runs on any native machine that has the capability. The
+  workflow branch's `hosts.yaml` lists the machines that serve each host
+  name, one or more, and only the human changes it.
 
-A worker takes only steps whose affinity it satisfies. A step is offered when
+A feature may be **led** by a host name, which any worker may set or
+change, each change recorded in the item's history and the run's digest
+(FLOW-09). Its steps of Branch setup through Guide that would be `cloud`
+carry that `host:<name>` instead; its design review stays `human`, and its
+Publish, Merge and Close stay `cloud`. A claim by a worker that serves the
+lead starts a queued led feature, and no other claim does.
+
+A worker takes only steps whose affinity it satisfies: a machine satisfies
+each host name the table lists for it, and a `host:<name>` step goes to
+whichever such worker next takes steps. A step is offered when
 every step it needs is done and, unless it is `human`, its feature has reached
 the step's phase; no worker may claim or complete a host or cloud step of a
 later phase. A step is claimed with a
 lease (claimant plus expiry) recorded on the `workflow` branch, and only
-when FLOW-05's limits allow the claim, whoever the worker is. When the
+when FLOW-05's limits allow the claim, whoever the worker is. A claim
+names the worker's kind and session, and a machine's session names the
+machine. When the
 push of a claim is rejected because the branch moved, the claim is asked
 again on the new state: it stands if the step may still be claimed
-there, and otherwise it is lost and the worker re-reads state. An
-expired lease may be reclaimed.
+there, and otherwise it is lost and the worker re-reads state. A
+machine's lease lasts 20 hours, or what the human sets in `config.yaml`;
+its session renews it while it is actively working on the step, and a
+renewal counts nothing against the item's budget. A `cloud` or `human`
+lease lasts what the human sets, 120 minutes when he sets none. When a
+machine's scheduled session ends, the machine releases every lease that
+session still holds, and a machine releases at its next run any lease an
+earlier scheduled session of it left; an attended session releases its
+leases at its close, and a lease it leaves runs to its expiry. An expired
+lease may be reclaimed.
 
 ---
 
@@ -222,6 +259,14 @@ class in-progress items come before queued ones, then the higher priority:
    says otherwise.
 4. **New functionality**: every other feature.
 
+An open item's priority is its position in this order, 1 for the first;
+a done item has none. The queue's tooling (`wf`) renumbers the open items
+whenever a change moves one: an item queued or moved, started, changing
+class, or done. Renumbering changes the numbers, never the order. Only
+the human places an item, at intake or by moving it, except where a rule
+places it (FLOW-09, LOOP-04), and the position asked for is kept as nearly
+as the item's class, and its status within that class, allow.
+
 While a process item is in progress, a worker matching one of its `holds`
 (affinity patterns such as `cloud` or `host:*`) takes no new step, whatever
 the class of the item the step belongs to, so disruptive work waits for the
@@ -229,10 +274,10 @@ rules to settle; a step it already claimed stays claimed, and finishing the
 process item releases the hold. A hold names workers and covers work in
 every repository. Otherwise a worker takes the next ready step
 of the first item in that order, and keeps taking that item's steps until it
-blocks: on a `human` or `host:<name>` step, an exhausted budget, a limit
-below, or the human's merge (FLOW-08). Only then does it take steps from the
-next item down, and it returns to the earlier item as soon as that one has a
-ready step again.
+blocks: on a step whose affinity it does not satisfy (FLOW-04), an
+exhausted budget, a limit below, or the human's merge (FLOW-08). Only then
+does it take steps from the next item down, and it returns to the earlier
+item as soon as that one has a ready step again.
 
 A worker starts a queued item only when every item ahead of it is
 blocked. Two items that change the same thing are likely to need an
@@ -250,12 +295,16 @@ word: no agent changes it otherwise. Two items cannot both change an
 *exclusive* area; any number may change an *ordered* area, and the
 later to merge is put in order by its refresh (FLOW-10). Area A *reaches* area B when code in A
 depends on code in B; only exclusive areas reach and are reached. A
-repository with no map is one exclusive area, and
-an item that declares no areas is taken to change the whole of each
-repository it names. Two features are:
+repository with no map is one exclusive area. An item is *undeclared*
+when its `areas` are left out, when its home repository, the first it
+names and the one that holds its design (FLOW-02, LOOP-04), has no map,
+or when they name an area the map lacks, until the map has it;
+an undeclared item is taken to change the whole of each repository it
+names. A declared item whose areas are `[]` changes nothing but its own
+design (FLOW-02). Two features are:
 
 - **colliding** when they share an exclusive area; when they have a
-  repository in common and either declares no areas; when both change a
+  repository in common and either is undeclared; when both change a
   seam that has no specification (LOOP-02); or when the human says so in
   a design review (FLOW-19);
 - **near** when they do not collide and an area of one reaches an area of
@@ -419,10 +468,11 @@ Native sessions drain their host's steps and backlog in batches, testing `main` 
 every waiting branch in one sitting rather than one session per feature. Each
 native machine also runs a scheduled session that starts an agent only when a
 host step it serves is ready, or when `main` or a waiting branch has moved since
-its last sweep of open backlog entries; it is bound by the unattended loop's limits
-(FLOW-13) and records what it did in the digest. Every scheduled run, including
-one that stops before an agent starts, also records the machine's outcome and a
-one-line reason in `native/status/<machine>.yaml` on the `workflow` branch, so a
+its last sweep of open backlog entries, and never while the human has not
+confirmed the priority order; it starts from trunk, is bound by the
+unattended loop's limits (FLOW-13) and records what it did in the digest.
+Every scheduled run, including one that stops before an agent starts, also
+records the machine's outcome and a one-line reason in `native/status/<machine>.yaml` on the `workflow` branch, so a
 silent failure is still visible. A failure
 the feature's branch causes returns the feature to Design or Implement with the
 logs attached (FLOW-06). A regression `main` already has, found while the
@@ -438,8 +488,15 @@ repositories and areas of the item it follows (FLOW-02), for its design
 to confirm. The full matrix before a release (TEST-02) is the backstop for every
 tracked gap.
 
-Work whose design or implementation itself needs the native host (for example a
-platform or hypervisor update) carries `host:<name>` affinity on those phases too.
+A feature whose design or implementation itself needs a native host (for
+example a platform or hypervisor update, or a driver only that platform
+builds) is **led** by that host from its first step (FLOW-04): any worker
+may name the host name as the item's lead, at intake or later, and a
+machine that serves it takes the item's steps through Guide that would
+otherwise be `cloud` (FLOW-04). Its Publish runs on the cloud, and its
+native validation is blocking or tracked as its design says. A process
+item's native work is done in an attended native session or tracked as
+native gaps, as its design says; it is never led.
 
 ---
 
@@ -523,18 +580,26 @@ front-matter and are retrofitted when a new design first relies on them.
 **Severity:** SHOULD
 **Check:** automated
 
-The unattended loop runs once a day. Each run takes steps one at a time (read
-state, claim, work, write state) until no `cloud` step is ready or the run's
-budget is spent, and writes state after every step so an interrupted run loses at
-most the step in progress. All state it needs lives in the repository, never in a
-long-running conversation. A run spends its budget in FLOW-05 order, so the
-first item in FLOW-05's order can use all of it. A scheduled native session (FLOW-09)
-spends its own budget, `native_budget`, which falls back to the run's budget when
-unset, so native and integration testing never compete with the cloud loop. Each
+The unattended loop runs once a day in the cloud, and each native machine runs
+its scheduled session on its own schedule (FLOW-09). Each run takes steps one
+at a time (read state, claim, work, write state) until no step it may take is
+ready or the run's budget is spent, and writes state after every step so an
+interrupted run loses at most the step in progress. All state it needs lives in
+the repository, never in a long-running conversation. No unattended run takes a
+step while the human has not confirmed the priority order. A run spends its
+budget in FLOW-05 order, so the first item in FLOW-05's order can use all of it.
+The cloud run spends `run_budget`. A scheduled native session spends its own
+budget, `native_budget`, which falls back to `run_budget` when unset, so
+native and integration testing never compete with the cloud loop; a step it
+takes for an item a machine leads counts against it like any other. Each
 feature also has a work budget, which is a runaway check rather than a share of
 the run: an open (queued or in-progress) item that spends `runaway_factor` times
-its estimated steps escalates to a `human` step, and the unattended loop takes no
-more of its steps. Runs are counted but never trip it. The loop posts a periodic
+its estimated steps escalates to a `human` step, and no unattended run takes
+more of its steps, nor any step of an item with an open blocking question
+(FLOW-07). Every claim counts against the work budget, whichever worker makes
+it, except the first claim of a refresh (FLOW-10); renewing a lease does not
+(FLOW-04). Runs are counted but never trip it. The
+loop posts a periodic
 digest (what moved, what is blocked on a human, what is waiting on a native host,
 what open items spent), and notifies when a new blocking question appears. Done
 items are left out of the runaway check, of the digest's blocked and spent lines,
@@ -633,6 +698,12 @@ longer needs, with no PR and no human step:
   GitHub deletes the remote branch on merge (the repository's "Automatically
   delete head branches" setting); Close confirms it is gone, and escalates to a
   `human` step with the exact command if it is not;
+- on each native machine, the worktrees and local branch its sessions made for
+  the item: not by Close, which cannot reach them, but by the machine at its
+  next scheduled run once the item is done or its branch is gone from the
+  remote, with `git worktree remove` and `git branch -d` only, reporting a
+  worktree with uncommitted changes or a branch `-d` refuses instead of
+  removing it;
 - the branches it was stacked on, once they are merged too;
 - the leftovers of its validation: test images and containers, downloaded
   media, scratch output, and anything created outside the documented cache
@@ -648,16 +719,17 @@ reason to keep a branch; it starts from trunk on a new one.
 Deleting a branch loses any commit not on trunk, so a branch is deleted only
 after it is shown to be contained in trunk (`git branch --merged`, the PR's
 merge commit, or, for a squash merge, a commit on trunk naming the PR whose
-tree equals the branch head's tree, or a one-parent such commit whose change
-from its parent has the same `git patch-id --verbatim` as the branch head's
-change from its merge base with that parent), with git's safe forms
+tree equals the branch head's tree, or a one-parent such commit C whose
+tree is exactly what merging the branch head onto C's parent writes, from
+the single merge base B of the two:
+`git merge-tree --write-tree --merge-base=B C^ <head>`), with git's safe forms
 (`git branch -d`) and never by force-pushing. `git branch -d` refuses a
 squash-merged branch, so that case alone deletes the local branch with
-`git branch -D`, and only after `wf check` has shown the equal tree or change;
-otherwise the escalation gives the human these commands, and an agent never
-runs them. Caches a later build reuses (prepared images, support images)
-stay. An agent without permission to delete lists the exact commands for the
-human instead of skipping the step.
+`git branch -D`, and only after `wf check` has shown the equal tree or
+that merge; otherwise the escalation gives the human these commands, and
+an agent never runs them. Caches a later build reuses (prepared images,
+support images) stay. An agent without permission to delete lists the
+exact commands for the human instead of skipping the step.
 
 The automated part reports remote and local branches already merged into trunk
 that no open design claims.
@@ -676,7 +748,11 @@ the change touches). The pushed branch is the backup and the hand-off point.
 
 Opening the PR to `main` needs no confirmation either (FLOW-08). Pushing
 never includes `main` itself, a force-push, rewriting history that is already on
-the remote, or deleting a remote branch (FLOW-16).
+the remote, or deleting a remote branch (FLOW-16). An unattended session on a
+native machine pushes a feature branch only through the loop's push script
+on trunk, which pushes one branch of an item in progress, fast-forward only,
+and the queue state only through the loop's state commit; it runs no other
+push.
 
 ---
 
@@ -691,6 +767,9 @@ three uses: a daily run resumes the previous run's session instead of starting
 cold (`entire session resume`), the Review phase and the human's design review and
 merge read why a
 change was made alongside the diff, and past sessions become searchable memory.
+Every worker records its sessions this way, on whichever machine it runs. A
+native machine whose session cannot be recorded takes no step of an item it
+leads in that run, and its report says so.
 
 The recordings go only to the private `buildwarden/buildwarden-sessions`
 repository, named by the `checkpoint_remote` setting in `.entire/settings.json`.
@@ -729,8 +808,15 @@ as a list of questions. The session goes over, at a high level:
 - the defaults, overrides and named fallbacks the design adds or changes
   (GLOBAL-09 to GLOBAL-11);
 - each `rule_changes` entry (FLOW-14), shown with its current and proposed
-  wording and asked on its own: approved, approved with a change, or rejected;
-- each assumed question, confirmed or turned into a change (FLOW-07).
+  wording and answered on its own: approved, approved with a change, or
+  rejected. Up to one question call's worth of entries may be shown
+  together;
+- each assumed question, confirmed or turned into a change (FLOW-07). The
+  human may confirm, in one answer, every assumed question that is not
+  flagged as recommended, naming any exceptions; each exception is then
+  answered on its own. A question is flagged, and always answered on its
+  own, when it touches a security boundary or a seam, or departs from
+  prior art or from an earlier decision of the human's.
 
 It ends approved, or with changes that send the feature back to Design with the
 human's notes as the finding. The design's **Design review** section records each
