@@ -103,8 +103,9 @@ func ReadProfile(path string) (*Profile, error) {
 // A file that leaves trunk out repeats nothing and passes.
 func (p *Profile) CheckTrunk(name, entryTrunk string) error {
 	if p.Trunk != "" && p.Trunk != entryTrunk {
-		return fmt.Errorf("profile file %s gives trunk %q, but config.yaml's entry gives %q, "+
-			"which wf uses: make them equal (LOOP-01)", name, p.Trunk, entryTrunk)
+		return fmt.Errorf("profile file %s gives trunk %q, but config.yaml's entry "+
+			"gives %q, which wf uses: make them equal (LOOP-01)", name, p.Trunk,
+			entryTrunk)
 	}
 	return nil
 }

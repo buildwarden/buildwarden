@@ -2128,8 +2128,9 @@ func TestValidateRepositories(t *testing.T) {
 		edit func(s *State, f *Feature)
 		want []string
 	}{
-		{"all entered", func(s *State, f *Feature) { f.Repos = []string{"o/here", "o/specs"} },
-			nil},
+		{"all entered", func(s *State, f *Feature) {
+			f.Repos = []string{"o/here", "o/specs"}
+		}, nil},
 		{"no entry for a second repository", func(s *State, f *Feature) {
 			f.Repos = []string{"o/here", "o/new", "o/new"}
 		}, []string{"a: repos names o/new, which has no entry in config.yaml's " +
@@ -2175,7 +2176,8 @@ func TestConfigTrunk(t *testing.T) {
 		got, err := c.Trunk(tc.repo)
 		if got != tc.want || (err == nil) != (tc.err == "") ||
 			(err != nil && !strings.Contains(err.Error(), tc.err)) {
-			t.Errorf("Trunk(%s) = %q, %v; want %q, %q", tc.repo, got, err, tc.want, tc.err)
+			t.Errorf("Trunk(%s) = %q, %v; want %q, %q", tc.repo, got, err, tc.want,
+				tc.err)
 		}
 	}
 }

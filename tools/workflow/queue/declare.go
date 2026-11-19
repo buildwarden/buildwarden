@@ -141,8 +141,9 @@ func declaredWork(f *Feature, repos, mergeFirst, live []string) ([]Work, error) 
 	for _, old := range f.Work {
 		if !slices.ContainsFunc(out, func(w Work) bool { return w.Repo == old.Repo }) &&
 			slices.Contains(live, old.Repo) {
-			return nil, fmt.Errorf("%s: the design no longer names %s, but the item's "+
-				"branch %s exists there; wf declare changed nothing (FLOW-16)",
+			return nil, fmt.Errorf("%s: the design no longer names %s, but the "+
+				"item's branch %s exists there; wf declare changed nothing "+
+				"(FLOW-16)",
 				f.Feature, old.Repo, old.Branch)
 		}
 	}
@@ -159,6 +160,22 @@ func mergeFirstOf(d Declaration) []string {
 		}
 	}
 	return out
+}
+
+// mergeFirstChange describes how the declaration changes which work entries
+// are first, or "". An item declared before work existed gains its entries
+// at its next declaration, which changes no repository, so it has none.
+func mergeFirstChange(f *Feature, to Declaration) string {
+	if len(f.Work) == 0 {
+		return ""
+	}
+	var was []string
+	for _, w := range f.Work {
+		if w.First {
+			was = append(was, w.Repo)
+		}
+	}
+	return delta(was, mergeFirstOf(to))
 }
 
 // workChange describes the change of the work entries' repositories and
@@ -378,18 +395,8 @@ func (s *State) widening(f *Feature, to Declaration, w Within) (map[string]strin
 	if was, now := boolOrUnset(f.AltersRelationships), boolOrUnset(to.Alters); was != now {
 		differs = append(differs, "alters_relationships "+was+" -> "+now)
 	}
-	// An item declared before work existed gains its entries here, which
-	// changes no repository; a changed merge_first is a design change.
-	if len(f.Work) > 0 {
-		var was []string
-		for _, w := range f.Work {
-			if w.First {
-				was = append(was, w.Repo)
-			}
-		}
-		if change := delta(was, mergeFirstOf(to)); change != "" {
-			differs = append(differs, "merge_first "+change)
-		}
+	if change := mergeFirstChange(f, to); change != "" {
+		differs = append(differs, "merge_first "+change)
 	}
 	if f.DesignReview != to.DesignReview {
 		differs = append(differs, "design_review "+orUnset(f.DesignReview)+" -> "+

@@ -63,7 +63,8 @@ func TestParseProfile(t *testing.T) {
 		{"empty", "", "is empty"},
 		{"unknown version", "version: 2\n", "version 2 is not one this wf reads"},
 		{"no version", "component: x\n", "version 0 is not one this wf reads"},
-		{"unknown key", "version: 1\nfast_gates: [[make]]\n", "field fast_gates not found"},
+		{"unknown key", "version: 1\nfast_gates: [[make]]\n",
+			"field fast_gates not found"},
 		{"not yaml", "version: [\n", "p.yaml"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -73,9 +74,9 @@ func TestParseProfile(t *testing.T) {
 					t.Fatal(err)
 				}
 				// An absent key is the term none.
-				if p.FastGate != nil || p.Rules.Paths != nil || p.Impact.Keys != nil ||
-					p.ReferenceDocs.Guides != nil || p.Native.Prepare != nil ||
-					p.Rules.Index != "" {
+				if p.FastGate != nil || p.Rules.Paths != nil ||
+					p.Impact.Keys != nil || p.ReferenceDocs.Guides != nil ||
+					p.Native.Prepare != nil || p.Rules.Index != "" {
 					t.Errorf("absent keys not none: %+v", p)
 				}
 				return
@@ -100,7 +101,8 @@ func TestProfileRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Component != "relay" || !reflect.DeepEqual(p.FastGate, [][]string{{"cargo", "test"}}) ||
+	if p.Component != "relay" ||
+		!reflect.DeepEqual(p.FastGate, [][]string{{"cargo", "test"}}) ||
 		!reflect.DeepEqual(p.ReferenceDocs.Guides, []string{"book/"}) ||
 		!reflect.DeepEqual(p.Rules.Paths, []string{"rules/"}) || p.Rules.Machinery != nil {
 		t.Errorf("%+v", p)
@@ -114,7 +116,8 @@ func TestProfileCheckTrunk(t *testing.T) {
 	p := &Profile{Trunk: "trunk"}
 	err := p.CheckTrunk("p.yaml", "main")
 	if err == nil || !strings.Contains(err.Error(), `"trunk"`) ||
-		!strings.Contains(err.Error(), `"main"`) || !strings.Contains(err.Error(), "p.yaml") {
+		!strings.Contains(err.Error(), `"main"`) ||
+		!strings.Contains(err.Error(), "p.yaml") {
 		t.Errorf("err %v, want both values and the file", err)
 	}
 	if err := (&Profile{}).CheckTrunk("p.yaml", "main"); err != nil {

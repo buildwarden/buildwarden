@@ -1015,11 +1015,13 @@ func (s *State) validateRepositories() []error {
 				"owner/name", who, e.Name))
 		}
 		if seen[e.Name] {
-			errs = append(errs, fmt.Errorf("config: repositories names %s twice", e.Name))
+			errs = append(errs, fmt.Errorf("config: repositories names %s twice",
+				e.Name))
 		}
 		seen[e.Name] = true
 		if e.Trunk == "" {
-			errs = append(errs, fmt.Errorf("config: repositories %s has no trunk", who))
+			errs = append(errs, fmt.Errorf("config: repositories %s has no trunk",
+				who))
 		}
 	}
 	if r := s.Config.Repository; r != "" && !seen[r] {
@@ -1082,13 +1084,7 @@ func (s *State) Problems(f *Feature) []error {
 		tracked = f.Round == "tracked"
 	}
 	f.validate(bad, tracked)
-	for i, r := range f.Repos {
-		if repoRe.MatchString(r) && s.Config.Repository != "" && s.Config.Entry(r) == nil &&
-			!slices.Contains(f.Repos[:i], r) {
-			bad("repos names %s, which has no entry in config.yaml's repositories: an "+
-				"attended session adds it with its trunk", r)
-		}
-	}
+	s.validateEntered(f, bad)
 	s.validateDeclared(f, bad)
 	s.validateUrgent(f, bad)
 	s.validateLead(f, bad)
@@ -1097,6 +1093,22 @@ func (s *State) Problems(f *Feature) []error {
 	}
 	validateWork(f, bad)
 	return errs
+}
+
+// validateEntered checks that each repository the item names has a
+// repositories entry. With no queue repository set, the fallback of
+// Problems, entries are not read either.
+func (s *State) validateEntered(f *Feature, bad func(string, ...any)) {
+	if s.Config.Repository == "" {
+		return
+	}
+	for i, r := range f.Repos {
+		if repoRe.MatchString(r) && s.Config.Entry(r) == nil &&
+			!slices.Contains(f.Repos[:i], r) {
+			bad("repos names %s, which has no entry in config.yaml's repositories: "+
+				"an attended session adds it with its trunk", r)
+		}
+	}
 }
 
 // validateWork checks that work, once written, has one entry for each
@@ -1113,7 +1125,8 @@ func validateWork(f *Feature, bad func(string, ...any)) {
 	for _, w := range f.Work {
 		got = append(got, w.Repo)
 		if w.Branch != f.Branch {
-			bad("work %s: branch %q is not the item's branch %q", w.Repo, w.Branch, f.Branch)
+			bad("work %s: branch %q is not the item's branch %q", w.Repo, w.Branch,
+				f.Branch)
 		}
 		if w.PR != nil && w.PR.Head != "" && !commitRe.MatchString(w.PR.Head) {
 			bad("work %s: pr.head %q is not a commit id", w.Repo, w.PR.Head)

@@ -228,8 +228,9 @@ func TestDeclareWork(t *testing.T) {
 	// names the flag and the path (Validation plan test 15).
 	writeDesign(t, work, "w", text("["+mapRepo+"]", "[]"))
 	refused(t, dir, "o/specs is not the queue's own repository, and no -checkouts is "+
-		"given: wf reads it in DIR/o/specs, given -checkouts DIR", "declare", "-repo", work,
-		"-worker", "cloud/run", "-feature", "w")
+		"given: wf reads it in DIR/o/specs, given -checkouts DIR", "declare",
+		"-repo", work, "-worker", "cloud/run", "-feature", "w")
 	refused(t, dir, "no clone of o/specs at "+filepath.Join(work, "o", "specs"),
-		"declare", "-repo", work, "-checkouts", work, "-worker", "cloud/run", "-feature", "w")
+		"declare", "-repo", work, "-checkouts", work, "-worker", "cloud/run",
+		"-feature", "w")
 }

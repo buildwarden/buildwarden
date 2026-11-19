@@ -290,7 +290,8 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.state, "state", ".", "checkout of the workflow branch")
 	fs.StringVar(&o.repo, "repo", ".", "checkout of the code, origin fetched")
 	fs.StringVar(&o.checkouts, "checkouts", "",
-		"a directory of clones of the other repositories, DIR/<owner>/<name>, origin fetched")
+		"a directory of clones of the other repositories, DIR/<owner>/<name>, "+
+			"origin fetched")
 	fs.StringVar(&o.worker, "worker", "", "cloud, human or host:<name>, optionally /<session>")
 	fs.StringVar(&o.feature, "feature", "", "feature name")
 	fs.StringVar(&o.step, "step", "", "step id")
