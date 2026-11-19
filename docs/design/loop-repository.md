@@ -1,6 +1,6 @@
 ---
 feature: loop-repository
-status: draft
+status: archived
 drivers: []              # the loop's tools, skills and rules; no driver tree is reached
 seams: []                # no GLOBAL-08 seam changes; the Loop Contract is seam 10 of the
                          # umbrella, a document, and the profile file is part of it (LOOP-01)
@@ -2446,7 +2446,12 @@ pull request that adopts it has merged, such as the relay's (Decision 3).
 
 ## Consolidation
 
-Filled in at Publish.
+A process item has no Publish phase and no consolidation pass (FLOW-03).
+The implement step merged current `main` (`e9315c2`, at `6ad05ea`) before
+it began, bringing in `queue-positions` (#126), `loop-streamline-2` (#127),
+`loop-parallel-rule-wording` (#128) and `loop-native-lead` (#129); `main`
+had not moved when the PR was opened. Its open PR is refreshed like a
+feature's (FLOW-10).
 
 ## Rollback notes
 
@@ -2454,4 +2459,98 @@ None.
 
 ## Archive summary
 
-Filled in at Publish.
+Implemented on 2026-11-19 as a process item (`x2-implement`), after design
+review r1 approved the design and its ten rule changes at `61f6fbe` on
+2026-11-17 (Jeff; q1 answered (C); a1 to a17 as recommended, a13 (b)), and
+after `x2-predecessors-merged` found the eight overlapping paragraphs on
+`main` at `e9315c2` equal to the approved text (no delta review, FLOW-19).
+It is P1's fifth item under FLOW-20 (`componentization`); the move of the
+loop to its own repository is P1's last item and follows it.
+
+- **Rule text** (`docs/development/process.md`,
+  `docs/development/loop-contract.md`, `docs/development/loop-profile.md`,
+  `docs/design/TEMPLATE.md`), word for word as approved over the
+  predecessors' merged text: FLOW-02 (`merge_first`, prefixed `areas`, the
+  profile's keys as this repository's), FLOW-03 (branches per repository,
+  tracked from `config.yaml`), FLOW-04 (repository-qualified host
+  satisfaction), FLOW-08 (merge ban and sign-off per trunk), FLOW-10
+  (Publish and refresh per trunk), FLOW-16 and FLOW-17 (per repository,
+  the clone push), LOOP-01 (the profile file), LOOP-08 (step 2) and
+  PROFILE-01 (the profile file, the Native hosts row). The enforcement-only
+  changes to FLOW-12, FLOW-14, LINT-01, LINT-04 and LINT-05 (LINT-05's
+  owner line in `tools/tier1/rules.yaml`) landed with their code.
+- **Built: the profile file** (`docs/development/loop-profile.yaml`,
+  `tools/workflow/check/profile.go`): the PROFILE-01 entries the tools
+  read; an absent key is none, an unknown key, version or unparseable file
+  fails, a trunk differing from `config.yaml`'s entry fails.
+- **Built: repositories and work** (`queue/`, `cmd/wf`): `config.yaml`'s
+  `repositories` (name, `trunk`, `profile` once adopted), the only place a
+  trunk is read; `work` in the queue file, written by `wf declare` from
+  `repos` and `merge_first`, never dropping an entry whose branch is
+  pushed.
+- **Built: the checker per repository** (`check/`): `-checkouts DIR`; each
+  repository's trunk, fast gate (the profile's; none without one), trial
+  merges, green PR and deletions; `Front.Problems` from the home's profile
+  file with `merge_first` and prefixed areas; rule-path classification from
+  the profile file at the merge base; the merge proof per `work` entry and
+  `f6-merged-<n>` for an entry marked `first`; `tier2Report` requiring the
+  report's `heads` to equal every branch head; tracked meaning a home whose
+  entry names no profile, the process home checked through `homedHere`.
+- **Built: state per repository**: `repos/<owner>/<name>/areas.yaml` and
+  `main.yaml`, `wf main -repository`, `wf areas -check/-list -repository`,
+  `wf stale` per trunk; FLOW-05 relations read prefixed areas against that
+  repository's map.
+- **Built: the native side**: `hosts.yaml`'s `repositories` and the
+  routing in `wf gate`, `wf next`, `wf validate`, `wf lead`, `wf new
+  -lead` and `wf declare`; `wf native -clones/-prepare/-check`;
+  `native-tick.sh`'s clone reset, per-clone worktree cleanup and
+  `native.prepare`; the installers' `wf native -check`; `native-push.sh
+  <name> [<owner>/<repo>]`; the two narrow allows `Bash(git -C
+  .dev/checkouts/* fetch*)` and `Bash(git -C .dev/checkouts/* worktree*)`.
+- **Built: `wf rules`** (a13 (b)): the rule index, the Tier1-Allow trailer
+  parsing and the design-front-matter check moved into
+  `tools/workflow/check`, tier 1 keeping thin wrappers; tier 1's output is
+  byte-identical before and after the move (test 11, run by hand).
+- **Skills and agents**: `workflow-tick`, `workflow-native`,
+  `workflow-intake`, `workflow-human`, `wf-publish` (a PR per repository),
+  `wf-implement` and `wf-review` (the profile's fast gate; the report's
+  `heads`), and the six phase agents' clone push sentence.
+- **Deviations and choices.** Test 11 is a recorded manual comparison, not
+  a committed test; test 10's fixture is the live state at `c0b3295` kept
+  as base64 text of a tarball under `cmd/wf/testdata/` (Git's line-ending
+  normalisation changed a raw tarball); the wrapper's clone handling is
+  tested through `wf native` and the push tests, not end to end on a
+  machine; FLOW-05 relations and the merge record per repository
+  (`UndeclaredIn`, `AreasIn`, `check.WorkMerges`) were added where the
+  plan's tasks needed them.
+- **Decisions taken.** A profile file the tools read (1), from the branch
+  checked (2); every repository named in `config.yaml`, its trunk only
+  there (3); a branch and PR per repository (4); gates in each (5); every
+  merge seen (6); a home's round by adoption (7); state beside the root's
+  (8); areas prefixed outside the home (9); holds name workers (10); no
+  worker held (11); checkouts under `.dev/checkouts` (12); one tier-2
+  report per branch state (13); the generic checks in `wf` (14); one
+  dedicated checkout per repository on a machine (15); a private
+  repository published as a public one (19, q1 (C)).
+- **Rejected.** Parsing the profile's Markdown table, or its entries in
+  `config.yaml`; reading the profile from trunk; the trunk from the
+  remote's default branch or from the profile; every component's designs
+  carrying all twelve keys; a public-only loop (q1 (A)); a private report
+  store (q1 (B)); one broad native allow.
+- **For future designs touching `second-repository`, `component-profile`,
+  `profile-file`, `work-list`, `branches-per-repository`,
+  `pull-requests-per-repository`, `area-map`, `tracked-items`,
+  `native-checkouts` or `tier1-generic-checks`:** a repository's `profile`
+  is added to its `config.yaml` entry only after the PR that adopts it
+  merges, and branches open then that forked before fail the rule-change
+  clearance until they next merge their trunk (the accepted one-time
+  cost). The designs directory, the template and the branch pattern are
+  still hard-coded (`loadDesign`, `Drops`, `wf new`), not read from the
+  profile: a follow-up. The relay adopts in its own item.
+- **Around the merge**, in the attended sitting that merges it (no run in
+  progress): before it, `config.yaml`'s `repositories` with
+  `buildwarden/buildwarden` and `buildwarden/buildwarden-specs` (`trunk:
+  main`, no `profile`) and the `workflow` branch's `README.md` (14a);
+  right after it, before the next run, `profile:
+  docs/development/loop-profile.yaml` on `buildwarden/buildwarden`'s entry
+  and `wf validate` with the merged `wf` (14b).
