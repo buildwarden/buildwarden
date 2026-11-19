@@ -4,6 +4,7 @@ package check
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -406,17 +407,64 @@ func (c *checker) docsTouched(name string, prefixes ...string) {
 	c.add(name, false, "surfaces %v but nothing under %v changed", d.Front.Surfaces, prefixes)
 }
 
+// tier2Report checks that the tier-2 report for the home's branch head is
+// written, and that the heads its JSON records are the item's current
+// branch heads in every repository it has a branch in: one report covers
+// one state of all the item's branches (LINT-04). An item with no work entry
+// may have a report without heads, as every report before them.
 func (c *checker) tier2Report() {
 	sha, err := c.git("rev-parse", "--short=12", "refs/heads/"+c.f.Branch)
 	if err != nil {
 		c.add("tier-2 report (LINT-04)", false, "%v", err)
 		return
 	}
+	var jsonPath string
 	for _, ext := range []string{".md", ".json"} {
 		p := filepath.Join(c.env.Workflow, "reports", c.f.Feature, sha+ext)
 		_, err := os.Stat(p)
 		c.add("tier-2 report "+ext+" (LINT-04, LINT-05)", err == nil, "%s", p)
+		if err == nil && ext == ".json" {
+			jsonPath = p
+		}
 	}
+	if jsonPath != "" {
+		c.reportHeads(jsonPath)
+	}
+}
+
+// reportHeads compares the report's heads with each repository's branch
+// head.
+func (c *checker) reportHeads(path string) {
+	const name = "tier-2 report heads (LINT-04)"
+	var rep struct {
+		Heads map[string]string `json:"heads"`
+	}
+	data, err := os.ReadFile(path)
+	if err == nil {
+		err = json.Unmarshal(data, &rep)
+	}
+	if err != nil {
+		c.add(name, false, "%s: %v", path, err)
+		return
+	}
+	if rep.Heads == nil && len(c.f.Work) == 0 {
+		return
+	}
+	var stale []string
+	c.each(func() {
+		head, err := c.git("rev-parse", "refs/heads/"+c.f.Branch)
+		got := rep.Heads[c.at.name]
+		if err != nil || len(got) < 7 || !strings.HasPrefix(head, got) {
+			stale = append(stale, fmt.Sprintf("%s: report %s, branch %s", c.at.name,
+				orNone(got), orNone(short(head))))
+		}
+	})
+	if len(stale) > 0 {
+		c.add(name, false, "the report's heads are not the item's branch heads: %s",
+			strings.Join(stale, "; "))
+		return
+	}
+	c.add(name, true, "every branch head is the one the report read")
 }
 
 // prGreen checks that the PR is open with its checks green on the branch's

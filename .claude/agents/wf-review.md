@@ -45,9 +45,12 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
    the feature's follow-up by the `workflow-intake` skill's follow-up path,
    and list it in the report as "<slug> (follows <feature>)" (FLOW-09).
 4. Write `reports/<feature>/<sha12>.json` and `.md` on the workflow checkout,
-   `<sha12>` the branch head's 12-character short hash (LINT-05: stable,
+   `<sha12>` the home branch head's 12-character short hash (LINT-05: stable,
    diffable, counts by severity, suppressions with reasons carried over from
-   the previous report).
+   the previous report). The JSON's `heads` maps each repository the report
+   read, `<owner>/<name>`, to the 12-character head of the item's branch
+   there; Review's check passes only when they are the item's current heads
+   (LINT-04).
 5. Fixing findings is not your job. Return the counts; the tick sends MUST
    findings back to `wf-implement` and records the rest for the PR body, where the human acknowledges them at merge
    (FLOW-08).

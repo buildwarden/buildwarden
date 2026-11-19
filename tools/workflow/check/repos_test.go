@@ -2,6 +2,7 @@ package check
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -246,4 +247,57 @@ func TestMergedPerRepository(t *testing.T) {
 	if rs := MergedFirst(env, f, 2); OK(rs) {
 		t.Fatalf("f6-merged-2 with one work entry: %+v", rs)
 	}
+}
+
+// TestReportHeads: Review's report check passes only when the report's
+// heads are the item's branch heads in every repository (a12, LINT-04).
+func TestReportHeads(t *testing.T) {
+	env, f, clone := twoRepos(t, 4, specsProfile)
+	branchIn(t, clone, "spec.md")
+	env.Workflow = t.TempDir()
+	home := strings.TrimSpace(gitOut(t, env.Repo, "rev-parse", "--short=12", "feat/demo"))
+	specs := strings.TrimSpace(gitOut(t, clone, "rev-parse", "--short=12", "feat/demo"))
+	dir := filepath.Join(env.Workflow, "reports", "demo")
+	_ = os.MkdirAll(dir, 0o755)
+	write := func(json string) {
+		for _, ext := range []string{".md", ".json"} {
+			if err := os.WriteFile(filepath.Join(dir, home+ext), []byte(json), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	const name = "tier-2 report heads (LINT-04)"
+	for _, tc := range []struct {
+		why, json string
+		ok        bool
+	}{
+		{"no heads", `{}`, false},
+		{"the second head missing", `{"heads": {"o/here": "` + home + `"}}`, false},
+		{"a stale head", `{"heads": {"o/here": "` + home + `", "o/specs": "0123456789ab"}}`,
+			false},
+		{"every head", `{"heads": {"o/here": "` + home + `", "o/specs": "` + specs + `"}}`,
+			true},
+	} {
+		write(tc.json)
+		if r := result(t, Phase(env, f), name); r.OK != tc.ok {
+			t.Errorf("%s: %+v", tc.why, r)
+		}
+	}
+	// An item with no work entry may have a report without heads.
+	f.Repos, f.Work = nil, nil
+	write(`{}`)
+	for _, r := range Phase(env, f) {
+		if r.Name == name {
+			t.Errorf("no work, no heads: %+v", r)
+		}
+	}
+}
+
+func gitOut(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
 }
