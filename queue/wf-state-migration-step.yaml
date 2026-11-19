@@ -1,6 +1,6 @@
 feature: wf-state-migration-step
 title: A shipped wf state-migration step in place of hand-added x4-state steps
-priority: 5
+priority: 6
 kind: process
 status: queued
 round: process

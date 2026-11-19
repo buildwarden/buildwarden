@@ -1,6 +1,6 @@
 feature: merge-confirm-attended
 title: An attended session confirms a merge it watched, with the merge step's done-when check kept
-priority: 4
+priority: 5
 kind: process
 status: queued
 round: process
