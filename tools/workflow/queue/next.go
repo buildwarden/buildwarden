@@ -230,6 +230,9 @@ func (s *State) wait(f *Feature, st *Step, worker string, now time.Time) (string
 	case st.Lease.Held(now) && st.Lease.ClaimedBy != worker:
 		return fmt.Sprintf("step %s leased to %s", st.ID, st.Lease.ClaimedBy), refusal{}
 	}
+	if why := s.machineRefuses(f, st, worker); why != "" {
+		return why, refusal{}
+	}
 	if Kind(worker) != "human" {
 		if why, red := s.unattendedHold(f, st); why != "" {
 			return why, refusal{red: red}

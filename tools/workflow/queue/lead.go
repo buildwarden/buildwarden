@@ -97,7 +97,7 @@ func (s *State) mayLead(f *Feature, lead string) error {
 	case lead != "" && !s.Serves(lead):
 		return fmt.Errorf("no machine in hosts.yaml serves %s", lead)
 	}
-	return nil
+	return s.MayLeadOn(f, lead)
 }
 
 // relabel gives each pending cloud template step of phases 0 to 5 the

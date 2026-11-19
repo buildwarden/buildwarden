@@ -247,6 +247,9 @@ type Step struct {
 	Needs    []string `yaml:"needs,omitempty"`
 	Lease    Lease    `yaml:"lease"`
 	Note     string   `yaml:"note,omitempty"`
+	// Repo is the repository a host step runs in, one of the item's work
+	// entries; empty, the item's home (FLOW-04).
+	Repo string `yaml:"repo,omitempty"`
 }
 
 // Lease is a claim on a step: who holds it and until when.

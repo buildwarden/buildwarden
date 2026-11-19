@@ -104,6 +104,14 @@ func (s *State) Declare(f *Feature, d Declaration, worker string, now time.Time)
 	f.Repos, f.Areas, f.Seams, f.RulesChanged = to.Repos, to.Areas, to.Seams, to.RulesChanged
 	f.Work = work
 	f.AltersRelationships, f.DesignReview = to.Alters, to.DesignReview
+	if f.Lead != "" {
+		// A lead says where the work must run: wf declare never clears it,
+		// and refuses repositories no machine serving it lists (FLOW-04).
+		if err := s.MayLeadOn(f, f.Lead); err != nil {
+			*f = before
+			return fmt.Errorf("%v; wf declare changed nothing", err)
+		}
+	}
 	if over := s.newLimitFindings(was); len(over) > 0 {
 		*f = before
 		then := "back to Design (FLOW-06)"

@@ -833,6 +833,11 @@ func accept(s *queue.State, f *queue.Feature, o opts) error {
 	if f.Lead != "" && !s.Serves(f.Lead) {
 		return fmt.Errorf("-lead: no machine in hosts.yaml serves %s", f.Lead)
 	}
+	if f.Lead != "" {
+		if err := s.MayLeadOn(f, f.Lead); err != nil {
+			return fmt.Errorf("-lead: %w", err)
+		}
+	}
 	if len(f.Seams) > 0 && !s.Tracked(f) {
 		return fmt.Errorf("-seams is for a tracked item: wf declare copies the seams of "+
 			"%s, which is homed here, from its design (FLOW-02)", f.Feature)

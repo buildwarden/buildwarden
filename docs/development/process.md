@@ -214,9 +214,8 @@ Every pending step carries an affinity:
 - `human` — answering blocking questions, the design review (FLOW-19), and
   escalations: a runaway budget (FLOW-13), CI repair exhausted (FLOW-11), a third
   return to Design (FLOW-06), a branch that did not delete on merge (FLOW-16).
-  Also the steps of work in a repository where the loop's gates do not
-  run: a tracked item's steps (FLOW-03), and a step that records the
-  human's merge there (FLOW-08).
+  Also a tracked item's steps (FLOW-03), and a step its design adds that
+  only the human may take, such as cutting a release.
 - `host:<name>` — work that needs native hardware, for example `host:macos-vz`
   (the macOS/arm64 laptop) or `host:windows-hyperv` (the Windows desktop). A
   name `<os>-<driver>` is specific to that platform; `<os>-any` needs the
@@ -233,8 +232,11 @@ Publish, Merge and Close stay `cloud`. A claim by a worker that serves the
 lead starts a queued led feature, and no other claim does.
 
 A worker takes only steps whose affinity it satisfies: a machine satisfies
-each host name the table lists for it, and a `host:<name>` step goes to
-whichever such worker next takes steps. A step is offered when
+each host name the table lists for it, for a step in a repository the
+table lists for that machine (only the queue's own repository when it
+lists none; a led item's step is in every repository the item works
+in), and a `host:<name>` step goes to whichever such worker next takes
+steps. A step is offered when
 every step it needs is done and, unless it is `human`, its feature has reached
 the step's phase; no worker may claim or complete a host or cloud step of a
 later phase. A step is claimed with a
