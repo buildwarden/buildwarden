@@ -3,6 +3,7 @@ package main
 import (
 	"archive/tar"
 	"compress/gzip"
+	"encoding/base64"
 	"errors"
 	"io"
 	"os"
@@ -17,19 +18,19 @@ import (
 // on it: wf next, wf status -md and wf validate.
 const fixture = "testdata/c0b3295"
 
-// copyFixture extracts the fixture's state, kept as state.tar.gz so that
-// the repository's text scans do not read the queue's history as source,
-// into a new directory and appends the repositories entries to its
-// config.yaml.
+// copyFixture extracts the fixture's state, kept as a base64 tarball so
+// that the repository's text scans do not read the queue's history as
+// source and a checkout's line endings cannot change it, into a new
+// directory and appends the repositories entries to its config.yaml.
 func copyFixture(t *testing.T, entries string) string {
 	t.Helper()
 	dir := t.TempDir()
-	f, err := os.Open(filepath.Join(fixture, "state.tar.gz"))
+	f, err := os.Open(filepath.Join(fixture, "state.tar.gz.b64"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = f.Close() }()
-	z, err := gzip.NewReader(f)
+	z, err := gzip.NewReader(base64.NewDecoder(base64.StdEncoding, f))
 	if err != nil {
 		t.Fatal(err)
 	}
