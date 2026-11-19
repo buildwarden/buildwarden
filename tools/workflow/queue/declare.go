@@ -204,7 +204,7 @@ func (s *State) MayDeclare(f *Feature, worker string) error {
 		return errors.New("wf declare needs -worker")
 	case s.Tracked(f):
 		return fmt.Errorf("%s is tracked: wf cannot read its design in %s; wf new "+
-			"records what it declares", f.Feature, f.Repos[0])
+			"records what it declares", f.Feature, s.Home(f))
 	case f.Status == "done":
 		return fmt.Errorf("%s is done", f.Feature)
 	}

@@ -965,11 +965,33 @@ func (s *State) waitingLimit() int {
 	return 8
 }
 
-// Tracked reports whether the item's home, its first repository, is not the
-// queue's own: wf sees no branch, design or PR there, so it runs no gate for
-// the item and counts it in no limit (FLOW-03, FLOW-05).
+// Home is the item's home repository: its first repository, or the queue's
+// own when it names none (LOOP-04).
+func (s *State) Home(f *Feature) string {
+	if len(f.Repos) > 0 {
+		return f.Repos[0]
+	}
+	return s.Config.Repository
+}
+
+// Tracked reports whether the item's home has not adopted the contract: its
+// config.yaml entry names no profile, so wf has no gate to run there and
+// counts the item in no limit (FLOW-03, FLOW-05). An adopted home, whichever
+// repository it is, gets the feature round (a6 of
+// docs/design/loop-repository.md). With no queue repository set, the
+// fallback Problems names: an item that names repos is tracked.
 func (s *State) Tracked(f *Feature) bool {
-	return len(f.Repos) > 0 && f.Repos[0] != s.Config.Repository
+	if s.Config.Repository == "" {
+		return len(f.Repos) > 0
+	}
+	e := s.Config.Entry(s.Home(f))
+	return e == nil || e.Profile == ""
+}
+
+// homedHere reports whether the item's home is the queue's own repository,
+// where a process item is homed (a6).
+func (s *State) homedHere(f *Feature) bool {
+	return s.Config.Repository == "" || s.Home(f) == s.Config.Repository
 }
 
 // validateConfig checks config.yaml's budgets and limits. A limit is checked
@@ -1083,7 +1105,7 @@ func (s *State) Problems(f *Feature) []error {
 		// whether the item is tracked: its round is checked as written.
 		tracked = f.Round == "tracked"
 	}
-	f.validate(bad, tracked)
+	f.validate(bad, tracked, s.homedHere(f))
 	s.validateEntered(f, bad)
 	s.validateDeclared(f, bad)
 	s.validateUrgent(f, bad)
@@ -1262,11 +1284,11 @@ func (s *State) validateUrgent(f *Feature, bad func(string, ...any)) {
 	}
 }
 
-func (f *Feature) validate(bad func(string, ...any), tracked bool) {
+func (f *Feature) validate(bad func(string, ...any), tracked, homedHere bool) {
 	if !oneOf(f.Status, "queued", "in_progress", "done") {
 		bad("status %q is not queued, in_progress or done", f.Status)
 	}
-	f.validateKind(bad, tracked)
+	f.validateKind(bad, tracked, homedHere)
 	if !oneOf(f.DesignReview, "", "required", "skip") {
 		bad("design_review %q is not required or skip", f.DesignReview)
 	}
@@ -1286,13 +1308,12 @@ func (f *Feature) validate(bad func(string, ...any), tracked bool) {
 
 // validateKind checks the item's kind against its round. tracked says the
 // item is homed in another repository.
-func (f *Feature) validateKind(bad func(string, ...any), tracked bool) {
+func (f *Feature) validateKind(bad func(string, ...any), tracked, homedHere bool) {
 	switch {
 	case !oneOf(f.Kind, "", "feature", "process"):
 		bad("kind %q is not feature or process", f.Kind)
-	case f.IsProcess() && tracked:
-		bad("a process item is homed in the queue's repository, not %s "+
-			"(an item homed in another repository is tracked)", f.Repos[0])
+	case f.IsProcess() && !homedHere:
+		bad("a process item is homed in the queue's repository, not %s", f.Repos[0])
 	case f.IsProcess():
 		f.validateProcess(bad)
 	default:
@@ -1301,8 +1322,8 @@ func (f *Feature) validateKind(bad func(string, ...any), tracked bool) {
 		case tracked && f.Round != "tracked":
 			bad("a tracked item's round is tracked, not %q", f.Round)
 		case !tracked && f.Round == "tracked":
-			bad("round tracked is for an item homed in another repository, and this " +
-				"one is homed in the queue's")
+			bad("round tracked is for an item whose home has not adopted the contract " +
+				"(no profile in config.yaml), and this one's has")
 		case !tracked && f.Round != "feature" && !legacy:
 			bad("round %q is not feature (run wf migrate)", f.Round)
 		}

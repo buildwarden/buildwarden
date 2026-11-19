@@ -1801,8 +1801,7 @@ func TestValidateDeclaredFields(t *testing.T) {
 		}, []string{"a: repos names o/here twice"}},
 		{"a process item homed elsewhere", func(f, p *Feature) {
 			p.Repos = []string{"o/specs", "o/here"}
-		}, []string{"p: a process item is homed in the queue's repository, not o/specs " +
-			"(an item homed in another repository is tracked)"}},
+		}, []string{"p: a process item is homed in the queue's repository, not o/specs"}},
 		{"an area twice", func(f, p *Feature) {
 			f.Areas = &[]string{"relay", "book", "relay"}
 		}, []string{"a: areas names relay twice"}},
@@ -1882,8 +1881,8 @@ func TestValidateTracked(t *testing.T) {
 	}
 	wantValidate(t, s)
 	both.Round = "tracked"
-	wantValidate(t, s, "s1: round tracked is for an item homed in another repository, "+
-		"and this one is homed in the queue's")
+	wantValidate(t, s, "s1: round tracked is for an item whose home has not adopted the "+
+		"contract (no profile in config.yaml), and this one's has")
 }
 
 // TestAdoptsValidate: adopts marks a reconciliation item (LOOP-07): the
@@ -2139,7 +2138,9 @@ func TestValidateRepositories(t *testing.T) {
 		{"no entry for the queue's own", func(s *State, f *Feature) {
 			s.Config.Repositories = s.Config.Repositories[1:]
 		}, []string{"config: repositories has no entry for o/here, the queue's own " +
-			"repository: an attended session adds it with its trunk"}},
+			"repository: an attended session adds it with its trunk",
+			// With no entry the home has no profile: the item is tracked.
+			`a: a tracked item's round is tracked, not "feature"`}},
 		{"an entry with no trunk", func(s *State, f *Feature) {
 			s.Config.Repositories[1].Trunk = ""
 		}, []string{"config: repositories o/specs has no trunk"}},
@@ -2204,4 +2205,38 @@ func TestValidateWork(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("Validate = %q, want %q", got, want)
 	}
+}
+
+// TestTrackedByProfile: an item is tracked when its home's entry names no
+// profile, whichever repository that is; a process item is homed in the
+// queue's own repository even where another has adopted (Validation plan
+// test 7, a6).
+func TestTrackedByProfile(t *testing.T) {
+	f := feature("a", 1, "queued")
+	s := own(state(f), "o/here")
+	s.Config.Repositories[1].Profile = "loop-profile.yaml" // o/specs adopted
+	for _, tc := range []struct {
+		repos   []string
+		tracked bool
+	}{
+		{nil, false},
+		{[]string{"o/here", "o/relay"}, false},
+		{[]string{"o/specs", "o/here"}, false},
+		{[]string{"o/relay", "o/here"}, true},
+	} {
+		f.Repos = tc.repos
+		if got := s.Tracked(f); got != tc.tracked {
+			t.Errorf("repos %v: tracked %v, want %v", tc.repos, got, tc.tracked)
+		}
+	}
+	s.Config.Repositories[0].Profile = ""
+	f.Repos = nil
+	if !s.Tracked(f) {
+		t.Error("an item homed in the queue's repository, which has no profile, is not tracked")
+	}
+	p := process("p", 2, "queued")
+	p.Repos = []string{"o/specs"}
+	s = own(state(p), "o/here")
+	s.Config.Repositories[1].Profile = "loop-profile.yaml"
+	wantValidate(t, s, "p: a process item is homed in the queue's repository, not o/specs")
 }
