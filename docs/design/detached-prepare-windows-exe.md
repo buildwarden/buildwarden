@@ -417,6 +417,21 @@ and `GOOS=windows make lint` now pass `drivers-claim` with no trailer. The
 areas are unchanged: `driver-core` is a shared area, which covers every
 declared driver (FLOW-02).
 
+*Plan r2 (2026-11-19).* Confirmed against the design as its r2 review
+approved it (**approved at `0c1cad5`**, a5 answered (a)) and against
+`origin/main` `e9315c2`, merged into the branch (FLOW-10). `main`'s new
+commits (#127 to #129) change only the loop, its process text and
+`tools/workflow/`; none touches `driver/`, `docs/book/` or
+`tools/tier1/`, so every file the tasks read or edit is as this plan
+read it, and every rule a task cites stands. The eleven tasks and their
+numbers stand. Tasks 1 and 2 start from `main`'s code: the earlier
+attempt was never committed and is gone, so `driver/detach.go` still
+starts through `exec.Command` and `driver/main_test.go` does not exist.
+The `drivers` change asks nothing more of a task: container, vz and
+firecracker are covered by task 10's tier 0 and tier 1 and the
+`integration` workflow, with no native step (Cross-driver impact, a5;
+TEST-02), and the native steps are unchanged.
+
 Tasks 1 and 2 are one green checkpoint, as are 3 and 4, and 5 and 6.
 
 **Plan notes.** Where the design is silent on how a thing is done, the
