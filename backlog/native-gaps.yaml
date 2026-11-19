@@ -76,6 +76,9 @@ gaps:
       2026-11-18 (host:macos-qemu/20261118T124004Z, unattended, main 0cd3c02): not run. main has not moved
       since the 2026-11-17 run, and no queue item carries a qemu Windows build-guest fix (feat/driver-contract's
       driver/qemu changes, 72b8502 and 17125f5, move the build sequence into warden and are back in Design).
+      2026-11-19 (host:macos-qemu/20261119T124005Z, unattended, main e9315c2): not run. Since 0cd3c02 main
+      changed only loop and process files (#126-#129), nothing in driver/, cmd/, relay/ or tools/relay-vm,
+      tools/build-vm, and no queue item carries a qemu Windows build-guest fix.
     status: open
   - id: qemu-linux-exclusive-trust
     host: macos-qemu
@@ -241,6 +244,9 @@ gaps:
       closed). Windows half: see qemu-windows-guest-package. Logs: native/qemu-any/2026-11-17/tree.log.
       2026-11-18 (host:qemu-any/20261118T124004Z, unattended): not rerun. main is unchanged at 0cd3c02, so
       the 2026-11-17 Linux pass stands; Windows half still waits on qemu-windows-guest-package.
+      2026-11-19 (host:qemu-any/20261119T124005Z, unattended, main e9315c2): not rerun. Since 0cd3c02 main
+      changed only loop and process files (#126-#129), so the 2026-11-17 Linux pass stands; Windows half
+      still waits on qemu-windows-guest-package.
     status: open
   - id: hyperv-eval-image-verify-disks
     host: windows-hyperv
@@ -488,6 +494,8 @@ gaps:
       build on main (default link) still times out with no relay traffic (qemu-windows-guest-package).
       2026-11-17 (host:macos-qemu/20261117T124004Z, unattended, main 0cd3c02): not run, for the same reason.
       2026-11-18 (host:macos-qemu/20261118T124004Z, unattended, main 0cd3c02): not run, for the same reason.
+      2026-11-19 (host:macos-qemu/20261119T124005Z, unattended, main e9315c2): not run, for the same reason
+      (no code change on main since 0cd3c02).
     status: open
   - id: hyperv-relay-per-build-channel-qemu-windows
     host: macos-qemu
@@ -508,6 +516,8 @@ gaps:
       2026-11-17 (host:macos-qemu/20261117T124004Z, unattended, main 0cd3c02): not run. qemu Windows builds
       still fail on main (qemu-windows-guest-package).
       2026-11-18 (host:macos-qemu/20261118T124004Z, unattended, main 0cd3c02): not run, for the same reason.
+      2026-11-19 (host:macos-qemu/20261119T124005Z, unattended, main e9315c2): not run, for the same reason
+      (no code change on main since 0cd3c02).
     status: open
   - id: security-suite-tier2-macos-vz
     host: macos-vz
@@ -602,6 +612,8 @@ gaps:
       2026-11-17 (host:macos-qemu/20261117T124004Z, unattended, main 0cd3c02): not run, for the same reason.
       2026-11-18 (host:macos-qemu/20261118T124004Z, unattended, main 0cd3c02): not run. The branch is still
       design-only (f68a8b1), and qemu Windows builds still fail on main.
+      2026-11-19 (host:macos-qemu/20261119T124005Z, unattended, main e9315c2): not run. The branch is still
+      design-only (f68a8b1), and qemu Windows builds still fail on main.
     status: open
   - id: build-vm-busybox-qemu-direct-boot
     host: qemu-any
@@ -695,6 +707,9 @@ gaps:
       2026-11-18 (host:macos-qemu/20261118T124004Z, unattended, main 0cd3c02): not run. driver-contract has
       not merged (feat/driver-contract 975e8cc, back in Design at cloud step f1-design-r3), and qemu Windows
       builds still fail on main.
+      2026-11-19 (host:macos-qemu/20261119T124005Z, unattended, main e9315c2): not run. driver-contract has
+      not merged (feat/driver-contract 028ffe2, r3, waiting on human step f2-design-review-r2), and qemu
+      Windows builds still fail on main.
   - id: runtime-cli-project-path-windows
     host: container-any
     status: done
@@ -991,6 +1006,8 @@ gaps:
       its branch if still waiting.
       2026-11-18 (host:macos-qemu/20261118T124004Z, unattended, main 0cd3c02): not run.
       feat/prebuilt-artifacts is design-only (49b513a), and qemu Windows builds still fail on main.
+      2026-11-19 (host:macos-qemu/20261119T124005Z, unattended, main e9315c2): not run.
+      feat/prebuilt-artifacts is still design-only (49b513a), and qemu Windows builds still fail on main.
   - id: detached-prepare-windows-exe-qemu
     host: macos-qemu
     status: open
@@ -1006,6 +1023,10 @@ gaps:
       merged, or on its branch if still waiting.
       2026-11-18 (host:macos-qemu/20261118T124004Z, unattended, main 0cd3c02): not run.
       feat/detached-prepare-windows-exe is design-only (0c1cad5), and qemu Windows builds still fail on main.
+      2026-11-19 (host:macos-qemu/20261119T124005Z, unattended, main e9315c2): not run.
+      feat/detached-prepare-windows-exe now carries code (c6b6fb5: driver/detach.go, driver/qemu/driver.go's
+      ensureFreshWindowsLayer, driver/hyperv/freshness.go) but is mid-Implement (cloud step f3-implement
+      claimed), and qemu Windows builds still fail on main, so the case cannot reach the freshness check.
   - id: workdir-in-context-windows
     host: container-any
     status: open
