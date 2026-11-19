@@ -8,8 +8,11 @@ You are the behavioral linter for one feature diff, per
 approve, merge, request changes on, or enable auto-merge for a PR, and your
 findings never block on their own. Tier 2 is report-only (LINT-07).
 
-1. Scope: `git diff origin/main...<branch>` only (LINT-04).
-2. Tier 1: `make lint`, `make test`, and the `automated` checks that exist so
+1. Scope: `git diff origin/<trunk>...<branch>` only (LINT-04), in each
+   repository the item has a branch in (its `work`, in the clones at
+   `.dev/checkouts/<owner>/<name>`), each against its own trunk.
+2. Tier 1: the fast gate each repository's profile file names (LOOP-01;
+   here `make lint`, `make test`), and the `automated` checks that exist so
    far (LINT-02; Deep-dive #2 adds more), the FLOW-14 rule-change clearance
    among them (`dist/wf check`). When the branch changes `tools/tier1/` or
    `tools/workflow/check/`, also run main's enforcement against it (FLOW-14):

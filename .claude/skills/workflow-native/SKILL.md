@@ -95,6 +95,14 @@ lease it still holds when it ends. Attended,
 **Arguments**; its **Close** releases its leases. A claim holds a lease of
 `host_lease_minutes` (20 hours when unset, FLOW-04).
 
+The machine's clones of the other repositories `hosts.yaml` lists for it
+are the owner's, at `.dev/checkouts/<owner>/<repo>` (LOOP-05): the wrapper
+has reset each to its trunk; attended, check that each is there, clean and
+on its trunk (`dist/wf native -state .dev/workflow -repo . -machine <machine>
+-check`), and never clone one. Pass `-checkouts .dev/checkouts` to every `wf`
+command that takes `-repo`. `wf next` offers this machine only the steps
+of repositories it lists (FLOW-04).
+
 ## Collect the batch
 
 For each host this session serves:
@@ -162,8 +170,9 @@ command writes the history line, and the digest lists it under **Moved**.
 
 ## Record
 
-- A queue step that passes: `dist/wf done ... -step S` with the evidence
-  (commands, versions, short log excerpt) in the queue history.
+- A queue step that passes: `dist/wf done ... -checkouts .dev/checkouts
+  -step S` with the evidence (commands, versions, short log excerpt) in the
+  queue history.
 - A failure: attach the logs under `native/<host>/<date>/` on the workflow
   branch. If the feature's branch causes it, release the step with the
   failure as the reason and return the feature with `dist/wf back`, to

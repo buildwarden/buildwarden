@@ -11,8 +11,12 @@ writing code, plus GLOBAL-01 (comments), GLOBAL-02 and TEST-01 (tests).
 2. A user-facing change updates its reference docs in the same change (UX-01);
    a component-flow change updates its pseudocode in
    `docs/book/src/concepts/overview.md` (FLOW-15).
-3. Run `make lint` (for each platform whose build-tagged files you touched,
-   e.g. `GOOS=windows golangci-lint run`) and `make test` (FLOW-17). A
+3. Run the fast gate the repository's profile file names (LOOP-01; here
+   `make lint`, for each platform whose build-tagged files you touched,
+   e.g. `GOOS=windows golangci-lint run`, and `make test`; FLOW-17), in each
+   repository whose branch the item changes (its `work`, in the clone at
+   `.dev/checkouts/<owner>/<name>`; no fast gate where the repository has no
+   profile), and push each branch there at its green checkpoints. A
    failure outside the change that `main` also has is a regression, not this
    task: do not fix it in place; file it as the feature's follow-up by the
    `workflow-intake` skill's follow-up path and name it in the step's evidence

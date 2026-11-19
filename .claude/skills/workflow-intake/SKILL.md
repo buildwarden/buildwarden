@@ -21,13 +21,18 @@ FLOW-20.
    A change to a loop rule (LOOP-\*, FLOW-\*, LINT-\*) or to its enforcement
    is a process item, never a feature's rule change (LOOP-09). Agree with
    Jeff which repositories the item works in, its home first (`-repos`,
-   when there is more than this one, LOOP-04), and which areas it changes,
+   when there is more than this one, LOOP-04). Each must have an entry in
+   `config.yaml`'s `repositories`: refuse one that has none, and say that an
+   attended session adds it, with its trunk, on Jeff's word (`wf validate`
+   fails an item naming it). Agree which areas it changes,
    by the names `dist/wf areas -state .dev/workflow -list` prints
    (`-areas`; FLOW-02, FLOW-05). Leaving `-areas` out files the item
    undeclared, colliding with every item in its repositories until its
-   design declares them. A feature whose home is a repository where the
-   loop's gates do not run is tracked (FLOW-03): give it `-repos` with that
-   repository first and the seams it changes with `-seams`. A
+   design declares them; an area of another repository is written
+   `<owner>/<name>:<area>` (FLOW-02). A feature whose home has not adopted
+   the contract (its `repositories` entry names no `profile`) is tracked
+   (FLOW-03): give it `-repos` with that repository first and the seams it
+   changes with `-seams`. A
    reconciliation item (LOOP-07) sets `-adopts <consumable>@<version>`: it
    is in class 3 and goes below the open fixes unless Jeff says otherwise
    (FLOW-05).
