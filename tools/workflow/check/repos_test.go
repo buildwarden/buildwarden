@@ -204,3 +204,46 @@ func TestProfileTrunkDiffers(t *testing.T) {
 		t.Errorf("trunk differs: %+v", r)
 	}
 }
+
+// mergeIn merges feat/demo into main in the checkout as a pull request's
+// merge commit and pushes main.
+func mergeIn(t *testing.T, work string, pr string) {
+	t.Helper()
+	git(t, work, "checkout", "-q", "main")
+	git(t, work, "merge", "-q", "--no-ff", "-m", "Merge pull request #"+pr+
+		" from o/feat/demo", "feat/demo")
+	git(t, work, "push", "-q", "origin", "main")
+	git(t, work, "fetch", "-q", "origin")
+	git(t, work, "checkout", "-q", "feat/demo")
+}
+
+// TestMergedPerRepository: the merge step passes only once every pull
+// request is merged into its own trunk, and f6-merged-<n> only on the merge
+// of its entry (Validation plan tests 4 and 5, FLOW-08).
+func TestMergedPerRepository(t *testing.T) {
+	env, f, clone := twoRepos(t, 7, specsProfile)
+	branchIn(t, clone, "spec.md")
+	f.PR, f.Work[0].PR = &queue.PR{Number: 5}, &queue.PR{Number: 7}
+	got := failures(Phase(env, f))
+	if !strings.Contains(got, "merged by a human (FLOW-08): ") ||
+		!strings.Contains(got, "merged by a human (FLOW-08) in o/specs") {
+		t.Fatalf("nothing merged: failures %q", got)
+	}
+	if OK(MergedFirst(env, f, 1)) {
+		t.Fatal("f6-merged-1 passed before the merge")
+	}
+	mergeIn(t, clone, "7")
+	if rs := MergedFirst(env, f, 1); !OK(rs) {
+		t.Fatalf("f6-merged-1 after the merge: %+v", rs)
+	}
+	if OK(Phase(env, f)) {
+		t.Fatal("phase 7 passed with the home's PR not merged")
+	}
+	mergeIn(t, env.Repo, "5")
+	if rs := Phase(env, f); !OK(rs) {
+		t.Fatalf("phase 7 with both merged: %+v", rs)
+	}
+	if rs := MergedFirst(env, f, 2); OK(rs) {
+		t.Fatalf("f6-merged-2 with one work entry: %+v", rs)
+	}
+}

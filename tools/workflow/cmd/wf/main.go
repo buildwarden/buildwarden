@@ -618,9 +618,10 @@ func releaseLeases(s *queue.State, o opts) error {
 }
 
 // finish is wf done: it completes the step once its done-when passes. A gate
-// has its phase's, and two steps that are not gates have their own: the
-// design review, which precedes Plan, its approval (FLOW-19), and a refresh,
-// which no phase seeds, the refresh's (FLOW-10).
+// has its phase's, and three steps that are not gates have their own: the
+// design review, which precedes Plan, its approval (FLOW-19), a refresh,
+// which no phase seeds, the refresh's (FLOW-10), and an f6-merged-<n>, the
+// merge of its work entry's pull request (FLOW-08).
 func finish(s *queue.State, f *queue.Feature, st *queue.Step, o opts) error {
 	if err := queue.Early(f, st); err != nil {
 		return err
@@ -634,6 +635,11 @@ func finish(s *queue.State, f *queue.Feature, st *queue.Step, o opts) error {
 	}
 	if queue.IsRefresh(st) && !printResults(check.Refresh(env(s, o), f)) {
 		return fmt.Errorf("%s done-when not met (FLOW-10)", st.ID)
+	}
+	if n, ok := queue.MergedFirst(st); ok && !printResults(check.MergedFirst(env(s, o), f,
+		n)) {
+		return fmt.Errorf("%s done-when not met: the work entry's PR is not merged "+
+			"(FLOW-08)", st.ID)
 	}
 	queue.Complete(f, st, o.worker, o.now)
 	return nil

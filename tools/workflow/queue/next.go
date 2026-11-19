@@ -223,6 +223,8 @@ func (s *State) wait(f *Feature, st *Step, worker string, now time.Time) (string
 	switch {
 	case IsMerge(st):
 		return mergeWait(f), refusal{}
+	case isMergedFirst(st):
+		return mergedFirstWait(f, st), refusal{}
 	case !Satisfies(worker, st.Affinity):
 		return fmt.Sprintf("%s step %s", st.Affinity, st.ID), refusal{}
 	case st.Lease.Held(now) && st.Lease.ClaimedBy != worker:
@@ -238,6 +240,26 @@ func (s *State) wait(f *Feature, st *Step, worker string, now time.Time) (string
 }
 
 // mergeWait is the reason an item at its merge step waits.
+// isMergedFirst reports whether the step is an f6-merged-<n>.
+func isMergedFirst(st *Step) bool {
+	_, ok := MergedFirst(st)
+	return ok
+}
+
+// mergedFirstWait is what an f6-merged-<n> waits on: the human's merge of
+// that work entry's pull request.
+func mergedFirstWait(f *Feature, st *Step) string {
+	n, _ := MergedFirst(st)
+	if n > len(f.Work) {
+		return fmt.Sprintf("the human's merge (%s names no work entry %d, FLOW-08)", st.ID, n)
+	}
+	w := f.Work[n-1]
+	if w.PR != nil && w.PR.Number > 0 {
+		return fmt.Sprintf("the human's merge of %s PR #%d (FLOW-08)", w.Repo, w.PR.Number)
+	}
+	return fmt.Sprintf("the human's merge in %s (no PR recorded, FLOW-08)", w.Repo)
+}
+
 func mergeWait(f *Feature) string {
 	if f.PR != nil && f.PR.Number > 0 {
 		return fmt.Sprintf("the human's merge of PR #%d (FLOW-08)", f.PR.Number)

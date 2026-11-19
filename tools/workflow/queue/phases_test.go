@@ -361,3 +361,62 @@ func TestReadyToMerge(t *testing.T) {
 		t.Fatal("a process item at its merge step with a green PR is not ready")
 	}
 }
+
+// TestMergedFirstSeeded: Publish seeds f6-merged-<n> for each work entry
+// marked first, n its position in work; no worker is offered it, a step
+// that needs it waits, and Publish ends only once it is done (Validation
+// plan test 5, a5).
+func TestMergedFirstSeeded(t *testing.T) {
+	f := feature("a", 1, "in_progress")
+	f.Repos = []string{"o/here", "o/specs", "o/relay"}
+	f.Work = []Work{{Repo: "o/specs", Branch: "feat/a"},
+		{Repo: "o/relay", Branch: "feat/a", First: true, PR: &PR{Number: 9}}}
+	advance(f, 6)
+	var ids []string
+	for _, st := range f.Steps {
+		if st.Phase == 6 {
+			ids = append(ids, st.ID)
+		}
+	}
+	if !slices.Equal(ids, []string{"f6-merge-main", "f6-consolidate", "f6-open-pr",
+		"f6-merged-2"}) {
+		t.Fatalf("Publish steps %v", ids)
+	}
+	st := f.Steps[len(f.Steps)-1]
+	if n, ok := MergedFirst(&st); !ok || n != 2 {
+		t.Fatalf("MergedFirst(%s) = %d, %v", st.ID, n, ok)
+	}
+	f.Steps = append(f.Steps, Step{ID: "f6-release-specs", Phase: 6, Affinity: "human",
+		Status: "pending", Needs: []string{"f6-merged-2"}})
+	s := state(f)
+	for i := range f.Steps[:len(f.Steps)-2] {
+		if f.Steps[i].Phase == 6 {
+			Complete(f, &f.Steps[i], "test", now)
+		}
+	}
+	for _, worker := range []string{"cloud", "human/jeff"} {
+		_, blocked := s.Next(worker, now)
+		if !slices.Contains(blocked, Blocked{"a",
+			"waiting on the human's merge of o/relay PR #9 (FLOW-08)"}) {
+			t.Errorf("%s: blocked %+v", worker, blocked)
+		}
+	}
+	if f.Phase != 6 {
+		t.Fatalf("Publish ended with f6-merged-2 pending: phase %d", f.Phase)
+	}
+	Complete(f, &f.Steps[len(f.Steps)-2], "test", now)
+	if got := next(t, s, "human/jeff"); got != "a f6-release-specs" {
+		t.Errorf("after the merge: next %q", got)
+	}
+	for _, id := range []string{"f6-merged-1", "f6-merged-12-r2"} {
+		if n, ok := MergedFirst(&Step{ID: id}); !ok || n != map[string]int{
+			"f6-merged-1": 1, "f6-merged-12-r2": 12}[id] {
+			t.Errorf("MergedFirst(%s) = %d, %v", id, n, ok)
+		}
+	}
+	for _, id := range []string{"f7-merged-1", "f6-merged-0", "x2-merged-1", "f6-merged"} {
+		if _, ok := MergedFirst(&Step{ID: id}); ok {
+			t.Errorf("MergedFirst(%s) is a confirmation", id)
+		}
+	}
+}

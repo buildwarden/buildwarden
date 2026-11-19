@@ -103,7 +103,7 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.archivedOn(c.f.Branch)
 		c.each(c.prGreen)
 	case 7:
-		c.merged()
+		c.each(c.merged)
 	case 8:
 		c.closed()
 	}
@@ -133,6 +133,28 @@ func Merged(env Env, f *queue.Feature) bool {
 	}
 	c.merged()
 	return OK(c.out)
+}
+
+// MergedFirst runs the done-when check of an f6-merged-<n>: the pull
+// request of the item's n-th work entry, counted from 1, is merged into that
+// repository's trunk, by the merge step's proofs (FLOW-08).
+func MergedFirst(env Env, f *queue.Feature, n int) []Result {
+	c := newChecker(env, f)
+	if !c.ready() {
+		return c.out
+	}
+	if n < 1 || n > len(f.Work) {
+		c.add("merged by a human (FLOW-08)", false, "work has no entry %d", n)
+		return c.out
+	}
+	c.repos()
+	c.at = c.others[n-1]
+	if c.at.err != nil {
+		c.add("repository (LOOP-01)", false, "%v", c.at.err)
+		return c.out
+	}
+	c.merged()
+	return c.out
 }
 
 // Refresh runs the done-when check of a refresh step (FLOW-10): the branch
@@ -432,6 +454,14 @@ func (c *checker) merged() {
 	const name = "merged by a human (FLOW-08)"
 	var prCommits []string
 	pr := c.pr()
+	if c.at != c.home && pr == nil {
+		// A repository whose branch added nothing got no pull request.
+		if n, err := c.git("rev-list", "--count", c.trunk()+".."+c.f.Branch); err == nil &&
+			n == "0" {
+			c.add(name, true, "%s adds no commit to %s: no PR", c.f.Branch, c.trunk())
+			return
+		}
+	}
 	if pr != nil && pr.Number > 0 {
 		out, _ := c.git("log", c.trunk(), "--format=%h %s", "-E",
 			fmt.Sprintf("--grep=(Merge pull request |\\()#%d([^0-9]|$)", pr.Number))
