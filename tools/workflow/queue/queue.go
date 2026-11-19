@@ -1322,8 +1322,8 @@ func (f *Feature) validateKind(bad func(string, ...any), tracked, homedHere bool
 		case tracked && f.Round != "tracked":
 			bad("a tracked item's round is tracked, not %q", f.Round)
 		case !tracked && f.Round == "tracked":
-			bad("round tracked is for an item whose home has not adopted the contract " +
-				"(no profile in config.yaml), and this one's has")
+			bad("round tracked is for an item whose home has not adopted the " +
+				"contract (no profile in config.yaml), and this one's has")
 		case !tracked && f.Round != "feature" && !legacy:
 			bad("round %q is not feature (run wf migrate)", f.Round)
 		}

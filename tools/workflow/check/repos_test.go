@@ -261,7 +261,8 @@ func TestReportHeads(t *testing.T) {
 	_ = os.MkdirAll(dir, 0o755)
 	write := func(json string) {
 		for _, ext := range []string{".md", ".json"} {
-			if err := os.WriteFile(filepath.Join(dir, home+ext), []byte(json), 0o644); err != nil {
+			err := os.WriteFile(filepath.Join(dir, home+ext), []byte(json), 0o644)
+			if err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -273,8 +274,8 @@ func TestReportHeads(t *testing.T) {
 	}{
 		{"no heads", `{}`, false},
 		{"the second head missing", `{"heads": {"o/here": "` + home + `"}}`, false},
-		{"a stale head", `{"heads": {"o/here": "` + home + `", "o/specs": "0123456789ab"}}`,
-			false},
+		{"a stale head", `{"heads": {"o/here": "` + home +
+			`", "o/specs": "0123456789ab"}}`, false},
 		{"every head", `{"heads": {"o/here": "` + home + `", "o/specs": "` + specs + `"}}`,
 			true},
 	} {

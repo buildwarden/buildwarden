@@ -471,8 +471,9 @@ func seedMergedFirst(f *Feature, suffix string) {
 	}
 	for i, w := range f.Work {
 		if w.First {
-			f.Steps = append(f.Steps, Step{ID: StepID(f.Round, 6, fmt.Sprintf("merged-%d",
-				i+1)) + suffix, Phase: 6, Affinity: "cloud", Status: "pending"})
+			id := StepID(f.Round, 6, fmt.Sprintf("merged-%d", i+1)) + suffix
+			f.Steps = append(f.Steps, Step{ID: id, Phase: 6, Affinity: "cloud",
+				Status: "pending"})
 		}
 	}
 }

@@ -2232,7 +2232,8 @@ func TestTrackedByProfile(t *testing.T) {
 	s.Config.Repositories[0].Profile = ""
 	f.Repos = nil
 	if !s.Tracked(f) {
-		t.Error("an item homed in the queue's repository, which has no profile, is not tracked")
+		t.Error("an item homed in the queue's repository, which has no profile, is " +
+			"not tracked")
 	}
 	p := process("p", 2, "queued")
 	p.Repos = []string{"o/specs"}

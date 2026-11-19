@@ -408,6 +408,11 @@ func TestMergedFirstSeeded(t *testing.T) {
 	if got := next(t, s, "human/jeff"); got != "a f6-release-specs" {
 		t.Errorf("after the merge: next %q", got)
 	}
+}
+
+// TestMergedFirstIDs: MergedFirst reads n from f6-merged-<n> and its -r<n>
+// forms, and nothing else is a confirmation.
+func TestMergedFirstIDs(t *testing.T) {
 	for _, id := range []string{"f6-merged-1", "f6-merged-12-r2"} {
 		if n, ok := MergedFirst(&Step{ID: id}); !ok || n != map[string]int{
 			"f6-merged-1": 1, "f6-merged-12-r2": 12}[id] {

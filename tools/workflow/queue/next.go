@@ -251,7 +251,8 @@ func isMergedFirst(st *Step) bool {
 func mergedFirstWait(f *Feature, st *Step) string {
 	n, _ := MergedFirst(st)
 	if n > len(f.Work) {
-		return fmt.Sprintf("the human's merge (%s names no work entry %d, FLOW-08)", st.ID, n)
+		return fmt.Sprintf("the human's merge (%s names no work entry %d, FLOW-08)",
+			st.ID, n)
 	}
 	w := f.Work[n-1]
 	if w.PR != nil && w.PR.Number > 0 {
