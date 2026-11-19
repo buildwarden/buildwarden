@@ -11,7 +11,7 @@ rules:
   LINT-02: {check: [rule-index]}
   LINT-03: {owner: "branch protection and the release workflow's tier1 job"}
   LINT-04: {owner: "tier1 itself: every run is diff-scoped"}
-  LINT-05: {owner: "tier1 itself: report.schema.json and Tier1-Allow trailers"}
+  LINT-05: {owner: "tier1's report.schema.json; Tier1-Allow trailers by tools/workflow/check (suppression), which tier1 and wf rules call"}
 
   BOOT-04: {follow-up: "needs the set of build-input paths named in code"}
   BOOT-07: {check: [bootstrap-surface]}

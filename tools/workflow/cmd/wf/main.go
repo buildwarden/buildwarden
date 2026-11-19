@@ -288,6 +288,9 @@ func run(cmd string, args []string, now time.Time) error {
 	if cmd == "main" {
 		return mainCmd(args)
 	}
+	if cmd == "rules" {
+		return rulesCmd(args)
+	}
 	o := opts{now: now}
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	fs.StringVar(&o.state, "state", ".", "checkout of the workflow branch")
