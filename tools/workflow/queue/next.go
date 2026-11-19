@@ -290,9 +290,20 @@ func (s *State) unattendedHold(f *Feature, st *Step) (why string, red bool) {
 			"escalate to human, FLOW-13)",
 			f.Budget.Spent.Steps, f.Budget.Estimate.Steps), false
 	}
-	if IsRefresh(st) && s.Main != nil && s.Main.CI == "red" && !s.fixesMain(f) {
-		return fmt.Sprintf("main is red at %s: no refresh until it is green (FLOW-10)",
-			s.Main.SHA), true
+	if !IsRefresh(st) {
+		return "", false
+	}
+	for _, repo := range s.ReposOf(f) {
+		m := s.MainOf(repo)
+		if m == nil || m.CI != "red" || m.Followup == f.Feature {
+			continue
+		}
+		if repo == s.Config.Repository || repo == "" {
+			return fmt.Sprintf("main is red at %s: no refresh until it is green "+
+				"(FLOW-10)", m.SHA), true
+		}
+		return fmt.Sprintf("the trunk of %s is red at %s: no refresh until it is green "+
+			"(FLOW-10)", repo, m.SHA), true
 	}
 	return "", false
 }

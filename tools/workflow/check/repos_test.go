@@ -147,14 +147,22 @@ func TestGatesPerRepository(t *testing.T) {
 func TestNoProfileNoGate(t *testing.T) {
 	env, f, clone := twoRepos(t, 3, "")
 	branchIn(t, clone, "spec.md")
-	for _, r := range named(Phase(env, f)) {
-		if r.Name != "checkout is the clean branch head in o/specs" &&
-			r.Name != "rule changes cleared (FLOW-14) in o/specs" {
-			t.Errorf("phase 3 in a repository with no profile: %+v", r)
+	gates := func(rs []Result) []Result {
+		var out []Result
+		for _, r := range named(rs) {
+			if !r.OK || strings.Contains(r.Name, "fast gate") ||
+				strings.Contains(r.Name, "docs") ||
+				strings.Contains(r.Name, "guides") {
+				out = append(out, r)
+			}
 		}
+		return out
+	}
+	if rs := gates(Phase(env, f)); len(rs) != 0 {
+		t.Errorf("phase 3 in a repository with no profile: %+v", rs)
 	}
 	f.Phase = 5
-	if rs := named(Phase(env, f)); len(rs) != 0 {
+	if rs := gates(Phase(env, f)); len(rs) != 0 {
 		t.Errorf("phase 5 in a repository with no profile: %+v", rs)
 	}
 	f.Phase = 0
@@ -301,4 +309,34 @@ func gitOut(t *testing.T, dir string, args ...string) string {
 		t.Fatal(err)
 	}
 	return string(out)
+}
+
+// specsMap is o/specs's area map: its specification files and its guides.
+const specsMap = "version: 1\nrepository: o/specs\ncatch_all: core\nareas:\n" +
+	"  schema:\n    mode: exclusive\n    paths: [spec.md]\n" +
+	"  guide:\n    mode: exclusive\n    paths: [guide/]\n  core:\n    mode: exclusive\n"
+
+// TestInsideAreasPerRepository: a path the branch changes in a second
+// repository lies in an area the design declares there, read against that
+// repository's map under repos/ (Validation plan test 4, FLOW-03).
+func TestInsideAreasPerRepository(t *testing.T) {
+	env, f, clone := twoRepos(t, 3, "")
+	branchIn(t, clone, "guide/spec.md")
+	env.State.Dir = t.TempDir()
+	dir := filepath.Join(env.State.Dir, "repos", "o", "specs")
+	_ = os.MkdirAll(dir, 0o755)
+	if err := os.WriteFile(filepath.Join(dir, "areas.yaml"), []byte(specsMap),
+		0o644); err != nil {
+		t.Fatal(err)
+	}
+	const name = "diff inside the declared areas (FLOW-03) in o/specs"
+	f.Areas = &[]string{"o/specs:schema"}
+	if r := result(t, Phase(env, f), name); r.OK ||
+		!strings.Contains(r.Info, "guide/spec.md (area guide)") {
+		t.Errorf("a path outside the areas declared there: %+v", r)
+	}
+	f.Areas = &[]string{"o/specs:schema", "o/specs:guide"}
+	if r := result(t, Phase(env, f), name); !r.OK {
+		t.Errorf("every path inside: %+v", r)
+	}
 }

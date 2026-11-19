@@ -75,19 +75,19 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.each(func() { c.referenceDocs("UX-01 reference docs updated", false) })
 		c.each(c.ruleClearance)
 		c.declaredStill()
-		c.insideAreas()
+		c.each(c.insideAreas)
 	case 4:
 		c.each(c.onBranchHead)
 		c.each(c.fastGate)
 		c.tier2Report()
 		c.each(c.ruleClearance)
 		c.declaredStill()
-		c.insideAreas()
+		c.each(c.insideAreas)
 		c.each(c.trialMerge)
 	case 5:
 		c.each(func() { c.referenceDocs("guides or examples updated", true) })
 		c.declaredStill()
-		c.insideAreas()
+		c.each(c.insideAreas)
 	case 6:
 		if c.mergedEarly() {
 			break
@@ -99,7 +99,7 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.eachOther(c.consolidationNamesMain)
 		c.each(c.ruleClearance)
 		c.declaredStill()
-		c.insideAreas()
+		c.each(c.insideAreas)
 		c.each(c.trialMerge)
 		c.archivedOn(c.f.Branch)
 		c.each(c.prGreen)
@@ -179,7 +179,7 @@ func Refresh(env Env, f *queue.Feature) []Result {
 		c.each(c.consolidationNamesMain)
 		c.each(c.ruleClearance)
 		c.declaredStill()
-		c.insideAreas()
+		c.each(c.insideAreas)
 	}
 	if hasPR || f.Round == "process" {
 		c.archivedOn(f.Branch)

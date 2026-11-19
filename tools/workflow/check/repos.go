@@ -103,6 +103,13 @@ func (c *checker) each(check func()) {
 	c.at = c.home
 }
 
+// Clone returns the checkout of repo in the environment: Env.Repo for the
+// queue's own repository, else its clone under Env.Checkouts, which must be
+// there (GLOBAL-11).
+func Clone(env Env, repo string) (string, error) {
+	return (&checker{env: env, f: &queue.Feature{}}).clone(repo)
+}
+
 // trunk is the remote-tracking ref of the trunk of the repository being
 // checked.
 func (c *checker) trunk() string { return "origin/" + c.at.trunk }

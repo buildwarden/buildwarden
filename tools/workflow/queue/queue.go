@@ -311,6 +311,11 @@ type State struct {
 	// doneDir records that queue/done/ exists: done items are written there
 	// and carry no number (queue-positions, Decision 8).
 	doneDir bool
+	// repos are the views ForRepository has made, by repository.
+	repos map[string]*State
+	// summaryDir is where a view's writes regenerate QUEUE.md: the queue
+	// state's own directory. Empty, it is Dir.
+	summaryDir string
 }
 
 // doneFolder is where done items live once wf migrate -done has created it.
@@ -440,8 +445,16 @@ func (s *State) SaveMain() error {
 	if err := enc.Encode(s.Main); err != nil {
 		return err
 	}
+	if err := s.mkdir(); err != nil {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join(s.Dir, "main.yaml"), buf.Bytes(), 0o644); err != nil {
 		return err
+	}
+	if s.summaryDir != "" {
+		// A view's main.yaml is a second repository's; QUEUE.md is the
+		// queue state's, which the next wf validate or status writes.
+		return nil
 	}
 	return s.WriteSummary()
 }
