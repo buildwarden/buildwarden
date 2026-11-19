@@ -581,6 +581,51 @@ suite is TEST-08's, not this item's. a3 is native case 3. No task changes
 
 ## Consolidation
 
+**2026-11-19, against `main` e9315c2** (forked at 0cd3c02; merged in
+f6-merge-main as a merge commit, no conflicts).
+
+- **What landed since the fork.** PRs #126 (`queue-positions`), #127
+  (`loop-streamline-2`), #128 (`loop-parallel-rule-wording`) and #129
+  (`loop-native-lead`): process items only, in `docs/development/`,
+  `.claude/`, `tools/workflow/` and their designs. None touches `driver/`,
+  `cmd/` or `docs/book/`, so nothing this branch changes was moved,
+  renamed or re-specified under it. `TEMPLATE.md` gained two notes (what
+  `areas: []` means, and `Flagged:` on an assumption that departs from an
+  earlier decision); this design declares its areas, and a5, the
+  assumption that widened the approved `drivers`, was flagged and
+  confirmed (2026-11-18), so neither changes it. `loop-native-lead` lets a
+  native machine lead an item; this item has no lead, and its blocking
+  `f6-validate-windows-hyperv` step stays a host step after this one, as
+  planned.
+- **FLOW-15 sweep.** `make deadcode`: nothing in `driver/detach.go`,
+  `driver/hyperv/freshness.go` or `driver/qemu/driver.go` (the entries it
+  prints are main's, in `driver/vz` and `relay`). Duplication: the
+  "background refresh did not start: …; run `…` to refresh it" line is
+  written in two drivers, as the "refreshing it in the background" line
+  already was on `main`; the subjects differ ("prepared base",
+  "prepared Windows layer") and each fix is its driver's `prepareFix`, so
+  it stays per driver, with `winguest.RoundAge` shared as before. Each
+  driver keeps its own `startDetached` test seam, as the design's plan
+  says; no exported API was added. `overview.md`: the `"hyperv-prepare"`
+  lock line names the failed-start report; the qemu flow has no refresh
+  line in the overview to update. `drivers.md` carries the user-facing
+  line (UX-01) in the Hyper-V section and, by reference, the qemu Windows
+  one.
+- **Wording.** No terminology change needed: "background refresh",
+  "re-prepare" and `prepareFix` read the same across the code, the book
+  and this design.
+- **Gates.** `make lint` and `GOOS=windows make lint` (0 MUST, 0 SHOULD),
+  `make test` green.
+- **`dist/wf check`** (FLOW-10): `ok   current main merged: origin/main
+  is an ancestor of feat/detached-prepare-windows-exe`; `ok   diff inside
+  the declared areas (FLOW-03): every changed path is in [driver-core
+  driver/hyperv driver/qemu book designs]`; `ok   rule changes cleared
+  (FLOW-14)`; `ok   queue records what the design declares (FLOW-03): as
+  declared at 0c1cad5`. No trial-merge conflict line: `main` is already
+  merged.
+- Nothing goes back: no finding for the design or the plan, no
+  regression found on `main`, no follow-up filed.
+
 ## Rollback notes
 
 ## Archive summary
