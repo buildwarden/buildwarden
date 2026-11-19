@@ -241,9 +241,16 @@ func TestMergedPerRepository(t *testing.T) {
 	if OK(MergedFirst(env, f, 1)) {
 		t.Fatal("f6-merged-1 passed before the merge")
 	}
+	if got := WorkMerges(env, f); got[0] != "" {
+		t.Fatalf("WorkMerges before the merge: %q", got)
+	}
 	mergeIn(t, clone, "7")
 	if rs := MergedFirst(env, f, 1); !OK(rs) {
 		t.Fatalf("f6-merged-1 after the merge: %+v", rs)
+	}
+	if got, want := WorkMerges(env, f), strings.TrimSpace(gitOut(t, clone, "rev-parse",
+		"origin/main")); got[0] != want {
+		t.Fatalf("WorkMerges = %q, want the PR's merge %s", got, want)
 	}
 	if OK(Phase(env, f)) {
 		t.Fatal("phase 7 passed with the home's PR not merged")

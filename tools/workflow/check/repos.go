@@ -25,6 +25,8 @@ type repoAt struct {
 	// err says why the repository cannot be checked at all: no entry, no
 	// trunk, or no clone.
 	err error
+	// merge is the merge commit merged confirmed, "" until it does.
+	merge string
 
 	profile       *Profile
 	profileErr    error

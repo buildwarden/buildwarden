@@ -35,7 +35,7 @@ func (s *State) ForRepository(repo string) (*State, error) {
 	v := &State{Dir: filepath.Join(s.Dir, reposDir, filepath.FromSlash(repo)),
 		Config: s.Config, Features: s.Features, Machines: s.Machines, doneDir: s.doneDir,
 		summaryDir: s.Dir}
-	v.Config.Repository = repo
+	v.Config.Repository, v.queueRepo = repo, s.Config.Repository
 	if err := v.loadAreas(); err != nil {
 		return nil, err
 	}

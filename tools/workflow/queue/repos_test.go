@@ -150,3 +150,45 @@ func TestFingerprintPerRepository(t *testing.T) {
 		t.Error("b's fingerprint changed, though b does not list o/relay")
 	}
 }
+
+// TestRelationsPerRepository: an area of another repository, written
+// <owner>/<name>:<area>, is read against that repository's map under repos/,
+// so two items relate in it as in their home (FLOW-02, FLOW-05).
+func TestRelationsPerRepository(t *testing.T) {
+	a, b := feature("a", 1, "queued"), feature("b", 2, "queued")
+	s := mapped(t, a, b)
+	s.Dir = t.TempDir()
+	dir := filepath.Join(s.Dir, "repos", "o", "specs")
+	_ = os.MkdirAll(dir, 0o755)
+	m := "version: 1\nrepository: o/specs\ncatch_all: core\nareas:\n" +
+		"  schema: {mode: exclusive, paths: [schema/]}\n" +
+		"  guide: {mode: exclusive, paths: [guide/], reaches: [schema]}\n" +
+		"  core: {mode: exclusive}\n"
+	if err := os.WriteFile(filepath.Join(dir, "areas.yaml"), []byte(m), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	here := s.Config.Repository
+	a.Repos, b.Repos = []string{here, "o/specs"}, []string{here, "o/specs"}
+	for _, tc := range []struct {
+		a, b []string
+		want string
+	}{
+		{[]string{"relay", "o/specs:schema"}, []string{"book", "o/specs:schema"},
+			"colliding (area o/specs:schema)"},
+		{[]string{"relay", "o/specs:guide"}, []string{"book", "o/specs:schema"},
+			"near (o/specs:guide reaches o/specs:schema)"},
+		{[]string{"relay", "o/specs:nope"}, []string{"book"},
+			"colliding (a is undeclared)"},
+		{[]string{"relay"}, []string{"book"}, "disjoint"},
+	} {
+		a.Areas, b.Areas = &tc.a, &tc.b
+		if got := s.Relation(a, b).String(); got != tc.want {
+			t.Errorf("%v and %v: %s, want %s", tc.a, tc.b, got, tc.want)
+		}
+	}
+	got := s.areasLabel(&Feature{Repos: a.Repos, Areas: &[]string{"relay",
+		"o/specs:schema", "o/specs:nope"}})
+	if got != "relay, o/specs:schema, o/specs:nope*" {
+		t.Errorf("QUEUE.md's areas: %q", got)
+	}
+}

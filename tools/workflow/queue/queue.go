@@ -316,6 +316,9 @@ type State struct {
 	doneDir bool
 	// repos are the views ForRepository has made, by repository.
 	repos map[string]*State
+	// queueRepo is, in such a view, the queue's own repository, which the
+	// view's Config.Repository is not.
+	queueRepo string
 	// summaryDir is where a view's writes regenerate QUEUE.md: the queue
 	// state's own directory. Empty, it is Dir.
 	summaryDir string
@@ -984,10 +987,7 @@ func (s *State) waitingLimit() int {
 // Home is the item's home repository: its first repository, or the queue's
 // own when it names none (LOOP-04).
 func (s *State) Home(f *Feature) string {
-	if len(f.Repos) > 0 {
-		return f.Repos[0]
-	}
-	return s.Config.Repository
+	return s.ReposOf(f)[0]
 }
 
 // Tracked reports whether the item's home has not adopted the contract: its

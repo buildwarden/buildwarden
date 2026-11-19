@@ -663,8 +663,23 @@ func finish(s *queue.State, f *queue.Feature, st *queue.Step, o opts) error {
 		return fmt.Errorf("%s done-when not met: the work entry's PR is not merged "+
 			"(FLOW-08)", st.ID)
 	}
+	if _, ok := queue.MergedFirst(st); ok || queue.IsMerge(st) {
+		recordMerges(s, f, o)
+	}
 	queue.Complete(f, st, o.worker, o.now)
 	return nil
+}
+
+// recordMerges writes each work entry's merge commit, once the merge
+// confirmation has seen it, as the entry's merged (FLOW-08).
+func recordMerges(s *queue.State, f *queue.Feature, o opts) {
+	for i, sha := range check.WorkMerges(env(s, o), f) {
+		if sha != "" && f.Work[i].Merged == "" {
+			f.Work[i].Merged = sha
+			f.Log(o.now, o.worker, "%s merged as %s (FLOW-08)", f.Work[i].Repo,
+				short(sha))
+		}
+	}
 }
 
 func answer(s *queue.State, o opts) error {

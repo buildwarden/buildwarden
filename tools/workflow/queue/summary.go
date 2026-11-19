@@ -610,7 +610,11 @@ func (s *State) areasLabel(f *Feature) string {
 	names := make([]string, len(*f.Areas))
 	for i, a := range *f.Areas {
 		names[i] = a
-		if s.Areas == nil || !s.Areas.Has(a) {
+		repo, area, prefixed := strings.Cut(a, ":")
+		if !prefixed {
+			repo, area = s.ReposOf(f)[0], a
+		}
+		if m := s.mapOf(repo); m == nil || !m.Has(area) {
 			names[i] += "*"
 		}
 	}

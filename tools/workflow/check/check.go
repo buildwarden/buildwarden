@@ -532,6 +532,7 @@ func (c *checker) merged() {
 	}
 	if len(infos) > 0 {
 		c.add(name, true, "%s", strings.Join(infos, "; "))
+		c.at.merge = c.mergeCommit(prCommits)
 		return
 	}
 	if pr == nil || pr.Number == 0 {
@@ -540,6 +541,41 @@ func (c *checker) merged() {
 	}
 	c.add(name, len(prCommits) > 0, "PR #%d on %s: %s", pr.Number, c.trunk(),
 		firstLine(strings.Join(prCommits, "\n")))
+	if len(prCommits) > 0 {
+		c.at.merge = c.mergeCommit(prCommits)
+	}
+}
+
+// mergeCommit is the commit a confirmed merge is recorded by: the PR's
+// commit on the trunk, or else the trunk's head, which contains the branch.
+func (c *checker) mergeCommit(prCommits []string) string {
+	rev := c.trunk()
+	if len(prCommits) > 0 {
+		rev = strings.Fields(prCommits[0])[0]
+	}
+	sha, _ := c.git("rev-parse", rev+"^{commit}")
+	return sha
+}
+
+// WorkMerges returns, for each of the item's work entries in order, the
+// merge commit the merge step's proofs confirm in that repository, or ""
+// where they do not hold: what the merge confirmation records as the
+// entry's merged (FLOW-08).
+func WorkMerges(env Env, f *queue.Feature) []string {
+	c := newChecker(env, f)
+	out := make([]string, len(f.Work))
+	if !c.ready() {
+		return out
+	}
+	for i, r := range c.repos()[1:] {
+		if r.err != nil {
+			continue
+		}
+		c.at = r
+		c.merged()
+		out[i] = r.merge
+	}
+	return out
 }
 
 // refMerged reports whether ref is on the trunk, by the first of three
