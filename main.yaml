@@ -1,5 +1,5 @@
 sha: e9315c2e7b1db9180fa4c66ad42d30ff0dd2c471
-ci: pending
+ci: green
 up_to_date: required
 areas:
   sha: e9315c2e7b1db9180fa4c66ad42d30ff0dd2c471
