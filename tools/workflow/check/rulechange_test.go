@@ -60,7 +60,7 @@ func TestRuleChangeProblems(t *testing.T) {
 		"docs/development/testing.md" {
 		t.Fatalf("rule_changes = %+v", d.Front.RuleChanges)
 	}
-	got := strings.Join(d.Front.Problems("demo"), "; ")
+	got := strings.Join(d.Front.Problems("demo", hereProfile(t)), "; ")
 	for _, want := range []string{`entry 1: rule "nope"`, `change "edit"`,
 		"entry 1: paths is empty",
 		"FLOW-14: .claude/agents/wf-plan.md changes only through a process item"} {
@@ -72,7 +72,7 @@ func TestRuleChangeProblems(t *testing.T) {
 		t.Errorf("a valid entry has problems: %q", got)
 	}
 	d, _ = ParseDesign(design, tmpl)
-	if p := d.Front.Problems("demo"); len(p) != 0 {
+	if p := d.Front.Problems("demo", hereProfile(t)); len(p) != 0 {
 		t.Errorf("a design without rule_changes: %v", p)
 	}
 }

@@ -64,7 +64,8 @@ func (c *checker) trialMerge() {
 	s := c.state()
 	for _, o := range s.Ordered() {
 		if o == c.f || o.Feature == c.f.Feature || o.Status != "in_progress" ||
-			o.IsProcess() || s.Tracked(o) || o.Branch == "" || !c.worksIn(s, o, c.at.name) ||
+			o.IsProcess() || s.Tracked(o) || o.Branch == "" ||
+			!c.worksIn(s, o, c.at.name) ||
 			s.Relation(c.f, o).Kind != queue.Disjoint {
 			continue
 		}

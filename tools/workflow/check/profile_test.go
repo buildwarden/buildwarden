@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -28,8 +29,10 @@ func TestProfileFileHere(t *testing.T) {
 		[]string{"none", "host-env", "env-relay", "env-beyond"}) {
 		t.Errorf("security_boundary values %v", p.Impact.Values)
 	}
-	if p.Rules.RuleJobs != workflowRunsRe.String() {
-		t.Errorf("rule_jobs %q, workflowRunsRe %q", p.Rules.RuleJobs, workflowRunsRe)
+	// The pattern wf hard-coded before it read the profile (FLOW-14).
+	const was = `tier1|golangci-lint|tools/workflow|\bmake\s+(lint|enforcement)\b`
+	if p.Rules.RuleJobs != was {
+		t.Errorf("rule_jobs %q, was %q", p.Rules.RuleJobs, was)
 	}
 	for _, path := range []string{"docs/development/process.md", "tools/tier1/x.go",
 		"tools/workflow/check/x.go", "docs/design/TEMPLATE.md"} {
@@ -44,6 +47,22 @@ func TestProfileFileHere(t *testing.T) {
 	if err := p.CheckTrunk("loop-profile.yaml", "main"); err != nil {
 		t.Error(err)
 	}
+}
+
+// hereProfile is this repository's profile file.
+func hereProfile(t *testing.T) *Profile {
+	t.Helper()
+	p, err := ReadProfile(filepath.Join("..", "..", "..", filepath.FromSlash(profilePath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// hereRuns is this repository's rule_jobs pattern.
+func hereRuns(t *testing.T) *regexp.Regexp {
+	t.Helper()
+	return regexp.MustCompile(hereProfile(t).Rules.RuleJobs)
 }
 
 func hasPrefixIn(p string, prefixes []string) bool {

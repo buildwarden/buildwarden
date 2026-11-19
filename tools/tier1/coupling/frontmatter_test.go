@@ -1,6 +1,8 @@
 package coupling
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -10,6 +12,7 @@ import (
 	"github.com/buildwarden/buildwarden/tools/tier1/internal/gittest"
 	"github.com/buildwarden/buildwarden/tools/tier1/report"
 	"github.com/buildwarden/buildwarden/tools/tier1/rules"
+	"github.com/buildwarden/buildwarden/tools/workflow/check"
 )
 
 // validFront is a design named x whose front-matter satisfies FLOW-02, one
@@ -31,6 +34,26 @@ concepts: [front-matter]
 
 # x
 `
+
+// hereProfileText is this repository's profile file.
+func hereProfileText(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", filepath.FromSlash(profileFile)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+// hereProfile is this repository's profile file, parsed.
+func hereProfile(t *testing.T) *check.Profile {
+	t.Helper()
+	p, err := check.ParseProfile(profileFile, []byte(hereProfileText(t)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
 
 // withLine returns validFront with the line starting "key:" replaced by
 // repl, or dropped when repl is empty.
@@ -97,7 +120,8 @@ func TestValidate(t *testing.T) {
 	for _, k := range []string{"feature", "status", "design_review", "drivers", "seams",
 		"surfaces", "security_boundary", "alters_relationships", "native_validation",
 		"tier2_gaps", "rules", "concepts"} {
-		v := Validate("docs/design/x.md", withLine(k, ""), tmpl, nil, false)
+		v := Validate("docs/design/x.md", withLine(k, ""), tmpl, hereProfile(t), nil,
+			false)
 		if len(v.Problems) == 0 || v.Problems[0] != "missing "+k {
 			t.Errorf("missing %s: problems %q", k, v.Problems)
 		}
@@ -107,7 +131,7 @@ func TestValidate(t *testing.T) {
 		if p == "" {
 			p = "docs/design/x.md"
 		}
-		v := Validate(p, c.text, tmpl, c.tolerate, c.pre)
+		v := Validate(p, c.text, tmpl, hereProfile(t), c.tolerate, c.pre)
 		if v.PreStandard != c.preStd || !reflect.DeepEqual(v.Problems, c.problems) ||
 			!reflect.DeepEqual(v.Tolerated, c.tolerated) {
 			t.Errorf("%s: got pre %v problems %q tolerated %q; want %v %q %q",
@@ -151,6 +175,7 @@ func loadDiff(t *testing.T, files, change map[string]string) (*diff.Diff, *rules
 
 func TestTouchedDesigns(t *testing.T) {
 	d, cfg := loadDiff(t, map[string]string{
+		profileFile:               hereProfileText(t),
 		"docs/design/TEMPLATE.md": tmpl,
 		"docs/design/old.md":      "# Old plan\n",
 		"docs/design/moved.md":    "# Moved plan\n\nlong enough to be seen as a rename\n",
@@ -190,6 +215,7 @@ func TestTouchedDesigns(t *testing.T) {
 
 func TestAllDesigns(t *testing.T) {
 	r := gittest.New(t, map[string]string{
+		profileFile:               hereProfileText(t),
 		"docs/design/TEMPLATE.md": tmpl,
 		"docs/design/old.md":      "# Pre-standard\n",
 		"docs/design/x.md":        validFront,

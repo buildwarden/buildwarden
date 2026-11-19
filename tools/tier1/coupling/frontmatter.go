@@ -25,12 +25,29 @@ type Verdict struct {
 	Tolerated []string
 }
 
+// profileFile is this repository's profile file, whose impact keys a design
+// here carries (PROFILE-01, LOOP-01).
+const profileFile = "docs/development/loop-profile.yaml"
+
+// headProfile reads the profile file at the diff's head, as wf reads it from
+// the branch.
+func headProfile(d *diff.Diff) (*check.Profile, error) {
+	text, ok := d.Show(d.Head, profileFile)
+	if !ok {
+		return nil, fmt.Errorf("no profile file %s at %s", profileFile, d.Head)
+	}
+	return check.ParseProfile(profileFile, []byte(text))
+}
+
 // Validate checks one design's text against FLOW-02 with wf's own validator,
-// check.Front.Problems, taking the feature name from the file stem.
+// check.Front.Problems, taking the feature name from the file stem and the
+// impact keys from the profile.
 // preStandardOK says whether a design with no front-matter is pre-standard
 // rather than a problem. tolerate lists the front-matter keys whose problems
 // are moved to Tolerated.
-func Validate(p, text, tmpl string, tolerate []string, preStandardOK bool) Verdict {
+func Validate(p, text, tmpl string, prof *check.Profile, tolerate []string,
+	preStandardOK bool,
+) Verdict {
 	v := Verdict{Path: p}
 	if !strings.HasPrefix(text, "---\n") && preStandardOK {
 		v.PreStandard = true
@@ -41,7 +58,7 @@ func Validate(p, text, tmpl string, tolerate []string, preStandardOK bool) Verdi
 		v.Problems = []string{err.Error()}
 		return v
 	}
-	for _, pr := range d.Front.Problems(strings.TrimSuffix(path.Base(p), ".md")) {
+	for _, pr := range d.Front.Problems(strings.TrimSuffix(path.Base(p), ".md"), prof) {
 		if contains(tolerate, problemKey(pr)) {
 			v.Tolerated = append(v.Tolerated, pr)
 		} else {
@@ -68,6 +85,7 @@ func problemKey(problem string) string {
 // design, or one whose front-matter was removed, breaks FLOW-02.
 func TouchedDesigns(d *diff.Diff, cfg *rules.Config) []Verdict {
 	tmpl, _ := d.Show(d.Head, template)
+	prof, perr := headProfile(d)
 	var out []Verdict
 	for _, f := range d.Files {
 		if f.Status == 'D' || !isDesign(f.Path) {
@@ -80,7 +98,12 @@ func TouchedDesigns(d *diff.Diff, cfg *rules.Config) []Verdict {
 		}
 		before, existed := d.Show(d.Base, old)
 		pre := existed && !strings.HasPrefix(before, "---\n")
-		out = append(out, Validate(f.Path, text, tmpl, cfg.DesignTolerate[f.Path], pre))
+		if perr != nil {
+			out = append(out, Verdict{Path: f.Path, Problems: []string{perr.Error()}})
+			continue
+		}
+		out = append(out, Validate(f.Path, text, tmpl, prof, cfg.DesignTolerate[f.Path],
+			pre))
 	}
 	return out
 }
@@ -91,13 +114,17 @@ func TouchedDesigns(d *diff.Diff, cfg *rules.Config) []Verdict {
 // (FLOW-12); the per-diff check is what stops a new one.
 func AllDesigns(d *diff.Diff, cfg *rules.Config) []Verdict {
 	tmpl, _ := d.Show(d.Head, template)
+	prof, perr := headProfile(d)
+	if perr != nil {
+		return []Verdict{{Path: profileFile, Problems: []string{perr.Error()}}}
+	}
 	var out []Verdict
 	for _, p := range d.List(d.Head, designDir) {
 		if !isDesign(p) {
 			continue
 		}
 		text, _ := d.Show(d.Head, p)
-		out = append(out, Validate(p, text, tmpl, cfg.DesignTolerate[p], true))
+		out = append(out, Validate(p, text, tmpl, prof, cfg.DesignTolerate[p], true))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out

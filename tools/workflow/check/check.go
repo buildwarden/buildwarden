@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -71,14 +72,14 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.each(c.onBranchHead)
 		c.each(c.fastGate)
 		c.each(func() { c.referenceDocs("UX-01 reference docs updated", false) })
-		c.ruleClearance()
+		c.each(c.ruleClearance)
 		c.declaredStill()
 		c.insideAreas()
 	case 4:
 		c.each(c.onBranchHead)
 		c.each(c.fastGate)
 		c.tier2Report()
-		c.ruleClearance()
+		c.each(c.ruleClearance)
 		c.declaredStill()
 		c.insideAreas()
 		c.each(c.trialMerge)
@@ -95,7 +96,7 @@ func Phase(env Env, f *queue.Feature) []Result {
 			c.section(d, "Consolidation")
 		}
 		c.eachOther(c.consolidationNamesMain)
-		c.ruleClearance()
+		c.each(c.ruleClearance)
 		c.declaredStill()
 		c.insideAreas()
 		c.each(c.trialMerge)
@@ -153,7 +154,7 @@ func Refresh(env Env, f *queue.Feature) []Result {
 	hasPR := f.PR != nil && f.PR.Number > 0
 	if f.Round != "process" {
 		c.each(c.consolidationNamesMain)
-		c.ruleClearance()
+		c.each(c.ruleClearance)
 		c.declaredStill()
 		c.insideAreas()
 	}
@@ -209,7 +210,7 @@ func (c *checker) process() {
 			break
 		}
 		c.pushed()
-		c.ruleClearance()
+		c.each(c.ruleClearance)
 		c.archivedOn(c.f.Branch)
 		c.prGreen()
 	case 3:
@@ -664,7 +665,11 @@ func (c *checker) design() {
 		return
 	}
 	c.add("design present (FLOW-01)", true, "%s on %s", c.f.Design, c.f.Branch)
-	for _, e := range d.Front.Problems(c.f.Feature) {
+	p, err := c.profile()
+	if err != nil {
+		c.add("front-matter (FLOW-02)", false, "%v", err)
+	}
+	for _, e := range d.Front.Problems(c.f.Feature, p) {
 		c.add("front-matter (FLOW-02)", false, "%s", e)
 	}
 	if d.Front.Alters == nil || c.f.AltersRelationships == nil ||
@@ -754,31 +759,48 @@ type Front struct {
 	RuleChanges []RuleChange `yaml:"rule_changes"`
 	Concepts    []string     `yaml:"concepts"`
 	present     map[string]bool
+	// raw is the front-matter as parsed, for the values a profile checks.
+	raw map[string]any
 }
 
+// loopKeys are the front-matter keys every design carries, whatever its
+// component (FLOW-02, LOOP-08).
+var loopKeys = []string{"feature", "status", "seams", "alters_relationships",
+	"design_review", "native_validation", "rules", "concepts"}
+
+// keyOrder is the order Problems reports missing keys in, so that a
+// component's added keys fall where they always have here.
+var keyOrder = []string{"feature", "status", "drivers", "seams", "surfaces",
+	"security_boundary", "alters_relationships", "design_review", "native_validation",
+	"tier2_gaps", "rules", "concepts"}
+
 // Problems lists the ways the front-matter breaks FLOW-02 for the named
-// feature: a missing key, or a value outside the allowed set. It is empty when
-// the front-matter is valid.
-func (fm *Front) Problems(feature string) []string {
-	var out []string
-	for _, k := range []string{"feature", "status", "drivers", "seams", "surfaces",
-		"security_boundary", "alters_relationships", "design_review", "native_validation",
-		"tier2_gaps", "rules", "concepts"} {
-		// design_review decides a gate before implementation (FLOW-19); an
-		// archived design is past it, and designs archived before FLOW-19
-		// never had the key.
-		if !fm.present[k] && (k != "design_review" || fm.Status != "archived") {
-			out = append(out, "missing "+k)
-		}
+// feature: a missing key, or a value outside the allowed set. The keys are
+// the loop's and those the home's profile file adds, with the values it
+// gives (a17 of docs/design/loop-repository.md); a nil profile adds none. It
+// is empty when the front-matter is valid.
+func (fm *Front) Problems(feature string, p *Profile) []string {
+	var impact []string
+	var values map[string][]string
+	var k classifier
+	if p != nil {
+		impact, values = p.Impact.Keys, p.Impact.Values
+		k = classifier{paths: p.Rules.Paths, machinery: p.Rules.Machinery}
 	}
+	required := func(k string) bool {
+		return slices.Contains(loopKeys, k) || slices.Contains(impact, k)
+	}
+	out := fm.missing(required, impact)
 	if fm.Feature != feature {
 		out = append(out, fmt.Sprintf("feature %q, queue says %q", fm.Feature, feature))
 	}
 	if !oneOf(fm.Status, "draft", "active", "archived") {
 		out = append(out, fmt.Sprintf("status %q", fm.Status))
 	}
-	if !oneOf(fm.SecurityBoundary, "none", "host-env", "env-relay", "env-beyond") {
-		out = append(out, fmt.Sprintf("security_boundary %q", fm.SecurityBoundary))
+	for _, k := range sortedKeys(values) {
+		if v := fm.scalar(k); required(k) && !slices.Contains(values[k], v) {
+			out = append(out, fmt.Sprintf("%s %q", k, v))
+		}
 	}
 	if len(fm.Rules) == 0 {
 		out = append(out, "rules is empty")
@@ -792,7 +814,62 @@ func (fm *Front) Problems(feature string) []string {
 				"native_validation %+v needs host, blocking and reason", nv))
 		}
 	}
-	return append(out, ruleChangeProblems(fm.RuleChanges)...)
+	out = append(out, fm.repoProblems()...)
+	return append(out, ruleChangeProblems(fm.RuleChanges, k)...)
+}
+
+// missing lists the required keys the front-matter lacks, in keyOrder and
+// then the order the profile adds them.
+func (fm *Front) missing(required func(string) bool, impact []string) []string {
+	keys := slices.DeleteFunc(slices.Clone(keyOrder), func(k string) bool {
+		return !required(k)
+	})
+	for _, k := range impact {
+		if !slices.Contains(keys, k) {
+			keys = append(keys, k)
+		}
+	}
+	var out []string
+	for _, k := range keys {
+		// design_review decides a gate before implementation (FLOW-19); an
+		// archived design is past it, and designs archived before FLOW-19
+		// never had the key.
+		if !fm.present[k] && (k != "design_review" || fm.Status != "archived") {
+			out = append(out, "missing "+k)
+		}
+	}
+	return out
+}
+
+// scalar is the front-matter value of key as text, "" when it is absent.
+func (fm *Front) scalar(key string) string {
+	if v, ok := fm.raw[key]; ok && v != nil {
+		return fmt.Sprint(v)
+	}
+	return ""
+}
+
+// repoProblems checks merge_first and the prefixed areas against repos: each
+// names a repository the item works in other than its home (FLOW-02).
+func (fm *Front) repoProblems() []string {
+	var out []string
+	others := fm.Repos[min(1, len(fm.Repos)):]
+	for _, r := range fm.MergeFirst {
+		if !slices.Contains(others, r) {
+			out = append(out, fmt.Sprintf(
+				"merge_first %s is not in repos after the home", r))
+		}
+	}
+	if fm.Areas == nil {
+		return out
+	}
+	for _, a := range *fm.Areas {
+		if repo, _, ok := strings.Cut(a, ":"); ok && !slices.Contains(others, repo) {
+			out = append(out, fmt.Sprintf(
+				"area %s names %s, which is not in repos after the home", a, repo))
+		}
+	}
+	return out
 }
 
 func (c *checker) loadDesign(rev string) (*Design, error) {
@@ -822,7 +899,7 @@ func ParseDesign(text, tmpl string) (*Design, error) {
 	}
 	keys := map[string]any{}
 	_ = yaml.Unmarshal([]byte(front), &keys)
-	d.Front.present = map[string]bool{}
+	d.Front.present, d.Front.raw = map[string]bool{}, keys
 	for k := range keys {
 		d.Front.present[k] = true
 	}

@@ -32,23 +32,11 @@ const (
 	machinery          // the loop's own machinery: process items only
 )
 
-// kindOf classifies a path. A workflow file is ordinary here; whether its
-// change touches a rule-running job decides (workflowGuardChanged).
-func kindOf(p string) pathKind {
-	switch {
-	case strings.HasPrefix(p, "docs/development/"), strings.HasPrefix(p, "tools/tier1/"),
-		strings.HasPrefix(p, "tools/workflow/check/"), p == "docs/design/TEMPLATE.md":
-		return rulePath
-	case strings.HasPrefix(p, ".claude/"), strings.HasPrefix(p, "tools/workflow/"):
-		return machinery
-	}
-	return ordinary
-}
-
 var ruleIDRe = regexp.MustCompile(`^[A-Z]+-\d{2}$`)
 
-// ruleChangeProblems is the rule_changes part of Front.Problems.
-func ruleChangeProblems(rcs []RuleChange) []string {
+// ruleChangeProblems is the rule_changes part of Front.Problems. k is the
+// profile's classification: no rule change may name its machinery.
+func ruleChangeProblems(rcs []RuleChange, k classifier) []string {
 	var out []string
 	for i, rc := range rcs {
 		who := rc.Rule
@@ -65,7 +53,7 @@ func ruleChangeProblems(rcs []RuleChange) []string {
 			out = append(out, fmt.Sprintf("rule_changes %s: paths is empty", who))
 		}
 		for _, p := range rc.Paths {
-			if kindOf(p) == machinery {
+			if k.kindOf(p) == machinery {
 				out = append(out, fmt.Sprintf("rule_changes %s: %s changes only "+
 					"through a process item (FLOW-14)", who, p))
 			}
@@ -124,25 +112,37 @@ func (c *checker) cleared(d *Design) (paths map[string]string, why []string) {
 // machinery path, and each workflow file whose change touches a rule-running
 // job (workflowGuardChanged). A workflow that does not parse on either side
 // is an error naming the file.
-func (c *checker) ruleChangeFiles(base, branch string) (map[string]pathKind, error) {
+func (c *checker) ruleChangeFiles(k classifier, base, branch string,
+) (map[string]pathKind, error) {
 	names, err := c.git("diff", "--name-only", "--no-renames", base+"..."+branch)
 	if err != nil {
 		return nil, err
 	}
 	out := map[string]pathKind{}
 	for _, p := range strings.Fields(names) {
-		if k := kindOf(p); k != ordinary {
-			out[p] = k
+		if kind := k.kindOf(p); kind != ordinary {
+			out[p] = kind
 		}
 	}
+	if k.runs == nil {
+		return out, nil
+	}
+	return out, c.workflowChanges(k, base, branch, out)
+}
+
+// workflowChanges adds to out each workflow file whose change touches a
+// rule-running job (workflowGuardChanged).
+func (c *checker) workflowChanges(k classifier, base, branch string,
+	out map[string]pathKind,
+) error {
 	mb, err := c.git("merge-base", base, branch)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	status, err := c.git("diff", "--name-status", "-z", "--no-renames", base+"..."+branch,
 		"--", workflowsDir)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	// -z: status and path alternate, each NUL-terminated, so no path is quoted.
 	fields := strings.Split(strings.TrimSuffix(status, "\x00"), "\x00")
@@ -155,39 +155,48 @@ func (c *checker) ruleChangeFiles(base, branch string) (map[string]pathKind, err
 		if st != "A" {
 			text, err := c.git("show", mb+":"+p)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			before = []byte(text)
 		}
 		if st != "D" {
 			text, err := c.git("show", branch+":"+p)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			after = []byte(text)
 		}
-		changed, err := workflowGuardChanged(before, after)
+		changed, err := workflowGuardChanged(k.runs, before, after)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", p, err)
+			return fmt.Errorf("%s: %w", p, err)
 		}
 		if changed {
 			out[p] = rulePath
 		}
 	}
-	return out, nil
+	return nil
 }
 
 // ruleClearance is FLOW-14's automated part, run at the Implement, Review and
 // Publish done-when: every guarded file a feature branch changes is in the
-// paths of an approved rule change, and the loop's machinery is untouched. A
-// process item's branch is the other FLOW-14 route and is exempt.
+// paths of an approved rule change, and the loop's machinery is untouched, in
+// each repository the item has a branch in, with the paths classified by
+// that repository's profile at the merge base (classifierAt). A path in a
+// repository other than the home is cleared by a rule_changes path written
+// <owner>/<name>:<path>, as an area there is. A process item's branch is the
+// other FLOW-14 route and is exempt.
 func (c *checker) ruleClearance() {
 	const name = "rule changes cleared (FLOW-14)"
 	if c.f.Round == "process" {
 		c.add(name, true, "process item: the FLOW-14 process route")
 		return
 	}
-	files, err := c.ruleChangeFiles(c.trunk(), c.f.Branch)
+	k, err := c.classifierAt()
+	if err != nil {
+		c.add(name, false, "%v", err)
+		return
+	}
+	files, err := c.ruleChangeFiles(k, c.trunk(), c.f.Branch)
 	if err != nil {
 		c.add(name, false, "%v", err)
 		return
@@ -196,21 +205,32 @@ func (c *checker) ruleClearance() {
 		c.add(name, true, "the branch changes no rule or its enforcement")
 		return
 	}
+	at := c.at
+	c.at = c.home
 	d, err := c.loadDesign(c.f.Branch)
+	var ok map[string]string
+	var why []string
+	if err == nil {
+		ok, why = c.cleared(d)
+	}
+	c.at = at
 	if err != nil {
 		c.add(name, false, "%v", err)
 		return
 	}
-	ok, why := c.cleared(d)
+	prefix := ""
+	if c.at != c.home {
+		prefix = c.at.name + ":"
+	}
 	var good []string
 	for _, p := range sortedKeys(files) {
 		switch {
 		case files[p] == machinery:
 			c.add(name, false, "%s changes only through a process item", p)
-		case ok[p] == "":
+		case ok[prefix+p] == "":
 			c.add(name, false, "%s is in no approved rule change%s", p, because(why))
 		default:
-			good = append(good, p+" ("+ok[p]+")")
+			good = append(good, p+" ("+ok[prefix+p]+")")
 		}
 	}
 	if len(good) > 0 {

@@ -147,7 +147,8 @@ func TestNoProfileNoGate(t *testing.T) {
 	env, f, clone := twoRepos(t, 3, "")
 	branchIn(t, clone, "spec.md")
 	for _, r := range named(Phase(env, f)) {
-		if r.Name != "checkout is the clean branch head in o/specs" {
+		if r.Name != "checkout is the clean branch head in o/specs" &&
+			r.Name != "rule changes cleared (FLOW-14) in o/specs" {
 			t.Errorf("phase 3 in a repository with no profile: %+v", r)
 		}
 	}
