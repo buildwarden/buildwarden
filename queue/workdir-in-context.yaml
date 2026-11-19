@@ -1,6 +1,6 @@
 feature: workdir-in-context
 title: A work directory inside the build context is served to the build; a Dockerfile FROM value reaches the container runtime's command line unchecked (security fix)
-priority: 9
+priority: 8
 status: in_progress
 round: feature
 phase: 2
