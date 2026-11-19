@@ -161,3 +161,76 @@ func TestCommitFromFile(t *testing.T) {
 		t.Fatalf("the worktree is not clean: %q", st)
 	}
 }
+
+// withClone adds to the push repository a second repository o/r: its bare
+// origin at a path naming o/r, its clone at .dev/checkouts/o/r, and the
+// clone's worktree .scratch/o/r/w on feat/item, whose queue file names o/r
+// in repos. o/s is a clone whose origin names o/r, with a worktree at
+// .scratch/o/r/s; .scratch/o/r/v is a worktree of o/r on feat/solo, whose
+// item does not name o/r.
+func withClone(t *testing.T, r pushRepo) (origin string) {
+	t.Helper()
+	origin = filepath.Join(filepath.Dir(r.origin), "remote", "o", "r.git")
+	r.git(r.dir, "init", "-q", "--bare", origin)
+	clone := filepath.Join(r.dir, ".dev", "checkouts", "o", "r")
+	r.git(r.dir, "clone", "-q", origin, clone)
+	r.git(clone, "commit", "-q", "--allow-empty", "-m", "r")
+	for name, branch := range map[string]string{"w": "feat/item", "v": "feat/solo"} {
+		r.git(clone, "worktree", "add", "-q", "-b", branch,
+			filepath.Join("..", "..", "..", "..", ".scratch", "o", "r", name))
+	}
+	other := filepath.Join(r.dir, ".dev", "checkouts", "o", "s")
+	r.git(r.dir, "clone", "-q", origin, other)
+	r.git(other, "commit", "-q", "--allow-empty", "-m", "s")
+	r.git(other, "worktree", "add", "-q", "-b", "feat/item",
+		filepath.Join("..", "..", "..", "..", ".scratch", "o", "r", "s"))
+	r.write("repository: o/here\n", ".dev", "workflow", "config.yaml")
+	r.write("feature: item\nstatus: in_progress\nrepos:\n  - o/here\n  - o/r\n", ".dev",
+		"workflow", "queue", "item.yaml")
+	r.write("feature: solo\nstatus: in_progress\nwork:\n  - repo: o/r\n", ".dev",
+		"workflow", "queue", "solo.yaml")
+	return origin
+}
+
+// TestNativePushClone runs native-push.sh's form for a branch in a second
+// repository's clone: it pushes the worktree .scratch/<owner>/<repo>/<name>
+// to that clone's origin, and refuses before any push what the design names
+// (docs/design/loop-repository.md, The native side; FLOW-17).
+func TestNativePushClone(t *testing.T) {
+	r := newPushRepo(t)
+	origin := withClone(t, r)
+	for _, c := range []struct {
+		name string
+		args []string
+	}{
+		{"a third argument", []string{"w", "o/r", "x"}},
+		{"not owner/repo", []string{"w", "r"}},
+		{"three parts", []string{"w", "o/r/x"}},
+		{"dot dot", []string{"w", "o/.."}},
+		{"the queue's own", []string{"w", "o/here"}},
+		{"no clone", []string{"w", "o/none"}},
+		{"origin names another", []string{"s", "o/s"}},
+		{"another clone's worktree", []string{"s", "o/r"}},
+		{"repos does not name it", []string{"v", "o/r"}},
+		{"no worktree", []string{"missing", "o/r"}},
+	} {
+		t.Run(c.name, func(t *testing.T) { r.refused(t, "", c.args...) })
+	}
+	if refs := r.git(r.dir, "ls-remote", origin); refs != "" {
+		t.Fatalf("a refusal pushed: %s", refs)
+	}
+	if _, stderr, code := r.push("", "w", "o/r"); code != 0 {
+		t.Fatalf("push: exit %d: %s", code, stderr)
+	}
+	head := r.git(filepath.Join(r.dir, ".scratch", "o", "r", "w"), "rev-parse", "HEAD")
+	if got := r.git(r.dir, "ls-remote", origin); got != head+"\trefs/heads/feat/item" {
+		t.Fatalf("o/r's origin has %q, want feat/item at %s", got, head)
+	}
+	if refs := r.git(r.dir, "ls-remote", "origin"); refs != "" {
+		t.Fatalf("the clone form pushed to the dedicated checkout's origin: %s", refs)
+	}
+	// The one-argument form is unchanged.
+	if _, stderr, code := r.push("", "w"); code != 0 {
+		t.Fatalf("one-argument push: exit %d: %s", code, stderr)
+	}
+}

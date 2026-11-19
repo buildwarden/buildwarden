@@ -252,7 +252,7 @@ type opts struct {
 	lead, host, session, current, renewed                     string
 	repos, areas, seams, adopts, with, message, claimed       string
 	rev, edges, repository                                    string
-	urgent, clear, check, list                                bool
+	urgent, clear, check, list, clones, prepare               bool
 	// given holds the names of the flags the command line set, for a flag
 	// whose empty value means something.
 	given                                      map[string]bool
@@ -318,7 +318,12 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.areas, "areas", "",
 		"new: comma-separated areas the item changes; given empty, it changes none; "+
 			"validate: a candidate area map")
-	fs.BoolVar(&o.check, "check", false, "areas: compare the map with a tree of -repo")
+	fs.BoolVar(&o.check, "check", false, "areas: compare the map with a tree of -repo; "+
+		"native: the install check of the machine's clones and profiles")
+	fs.BoolVar(&o.clones, "clones", false,
+		"native: print each second repository the machine lists, with its trunk")
+	fs.BoolVar(&o.prepare, "prepare", false,
+		"native: run the profiles' native.prepare for the machine's hosts")
 	fs.StringVar(&o.repository, "repository", "",
 		"areas: owner/name, the repository whose map under repos/ to read; its tree is "+
 			"its clone under -checkouts")
@@ -384,7 +389,7 @@ func run(cmd string, args []string, now time.Time) error {
 		"lead": lead,
 		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
 		"declare": declareItem, "relate": relate, "relations": relations,
-		"digest": digest, "areas": areasCmd,
+		"digest": digest, "areas": areasCmd, "native": native,
 	}
 	for _, c := range []string{"claim", "release", "renew", "done"} {
 		cmds[c] = func(s *queue.State, o opts) error {

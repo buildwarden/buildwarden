@@ -28,9 +28,9 @@ type Machine struct {
 	Note         string   `yaml:"note,omitempty"`
 }
 
-// lists returns the repositories the machine takes steps in: its
+// Lists returns the repositories the machine takes steps in: its
 // repositories, or the queue's own when it lists none (FLOW-04).
-func (s *State) lists(m *Machine) []string {
+func (s *State) Lists(m *Machine) []string {
 	if len(m.Repositories) > 0 {
 		return m.Repositories
 	}
@@ -53,7 +53,7 @@ func (s *State) stepRepos(f *Feature, st *Step) []string {
 
 // missingOn returns the repositories of repos the machine does not list.
 func (s *State) missingOn(m *Machine, repos []string) []string {
-	return minus(repos, s.lists(m))
+	return minus(repos, s.Lists(m))
 }
 
 // takers returns the machines that serve the host name and list every
@@ -411,7 +411,7 @@ func (s *State) unheld(m *Machine, g *Gate) map[string]bool {
 // docs/design/loop-repository.md). A repository with no entry is an error.
 func (s *State) fingerprint(m *Machine, repo string) (string, error) {
 	h := sha256.New()
-	for _, name := range s.lists(m) {
+	for _, name := range s.Lists(m) {
 		dir, label := repo, ""
 		trunk := "main"
 		if name != "" {

@@ -49,7 +49,9 @@ containers this session creates. And:
   budget, which `wf next` now enforces for every worker but a human (FLOW-07,
   FLOW-13);
 - no push but by `dist/wf commit` (the workflow branch) and
-  `tools/workflow/native/native-push.sh <name>` (a feature branch, FLOW-17);
+  `tools/workflow/native/native-push.sh <name>` (a feature branch, FLOW-17),
+  or `native-push.sh <name> <owner>/<repo>` for a branch in a second
+  repository's clone;
 - no `git -C ... commit -m`: a commit message goes in `.scratch/<name>.msg`
   and is committed with `git -C .scratch/<name> commit -F ../<name>.msg`,
   never `-m`, and never `git -C ... log --grep push`, because the deny
@@ -132,6 +134,15 @@ finish as in its step 2.5. On this machine every commit of the branch is
 `.scratch/<item>.msg` first, and every push, at each green checkpoint
 (FLOW-17), is `tools/workflow/native/native-push.sh <item>`, which pushes
 only the checked-out `feat/<item>` of an item in progress, fast-forward only.
+A branch of the item in a second repository it works in is worked in that
+repository's clone: `git -C .dev/checkouts/<owner>/<repo> fetch origin`, then
+`git -C .dev/checkouts/<owner>/<repo> worktree add
+../../../../.scratch/<owner>/<repo>/<item> feat/<item>`, committed with `git
+-C .scratch/<owner>/<repo>/<item> commit -F ../<item>.msg` (the message at
+`.scratch/<owner>/<repo>/<item>.msg`) and pushed with
+`tools/workflow/native/native-push.sh <item> <owner>/<repo>`; no other git
+command runs in the clone, which the wrapper resets to its trunk at its next
+run.
 
 Keep the lease while working: before each phase-agent dispatch, and at each
 checkpoint push, when less than half the lease is left, renew it with

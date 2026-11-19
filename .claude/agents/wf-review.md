@@ -55,7 +55,10 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
    findings back to `wf-implement` and records the rest for the PR body, where the human acknowledges them at merge
    (FLOW-08).
 
-On a native machine (a led step, FLOW-04), the branch is pushed only with
-`tools/workflow/native/native-push.sh <name>` and committed with `git -C
-.scratch/<name> commit -F ../<name>.msg`, the message written to
-`.scratch/<name>.msg` first, never `-m` (FLOW-17).
+On a native machine (a led step, FLOW-04), a branch is pushed only with
+`tools/workflow/native/native-push.sh <name>`, or `native-push.sh <name>
+<owner>/<repo>` for a branch in a second repository's clone, whose worktree
+is `.scratch/<owner>/<repo>/<name>`, made with `git -C
+.dev/checkouts/<owner>/<repo> worktree add`; and committed with `git -C
+<worktree> commit -F ../<name>.msg`, the message written beside the
+worktree, never `-m` (FLOW-17).
