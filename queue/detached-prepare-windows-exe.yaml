@@ -4,7 +4,7 @@ priority: 3
 follows: project-config-trust
 status: in_progress
 round: feature
-phase: 5
+phase: 6
 design: docs/design/detached-prepare-windows-exe.md
 branch: feat/detached-prepare-windows-exe
 areas:
@@ -36,6 +36,8 @@ steps:
     phase: 6
     affinity: host:windows-hyperv
     status: pending
+    needs:
+      - f6-consolidate
     lease:
       claimed_by: ""
       expires: null
@@ -96,10 +98,36 @@ steps:
   - id: f5-guide
     phase: 5
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261119T105705Z
-      expires: 2026-11-19T14:49:27.248494329Z
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-merge-main
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate
+      - f6-validate-windows-hyperv
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -284,3 +312,9 @@ history:
   - at: 2026-11-19T12:49:27Z
     by: cloud/20261119T105705Z
     event: claimed f5-guide until 2026-11-19T14:49:27Z
+  - at: 2026-11-19T12:50:07Z
+    by: cloud/20261119T105705Z
+    event: done f5-guide
+  - at: 2026-11-19T12:50:07Z
+    by: cloud/20261119T105705Z
+    event: entered phase 6 (publish)
