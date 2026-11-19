@@ -1,0 +1,59 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/dpwe-nv'
+[vm]
+image_refresh_after = "1m"
+../dpwe/dist/warden build --config C:/Users/jeff/buildwarden-native/.scratch/dpwe-nv/cfg/warden.toml --driver hyperv --guest-os windows -o out-c2b proj/build.ps1; echo "exit=$?"
+[warden] config: C:\Users\jeff\buildwarden-native\.scratch\dpwe-nv\cfg\warden.toml (--config)
+warden: build VM "warden-build-mb6sker4" COM1 -> \\.\pipe\warden-build-mb6sker4 (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: out-c2b)
+exit=0
+powershell -NoProfile -ExecutionPolicy Bypass -File state.ps1
+now (UTC): 2026-11-19T17:15:47.7249693Z
+warden processes:
+
+
+ProcessId      : 65540
+CreationDate   : 11/12/2026 9:41:21 PM
+ExecutablePath : 
+CommandLine    : 
+
+ProcessId      : 62068
+CreationDate   : 11/19/2026 9:13:22 AM
+ExecutablePath : C:\Users\jeff\buildwarden-native\.scratch\dpwe\dist\warden
+CommandLine    : C:\Users\jeff\buildwarden-native\.scratch\dpwe\dist\warden --config 
+                 C:\Users\jeff\buildwarden-native\.scratch\dpwe-nv\cfg\warden.toml image prepare --driver hyperv
+
+
+
+prepare.log:
+
+
+Length           : 746
+LastWriteTimeUtc : 11/19/2026 5:15:05 PM
+
+
+
+[warden] config: C:\Users\jeff\buildwarden-native\.scratch\dpwe-nv\cfg\warden.toml (--config)
+base 26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx is current (https://go.microsoft.com/fwlink/?linkid=2293215&clcid=0x409&culture=en-us&country=us)
+activated "windows-server-2025" as the Hyper-V base: C:\Users\jeff\AppData\Local\warden\hyperv\images\26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx
+preparing windows-server-2025-20261119T171325Z.vhdx from windows-server-2025 in VM warden-prepare-20261119t171325z (no network)
+  guest: running:services
+  guest: running:scheduled-tasks
+  guest: running:defender
+  guest: running:reboot
+  guest: running:ngen
+images:
+
+Name                                                                                                 Length      LastWr
+                                                                                                                 iteTim
+                                                                                                                 eUtc  
+----                                                                                                 ------      ------
+prepared                                                                                                         11/...
+26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx        11686379520 10/...
+26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx.sha256 65          10/...
+index.json                                                                                           2754        11/...
+layers.json                                                                                          2641        11/...
+
+
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/dpwe-nv'

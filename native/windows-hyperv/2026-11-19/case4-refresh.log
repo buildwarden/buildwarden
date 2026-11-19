@@ -1,0 +1,45 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/dpwe-nv'
+[vm]
+image_refresh_after = "1m"
+../dpwe/dist/warden build --config C:/Users/jeff/buildwarden-native/.scratch/dpwe-nv/cfg/warden.toml --driver hyperv --guest-os windows -o out-c4 proj/build.ps1; echo "exit=$?"
+[warden] config: C:\Users\jeff\buildwarden-native\.scratch\dpwe-nv\cfg\warden.toml (--config)
+[warden] prepared base is 4m old, and its background refresh did not start: open C:\Users\jeff\AppData\Local\warden\hyperv\prepare.log: The process cannot access the file because it is being used by another process.; run `warden image prepare --driver hyperv` to refresh it
+warden: build VM "warden-build-9ki9wkzv" COM1 -> \\.\pipe\warden-build-9ki9wkzv (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: out-c4)
+exit=0
+powershell -NoProfile -ExecutionPolicy Bypass -File state.ps1
+now (UTC): 2026-11-19T17:21:44.2950497Z
+warden processes:
+
+
+ProcessId      : 65540
+CreationDate   : 11/12/2026 9:41:21 PM
+ExecutablePath : 
+CommandLine    : 
+
+
+
+prepare.log:
+
+
+Length           : 1060
+LastWriteTimeUtc : 11/19/2026 5:20:57 PM
+
+
+
+images:
+
+Name                                                                                                 Length      LastWr
+                                                                                                                 iteTim
+                                                                                                                 eUtc  
+----                                                                                                 ------      ------
+prepared                                                                                                         11/...
+26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx        11686379520 10/...
+26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx.sha256 65          10/...
+index.json                                                                                           2754        11/...
+layers.json                                                                                          2641        11/...
+
+
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/dpwe-nv'

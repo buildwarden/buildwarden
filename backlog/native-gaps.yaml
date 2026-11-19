@@ -991,6 +991,8 @@ gaps:
       2026-11-18 (host:container-any/20261118T231002Z, unattended, main e9315c2): not run. main moved
       (#126 to #129, loop and process changes only), but feat/prebuilt-artifacts is still 49b513a
       (design only), and q1 is still open: driver-contract still waits on human step f2-design-review-r2.
+      2026-11-19 (host:container-any/windows-desktop.20261119T171002Z, unattended, main e9315c2): not run,
+      nothing changed. feat/prebuilt-artifacts is still 49b513a (design only), and q1 is still open.
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: open
@@ -1052,6 +1054,8 @@ gaps:
       2026-11-18 (host:container-any/20261118T231002Z, unattended, main e9315c2): not run. main moved
       (loop and process changes only); feat/workdir-in-context is still 24376c0 (design only), held on
       f2-answer-q1.
+      2026-11-19 (host:container-any/windows-desktop.20261119T171002Z, unattended, main e9315c2): not run,
+      nothing changed. feat/workdir-in-context is still 24376c0 (design only), held on f2-answer-q1.
   - id: workdir-in-context-macos
     host: macos-finch
     status: open

@@ -1,0 +1,63 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/dpwe-nv'
+cd ../dpwe && go build -o dist/warden.exe ./cmd/warden && ls -l dist/
+total 85056
+-rwxr-xr-x 1 jeff 197611 18701312 Nov 19 09:12 warden
+-rwxr-xr-x 1 jeff 197611 18701312 Nov 19 09:17 warden.exe
+-rw-r--r-- 1 jeff 197611  9184892 Nov 19 09:12 warden-io-linux-amd64
+-rw-r--r-- 1 jeff 197611  8540601 Nov 19 09:12 warden-io-linux-arm64
+-rw-r--r-- 1 jeff 197611 16491917 Nov 19 09:12 warden-relay-linux-amd64
+-rw-r--r-- 1 jeff 197611 15464369 Nov 19 09:12 warden-relay-linux-arm64
+[vm]
+image_refresh_after = "1m"
+../dpwe/dist/warden build --config C:/Users/jeff/buildwarden-native/.scratch/dpwe-nv/cfg/warden.toml --driver hyperv --guest-os windows -o out-c3 proj/build.ps1; echo "exit=$?"
+[warden] config: C:\Users\jeff\buildwarden-native\.scratch\dpwe-nv\cfg\warden.toml (--config)
+[warden] prepared base is 4m old; refreshing it in the background (log: C:\Users\jeff\AppData\Local\warden\hyperv\prepare.log)
+warden: build VM "warden-build-30463f7t" COM1 -> \\.\pipe\warden-build-30463f7t (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: out-c3)
+exit=0
+powershell -NoProfile -ExecutionPolicy Bypass -File state.ps1
+now (UTC): 2026-11-19T17:18:07.8747726Z
+warden processes:
+
+
+ProcessId      : 65540
+CreationDate   : 11/12/2026 9:41:21 PM
+ExecutablePath : 
+CommandLine    : 
+
+ProcessId      : 76320
+CreationDate   : 11/19/2026 9:17:29 AM
+ExecutablePath : C:\Users\jeff\buildwarden-native\.scratch\dpwe\dist\warden
+CommandLine    : C:\Users\jeff\buildwarden-native\.scratch\dpwe\dist\warden --config 
+                 C:\Users\jeff\buildwarden-native\.scratch\dpwe-nv\cfg\warden.toml image prepare --driver hyperv
+
+
+
+prepare.log:
+
+
+Length           : 615
+LastWriteTimeUtc : 11/19/2026 5:17:34 PM
+
+
+
+[warden] config: C:\Users\jeff\buildwarden-native\.scratch\dpwe-nv\cfg\warden.toml (--config)
+base 26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx is current (https://go.microsoft.com/fwlink/?linkid=2293215&clcid=0x409&culture=en-us&country=us)
+activated "windows-server-2025" as the Hyper-V base: C:\Users\jeff\AppData\Local\warden\hyperv\images\26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx
+preparing windows-server-2025-20261119T171732Z.vhdx from windows-server-2025 in VM warden-prepare-20261119t171732z (no network)
+images:
+
+Name                                                                                                 Length      LastWr
+                                                                                                                 iteTim
+                                                                                                                 eUtc  
+----                                                                                                 ------      ------
+prepared                                                                                                         11/...
+26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx        11686379520 10/...
+26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx.sha256 65          10/...
+index.json                                                                                           2754        11/...
+layers.json                                                                                          2641        11/...
+
+
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/dpwe-nv'

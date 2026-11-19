@@ -35,12 +35,12 @@ steps:
   - id: f6-validate-windows-hyperv
     phase: 6
     affinity: host:windows-hyperv
-    status: pending
+    status: done
     needs:
       - f6-consolidate
     lease:
-      claimed_by: host:windows-hyperv/windows-desktop.20261119T171002Z
-      expires: 2026-11-20T13:11:08.1129817Z
+      claimed_by: ""
+      expires: null
     note: 'Blocking native validation (FLOW-09) per docs/design/detached-prepare-windows-exe.md Validation plan, on the branch built with make build (dist/warden, no .exe): (1) go test ./driver/ ./driver/hyperv/ on this host, the new StartDetached cases included (the file started is the extension-less one named, not a warden.exe beside it); (2) no warden.exe in dist/: a hyperv build with [vm] image_refresh_after = "1m" prints "refreshing it in the background", prepare.log fills (config line first), the prepare finishes and the new base is active, and a build meanwhile starts no second prepare; (3) with the stale dist/warden.exe of 2026-11-04 beside it (a3): the same build, and the background process path (state.ps1) is dist\warden, not warden.exe; then delete the stale file; (4) prepare.log held open with no sharing by another process: the build prints the new line naming the error and warden image prepare --driver hyperv, and still SUCCEEDS; (5) go build -o dist/warden.exe ./cmd/warden: the refresh-due build still refreshes, from dist\warden.exe. Evidence under native/windows-hyperv/<date>/.'
   - id: f2-design-review
     phase: 2
@@ -333,3 +333,6 @@ history:
   - at: 2026-11-19T17:11:08Z
     by: host:windows-hyperv/windows-desktop.20261119T171002Z
     event: claimed f6-validate-windows-hyperv until 2026-11-20T13:11:08Z
+  - at: 2026-11-19T17:29:55Z
+    by: host:windows-hyperv/windows-desktop.20261119T171002Z
+    event: done f6-validate-windows-hyperv

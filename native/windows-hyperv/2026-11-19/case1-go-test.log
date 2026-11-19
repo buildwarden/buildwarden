@@ -1,0 +1,34 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/dpwe-nv'
+cd ../dpwe && go version && go test -count=1 -v -run 'Detach|Detached|Refresh|Fresh|StartDetached' ./driver/ ./driver/hyperv/ ./driver/qemu/ 2>&1 | tail -80
+go version go1.26.3 windows/amd64
+=== RUN   TestDetachedArgs
+--- PASS: TestDetachedArgs (0.00s)
+=== RUN   TestStartDetachedRunsNamedFile
+--- PASS: TestStartDetachedRunsNamedFile (0.11s)
+=== RUN   TestStartDetachedFailedStart
+--- PASS: TestStartDetachedFailedStart (0.04s)
+PASS
+ok  	github.com/buildwarden/buildwarden/driver	0.256s
+=== RUN   TestEnsureFreshBaseReportsFailedStart
+--- PASS: TestEnsureFreshBaseReportsFailedStart (0.02s)
+=== RUN   TestEnsureFreshBaseStartsRefresh
+--- PASS: TestEnsureFreshBaseStartsRefresh (0.02s)
+=== RUN   TestRefreshCacheWritesRelayBootChannel
+--- PASS: TestRefreshCacheWritesRelayBootChannel (0.00s)
+PASS
+ok  	github.com/buildwarden/buildwarden/driver/hyperv	1.628s
+=== RUN   TestEnsureFreshWindowsLayerReports
+=== RUN   TestEnsureFreshWindowsLayerReports/start_fails
+=== RUN   TestEnsureFreshWindowsLayerReports/lock_fails
+=== RUN   TestEnsureFreshWindowsLayerReports/starts
+--- PASS: TestEnsureFreshWindowsLayerReports (0.00s)
+    --- PASS: TestEnsureFreshWindowsLayerReports/start_fails (0.00s)
+    --- PASS: TestEnsureFreshWindowsLayerReports/lock_fails (0.00s)
+    --- PASS: TestEnsureFreshWindowsLayerReports/starts (0.00s)
+PASS
+ok  	github.com/buildwarden/buildwarden/driver/qemu	0.137s
+cd ../dpwe && go test -count=1 ./driver/ ./driver/hyperv/ ./driver/qemu/
+ok  	github.com/buildwarden/buildwarden/driver	1.938s
+ok  	github.com/buildwarden/buildwarden/driver/hyperv	9.514s
+ok  	github.com/buildwarden/buildwarden/driver/qemu	2.103s
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/dpwe-nv'

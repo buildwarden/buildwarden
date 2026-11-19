@@ -1,0 +1,73 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/dpwe-nv'
+powershell -NoProfile -ExecutionPolicy Bypass -File state.ps1
+now (UTC): 2026-11-19T17:17:17.5113359Z
+warden processes:
+
+
+ProcessId      : 65540
+CreationDate   : 11/12/2026 9:41:21 PM
+ExecutablePath : 
+CommandLine    : 
+
+
+
+prepare.log:
+
+
+Length           : 1060
+LastWriteTimeUtc : 11/19/2026 5:16:55 PM
+
+
+
+[warden] config: C:\Users\jeff\buildwarden-native\.scratch\dpwe-nv\cfg\warden.toml (--config)
+base 26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx is current (https://go.microsoft.com/fwlink/?linkid=2293215&clcid=0x409&culture=en-us&country=us)
+activated "windows-server-2025" as the Hyper-V base: C:\Users\jeff\AppData\Local\warden\hyperv\images\26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx
+preparing windows-server-2025-20261119T171325Z.vhdx from windows-server-2025 in VM warden-prepare-20261119t171325z (no network)
+  guest: running:services
+  guest: running:scheduled-tasks
+  guest: running:defender
+  guest: running:reboot
+  guest: running:ngen
+  guest: done
+retired prepared layer windows-server-2025-20261116T051928Z.vhdx
+prepared windows-server-2025-20261119T171325Z.vhdx (sha256:007b40a02ce9); evaluation grace ends 2026-11-29T17:14:11Z
+Base image ready: C:\Users\jeff\AppData\Local\warden\hyperv\images\prepared\windows-server-2025-20261119T171325Z.vhdx
+images:
+
+Name                                                                                                 Length      LastWr
+                                                                                                                 iteTim
+                                                                                                                 eUtc  
+----                                                                                                 ------      ------
+prepared                                                                                                         11/...
+26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx        11686379520 10/...
+26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx.sha256 65          10/...
+index.json                                                                                           2754        11/...
+layers.json                                                                                          2641        11/...
+
+
+../dpwe/dist/warden doctor --driver hyperv; echo "exit=$?"
+config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+build link 100.127.255.252/30 (default)
+build link: no host interface overlaps it
+hyperv relay boot VHDX: link-channel stamp current
+Hyper-V hypervisor present ........... yes
+Hyper-V feature enabled .............. yes
+Token read ........................... current process (non-elevated)
+Full Administrator ................... no  (needed for: New-VMSwitch, New-NetNat, New-NetIPAddress)
+Hyper-V Administrators ............... yes (covers: New-VM, Start-VM, Remove-VM, adapters, VHDX)
+Durable build switches 'warden-dev-<i>'  present
+Privileged service ................... reachable
+Image cache .......................... C:\Users\jeff\AppData\Local\warden\hyperv
+Prepared base ........................ windows-server-2025-20261119T171325Z.vhdx, 4m old, evaluation grace ends 2026-11-29 17:14Z (10.0d left)
+
+Resolved:
+  VM lifecycle ......... OK (direct, Hyper-V Administrators)
+  Network .............. OK (fresh per-build via privileged service)
+
+Build network:
+  NAT .................................. warden-dev-nat (192.168.250.0/24, host 192.168.250.1)
+  Relay resolvers ...................... 8.8.8.8, 8.8.4.4 (from interface Ethernet (the IPv4 default route's))
+  Slot warden-dev-0 .................... free
+  Slot warden-dev-1 .................... free
+exit=0
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/dpwe-nv'

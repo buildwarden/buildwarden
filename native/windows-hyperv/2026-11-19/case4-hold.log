@@ -1,0 +1,5 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/dpwe-nv'
+powershell -NoProfile -ExecutionPolicy Bypass -File hold.ps1 -Seconds 240
+holding C:\Users\jeff\AppData\Local\warden\hyperv\prepare.log with FileShare None for 240 s (pid 11688)
+released
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/dpwe-nv'
