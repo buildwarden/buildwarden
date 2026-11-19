@@ -154,6 +154,11 @@ type Feature struct {
 	// home first: the home holds its design, its branch and its PR
 	// (LOOP-04). Empty, the item works only in Config.Repository.
 	Repos []string `yaml:"repos,omitempty"`
+	// Work has one entry per repository in Repos after the home: the item's
+	// branch and pull request there (FLOW-03, FLOW-08). wf declare writes it
+	// from the design. Empty on an item declared before it existed, which
+	// keeps its gates in its home only.
+	Work []Work `yaml:"work,omitempty"`
 	// Areas names the areas of the area map whose files the item changes
 	// (FLOW-02, FLOW-05). Nil, the key absent, is undeclared: the item
 	// collides with every item it shares a repository with. An empty list is
@@ -191,6 +196,23 @@ type Feature struct {
 	// written. Save writes the items whose number moved from stored.
 	stored int
 	file   string
+}
+
+// Work is the item's branch and pull request in one repository other than
+// its home.
+type Work struct {
+	Repo string `yaml:"repo"`
+	// Branch is the home's branch name: an item has one name in every
+	// repository (FLOW-17).
+	Branch string `yaml:"branch"`
+	// First says the design names the repository in merge_first: its pull
+	// request merges before the home's is listed ready, confirmed in Publish
+	// (FLOW-08).
+	First bool `yaml:"first,omitempty"`
+	PR    *PR  `yaml:"pr,omitempty"`
+	// Merged is the merge commit the loop confirmed on the repository's
+	// trunk.
+	Merged string `yaml:"merged,omitempty"`
 }
 
 // Adopts is what a reconciliation item adopts: a release of a consumable
@@ -1073,7 +1095,37 @@ func (s *State) Problems(f *Feature) []error {
 	if f.PR != nil && f.PR.Head != "" && !commitRe.MatchString(f.PR.Head) {
 		bad("pr.head %q is not a commit id", f.PR.Head)
 	}
+	validateWork(f, bad)
 	return errs
+}
+
+// validateWork checks that work, once written, has one entry for each
+// repository in repos after the home, in its order, on the home's branch
+// name (FLOW-03, FLOW-17).
+func validateWork(f *Feature, bad func(string, ...any)) {
+	if len(f.Work) == 0 {
+		return
+	}
+	var want, got []string
+	if len(f.Repos) > 1 {
+		want = f.Repos[1:]
+	}
+	for _, w := range f.Work {
+		got = append(got, w.Repo)
+		if w.Branch != f.Branch {
+			bad("work %s: branch %q is not the item's branch %q", w.Repo, w.Branch, f.Branch)
+		}
+		if w.PR != nil && w.PR.Head != "" && !commitRe.MatchString(w.PR.Head) {
+			bad("work %s: pr.head %q is not a commit id", w.Repo, w.PR.Head)
+		}
+		if w.Merged != "" && !commitRe.MatchString(w.Merged) {
+			bad("work %s: merged %q is not a commit id", w.Repo, w.Merged)
+		}
+	}
+	if !slices.Equal(got, want) {
+		bad("work names %v, but repos after the home are %v: wf declare writes work "+
+			"from the design", got, want)
+	}
 }
 
 // Inherit gives a new item that follows parent the parent's repositories and

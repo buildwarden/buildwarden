@@ -19,8 +19,12 @@ import (
 
 // Env is where the checks look.
 type Env struct {
-	Repo     string // a checkout of buildwarden/buildwarden with origin fetched
+	Repo     string // a checkout of the queue's own repository with origin fetched
 	Workflow string // a checkout of the workflow branch
+	// Checkouts holds a clone of each other repository an item works in,
+	// at Checkouts/<owner>/<name>, origin fetched (-checkouts). Empty, wf
+	// reads no second repository, and a check that needs one fails.
+	Checkouts string
 	// Run enables the checks that run make targets; off, they are reported
 	// as skipped and fail.
 	Run bool
@@ -232,6 +236,54 @@ func (c *checker) git(args ...string) (string, error) {
 			strings.TrimSpace(stderr.String()))
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// clone returns the checkout of repo: Env.Repo for the queue's own
+// repository (or for an item that names none), else its clone under
+// Env.Checkouts. A clone that is not there is an error naming -checkouts and
+// the path it was looked for at (GLOBAL-11).
+func (c *checker) clone(repo string) (string, error) {
+	if repo == "" || repo == c.state().Config.Repository {
+		return c.env.Repo, nil
+	}
+	if c.env.Checkouts == "" {
+		return "", fmt.Errorf("%s is not the queue's own repository, and no -checkouts "+
+			"is given: wf reads it in DIR/%s, given -checkouts DIR", repo, repo)
+	}
+	dir := filepath.Join(c.env.Checkouts, filepath.FromSlash(repo))
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
+		return "", fmt.Errorf("no clone of %s at %s (-checkouts %s): clone it there",
+			repo, dir, c.env.Checkouts)
+	}
+	return dir, nil
+}
+
+// gitIn runs git in repo's checkout.
+func (c *checker) gitIn(repo string, args ...string) (string, error) {
+	dir, err := c.clone(repo)
+	if err != nil {
+		return "", err
+	}
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git %s in %s: %v: %s", strings.Join(args, " "), repo, err,
+			strings.TrimSpace(stderr.String()))
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// remoteHeadIn returns the commit of branch on repo's remote, "" when the
+// branch is not there.
+func (c *checker) remoteHeadIn(repo, branch string) (string, error) {
+	out, err := c.gitIn(repo, "ls-remote", "--heads", "origin", "refs/heads/"+branch)
+	if err != nil || out == "" {
+		return "", err
+	}
+	return strings.Fields(out)[0], nil
 }
 
 func (c *checker) remoteHead(branch string) string {
@@ -641,6 +693,9 @@ type Front struct {
 	// Repos are the repositories the item works in, its home first; empty
 	// or absent, only the one that holds the design (LOOP-04).
 	Repos []string `yaml:"repos"`
+	// MergeFirst are the repositories in Repos, not the home, whose pull
+	// request merges before the home's is listed ready (FLOW-08).
+	MergeFirst []string `yaml:"merge_first"`
 	// Areas are the areas of the area map the change edits (FLOW-02). Nil,
 	// the key absent, the design is undeclared, which an empty list is not.
 	Areas            *[]string `yaml:"areas"`

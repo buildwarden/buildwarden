@@ -2179,3 +2179,27 @@ func TestConfigTrunk(t *testing.T) {
 		}
 	}
 }
+
+// TestValidateWork: work, once written, agrees with repos after the home and
+// the item's branch (Validation plan test 8).
+func TestValidateWork(t *testing.T) {
+	f := feature("a", 1, "in_progress")
+	f.Branch, f.Repos = "feat/a", []string{"o/here", "o/specs"}
+	s := own(state(f), "o/here")
+	f.Work = []Work{{Repo: "o/specs", Branch: "feat/a", Merged: "4c1d9e2"}}
+	if errs := s.Validate(); len(errs) != 0 {
+		t.Fatalf("Validate = %v", errs)
+	}
+	f.Work = []Work{{Repo: "o/relay", Branch: "feat/b", Merged: "HEAD"}}
+	var got []string
+	for _, err := range s.Validate() {
+		got = append(got, err.Error())
+	}
+	want := []string{`a: work o/relay: branch "feat/b" is not the item's branch "feat/a"`,
+		`a: work o/relay: merged "HEAD" is not a commit id`,
+		"a: work names [o/relay], but repos after the home are [o/specs]: wf declare " +
+			"writes work from the design"}
+	if !slices.Equal(got, want) {
+		t.Errorf("Validate = %q, want %q", got, want)
+	}
+}

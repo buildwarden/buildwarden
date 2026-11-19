@@ -74,46 +74,66 @@ front-matter; the agent part judges whether the design actually covers the chang
 A design's front-matter declares what the change reaches, so the behavioral linter
 can compare the claim against the diff and the queue can route the work:
 
-- `drivers` — which drivers are touched, or `interface` for a change made at the
-  level of the driver contract or `driver.Session` (ORCH-01).
+- `drivers` — here: which drivers are touched, or `interface` for a
+  change made at the level of the driver contract or `driver.Session`
+  (ORCH-01).
 - `seams` — which versioned seams change (GLOBAL-08).
-- `surfaces` — which user-facing surfaces change (UX-01, ORCH-03).
+- `surfaces` — here: which user-facing surfaces change (UX-01, ORCH-03).
 - `repos` — every repository the change works in, the one that holds the
   design first, when there is more than that one (LOOP-04).
-- `areas` — the areas of the repository's area map whose files the change
-  edits (FLOW-05). A design that leaves the key out is undeclared, as
-  FLOW-05 defines it, and FLOW-05 then treats the item as colliding with
-  every item in its repositories. `areas: []` is a declaration: the
-  change edits nothing but its own design, though an item whose home
-  repository has no map is undeclared whatever it declares (FLOW-05).
-- `security_boundary` — which GLOBAL-06 boundary is altered, if any. Any value other
-  than `none` requires a security note in the design.
-- `alters_relationships` — `true` when the change alters a component's role or
-  how components interact: a versioned seam (GLOBAL-08), the bootstrap model
-  (BOOT rules), which component owns a responsibility (relay, collector,
-  executor, orchestrator, a driver), or the driver contract or
-  `driver.Session`. Changes inside one component's existing role are `false`.
-  FLOW-05 limits how many such features are in flight.
+- `merge_first` — the repositories in `repos`, other than the home, whose
+  pull request merges before the home's is listed ready (FLOW-08). Empty
+  or absent means none.
+- `areas` — the areas of an area map whose files the change edits
+  (FLOW-05). A bare name is an area of the map of the item's home
+  repository; an area of another repository the item works in is written
+  `<owner>/<name>:<area>`. A design that leaves the key out is
+  undeclared, as FLOW-05 defines it, and FLOW-05 then treats the item as
+  colliding with every item in its repositories. `areas: []` is a
+  declaration: the change edits nothing but its own design, though an
+  item whose home repository has no map is undeclared whatever it
+  declares (FLOW-05).
+- `security_boundary` — here: which GLOBAL-06 boundary is altered, if
+  any. Any value other than `none` requires a security note in the
+  design.
+- `alters_relationships` — `true` when the change alters a component's
+  role or how components interact: a versioned seam (GLOBAL-08), or which
+  component owns a responsibility; here also the bootstrap model (BOOT
+  rules), which of relay, collector, executor, orchestrator or a driver
+  owns a responsibility, or the driver contract or `driver.Session`.
+  Changes inside one component's existing role are `false`. FLOW-05
+  limits how many such features are in flight.
 - `native_validation` — which native hosts must validate the change, and whether
   each blocks merge (FLOW-09).
-- `tier2_gaps` — platform validation knowingly deferred (TEST-03).
+- `tier2_gaps` — here: platform validation knowingly deferred (TEST-03).
 - `rules` — the rule IDs the design relies on or changes.
 - `rule_changes` — each rule change the feature makes (FLOW-14), as
   `{rule, change: add | amend | retire, paths}`, `paths` naming every file it
   edits, enforcement included. Empty or absent means none.
 - `concepts` — retrieval tags for the archive (FLOW-12).
 
-Declarations are derived conservatively: a change to a shared package (`relay/`,
-`ledger/`, `collector/`, `driver/`) declares every dependent driver and host, per
-the TEST-02 caveat. `areas` name what the change edits, not what depends on
-it: the area map says which area reaches which.
+A key whose bullet begins "here:" is one this repository's profile file
+adds to the loop's keys (LOOP-01, its impact keys), and the rest of the
+bullet is this repository's entry for that term; a design in a component
+whose profile file does not add it leaves it out. Elsewhere, in a bullet
+of one of the loop's keys and in the paragraphs below, "here" introduces
+this repository's examples of the term.
 
-The automated part diffs the declared `drivers` / `seams` / `surfaces` against the
-trees and files the change reaches. It checks the declared `areas` against
-what `drivers`, `surfaces` and the `rule_changes` paths imply, at Design,
-and against the paths the change edits, from Implement through Publish
-and at each refresh of a feature (FLOW-03). The agent part judges the
-security note.
+Declarations are derived conservatively: a change to a shared package
+declares everything that depends on it (here a change to `relay/`,
+`ledger/`, `collector/` or `driver/` declares every dependent driver and
+host, per the TEST-02 caveat). `areas` name what the change edits, not
+what depends on it: the area map says which area reaches which.
+
+The automated part diffs the declared `seams`, and the keys the profile
+file adds that name trees or files (here `drivers` and `surfaces`),
+against the trees and files the change reaches. It checks the declared
+`areas` against what those profile keys and the `rule_changes` paths
+imply (here `drivers` and `surfaces`), at Design, and against the paths
+the change edits, from Implement through Publish and at each refresh of
+a feature (FLOW-03). The agent part judges the
+security note, where the profile's keys require one (here a
+`security_boundary` other than `none`).
 
 ---
 

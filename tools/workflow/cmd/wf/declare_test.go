@@ -169,3 +169,67 @@ func TestRelateAndRelations(t *testing.T) {
 		t.Fatalf("wf relations with disjoint items = %q", got)
 	}
 }
+
+// TestDeclareWork: wf declare writes work from the design's repos, one entry
+// per repository after the home on the home's branch name, first where
+// merge_first names it; it refuses to drop an entry while its branch is on
+// that repository's remote, and drops it once it is not (Validation plan
+// test 14, Decision 4).
+func TestDeclareWork(t *testing.T) {
+	work, dir := codeRepo(t, "w"), mappedDir(t)
+	checkouts := t.TempDir()
+	clones := map[string]string{}
+	for _, repo := range []string{"o/specs", "o/relay"} {
+		other := codeRepo(t, "w")
+		clone := filepath.Join(checkouts, filepath.FromSlash(repo))
+		gitT(t, checkouts, "clone", "-q", filepath.Join(filepath.Dir(other), "origin.git"),
+			clone)
+		clones[repo] = clone
+	}
+	queued(t, dir, "w", "1", "-areas", "")
+	edit(t, dir, "w", func(f *queue.Feature) { f.Status, f.Phase = "in_progress", 1 })
+	text := func(repos, first string) string {
+		return "---\nfeature: w\nstatus: draft\ndesign_review: required\nrepos: " + repos +
+			"\nmerge_first: " + first + "\nareas: []\n---\n\n# w\n"
+	}
+	declare := []string{"-repo", work, "-checkouts", checkouts, "-worker", "cloud/run",
+		"-feature", "w"}
+	head := writeDesign(t, work, "w", text("["+mapRepo+", o/specs, o/relay]", "[o/relay]"))
+	out := must(t, dir, "declare", declare...)
+	if !strings.Contains(out, "work +o/specs +o/relay (first)\n") {
+		t.Fatalf("wf declare printed %q", out)
+	}
+	f := item(t, dir, "w")
+	want := []queue.Work{{Repo: "o/specs", Branch: "feat/w"},
+		{Repo: "o/relay", Branch: "feat/w", First: true}}
+	if !slices.Equal(f.Repos, []string{mapRepo, "o/specs", "o/relay"}) ||
+		len(f.Work) != 2 || f.Work[0] != want[0] || f.Work[1] != want[1] {
+		t.Fatalf("after wf declare at %s: repos %v, work %+v", head, f.Repos, f.Work)
+	}
+	must(t, dir, "validate")
+
+	writeDesign(t, work, "w", text("["+mapRepo+", o/specs]", "[]"))
+	refused(t, dir, "the design no longer names o/relay, but the item's branch feat/w "+
+		"exists there; wf declare changed nothing (FLOW-16)", "declare", declare...)
+	if f := item(t, dir, "w"); len(f.Work) != 2 {
+		t.Fatalf("a refused wf declare wrote work %+v", f.Work)
+	}
+	gitT(t, clones["o/relay"], "push", "-q", "origin", "--delete", "feat/w")
+	out = must(t, dir, "declare", declare...)
+	if !strings.Contains(out, "work -o/relay (first)\n") {
+		t.Fatalf("wf declare printed %q", out)
+	}
+	if f := item(t, dir, "w"); len(f.Work) != 1 || f.Work[0] != want[0] {
+		t.Fatalf("after the branch went: work %+v", f.Work)
+	}
+	must(t, dir, "validate")
+
+	// Without -checkouts the clone it needs is not found, and the error
+	// names the flag and the path (Validation plan test 15).
+	writeDesign(t, work, "w", text("["+mapRepo+"]", "[]"))
+	refused(t, dir, "o/specs is not the queue's own repository, and no -checkouts is "+
+		"given: wf reads it in DIR/o/specs, given -checkouts DIR", "declare", "-repo", work,
+		"-worker", "cloud/run", "-feature", "w")
+	refused(t, dir, "no clone of o/specs at "+filepath.Join(work, "o", "specs"),
+		"declare", "-repo", work, "-checkouts", work, "-worker", "cloud/run", "-feature", "w")
+}

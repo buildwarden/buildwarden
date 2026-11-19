@@ -10,10 +10,12 @@ seams: []                # e.g. relay-claim, collector, executor-initialize, led
 surfaces: []             # e.g. cli, config, output
 repos: []                # every repository the item works in, home first, when there is
                          # more than this one (LOOP-04); empty or absent: only this one
+merge_first: []          # repositories in repos, not the home, whose PR merges before the home's is ready (FLOW-08); empty or absent: none
 # areas: []              # the areas the change edits (FLOW-02), by the names of the
                          # area map (`wf areas -list`). Left out, the item is undeclared
                          # and collides with every item in its repositories (FLOW-05);
-                         # []: the change edits nothing but its own design
+                         # []: the change edits nothing but its own design. A bare name
+                         # is the home's map; <owner>/<name>:<area> another repository's
 security_boundary: none  # none | host-env | env-relay | env-beyond (GLOBAL-06)
 alters_relationships: false  # true if a component's role or interactions change (FLOW-02, FLOW-05)
 design_review: required  # required | skip (FLOW-19: skip only when its criteria hold)

@@ -246,7 +246,8 @@ const usage = "usage: wf " +
 var errIdle = errors.New("idle")
 
 type opts struct {
-	state, repo, worker, feature, step, why, question, answer string
+	state, repo, checkouts, worker, feature, step, why        string
+	question, answer                                          string
 	title, source, machine, stamp, kind, holds, follows, hold string
 	lead, host, session, current, renewed                     string
 	repos, areas, seams, adopts, with, message, claimed       string
@@ -288,6 +289,8 @@ func run(cmd string, args []string, now time.Time) error {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	fs.StringVar(&o.state, "state", ".", "checkout of the workflow branch")
 	fs.StringVar(&o.repo, "repo", ".", "checkout of the code, origin fetched")
+	fs.StringVar(&o.checkouts, "checkouts", "",
+		"a directory of clones of the other repositories, DIR/<owner>/<name>, origin fetched")
 	fs.StringVar(&o.worker, "worker", "", "cloud, human or host:<name>, optionally /<session>")
 	fs.StringVar(&o.feature, "feature", "", "feature name")
 	fs.StringVar(&o.step, "step", "", "step id")
@@ -885,7 +888,8 @@ func kindFlags(o opts) (string, []string, error) {
 
 // env is where the done-when checks look for this command line.
 func env(s *queue.State, o opts) check.Env {
-	return check.Env{Repo: o.repo, Workflow: o.state, Run: o.run, State: s}
+	return check.Env{Repo: o.repo, Checkouts: o.checkouts, Workflow: o.state, Run: o.run,
+		State: s}
 }
 
 // declareItem is wf declare: it copies what the item's design declares on

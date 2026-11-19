@@ -21,6 +21,13 @@ type Declaration struct {
 	RulesChanged []string
 	Alters       *bool
 	DesignReview string
+	// MergeFirst are the design's merge_first: the repositories after the
+	// home whose pull request merges before the home's is ready (FLOW-08).
+	MergeFirst []string
+	// Live are the repositories of the item's work entries whose branch
+	// exists on that repository's remote: an entry the declaration would
+	// drop is refused while its branch exists.
+	Live []string
 	// Within is the design a widening after Design is judged in.
 	Within Within
 }
@@ -81,8 +88,21 @@ func (s *State) Declare(f *Feature, d Declaration, worker string, now time.Time)
 	if d.Within.OnBranch && len(within) > 0 {
 		changes += " (design on the branch: review skipped)"
 	}
+	work, err := declaredWork(f, to.Repos, d.MergeFirst, d.Live)
+	if err != nil {
+		return err
+	}
+	if w := workChange(f.Work, work); w != "" {
+		if changes == "nothing changed" {
+			changes = ""
+		} else {
+			changes += "; "
+		}
+		changes += "work " + w
+	}
 	before, was := *f, s.limitFindings()
 	f.Repos, f.Areas, f.Seams, f.RulesChanged = to.Repos, to.Areas, to.Seams, to.RulesChanged
+	f.Work = work
 	f.AltersRelationships, f.DesignReview = to.Alters, to.DesignReview
 	if over := s.newLimitFindings(was); len(over) > 0 {
 		*f = before
@@ -96,6 +116,66 @@ func (s *State) Declare(f *Feature, d Declaration, worker string, now time.Time)
 	f.Declared = d.Commit
 	f.Log(now, worker, "declared at %s: %s", d.Commit, changes)
 	return nil
+}
+
+// declaredWork is the item's work as the design declares it: one entry per
+// repository after the home, on the home's branch name, first when
+// merge_first names it. An entry it keeps keeps its pull request and merge.
+// It refuses to drop an entry whose branch is live on its remote: the
+// branch would then be one no gate sees.
+func declaredWork(f *Feature, repos, mergeFirst, live []string) ([]Work, error) {
+	var out []Work
+	for i, r := range repos {
+		if i == 0 {
+			continue
+		}
+		w := Work{Repo: r, Branch: f.Branch}
+		for _, old := range f.Work {
+			if old.Repo == r {
+				w.PR, w.Merged = old.PR, old.Merged
+			}
+		}
+		w.First = slices.Contains(mergeFirst, r)
+		out = append(out, w)
+	}
+	for _, old := range f.Work {
+		if !slices.ContainsFunc(out, func(w Work) bool { return w.Repo == old.Repo }) &&
+			slices.Contains(live, old.Repo) {
+			return nil, fmt.Errorf("%s: the design no longer names %s, but the item's "+
+				"branch %s exists there; wf declare changed nothing (FLOW-16)",
+				f.Feature, old.Repo, old.Branch)
+		}
+	}
+	return out, nil
+}
+
+// mergeFirstOf is the declaration's merge_first, limited to the repositories
+// it names after the home, as declaredWork reads it.
+func mergeFirstOf(d Declaration) []string {
+	var out []string
+	for i, r := range d.Repos {
+		if i > 0 && slices.Contains(d.MergeFirst, r) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// workChange describes the change of the work entries' repositories and
+// their first marks, or "".
+func workChange(was, now []Work) string {
+	names := func(ws []Work) []string {
+		var out []string
+		for _, w := range ws {
+			n := w.Repo
+			if w.First {
+				n += " (first)"
+			}
+			out = append(out, n)
+		}
+		return out
+	}
+	return delta(names(was), names(now))
 }
 
 // MayDeclare says why the item has nothing for wf declare to copy, before its
@@ -115,14 +195,15 @@ func (s *State) MayDeclare(f *Feature, worker string) error {
 }
 
 // target is what the declaration makes of the item's declared fields. A
-// process item keeps all but its repos: the relations do not read it.
+// process item keeps all but its repos and their work: the relations do not
+// read the rest.
 func (s *State) target(f *Feature, d Declaration) Declaration {
 	if !f.IsProcess() {
 		return d
 	}
 	return Declaration{Repos: d.Repos, Areas: f.Areas, Seams: f.Seams,
 		RulesChanged: f.RulesChanged, Alters: f.AltersRelationships,
-		DesignReview: f.DesignReview}
+		DesignReview: f.DesignReview, MergeFirst: d.MergeFirst, Live: d.Live}
 }
 
 // declarable applies the rule for where the item is and who asks. For an
@@ -296,6 +377,19 @@ func (s *State) widening(f *Feature, to Declaration, w Within) (map[string]strin
 	}
 	if was, now := boolOrUnset(f.AltersRelationships), boolOrUnset(to.Alters); was != now {
 		differs = append(differs, "alters_relationships "+was+" -> "+now)
+	}
+	// An item declared before work existed gains its entries here, which
+	// changes no repository; a changed merge_first is a design change.
+	if len(f.Work) > 0 {
+		var was []string
+		for _, w := range f.Work {
+			if w.First {
+				was = append(was, w.Repo)
+			}
+		}
+		if change := delta(was, mergeFirstOf(to)); change != "" {
+			differs = append(differs, "merge_first "+change)
+		}
 	}
 	if f.DesignReview != to.DesignReview {
 		differs = append(differs, "design_review "+orUnset(f.DesignReview)+" -> "+
