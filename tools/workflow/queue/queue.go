@@ -28,8 +28,14 @@ type Config struct {
 	// Repository is the repository whose gates wf runs and whose area map an
 	// item's areas name, as owner/name. It has no default: unset, an item
 	// that names repos fails Validate.
-	Repository string     `yaml:"repository,omitempty"`
-	RunBudget  StepBudget `yaml:"run_budget"`
+	Repository string `yaml:"repository,omitempty"`
+	// Repositories has one entry for every repository an item may name, the
+	// queue's own included: its trunk, which is the only place wf reads a
+	// trunk from, and, once the change that adopts it has merged, its
+	// profile file (LOOP-01, LOOP-08). An absent entry is never read as a
+	// default.
+	Repositories []RepositoryEntry `yaml:"repositories,omitempty"`
+	RunBudget    StepBudget        `yaml:"run_budget"`
 	// NativeBudget bounds one scheduled native session's batch, so native
 	// work never competes with the cloud loop (FLOW-13). Nil falls back to
 	// RunBudget.
@@ -56,6 +62,42 @@ type Config struct {
 	// (FLOW-04). A value below 0 is an error.
 	HostLeaseMinutes int     `yaml:"host_lease_minutes,omitempty"`
 	RunawayFactor    float64 `yaml:"runaway_factor"`
+}
+
+// RepositoryEntry is one config.yaml repositories entry.
+type RepositoryEntry struct {
+	// Name is owner/name.
+	Name string `yaml:"name"`
+	// Trunk is the branch the repository's pull requests merge to.
+	Trunk string `yaml:"trunk"`
+	// Profile is the path of the repository's profile file in it. Empty,
+	// the repository has not adopted the contract (LOOP-08).
+	Profile string `yaml:"profile,omitempty"`
+}
+
+// Entry returns repo's repositories entry, or nil when it has none.
+func (c Config) Entry(repo string) *RepositoryEntry {
+	for i := range c.Repositories {
+		if c.Repositories[i].Name == repo {
+			return &c.Repositories[i]
+		}
+	}
+	return nil
+}
+
+// Trunk returns repo's trunk from its repositories entry, the only place wf
+// reads one (LOOP-01). A repository with no entry, or an entry with no
+// trunk, is an error naming the fix.
+func (c Config) Trunk(repo string) (string, error) {
+	e := c.Entry(repo)
+	switch {
+	case e == nil:
+		return "", fmt.Errorf("config.yaml's repositories has no entry for %s: an "+
+			"attended session adds it with its trunk", repo)
+	case e.Trunk == "":
+		return "", fmt.Errorf("config.yaml's repositories entry %s has no trunk", repo)
+	}
+	return e.Trunk, nil
 }
 
 // StepBudget is how many steps one run may take.
@@ -934,6 +976,34 @@ func (s *State) validateConfig() []error {
 				l.value))
 		}
 	}
+	return append(errs, s.validateRepositories()...)
+}
+
+// validateRepositories checks config.yaml's repositories: each entry names
+// a repository once and gives its trunk, and the queue's own repository has
+// one like any other (GLOBAL-11).
+func (s *State) validateRepositories() []error {
+	var errs []error
+	seen := map[string]bool{}
+	for i, e := range s.Config.Repositories {
+		who := e.Name
+		if !repoRe.MatchString(e.Name) {
+			who = fmt.Sprintf("entry %d", i+1)
+			errs = append(errs, fmt.Errorf("config: repositories %s: name %q is not "+
+				"owner/name", who, e.Name))
+		}
+		if seen[e.Name] {
+			errs = append(errs, fmt.Errorf("config: repositories names %s twice", e.Name))
+		}
+		seen[e.Name] = true
+		if e.Trunk == "" {
+			errs = append(errs, fmt.Errorf("config: repositories %s has no trunk", who))
+		}
+	}
+	if r := s.Config.Repository; r != "" && !seen[r] {
+		errs = append(errs, fmt.Errorf("config: repositories has no entry for %s, the "+
+			"queue's own repository: an attended session adds it with its trunk", r))
+	}
 	return errs
 }
 
@@ -990,6 +1060,13 @@ func (s *State) Problems(f *Feature) []error {
 		tracked = f.Round == "tracked"
 	}
 	f.validate(bad, tracked)
+	for i, r := range f.Repos {
+		if repoRe.MatchString(r) && s.Config.Repository != "" && s.Config.Entry(r) == nil &&
+			!slices.Contains(f.Repos[:i], r) {
+			bad("repos names %s, which has no entry in config.yaml's repositories: an "+
+				"attended session adds it with its trunk", r)
+		}
+	}
 	s.validateDeclared(f, bad)
 	s.validateUrgent(f, bad)
 	s.validateLead(f, bad)

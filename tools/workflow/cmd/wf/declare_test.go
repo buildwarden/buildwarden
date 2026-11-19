@@ -16,7 +16,7 @@ const mapRepo = "buildwarden/buildwarden"
 // design's map and whose config names its repository.
 func mappedDir(t *testing.T) string {
 	t.Helper()
-	dir := stateDir(t, "repository: "+mapRepo+"\n")
+	dir := stateDir(t, "repository: "+mapRepo+"\nrepositories:\n"+entries)
 	data, err := os.ReadFile(filepath.Join("..", "..", "queue", "testdata", "areas.yaml"))
 	if err != nil {
 		t.Fatal(err)

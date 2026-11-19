@@ -27,6 +27,25 @@ func state(fs ...*Feature) *State {
 	return limited(s, 1)
 }
 
+// testRepos are the second repositories the tests' items name.
+var testRepos = []string{"o/specs", "o/relay", "o/other", "buildwarden/buildwarden-specs"}
+
+// own makes repo the queue's own repository, adopted, and gives it and each
+// of testRepos, not adopted, a repositories entry with trunk main, as
+// config.yaml would write them.
+func own(s *State, repo string) *State {
+	s.Config.Repository = repo
+	s.Config.Repositories = []RepositoryEntry{{Name: repo, Trunk: "main",
+		Profile: "docs/development/loop-profile.yaml"}}
+	for _, r := range testRepos {
+		if r != repo {
+			s.Config.Repositories = append(s.Config.Repositories,
+				RepositoryEntry{Name: r, Trunk: "main"})
+		}
+	}
+	return s
+}
+
 // inProgress sets limits.in_progress as config.yaml would write it.
 func inProgress(s *State, n int) { s.Config.Limits.InProgress = &n }
 
@@ -1750,7 +1769,7 @@ func TestWaitingLimitDefault(t *testing.T) {
 // declaredState is a state whose config names the queue's own repository.
 func declaredState(fs ...*Feature) *State {
 	s := state(fs...)
-	s.Config.Repository = "o/here"
+	own(s, "o/here")
 	return s
 }
 
@@ -1939,7 +1958,9 @@ func TestNewFieldsRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	_ = os.MkdirAll(filepath.Join(dir, "queue"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "config.yaml"),
-		[]byte("run_budget: {steps: 8}\nrepository: o/here\n"), 0o644)
+		[]byte("run_budget: {steps: 8}\nrepository: o/here\nrepositories:\n"+
+			"  - {name: o/here, trunk: main, profile: p.yaml}\n"+
+			"  - {name: o/specs, trunk: main}\n"), 0o644)
 	s := &State{Dir: dir}
 	plain, full := feature("plain", 2, "queued"), feature("full", 1, "queued")
 	full.Repos = []string{"o/here", "o/specs"}
@@ -2096,4 +2117,65 @@ func trackedWalk(t *testing.T, s *State, f *Feature) {
 		t.Fatalf("after its merge m1 is %s", f.Status)
 	}
 	wantValidate(t, s)
+}
+
+// TestValidateRepositories: every repository an item names has an entry in
+// config.yaml's repositories, the queue's own included, and every entry
+// gives its trunk, which is where wf reads it (Validation plan test 8).
+func TestValidateRepositories(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		edit func(s *State, f *Feature)
+		want []string
+	}{
+		{"all entered", func(s *State, f *Feature) { f.Repos = []string{"o/here", "o/specs"} },
+			nil},
+		{"no entry for a second repository", func(s *State, f *Feature) {
+			f.Repos = []string{"o/here", "o/new", "o/new"}
+		}, []string{"a: repos names o/new, which has no entry in config.yaml's " +
+			"repositories: an attended session adds it with its trunk",
+			"a: repos names o/new twice"}},
+		{"no entry for the queue's own", func(s *State, f *Feature) {
+			s.Config.Repositories = s.Config.Repositories[1:]
+		}, []string{"config: repositories has no entry for o/here, the queue's own " +
+			"repository: an attended session adds it with its trunk"}},
+		{"an entry with no trunk", func(s *State, f *Feature) {
+			s.Config.Repositories[1].Trunk = ""
+		}, []string{"config: repositories o/specs has no trunk"}},
+		{"a bad name and a repeat", func(s *State, f *Feature) {
+			s.Config.Repositories = append(s.Config.Repositories,
+				RepositoryEntry{Name: "specs", Trunk: "main"},
+				RepositoryEntry{Name: "o/here", Trunk: "main"})
+		}, []string{`config: repositories entry 6: name "specs" is not owner/name`,
+			"config: repositories names o/here twice"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := feature("a", 1, "queued")
+			s := own(state(f), "o/here")
+			tc.edit(s, f)
+			var got []string
+			for _, err := range s.Validate() {
+				got = append(got, err.Error())
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("Validate = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestConfigTrunk(t *testing.T) {
+	c := own(&State{}, "o/here").Config
+	c.Repositories[1].Trunk = ""
+	for _, tc := range []struct{ repo, want, err string }{
+		{"o/here", "main", ""},
+		{"o/specs", "", "repositories entry o/specs has no trunk"},
+		{"o/new", "", "repositories has no entry for o/new"},
+	} {
+		got, err := c.Trunk(tc.repo)
+		if got != tc.want || (err == nil) != (tc.err == "") ||
+			(err != nil && !strings.Contains(err.Error(), tc.err)) {
+			t.Errorf("Trunk(%s) = %q, %v; want %q, %q", tc.repo, got, err, tc.want, tc.err)
+		}
+	}
 }
