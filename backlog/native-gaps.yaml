@@ -1070,3 +1070,37 @@ gaps:
       Tracked, not blocking (design Validation plan, tier 2). No driver tree is edited; the checks
       are runtime- and OS-independent Go, covered by tier 0 on Linux. Run on the branch once
       Implement is done, or on main after it merges.
+  - id: loop-native-lead-macos-wrapper
+    host: macos-vz
+    status: open
+    what: >-
+      On the macbook under launchd: native-tick.sh with its release stage, native-push.sh and the
+      new settings denies, in scheduled runs after loop-native-lead (#129) merged, including one run
+      with the private session remote unset (the session takes no led step and says so).
+    design: docs/design/loop-native-lead.md
+    note: >-
+      Tracked, not blocking (design tier2_gaps). Added at x4-state (Jeff, 2026-11-20). Runs on main
+      since the merge: 2026-11-19T12:40Z worked; 2026-11-20T12:52Z failed ("session left uncommitted
+      workflow changes"), to be read by the next macbook session. The unset-remote run is not yet done.
+  - id: loop-native-lead-windows-wrapper
+    host: windows-hyperv
+    status: open
+    what: >-
+      The same under Git Bash on the Windows desktop: the wrapper's release stage, native-push.sh and
+      the new settings denies, in scheduled runs after loop-native-lead (#129) merged.
+    design: docs/design/loop-native-lead.md
+    note: >-
+      Tracked, not blocking (design tier2_gaps). Added at x4-state (Jeff, 2026-11-20). Runs on main
+      since the merge: 2026-11-19T17:10Z worked (f6-validate-windows-hyperv, pushed through
+      wf commit), later runs idle. native-push.sh has not yet pushed a feature branch: no item is led.
+  - id: loop-native-lead-cleanup
+    host: windows-hyperv
+    status: open
+    what: >-
+      The wrapper's cleanup on a machine: a dirty .scratch/ worktree, and a squash-merged branch that
+      git branch -d refuses, each shown in native/status/<machine>.yaml after an idle run and after a
+      worked run. Either machine may close it; the evidence names which.
+    design: docs/design/loop-native-lead.md
+    note: >-
+      Tracked, not blocking (design tier2_gaps). Added at x4-state (Jeff, 2026-11-20). Needs a done
+      item's leftovers on the machine, which only a led item's .scratch/ worktree makes; none yet.

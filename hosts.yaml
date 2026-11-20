@@ -1,21 +1,29 @@
 # Native machines (FLOW-04, FLOW-09): which host names each machine's scheduled
-# native session serves. Each host name has exactly one machine, so moving a
-# capability between machines is an edit here, not a code change. Read by
-# `wf gate` and `wf validate`; the procedure is the workflow-native skill.
+# native session serves. A host name may be served by one machine or several;
+# a step goes to whichever serving machine next takes steps, and a lead's steps
+# to whichever serves the lead (loop-native-lead). Moving or sharing a
+# capability is an edit here, not a code change, and only the human makes it.
+# Read by `wf gate`, `wf next` and `wf validate`; the procedure is the
+# workflow-native skill. `repositories` (optional) lists the repositories a
+# machine takes steps for; absent, config.yaml's repository only.
 #
 # Host names: <os>-<driver> is specific to that platform (macos-vz,
-# windows-hyperv); <capability>-any can run on any native host that has it and
-# goes to the always-on machine.
+# windows-hyperv); <os>-any needs the platform and no one driver (macos-any,
+# windows-any); <capability>-any (qemu-any, container-any) runs on any native
+# machine that has the capability.
 machines:
   - name: macbook
-    hosts: [macos-vz, macos-qemu, macos-finch, qemu-any]
+    hosts: [macos-vz, macos-qemu, macos-finch, qemu-any, container-any, macos-any]
     note: >-
       Jeff's MacBook Pro (arm64). Asleep or away at times; launchd runs a missed slot on wake.
       Holds qemu-any because the qemu driver runs only on aarch64 hosts (2026-10-30).
+      Shares container-any with windows-desktop through Finch, and serves macos-any (Jeff,
+      loop-native-lead x4-state, 2026-11-20); a container-any step's evidence names the machine.
   - name: windows-desktop
-    hosts: [windows-hyperv, container-any, linux-kvm]
+    hosts: [windows-hyperv, container-any, linux-kvm, windows-any]
     note: >-
-      Always-on Windows desktop. Takes any-OS native work that runs here (a container runtime).
+      Always-on Windows desktop. Takes any-OS native work that runs here (a container runtime),
+      sharing container-any with macbook, and serves windows-any (Jeff, 2026-11-20).
       linux-kvm is PROPOSED / EXPERIMENTAL (Jeff, firecracker-driver design review r1,
       2026-10-31): served from WSL2 with nested virtualization, which may not be enough for
       Firecracker. If a linux-kvm step proves blocked here (no /dev/kvm, missing kernel features,
