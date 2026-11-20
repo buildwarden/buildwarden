@@ -4,7 +4,7 @@ priority: 5
 kind: process
 status: in_progress
 round: process
-phase: 3
+phase: 4
 design: docs/design/loop-repository.md
 branch: feat/loop-repository
 alters_relationships: null
@@ -40,6 +40,13 @@ steps:
       expires: null
   - id: x3-merge
     phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
     affinity: cloud
     status: pending
     lease:
@@ -117,3 +124,9 @@ history:
   - at: 2026-11-19T12:32:44Z
     by: cloud/20261119T105705Z
     event: entered phase 3 (merge)
+  - at: 2026-11-20T20:30:39Z
+    by: cloud/20261120T203034Z
+    event: done x3-merge
+  - at: 2026-11-20T20:30:39Z
+    by: cloud/20261120T203034Z
+    event: entered phase 4 (close)
