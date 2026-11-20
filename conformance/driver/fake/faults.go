@@ -17,6 +17,7 @@ const (
 	faultDriverFirst       = "driver-before-own-table"
 	faultWrongType         = "accept-wrong-type"
 	faultReapConfigGone    = "reap-fails-config-gone"
+	faultAcceptCase        = "accept-another-case"
 	faultNoTeardown        = "no-teardown"
 	faultIgnoreEOF         = "ignore-end-of-input"
 	faultDieClosedStderr   = "die-on-closed-stderr"

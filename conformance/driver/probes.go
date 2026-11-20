@@ -182,13 +182,15 @@ func (s *Suite) unownedFile() string {
 			unlisted = append(unlisted, k)
 		}
 	}
+	// An unlisted common key in upper case is no listed place in another
+	// case, so it is ignored too (DRV-C5, DRV-C12).
 	b.WriteString("[driver]\n")
 	for _, k := range unlisted {
-		b.WriteString(k + " = 5\n")
+		b.WriteString(k + " = 5\n" + strings.ToUpper(k) + " = 5\n")
 	}
 	b.WriteString("[driver." + s.desc.Name + "]\n")
 	for _, k := range unlisted {
-		b.WriteString(k + " = [true]\n")
+		b.WriteString(k + " = [true]\n" + strings.ToUpper(k) + " = [true]\n")
 	}
 	return b.String()
 }
@@ -259,12 +261,7 @@ func (s *Suite) checkKeysRefused() (string, string) {
 		if k.Type == "any" {
 			continue
 		}
-		places := append([]string{k.Key}, k.Aliases...)
-		if common, ok := strings.CutPrefix(k.Key, "driver."); ok &&
-			slices.Contains(commonKeys, common) {
-			places = append(places, "driver."+s.desc.Name+"."+common)
-		}
-		for i, p := range places {
+		for i, p := range s.places(k) {
 			file := filepath.Join(s.scratch, fmt.Sprintf("wrongtype-%d.toml", i))
 			table, key := p[:strings.LastIndex(p, ".")], p[strings.LastIndex(p,
 				".")+1:]
@@ -274,6 +271,82 @@ func (s *Suite) checkKeysRefused() (string, string) {
 			}
 			if msg := s.refused(c, file, key); msg != "" {
 				return "", msg
+			}
+		}
+	}
+	return "", ""
+}
+
+// otherCase is s with its ASCII letters in upper case, or in lower case when
+// that is s; "" when s has no ASCII letter.
+func otherCase(s string) string {
+	if u := strings.ToUpper(s); u != s {
+		return u
+	}
+	if l := strings.ToLower(s); l != s {
+		return l
+	}
+	return ""
+}
+
+// miscased are config files that write place in another letter case, each
+// with the spelling its refusal must hold: the key's last element in
+// another case; its first table's name capitalized; and the place as spelt
+// beside its last element in another case, in one table. value is written
+// at each.
+func miscased(place, value string) map[string]string {
+	i := strings.LastIndex(place, ".")
+	table, key := place[:i], place[i+1:]
+	out := map[string]string{}
+	if k := otherCase(key); k != "" {
+		out[k] = "[" + table + "]\n" + k + " = " + value + "\n"
+		out[k+" "] = "[" + table + "]\n" + key + " = " + value + "\n" + k + " = " +
+			value + "\n"
+	}
+	first, rest, _ := strings.Cut(table, ".")
+	if f := otherCase(first[:1]); f != "" {
+		capital := f + first[1:]
+		if rest != "" {
+			capital += "." + rest
+		}
+		out[capital] = "[" + capital + "]\n" + key + " = " + value + "\n"
+	}
+	return out
+}
+
+// checkAnotherCase: for each listed key and each place it may be written,
+// the place spelt in another ASCII letter case makes a probe of a command
+// that reads the key exit 1 with a fixable error naming the file and the
+// spelling as written, and create nothing; so does the place as spelt
+// beside one in another case. The value written is of the wrong type, so a
+// driver that reads the value before it looks at the spelling fails here.
+func (s *Suite) checkAnotherCase() (string, string) {
+	if len(s.desc.Keys) == 0 {
+		return "the driver lists no key", ""
+	}
+	n := 0
+	for _, k := range s.desc.Keys {
+		c := s.probeable(k.Commands)
+		if c == "" {
+			continue
+		}
+		for _, p := range s.places(k) {
+			cases := miscased(p, wrongValue(k.Type))
+			spellings := make([]string, 0, len(cases))
+			for sp := range cases {
+				spellings = append(spellings, sp)
+			}
+			slices.Sort(spellings)
+			for _, sp := range spellings {
+				n++
+				file := filepath.Join(s.scratch, fmt.Sprintf("case-%d.toml", n))
+				err := os.WriteFile(file, []byte(cases[sp]), 0o600)
+				if err != nil {
+					return "", err.Error()
+				}
+				if msg := s.refused(c, file, strings.TrimSpace(sp)); msg != "" {
+					return "", "in another letter case: " + msg
+				}
 			}
 		}
 	}

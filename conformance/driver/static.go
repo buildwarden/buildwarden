@@ -85,6 +85,8 @@ var staticChecks = []check{
 	{"tables it does not own", []string{"DRV-C4", "DRV-C5"}, (*Suite).checkUnowned},
 	{"config file and key refused", []string{"DRV-C6", "DRV-C7", "DRV-68"},
 		(*Suite).checkKeysRefused},
+	{"a listed key in another letter case", []string{"DRV-C12", "DRV-C7"},
+		(*Suite).checkAnotherCase},
 	{"reap with its config file gone", []string{"DRV-C10"}, (*Suite).checkReapFileGone},
 	{"probes", []string{"DRV-30", "DRV-31"}, (*Suite).checkProbes},
 	{"unlisted commands", []string{"DRV-21", "DRV-23"}, (*Suite).checkUnlisted},
@@ -188,7 +190,40 @@ func (s *Suite) checkDeclarations() (string, string) {
 			return "", msg
 		}
 	}
-	return "", ""
+	return "", s.checkPlacesFolded()
+}
+
+// checkPlacesFolded: no two places where the driver's listed keys may be
+// written are equal when ASCII letters are folded (DRV-C4).
+func (s *Suite) checkPlacesFolded() string {
+	seen := map[string]string{}
+	for _, k := range s.desc.Keys {
+		for _, p := range s.places(k) {
+			f := strings.Map(func(r rune) rune {
+				if r >= 'A' && r <= 'Z' {
+					return r + 'a' - 'A'
+				}
+				return r
+			}, p)
+			if prev, ok := seen[f]; ok && prev != p {
+				return fmt.Sprintf("places %s and %s are equal when ASCII "+
+					"letters are folded", prev, p)
+			}
+			seen[f] = p
+		}
+	}
+	return ""
+}
+
+// places are where the file may write k: its key, the override of a common
+// key, and its old names.
+func (s *Suite) places(k describeKey) []string {
+	places := append([]string{k.Key}, k.Aliases...)
+	if common, ok := strings.CutPrefix(k.Key, "driver."); ok &&
+		slices.Contains(commonKeys, common) {
+		places = append(places, "driver."+s.desc.Name+"."+common)
+	}
+	return places
 }
 
 // checkFlags checks each flag's name, usage and commands (DRV-C1).

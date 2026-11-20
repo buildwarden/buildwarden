@@ -47,6 +47,9 @@ func readConfig(command, file string, args []string, probe bool) (*config, error
 		return cfg, nil
 	}
 	tree, err := load(file)
+	if err == nil {
+		err = refuseAnotherCase(command, file, tree)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -201,4 +204,57 @@ func (c *config) echo() {
 	}
 	fmt.Fprintf(os.Stderr, "warden-driver-fake: image_refresh_after=%q from %s\n",
 		c.refresh, from)
+}
+
+// refuseAnotherCase refuses a file that writes a place of one of the fake's
+// keys for command in another ASCII letter case, before any value is read
+// (DRV-C12): a TOML library reads keys exactly, so without this the user's
+// value would be dropped without a word.
+func refuseAnotherCase(command, file string, tree map[string]any) error {
+	if fault == faultAcceptCase {
+		return nil
+	}
+	places := []string{"driver.fake.greeting"}
+	if command == "run" {
+		places = append(places, "driver.image_refresh_after",
+			"driver.fake.image_refresh_after")
+	}
+	for _, place := range places {
+		var found []string
+		walkFolded(tree, strings.Split(place, "."), "", &found)
+		found = slices.DeleteFunc(found, func(f string) bool { return f == place })
+		if len(found) == 0 {
+			continue
+		}
+		slices.Sort(found)
+		return &fixable{msg: fmt.Sprintf("%s: %s: keys are case-sensitive, and the "+
+			"fake driver reads %s", file, strings.Join(found, " and "), place),
+			fix: "write it as " + place}
+	}
+	return nil
+}
+
+// walkFolded adds to found every dotted path in tree equal to parts when
+// ASCII letters are folded; at is the path so far.
+func walkFolded(tree map[string]any, parts []string, at string, found *[]string) {
+	for k, v := range tree {
+		if !strings.EqualFold(k, parts[0]) || !isASCII(k) {
+			continue
+		}
+		here := strings.TrimPrefix(at+"."+k, ".")
+		if len(parts) == 1 {
+			*found = append(*found, here)
+		} else if sub, ok := v.(map[string]any); ok {
+			walkFolded(sub, parts[1:], here, found)
+		}
+	}
+}
+
+func isASCII(s string) bool {
+	for i := range len(s) {
+		if s[i] >= 0x80 {
+			return false
+		}
+	}
+	return true
 }

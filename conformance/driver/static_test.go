@@ -116,6 +116,7 @@ func TestSelfTest(t *testing.T) {
 		"read-unlisted-common-key":   "tables it does not own",
 		"accept-wrong-type":          "config file and key refused",
 		"reap-fails-config-gone":     "reap with its config file gone",
+		"accept-another-case":        "a listed key in another letter case",
 	} {
 		t.Run(fault, func(t *testing.T) {
 			t.Parallel()
@@ -130,6 +131,31 @@ func TestSelfTest(t *testing.T) {
 				}
 			}
 			t.Fatalf("no check %q", check)
+		})
+	}
+}
+
+// DRV-C4: the declarations check refuses two places equal when ASCII letters
+// are folded, whether two keys, a key and a common key's override, or a key
+// and an old name; and passes the bundled drivers' shapes.
+func TestPlacesFolded(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		keys []describeKey
+		ok   bool
+	}{
+		{"two keys", []describeKey{{Key: "driver.nomad.region"},
+			{Key: "driver.nomad.Region"}}, false},
+		{"a key and an override", []describeKey{{Key: "driver.image_min_grace"},
+			{Key: "driver.nomad.IMAGE_MIN_GRACE"}}, false},
+		{"one place each", []describeKey{{Key: "driver.image_min_grace"},
+			{Key: "driver.nomad.region", Aliases: []string{"vm.region"}}}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &Suite{desc: &description{Name: "nomad", Keys: tc.keys}}
+			if msg := s.checkPlacesFolded(); (msg == "") != tc.ok {
+				t.Errorf("checkPlacesFolded = %q, want ok %v", msg, tc.ok)
+			}
 		})
 	}
 }
