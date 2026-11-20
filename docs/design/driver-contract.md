@@ -8105,8 +8105,8 @@ acceptance; then the outcome.
   https://claude.ai/artifact/1qZGMLeMTr2HqkHJxvSU87.
 - **Decisions.** a27 confirmed (i), as stated, flagged. Repositories:
   none besides this one (LOOP-04); areas stay undeclared. No rule
-  change is in the delta, so none was asked; the eleven approved at
-  `a6c8f0b` stand.
+  change is in the delta, so none was asked; the eleven rule changes
+  of r2's approval stand.
 - **An independent check before the walkthrough** (four report-only
   reviewers, consistency, scope, implementability and plan, each finding
   then given to a refuter): nine findings held, seven were refuted. Two
