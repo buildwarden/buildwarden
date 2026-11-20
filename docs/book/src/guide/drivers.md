@@ -213,7 +213,8 @@ the `warden-run` startup task, and powers off; builds boot a throwaway child of
 that layer as SYSTEM. With no `--source`, `image prepare` only re-prepares,
 and builds start that in the background once the layer is
 `[vm] image_refresh_after` old (see the Hyper-V section for the evaluation
-grace rules, which are the same).
+grace rules, which are the same, and the same report of a re-prepare that
+cannot start).
 
 ---
 
@@ -419,7 +420,9 @@ prepared base has the 10-day initial grace period, counted in wall time from
 the prepare. Builds keep it fresh: once the base is 7 days old, the next build
 starts a background re-prepare (`warden image prepare --driver hyperv` with no
 source does the same by hand), and a build refuses to start with less than a
-day of grace left. Both ages are set in `[vm]` (`image_refresh_after`,
+day of grace left. A re-prepare that cannot start is reported on the build's
+output with its error and that command to run by hand, and the build goes on
+on the current base. Both ages are set in `[vm]` (`image_refresh_after`,
 `image_min_grace`). Only one prepare runs at a time; superseded layers are
 deleted by a later prepare once no VM uses them.
 
