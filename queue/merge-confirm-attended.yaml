@@ -1,18 +1,33 @@
 feature: merge-confirm-attended
 title: Attended merge confirmation, a seeded state step, and entry-scoped design approvals
-priority: 5
+priority: 4
 kind: process
-status: queued
+status: in_progress
 round: process
-phase: 1
+phase: 2
 design: docs/design/merge-confirm-attended.md
 branch: feat/merge-confirm-attended
 alters_relationships: null
 source: 'Filed on Jeff''s word, 2026-11-18, as a follow-up named in loop-streamline-2''s design (What this item does not do; archived with #127), and widened on Jeff''s word, 2026-11-20, to carry three loop changes in one PR (fewer merges): (A) the approvals() bug in tools/workflow/check/review.go: every ''approved at <sha>'' in a Design review section counts, and callers take the last as the baseline, so prose in a later entry citing an older approval becomes the baseline; live on feat/detached-prepare-windows-exe (f2-plan-r2 compared against r1''s b7619b5, harmless because impactDelta does not compare drivers) and nearly hit driver-contract r3 on 2026-11-20; (B) an attended session (human worker) may confirm a merge it watched with wf done on the merge step, its done-when check unchanged (today only the tick can; PR #130 waited on 2026-11-20); (C) wf-state-migration-step''s core: a state step recorded at review (state_step) that wf seeds as x4-state when phase 4 is entered, with x4-close waiting on it, replacing the hand-added steps. Scoped 2026-11-20 by three scouts and a cross-check: about 100 lines of Go, 250 of tests, 60 of docs; FLOW-03 and FLOW-04 amended. The FLOW-19 mechanical-rebase exemption is split off to wf-state-migration-step. This item still needs one hand-added x4-state (the workflow README) and x4-close needs: [x4-state], the last item that does. Estimate from the process size row: 4 steps + 1.'
 steps:
+  - id: x4-state
+    phase: 4
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'After this item''s PR has merged and dist/wf is rebuilt from the merged main; not before (design, What this item cannot do for itself). On the workflow branch: (1) x4-close needs x4-state; add needs: [x4-state] by hand if the confirming wf did not; (2) README.md, the f7-merge row: never offered by wf next; confirmed by the tick or by an attended or native session''s wf done; (3) the process round: x3-merge the same, and x4-state (human, seeded at Close from state_step; x4-close waits for it); (4) the refresh paragraph: the merge step is the cloud''s, and a human or host worker may also complete it with wf done; (5) other commands: wf state-step (human only); (6) wf validate, then wf commit. The last item that needs a hand-added x4-state.'
   - id: x1-design
     phase: 1
     affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
       claimed_by: ""
@@ -23,7 +38,7 @@ budget:
     steps: 5
   spent:
     runs: 0
-    steps: 0
+    steps: 1
 questions: []
 history:
   - at: 2026-11-18T19:51:48Z
@@ -32,3 +47,15 @@ history:
   - at: 2026-11-20T20:05:00Z
     by: human/jeff
     event: 'widened on Jeff''s word (2026-11-20): carries the approvals() fix, attended merge confirmation and the seeded state step (wf-state-migration-step''s core); retitled; estimate unchanged at 5 steps, 1 run'
+  - at: 2026-11-20T20:27:41Z
+    by: human/jeff
+    event: started (FLOW-05)
+  - at: 2026-11-20T20:27:41Z
+    by: human/jeff
+    event: claimed x1-design until 2026-11-20T22:27:41Z
+  - at: 2026-11-20T20:27:41Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-11-20T20:27:41Z
+    by: human/jeff
+    event: entered phase 2 (implement)
