@@ -91,7 +91,8 @@ None.
 
 ### Assumed
 
-- **a1. How the shared path is recorded.**
+- **a1. How the shared path is recorded.** **Confirmed (a), Jeff,
+  2026-11-20.**
   - (a) A list of rules per path, sorted and deduplicated (Decisions 1-3).
   - (b) Keep the one-rule map for the clearance, and have `approvedRules`
     read the rule names straight from each approved entry instead of
@@ -156,7 +157,11 @@ No state step: nothing on the `workflow` branch changes.
 
 ## Design review
 
-Pending.
+- **r1, 2026-11-20: approved at `161af8a`** (Jeff, attended tick,
+  workflow-human, FLOW-19), read at `161af8a`. Repositories: this one only
+  (LOOP-04). a1 confirmed (a). No rule change is in the design, so none was
+  asked. No change was folded in.
+  - sitting: within the attended tick of 2026-11-20, asks: 3
 
 ## Consolidation
 
