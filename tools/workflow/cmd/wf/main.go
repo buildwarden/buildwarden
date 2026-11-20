@@ -583,7 +583,13 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 	if err != nil {
 		return err
 	}
-	if o.worker == "" || !queue.Satisfies(o.worker, st.Affinity) {
+	// A human or host worker may complete a merge step with done, and never
+	// claims one: claim, release and renew stay affinity-exact (FLOW-04).
+	may := queue.Satisfies(o.worker, st.Affinity)
+	if cmd == "done" {
+		may = queue.MayComplete(o.worker, st)
+	}
+	if o.worker == "" || !may {
 		return fmt.Errorf("worker %q may not take %s step %s (FLOW-04)", o.worker,
 			st.Affinity, st.ID)
 	}
@@ -602,6 +608,11 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 			return err
 		}
 	case "done":
+		// The tick and an attended session may both confirm a merge: the
+		// second is refused, not logged twice (FLOW-04).
+		if st.Status == "done" {
+			return fmt.Errorf("%s is already done; nothing to confirm", st.ID)
+		}
 		if err := finish(s, f, st, o); err != nil {
 			return err
 		}
@@ -1191,14 +1202,21 @@ func staleSeed(s *queue.State, f *queue.Feature, head string, o opts) (string, b
 
 // staleMerged is wf stale for an item whose PR the human has merged: no
 // refresh is seeded, since a push would bring the deleted branch back
-// (FLOW-16). At its merge step the item is only named: that step is the
-// cloud's, which the tick's merge confirmation completes and an attended
-// session cannot. In Publish nothing is done: its gate passes on the merge.
+// (FLOW-16). At its merge step the item is named with the wf done that
+// confirms it, which the tick or an attended session runs (FLOW-04); wf stale
+// does not run it, so the merge's own check stays the proof. In Publish
+// nothing is done: its gate passes on the merge.
 // Before Publish, the item was sent back with its PR open, and the merge
 // supersedes its phases (FLOW-08).
 func staleMerged(f *queue.Feature, o opts) (line string, changed bool) {
 	switch {
 	case f.AtMerge():
+		for _, st := range f.Steps {
+			if st.Status == "pending" && queue.IsMerge(&st) {
+				return fmt.Sprintf("merged: %s (confirm: wf done -feature %s -step %s)",
+					f.Feature, f.Feature, st.ID), false
+			}
+		}
 		return "merged: " + f.Feature, false
 	case f.Phase < f.PublishPhase():
 		queue.Landed(f, o.worker, o.now)
