@@ -153,8 +153,10 @@ words stop it being done before the merge.
    review entry is a top-level bullet of the Design review section whose
    head is the entry's ID: `r<N>`, bold or not, optionally after
    `Re-review`. Its approval is the first `approved at <sha>` in the whole
-   bullet once rule-change approvals are removed. Later mentions in the same
-   bullet, and bullets that are not entries, are ignored. The latest
+   bullet, once rule-change approvals are removed, whose sha no earlier
+   entry recorded: a sha an earlier entry recorded is a citation (r2,
+   2026-11-20). Other mentions in the same bullet, and bullets that are not
+   entries, are ignored. The latest
    approval is the last entry's, in document order. `reviewed()` counts
    entries, not mentions. Rule-change approvals keep their current reading:
    `cleared` and `ownApproval` pass only when the cited commit really has
@@ -217,7 +219,9 @@ None.
 a1 to a9 are the cross-check's Q2 to Q10.
 
 - **a1. Which text counts as a design's approval** (cross-check Q2).
-  **Confirmed (a), as recommended (batch), Jeff, 2026-11-20.**
+  **Confirmed (a), as recommended (batch), Jeff, 2026-11-20; amended at
+  r2 (Jeff, 2026-11-20): a sha an earlier entry recorded is a citation,
+  not the entry's approval.**
   - (a) H: the first non-rule-change `approved at` in each top-level bullet
     whose head is `r<N>` (bold or not; `Re-review` allowed). The latest is
     the last such entry in document order. Other approvals in the same
@@ -340,7 +344,9 @@ a1 to a9 are the cross-check's Q2 to Q10.
 3. The bullet is a review entry when its head (the leading `**...**` span,
    else its first line) matches `^(?:Re-review\s+)?r\d+\b`.
 4. The entry's approval is the first `approvedRe` match in the whole
-   bullet. This keeps the wrapped form (`- r1: approved\n  at`, the
+   bullet whose sha no earlier entry recorded (compared by prefix, since a
+   sha may be abbreviated to different lengths); one an earlier entry
+   recorded is a citation (r2, 2026-11-20). This keeps the wrapped form (`- r1: approved\n  at`, the
    existing `TestApprovalMayWrap`) and the legacy `**r1, <date>:
    approved** ... Approved at <sha>` working.
 5. `approvals` returns one sha per entry with an approval, in document
@@ -605,7 +611,9 @@ is added before the approval, and a new sentence is inserted after
     approved** ... Approved at` wrapped onto the next line counts; `- r1
     addendum: rule change X approved at` counts as no design approval; a
     `###` heading ends an entry; two entries, the last wins. A `reviewed()`
-    case: r2 seeded, the r2 entry without an approval but citing r1, fails.
+    case: r2 seeded, the r2 entry without an approval but citing r1, fails;
+    and a table case for it, and one with the citation before the entry's
+    own approval (r2, 2026-11-20).
     An `approvalDelta()` case and a declaration case: the base is r2's sha
     when the r2 body cites r1. `TestApprovalMayWrap` and the rule-change
     tests pass unchanged.
