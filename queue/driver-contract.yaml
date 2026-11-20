@@ -143,15 +143,15 @@ steps:
     needs:
       - f2-design-review-r2
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261120T203034Z
+      expires: 2026-11-20T22:36:51.054328236Z
 budget:
   estimate:
     runs: 5
     steps: 30
   spent:
-    runs: 3
-    steps: 11
+    runs: 4
+    steps: 12
 questions:
   - id: a16
     kind: assumed
@@ -672,3 +672,6 @@ history:
   - at: 2026-11-20T19:44:00Z
     by: human/jeff
     event: 'area map, on Jeff''s word at the r3 review: when this item''s PR merges, add `reaches: [collector, relaycfg]` to areas.yaml''s `core` (conformance/driver imports both), with `wf validate -areas` then `wf commit -worker human/<name>`; not before, so main''s wf areas -check stays clean meanwhile'
+  - at: 2026-11-20T20:36:51Z
+    by: cloud/20261120T203034Z
+    event: claimed f2-plan-r2 until 2026-11-20T22:36:51Z
