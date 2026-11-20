@@ -4,7 +4,7 @@ priority: 2
 kind: process
 status: in_progress
 round: process
-phase: 3
+phase: 4
 design: docs/design/merge-confirm-attended.md
 branch: feat/merge-confirm-attended
 alters_relationships: null
@@ -39,7 +39,16 @@ steps:
   - id: x3-merge
     phase: 3
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
     status: pending
+    needs:
+      - x4-state
     lease:
       claimed_by: ""
       expires: null
@@ -82,3 +91,9 @@ history:
   - at: 2026-11-20T21:21:03Z
     by: cloud/20261120T203034Z
     event: entered phase 3 (merge)
+  - at: 2026-11-20T21:23:19Z
+    by: cloud/20261120T203034Z
+    event: done x3-merge
+  - at: 2026-11-20T21:23:19Z
+    by: cloud/20261120T203034Z
+    event: entered phase 4 (close)
