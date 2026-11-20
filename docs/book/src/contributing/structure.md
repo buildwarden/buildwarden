@@ -13,6 +13,7 @@ buildwarden/
 │   │   ├── chanlistener.go    # Channel-based net.Listener (for host mode)
 │   │   ├── ingress_fd.go      # gvisor netstack: Ethernet frames → TCP/UDP
 │   │   └── ingress_dhcp.go    # Host mode's DHCP framing around dhcp.go
+│   ├── warden-driver-container/ # The container driver's binary: drivercmd.Main(container.Driver())
 │   ├── warden/             # Host binary (CLI + driver dispatch)
 │   │   ├── main.go            # Cobra commands: build, shell
 │   │   ├── config.go          # Config loading (TOML), runtime detection, validation
@@ -57,8 +58,11 @@ buildwarden/
 │   ├── relaycfg.go            # Serve/Claim: push config, return relay identity
 │   ├── buildlink.go           # The claim's build_link and its validation
 │   └── tunnel.go              # Host-initiated tunnel carrying the collector (HTTP/2)
-├── driver/                 # Driver interface + shared host-side build logic
-│   ├── driver.go              # Driver interface, BuildRequest, BuildResult
+├── driver/                 # The kit for drivers, and the drivers; warden's session
+│   ├── driver.go              # BuildRequest, BuildResult
+│   ├── host.go                # Start, Host, RelayStarted: the build dialogue's Go types
+│   ├── drivercmd/             # The driver contract for a Go driver: Main, Call, Setting, Resolve
+│   ├── relaysource/           # Where a relay comes from: Bundled, Path, Image, Relay.Verify
 │   ├── session.go             # Shared Session: collector, claim, wait, output finalize
 │   ├── hostlink.go            # Build-link checks every VM driver runs: host overlap, launcher stamps
 │   ├── buildlink/             # The VM build link: default, parse, checks, claim and boot-arg renders, stamps
@@ -66,12 +70,14 @@ buildwarden/
 │   ├── hostutil.go            # Host-side helpers
 │   ├── subnet.go              # Subnet allocation, utilities
 │   ├── container/             # Container driver (iptables isolation)
-│   │   ├── container.go          # StartBuild/Exec: holder, sidecar, create, copy, start
+│   │   ├── command.go            # Driver(): probe, run, reap, doctor, clean, attach
+│   │   ├── runtime.go            # The runtime: finch, docker or podman, and detection
+│   │   ├── container.go          # Run/Attach: holder, sidecar, create, copy, start
 │   │   ├── images.go             # Holder + sidecar images: by digest, or built for dev
 │   │   ├── images/               # holder.Containerfile, netns.Containerfile
 │   │   └── environment.go        # OCI manifest extraction, environment record
 │   ├── qemu/                  # QEMU driver (cross-platform VM)
-│   │   ├── driver.go             # StartBuild: prepare, boot relay VM, boot build VM, wait
+│   │   ├── driver.go             # Run: prepare, boot relay VM, boot build VM, wait
 │   │   ├── vm.go                 # QEMU subprocess management (relay VM + build VM args)
 │   │   ├── seedfat.go            # FAT seed image for Windows guests
 │   │   ├── windows.go            # Windows guest support
@@ -114,11 +120,15 @@ buildwarden/
 │   │   └── initrd.go             # Append a binary to a prebuilt initramfs as a cpio
 │   └── script/                # Dockerfile-to-shell-script translator (every driver)
 │       └── translate.go          # COPY expanded against the context on the host
+├── conformance/
+│   └── driver/                # The driver contract's suite (driver-conformance), the reference
+│                              #   fake (warden-driver-fake) and stubrelay
 ├── ledger/                 # Shared library: wire format, reader, verifier
 │   └── ledger.go
 ├── specs/                  # Ledger format specs, versioned (RELAY-05); published in the book
 │   ├── README.md             # Index: layout, $id -> file table, $id policy
 │   ├── build-ledger/v1.md    # Wire format (prose only)
+│   ├── driver-contract/      # The driver contract: v1.md beside v1.schema.json (GLOBAL-08)
 │   ├── metadata-<name>/      # A record metadata schema: v<N>.md beside v<N>.schema.json
 │   ├── environment-<type>/   # A signed environment payload: v<N>.md beside v<N>.schema.json
 │   └── specs_test.go         # Tier-0: relay header, schemas and book mirror agree; seams page refs match the pins
@@ -176,7 +186,7 @@ buildwarden/
 
 ## Package Boundaries
 
-- **`cmd/warden/`** — Host-side binary. CLI, driver dispatch, config, inspect, image management, doctor/setup. Dispatches to `driver/container`, `driver/qemu`, `driver/vz`, or `driver/hyperv` based on `--driver` flag.
+- **`cmd/warden/`** — Host-side binary. CLI, driver dispatch, config, inspect, image management, doctor/setup. Finds the driver `--driver` names (a `warden-driver-<name>` binary, or a driver linked into it: qemu, vz, hyperv, firecracker) and runs every build through one build sequence.
 - **`cmd/warden-io/`** — Build-environment agent, and the only thing the host puts in the build environment. Bootstraps itself from the relay (CA and trust policy, the baseline, the build script), runs the build, fetches context files, posts artifacts. Cross-compiled for linux (containers, QEMU VMs), darwin (VZ macOS VMs), and windows (QEMU and Hyper-V VMs).
 - **`cmd/warden-pause/`** — The container driver's namespace holder: owns the build's network namespace while it is isolated, and does nothing else.
 - **`cmd/relay/`** — Relay binary. Thin mode-based main that selects container/vm/host mode and calls into the `relay/` library. Cross-compiled for linux (container/VM relay) or built natively (host-mode relay for VZ).
@@ -185,7 +195,12 @@ buildwarden/
 - **`collector/`** — The host side of the relay's single output path and the source of its build inputs (artifacts, captures, ledger, build output, build script, bootstrap config, context).
 - **`bootstrap/`** — The bootstrap config: the declarative trust policy the executor fetches from the relay (BOOT-05). Policy only; no paths, contents or commands. Run in-process by every driver (`driver.Session`) and standalone by `cmd/collector`.
 - **`relaycfg/`** — The claim protocol: a relay boots unconfigured, the orchestrator pushes the per-build config over a host-initiated tunnel and receives the relay's identity (MITM CA cert + ledger key).
-- **`driver/`** — Driver interface, shared host-side build logic (`Session`: collector, claim, wait, output finalize), and implementations. Each driver implements `driver.Driver` (Name, StartBuild, Exec, Close).
+- **`cmd/warden-driver-container/`** — The container driver as a binary that speaks the driver contract; warden finds it beside itself.
+- **`driver/`** — The kit for writing a driver, warden's session (`Session`: collector, claim, wait, output finalize), and the drivers. A driver is a binary that speaks the driver contract (`specs/driver-contract/`), or, until each becomes one, linked into warden; either runs through warden's one build sequence.
+- **`driver/drivercmd/`** — The driver contract for a driver written in Go: command dispatch, `describe` from the `Setting` declarations, reading the driver's configuration (`Resolve`), the result file and the run dialogue.
+- **`driver/relaysource/`** — Where a driver's relay comes from: beside the binary or in the source tree, a path or an image the user named, and its verification.
+- **`conformance/driver/`** — The driver contract's conformance suite: its static tier runs under `make test`, its lifecycle tier with `make driver-conformance`; the reference fake and `stubrelay`.
+- **`specs/driver-contract/`** — The driver contract's specification and its machine schema.
 - **`driver/container/`** — Container driver. Namespace holder isolated by the iptables sidecar before the build container exists; build container created with `warden-io initialize` as its entrypoint; relay as container.
 - **`driver/qemu/`** — QEMU driver. Two-VM topology with cloud images, cross-platform; Linux and Windows guests.
 - **`driver/vz/`** — VZ driver. Host relay with gvisor netstack, macOS build VM.
