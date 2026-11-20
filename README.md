@@ -134,10 +134,10 @@ warden inspect <path>         # Verify and display a ledger
 warden inspect --json <path>  # Machine-readable output
 warden shell [path]           # Interactive shell in audited environment
 warden clean                  # Remove orphaned containers/networks/volumes
-warden driver list            # Which driver program each --driver name runs
+warden driver list            # Which driver binary each --driver name runs
 ```
 
-A driver can be a program of its own, `warden-driver-<name>`, which warden
+A driver can be a binary of its own, `warden-driver-<name>`, which warden
 finds on `PATH` or beside itself, the way git finds its subcommands;
 `--driver` also takes a driver's path. The container driver is one,
 `warden-driver-container`, installed beside `warden`; the VM drivers are

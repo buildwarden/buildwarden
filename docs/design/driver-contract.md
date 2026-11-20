@@ -3713,7 +3713,7 @@ sequence in K1.
 | `run` | `StartBuild` and `Exec`'s setup | Its probe reads its settings and resolves the runtime (the `runtime` setting, else detection) and refuses a missing or stopped one, as `newDriver` does today before any work. The build resolves it once more and writes it to the state file, then starts the relay container, then on `claimed` the holder, the iptables sidecar, the build container, the executor copy and the start. `mode: shell` starts it held and waits for `/etc/warden/shell.env`, as `waitHeld` does. Its isolation, delivery and start code stays in `driver/container/container.go`, so BOOT-07's surface list does not change |
 | `attach` | The second half of `Exec` | `<runtime> container exec -i -t <build> sh -c ...` on the inherited terminal; the exit code from `/.warden/shell-exit`. The runtime is the one in the build's state file |
 | `reap` | New; `teardown`'s removals by name | Containers, network, dev relay image and work directory of one build ID, in the runtime the state file names and under the record's `tmpdir`. With a state file it reads no config file, so a deleted checkout does not stop it. With no state file it uses the `runtime` setting as it resolves now from the record's flags and the recorded files that still exist, else detection. A runtime that does not answer is exit 1 with the fixable error, never "nothing to remove" |
-| `doctor` | `doctorCmd`'s container arm; `resolveRuntime`, `DetectRuntime`, `runtimeStartHint` in `config.go` | Prints `container runtime: <rt>`, then `ok` |
+| `doctor` | `doctorCmd`'s container arm; `resolveRuntime`, `DetectRuntime`, `runtimeStartHint` in `config.go` | Prints `container runtime: <rt>`; `warden` prints the `ok` after it, only when neither its own part nor the driver's result is blocked (UX-09; DRV-25 does not say who prints it) |
 | `clean` | `listResources`, `isOrphan`, `findLiveWardenProcesses` in `clean.go` | Removes `warden-*` containers and networks and `warden-relay:*` images of every build that is neither in `keep_ids` nor shown alive by the process scan. The scan (`ps aux`, for `warden-relay-<id>` and `warden-build-<id>` in a command line) stays: the driver's `container wait warden-build-<id>` child still exists in `run`, and the scan sees every user's processes, which `keep_ids` cannot (a runtime daemon is shared between users; a lock directory is not). On Windows there is no `ps`, the scan finds nothing, as today, and `keep_ids` is the only signal |
 
 `driver.ContainerBaseCIDR`, `WardenBaseNet` and `AllocateNetwork` stay in
@@ -8153,6 +8153,255 @@ acceptance; then the outcome.
 - sitting: 19:25-19:42 UTC, asks: 7 (0 in batches)
 
 ## Consolidation
+
+Filled at Publish, 2026-11-20, on the branch at `bc91149`, which contains
+`origin/main` at `be13847` (FLOW-10, FLOW-15). `f6-merge-main` merged it as
+`78a4a6e`, a merge commit with conflict-only fixes; Review's report at
+`4d3b760` was written on that merge.
+
+**The merges.** The branch forked from `b903f65` (componentization, #117)
+and merged `main` four times: `f91aef3` (`ad4ea50`, loop-contract #119 and
+alters-slot #118), `661886d` (project-config-trust #124, the merge Plan
+waited for), `5030752` (`480e205`) and `78a4a6e` (`be13847`). Sixteen pull
+requests landed in all. Ten change only the loop's own rules and tools and
+none of K1's code or rules: #118, #121, #122, #126, #127, #128, #129, #130,
+#132 and #133. The six that reach K1:
+
+- **loop-contract (#119, `ad4ea50`).** It made PROFILE-01 and this
+  repository's loop profile. K1 took both in r2 (a8: PROFILE-01 in, FLOW-02
+  out); the profile's Specifications sentences as merged are kept beside
+  K1's.
+- **runtime-cli-project-path (#120, `3cb0b2b`).** The container runtime is
+  finch, docker or podman from every source. It moved with the container
+  driver: `driver/container/runtime.go` keeps the three names, whichever
+  of the flag, `WARDEN_CTR_CLI` or the key sets it.
+- **vz-nocgo-build (#123, `c5ab2d5`).** A cgo-less darwin/arm64 `warden`
+  has no vz driver. `vz_stub.go`'s constraint and `checkPlatform`'s message
+  are as #123 left them. `make release-build` now also builds
+  `cmd/warden-driver-container` with cgo off for every release target, as
+  `.goreleaser.yaml` does.
+- **project-config-trust (#124, `417fabd`).** One `warden.toml`: `--config`,
+  `WARDEN_CONFIG` or `./warden.toml`. This is the one file `start` and every
+  request name to a driver (Configuration). Plan waited for it (q1).
+- **seam-specs (#125, `0cd3c02`, S1).** Six seam specifications, pinned
+  here, and `make conformance`. Two consequences:
+  - The **GLOBAL-08** quotations under **Rule changes** predate S1, as that
+    section foresaw. The rule on the branch keeps S1's executor bullet
+    ("the `initialize` invocation contract, the bootstrap config it reads
+    (`bootstrap/`), plus its side of the relay protocol") and its closing
+    paragraph on the specs repository and the pins. K1's bullet and
+    paragraph sit between them, as approved. The current wording to read
+    against is `main`'s `docs/development/global.md` at `be13847`, and
+    `wf check` clears the path.
+  - S1's seams page, `concepts/seams.md`, listed the six specifications in
+    the specs repository and the ledger, but not the seam K1 makes
+    versioned. It gains a row for seam 9, the driver contract: in this
+    repository until K2, its suite `conformance/driver/`, not pinned. Its
+    opening sentence now excepts the driver contract along with the ledger.
+    `tools/conformance/check-pins.sh` still passes, because `make pin-specs`
+    rewrites only the pinned rows. `make conformance` and `make
+    driver-conformance` stay separate targets: the first runs pinned suites
+    from another repository, the second this repository's suite against a
+    binary.
+- **detached-prepare-windows-exe (#131, `0cd7eba`).** `driver.StartDetached`
+  now runs exactly the file `os.Executable` names, through
+  `os.StartProcess`. A refresh that cannot start is reported on the
+  build's progress, with the command to run by hand, and the build goes on.
+  Against K1:
+  - *Design.* **The operations, per driver** says the two re-invocations
+    (qemu's Windows layer, hyperv's base) keep working because `warden`
+    still takes `image prepare --driver <name>`. That still holds. Both
+    drivers are linked in K1, so `os.Executable` is `warden`, and
+    `linked.go` sets `driver.ConfigFile` from `start.ConfigFile`, so the
+    child reads the same file. For K2, **The boundary with S4 and K2** has
+    the re-invocations name the driver binary. #131's exact-executable start
+    is what a driver binary re-invoking itself needs, with no PATH or
+    PATHEXT lookup.
+  - *Code.* No conflict. `ensureFreshBase` and `ensureFreshWindowsLayer`
+    keep `os.Stderr` as their progress writer, as every linked driver's
+    progress does in K1. The hyperv native validation's case (3) covers the
+    detached prepare.
+  - *Overview.* #131's line in the hyperv section (`hyperv-prepare`) merged
+    as written. No other pseudocode names the detached prepare.
+  - *Reference docs.* `drivers.md`'s qemu Windows paragraph had #131's
+    clause joined to K1's renamed keys as two parentheses in a row. It is
+    reworded (below). The Hyper-V paragraph was fixed at Review (`4d3b760`).
+- **merge-confirm-attended (#132) and rule-paths-shared (#133).** Loop
+  tools only, with two effects here:
+  - #132 reads a design's approval per review entry and finds r3's
+    `33a3563` here (its design says so).
+  - #133 fixes the `wf check` defect this item's Review found
+    (`wf-drops-shared-rule-paths`). `dist/wf check` now clears every path
+    that several of K1's approved rule changes share.
+
+  #132 also has `TEMPLATE.md` ask for one bullet per review. This design's
+  **Design review** keeps its dated headings as recorded, since `wf` reads
+  its approvals correctly.
+
+**Items in flight.** Each was trial-merged against this head with `git
+merge-tree`. Nothing was changed on them:
+
+- `prebuilt-artifacts` (`49b513a`): clean, no file in common.
+- `relay-collector-failure-fails-open` (`9cdd32b`): clean, no file in
+  common.
+- `workdir-in-context` (`24376c0`): clean, no file in common.
+
+**Terminology.**
+
+- The reference pages call a driver of its own a *driver binary*:
+  `cli.md`, `configuration.md`, `drivers.md` and the overview. The guide
+  pages Guide wrote said *driver program*: `README.md`'s `warden driver
+  list` comment and paragraph, and `installation.md`'s upgrade heading and
+  first sentence. They now say *binary*. The anchor
+  `#upgrading-driver-programs-and-renamed-keys` was linked from nowhere.
+- `drivers.md`'s qemu Windows refresh sentence now reads "`[driver]
+  image_refresh_after` old, or `[driver.qemu] image_refresh_after` for this
+  driver alone", the Hyper-V section's wording.
+- `AGENTS.md`'s map row for `specs/` now names the driver contract and its
+  suite.
+
+**Design notes brought up to date.** **The operations, per driver**'s
+container `doctor` row said the driver prints `container runtime: <rt>`,
+then `ok`. Since `321017c` (Review's finding 1 at `78a4a6e`), `warden`
+prints the `ok`, only when neither its own part nor the driver's result is
+blocked. That is what **Behaviour** requires (UX-09), and DRV-25 does not
+say who prints it. The row now says so. Review called this a note for
+consolidation, not a finding. The macos-finch validation case "`warden
+doctor` prints `container runtime: finch` and `ok`" holds as written.
+
+**Shared abstractions (one path where two do the same thing).**
+
+- *The build sequence.* It is the abstraction K1 exists for. All five
+  drivers run through `cmd/warden/buildseq.go`, with no build sequence of
+  their own left: qemu's and firecracker's `signal.NotifyContext` are gone
+  (Decision 19), and the one left in `cmd/warden` is the Hyper-V service's
+  console run. The `StartBuild` of each driver is its `Run` against
+  `driver.Host`.
+- *Version 1's tables of common keys, old names and reserved flags.* These
+  are written three times, each against the specification:
+  - `cmd/warden/drivercall.go`: `commonKeys`, `oldKeyNames` and
+    `reservedFlags`, for warden's check of a `describe`;
+  - `driver/drivercmd/settings.go`: `commonKeys` and `oldNames`, for the
+    kit's refusal of its own driver's declaration;
+  - `conformance/driver/contract.go`: all three, for the suite.
+
+  Review listed the first two for this sweep. They are kept apart. Each
+  belongs to one party of the contract, and **Design** keeps those sides
+  apart on purpose: "`warden`'s side of the contract lives in
+  `cmd/warden`, and the suite has its own implementation of that side, so
+  the two are checked against the specification and not against each
+  other". The suite imports nothing under `driver/` or `cmd/warden` by
+  design. `warden` imports the kit only in `linked.go`, which K2 removes,
+  so taking the kit's table would tie the orchestrator to the driver-side
+  library at the moment K2 cuts that tie. The three checks are different
+  jobs: holding a foreign `describe`, refusing a declaration in-process,
+  and testing a binary. That is not one job done twice in FLOW-15's sense.
+  The risk is drift: no test holds the three tables to `v1.md`'s **Old
+  names** and **The common keys of version 1**. K2 moves the specification
+  and the suite to the specs repository, and that is the natural point for
+  the specification to publish the tables once. Until then a change to
+  either table is a change to the seam, which GLOBAL-08's `seam-contract`
+  check ties to `v1.md` for `drivercall.go` and `drivercmd/`.
+- *The old-name table and the drivers' `Settings`.* `driver/hyperv` and
+  `driver/qemu` declare their `Aliases` in their own `settings.go`. The
+  kit checks each against its table at declaration, so a driver and the
+  table cannot disagree silently.
+
+**Versioned seams that more than one feature changed (GLOBAL-08).** The
+driver contract is new, and K1 is its only author. The claim (seam 1) and
+the collector (seam 2): S1 specified both and pins them, and K1 changes
+neither wire. It changes who claims (`warden`, for every driver) and who
+starts the collector (`warden`). The seams page names the claimant as
+`driver.Session`, which `warden` calls, so that row stays true.
+`relaycfg/` and `collector/` are not edited by K1, and `make conformance`'s
+targets are unchanged.
+
+**Behaviour or conventions the rest of the codebase now follows.** All of
+it is under rule changes approved by name at `a6c8f0b` and `33a3563`, and
+`wf check` clears each path. No new convention emerged here:
+
+- a driver's flags and keys are declared in `describe` and read by the
+  driver, in `[driver]` and `[driver.<name>]` (ORCH-03, UX-01, UX-03,
+  UX-08);
+- staging and the claim are `warden`'s (ORCH-02);
+- teardown on end of input, and `reap` from the build's record (ORCH-04);
+- a driver binary's suite (TEST-05);
+- the executor's version is the delivering driver's (BOOT-02).
+
+**FLOW-15 sweep.**
+
+- *Dead code.* `make deadcode`: 13 functions are unreachable on all three
+  of Linux, macOS and Windows.
+  - `relay.Relay.CAFingerprint` and `Relay.Ledger` are exported API of
+    `relay/`.
+  - Ten are in `driver/vz`, cgo-only, checked on a macOS host:
+    `suppressSetupAssistant`, `buildSkipPlist`, `createWardenUser`,
+    `hashPassword`, `enableAutoLogin`, `encodeKCPassword`, `NewLinuxVM`,
+    `VM.State`, `VM.IsRunning` and the stub's `createLinuxVM`.
+  - `cmd/warden/buildseq_test.go`'s `fakeSession.close` is K1's. It is
+    kept: `buildSession` requires `close`, and only the path that closes a
+    real `collectorSession` calls it, a path no test reaches with the fake.
+
+  None of the kit's functions is unreachable. Task 36's sweep held.
+- *Duplication.* See **Shared abstractions** above. Nothing else was found
+  in the files K1 adds:
+  - `cmd/warden/drivercall.go` and `driverlookup.go` are `warden`'s side
+    and `driver/drivercmd/` is the kit's;
+  - the container code moved out of `cmd/warden` and left no copy behind:
+    the runtime's resolution and detection (`resolveRuntime`,
+    `detectRuntime`) and the cleanup (`listNames`, `removeResources`,
+    `liveProcessBuilds`, the `ps aux` scan) exist only in
+    `driver/container`;
+  - the old relay-source lookups are wrapped by `driver/relaysource`, not
+    repeated.
+- *The overview.* `concepts/overview.md` holds K1's orchestrator sequence,
+  the per-driver `run` skeleton and the paragraph on the other commands and
+  the lookup (task 36). #131's hyperv line merged into it as written.
+  Nothing else in #131 to #133 changes a component's flow.
+
+**Left for later steps** (none of it is this step's work):
+
+- *Task 38*, at Publish: file seam 8 (relay release forms) as its own
+  S-track item through `workflow-intake` (a11). Nothing in the queue holds
+  it yet. It is a queue write on the `workflow` branch, so it falls to the
+  tick or Jeff before `f6-open-pr`, whose body lists follow-ups filed.
+- *The area map*, at merge, on Jeff's word: `core` gains `reaches:
+  [collector, relaycfg]`. Review also noted `cmd/warden-driver-container/`
+  falls to `core` and reaches six areas through it. Where it goes is
+  Jeff's call when the map is saved.
+- *On the PR's head* (`f6-open-pr`):
+  - the integration workflow's run of `make driver-conformance` against
+    `warden-driver-container` with the real relay (TEST-05);
+  - the firecracker workflow's run (a7), which is not a required check;
+  - CI's new three-platform `driver-contract` job.
+- *GLOBAL-06*, MUST-review: Jeff acknowledges it at merge against the
+  **Security note**.
+- *Native validation*: the five blocking `f6-validate-<host>` steps now
+  run on this consolidated head.
+
+**Checks on this head.**
+
+- `make lint` passed: golangci-lint 0 issues; tier1 0 MUST, 0
+  MUST-review, 0 SHOULD, 5 hints, 0 suppressed.
+- `make test` passed.
+- `make deadcode`: as above.
+- `tools/conformance/check-pins.sh` passed.
+- `tools/workflow/flow18-check.sh` passed.
+
+**`dist/wf check`** (`-state <workflow> -repo . -feature driver-contract`)
+printed no trial-merge line. `origin/main` (`be13847`) is the merge base,
+so the trial merge is the head itself. Its lines:
+
+```
+ok   current main merged: origin/main is an ancestor of feat/driver-contract
+ok   section filled: Consolidation
+ok   rule changes cleared (FLOW-14): cleared: docs/development/bootstrap.md (BOOT-02), docs/development/global.md (GLOBAL-08), docs/development/loop-profile.md (PROFILE-01), docs/development/orchestrator.md (ORCH-01, ORCH-02, ORCH-03, ORCH-04), docs/development/testing.md (TEST-05), docs/development/ux-cli-config.md (UX-08), tools/tier1/rules.yaml (GLOBAL-08, ORCH-01, TEST-05), tools/tier1/surface/surface.go (ORCH-03, UX-01, UX-03), tools/tier1/surface/surface_test.go (ORCH-03, UX-01, UX-03), tools/tier1/surface/testdata/driver.go.txt (ORCH-03, UX-01, UX-03)
+ok   queue records what the design declares (FLOW-03): as declared at 028ffe2
+ok   diff inside the declared areas (FLOW-03): undeclared: the item collides with every item in its repositories, and no path is outside it (FLOW-05)
+```
+
+Its `FAIL` lines are `f6-open-pr`'s: the design archived, the Archive
+summary, and the PR open with CI green.
 
 ## Rollback notes
 

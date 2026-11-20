@@ -274,9 +274,9 @@ Two kinds of value have a replacement:
 [A path, or another runtime](../guide/configuration.md#a-path-or-another-runtime)
 lists every value that stopped working and the message each one gets.
 
-## Upgrading: Driver Programs and Renamed Keys
+## Upgrading: Driver Binaries and Renamed Keys
 
-The container driver is now a program of its own, `warden-driver-container`,
+The container driver is now a binary of its own, `warden-driver-container`,
 which warden runs from beside itself. The one-liner and the release archives
 install it; if you copy `warden` by hand, copy `warden-driver-container` into
 the same directory. `warden driver list` shows which file each driver name

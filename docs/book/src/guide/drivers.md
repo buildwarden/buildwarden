@@ -257,9 +257,10 @@ once with no network through OOBE and the same tuning as Hyper-V, registers
 the `warden-run` startup task, and powers off; builds boot a throwaway child of
 that layer as SYSTEM. With no `--source`, `image prepare` only re-prepares,
 and builds start that in the background once the layer is
-`[driver] image_refresh_after` old (or `[driver.qemu] image_refresh_after`) (see the Hyper-V section for the evaluation
-grace rules, which are the same, and the same report of a re-prepare that
-cannot start).
+`[driver] image_refresh_after` old, or `[driver.qemu] image_refresh_after`
+for this driver alone (see the Hyper-V section for the evaluation grace
+rules, which are the same, and the same report of a re-prepare that cannot
+start).
 
 ---
 
