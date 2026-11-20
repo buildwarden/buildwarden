@@ -54,7 +54,7 @@ None.
 | Machine | Host names | Last run | Leads | Holds |
 |---|---|---|---|---|
 | macbook | macos-vz, macos-qemu, macos-finch, qemu-any | worked, 2026-11-19 12:40 (since 2026-11-17): claude exited 0 | - | - |
-| windows-desktop | windows-hyperv, container-any, linux-kvm | idle, 2026-11-19 05:10: idle: 2 open gaps, nothing moved since 2026-11-18T23:10:08Z | - | - |
+| windows-desktop | windows-hyperv, container-any, linux-kvm | idle, 2026-11-19 23:10: idle: 2 open gaps, nothing moved since 2026-11-19T17:10:27Z | - | - |
 
 ## Relations
 
