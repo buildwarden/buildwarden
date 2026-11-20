@@ -1,14 +1,18 @@
 feature: merge-confirm-attended
 title: Attended merge confirmation, a seeded state step, and entry-scoped design approvals
-priority: 1
+priority: 2
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/merge-confirm-attended.md
 branch: feat/merge-confirm-attended
 alters_relationships: null
 source: 'Filed on Jeff''s word, 2026-11-18, as a follow-up named in loop-streamline-2''s design (What this item does not do; archived with #127), and widened on Jeff''s word, 2026-11-20, to carry three loop changes in one PR (fewer merges): (A) the approvals() bug in tools/workflow/check/review.go: every ''approved at <sha>'' in a Design review section counts, and callers take the last as the baseline, so prose in a later entry citing an older approval becomes the baseline; live on feat/detached-prepare-windows-exe (f2-plan-r2 compared against r1''s b7619b5, harmless because impactDelta does not compare drivers) and nearly hit driver-contract r3 on 2026-11-20; (B) an attended session (human worker) may confirm a merge it watched with wf done on the merge step, its done-when check unchanged (today only the tick can; PR #130 waited on 2026-11-20); (C) wf-state-migration-step''s core: a state step recorded at review (state_step) that wf seeds as x4-state when phase 4 is entered, with x4-close waiting on it, replacing the hand-added steps. Scoped 2026-11-20 by three scouts and a cross-check: about 100 lines of Go, 250 of tests, 60 of docs; FLOW-03 and FLOW-04 amended. The FLOW-19 mechanical-rebase exemption is split off to wf-state-migration-step. This item still needs one hand-added x4-state (the workflow README) and x4-close needs: [x4-state], the last item that does. Estimate from the process size row: 4 steps + 1.'
+pr:
+  number: 132
+  ci: green
+  head: 2f650c450577004a0d6882c20ae892f6f11311ba
 steps:
   - id: x4-state
     phase: 4
@@ -28,10 +32,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261120T203034Z
-      expires: 2026-11-20T23:07:59.124419585Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -65,3 +76,9 @@ history:
   - at: 2026-11-20T21:07:59Z
     by: cloud/20261120T203034Z
     event: claimed x2-implement until 2026-11-20T23:07:59Z
+  - at: 2026-11-20T21:21:03Z
+    by: cloud/20261120T203034Z
+    event: done x2-implement
+  - at: 2026-11-20T21:21:03Z
+    by: cloud/20261120T203034Z
+    event: entered phase 3 (merge)
