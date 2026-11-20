@@ -29,8 +29,6 @@ import (
 // Driver-specific machinery with no analog elsewhere (the Hyper-V privileged
 // helper service) stays under `warden hyperv`.
 
-var ()
-
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Preflight the host for the selected driver",
