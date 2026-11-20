@@ -1,8 +1,7 @@
 feature: loop-repository
 title: 'Work in a second repository from the one queue: wf''s gates and checks, branches and PRs per repository, and the native side (componentization P1, last part). The move to a loop repository follows as P1''s last item.'
-priority: 3
 kind: process
-status: in_progress
+status: done
 round: process
 phase: 4
 design: docs/design/loop-repository.md
@@ -48,10 +47,10 @@ steps:
   - id: x4-close
     phase: 4
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261120T203034Z
-      expires: 2026-11-20T22:31:36.244703747Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 3
@@ -133,3 +132,9 @@ history:
   - at: 2026-11-20T20:31:36Z
     by: cloud/20261120T203034Z
     event: claimed x4-close until 2026-11-20T22:31:36Z
+  - at: 2026-11-20T20:31:43Z
+    by: cloud/20261120T203034Z
+    event: done x4-close
+  - at: 2026-11-20T20:31:43Z
+    by: cloud/20261120T203034Z
+    event: closed; feature done
