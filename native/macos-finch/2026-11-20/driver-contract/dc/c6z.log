@@ -1,0 +1,42 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+[warden] Build ID: 08fy5bop
+[warden] Building relay from source...
+go: downloading gvisor.dev/gvisor v0.0.0-20260907062237-d1e35511e5a4
+go: downloading golang.org/x/sys v0.47.0
+go: downloading golang.org/x/net v0.58.0
+go: downloading github.com/miekg/dns v1.1.73
+go: downloading github.com/fxamacker/cbor/v2 v2.9.3
+go: downloading golang.org/x/crypto v0.56.0
+go: downloading github.com/x448/float16 v0.8.4
+go: downloading golang.org/x/text v0.41.0
+go: downloading golang.org/x/exp v0.0.0-20250711185948-6ae5c78190dc
+go: downloading golang.org/x/time v0.15.0
+go: downloading github.com/google/btree v1.1.3
+[warden] Pulling image: alpine:3.21
+docker.io/library/alpine:3.21: resolving      |[32m[0m--------------------------------------| 
+elapsed: 0.1 s                 total:   0.0 B (0.0 B/s)                                         
+docker.io/library/alpine:3.21: resolving      |[32m[0m--------------------------------------| 
+elapsed: 0.2 s                 total:   0.0 B (0.0 B/s)                                         
+docker.io/library/alpine:3.21: resolving      |[32m[0m--------------------------------------| 
+elapsed: 0.3 s                 total:   0.0 B (0.0 B/s)                                         
+docker.io/library/alpine:3.21: resolving      |[32m[0m--------------------------------------| 
+elapsed: 0.4 s                 total:   0.0 B (0.0 B/s)                                         
+docker.io/library/alpine:3.21: resolving      |[32m[0m--------------------------------------| 
+elapsed: 0.5 s                 total:   0.0 B (0.0 B/s)                                         
+docker.io/library/alpine:3.21: resolving      |[32m[0m--------------------------------------| 
+elapsed: 0.6 s                 total:   0.0 B (0.0 B/s)                                         
+docker.io/library/alpine:3.21:                                                    resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
+index-sha256:bc21487101ae47172509130ee1092cc273a831968d64b617776d1f69c81e42ab:    done           |[32m++++++++++++++++++++++++++++++++++++++[0m| 
+manifest-sha256:e77b401c86e6d0651b12ca45dea812bdf6ffca3b6e16662b7c116180e56ec9f7: done           |[32m++++++++++++++++++++++++++++++++++++++[0m| 
+config-sha256:ed2dcc5679354d1c17b64f71343e311652c575a6551bbce979eab00644a14eee:   done           |[32m++++++++++++++++++++++++++++++++++++++[0m| 
+elapsed: 0.7 s                                                                    total:   0.0 B (0.0 B/s)                                         
+[warden] Allocating network...
+[warden] Starting relay...
+[warden] Starting build container...
+time="2026-11-20T15:20:41-08:00" level=warning msg="failed to remove hosts file for container \"51185438a8bc7a033efc769972311e9a1cfeed4dc9d92ebd4cfc38d3fcf20419\"" error="hosts-store error\nnot found\nstat /var/lib/nerdctl/1935db59/etchosts/finch/51185438a8bc7a033efc769972311e9a1cfeed4dc9d92ebd4cfc38d3fcf20419: no such file or directory"
+[warden] Executing build...
+build-started
+
+Interrupted, cleaning up... (press ctrl+c again to force)
+[warden] Tearing down environment...
+warden: build interrupted

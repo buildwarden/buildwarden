@@ -1,0 +1,15 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+[warden] Build ID: 9pubyyyx
+[warden] Building relay from source...
+[warden] Tearing down environment...
+[warden] driver container: error building relay image: exec: "podman": executable file not found in $PATH
+warden: build FAILED
+[warden] ERROR: driver "container" (/Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container): error building relay image: exec: "podman": executable file not found in $PATH
+  The driver's last output:
+    [warden] Build ID: 9pubyyyx
+    [warden] Building relay from source...
+    [warden] Tearing down environment...
+    [warden] driver container: error building relay image: exec: "podman": executable file not found in $PATH
+
+  This is a bug in the driver "container" (/Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container) version dev; report it at https://github.com/buildwarden/buildwarden/issues/new
+

@@ -1,0 +1,42 @@
+== start Y (running, default tmpdir)
+== start Z (running, HOME=home2)
+== before clean (X=g32wr9rn dead, its warden.toml deleted; tpbll3sr = case 5's SIGKILL leftover)
+Containerfile
+  containers: warden-build-g32wr9rn warden-build-p0u7615s warden-build-rpohoszf warden-holder-g32wr9rn warden-holder-p0u7615s warden-holder-rpohoszf warden-relay-g32wr9rn warden-relay-p0u7615s warden-relay-rpohoszf 
+  nets: warden-g32wr9rn warden-p0u7615s warden-rpohoszf 
+  locks: build-container-g32wr9rn.json build-container-g32wr9rn.lock build-container-g32wr9rn.state build-container-p0u7615s.json build-container-p0u7615s.lock build-container-p0u7615s.state build-container-tpbll3sr.json build-container-tpbll3sr.lock build-container-tpbll3sr.state 
+  home2 locks: build-container-rpohoszf.json build-container-rpohoszf.lock build-container-rpohoszf.state network.lock 
+  tmpA: warden-container-g32wr9rn-170683736 warden-stage-g32wr9rn   TMPDIR warden-*: warden-container-p0u7615s-3800211283 warden-container-rpohoszf-2633550412 warden-stage-p0u7615s warden-stage-rpohoszf warden-stage-tpbll3sr 
+== warden clean (from fp/c6; clean's tmpdir is the OS default, not X's tmpA)
+  clean rc=0
+  | [warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+  | Cleaning up after build g32wr9rn (container)
+  | Removing container: warden-build-g32wr9rn
+  | Removing container: warden-holder-g32wr9rn
+  | Removing container: warden-relay-g32wr9rn
+  | Removing network: warden-g32wr9rn
+  | Removing image: warden-relay:g32wr9rn
+  | Removing /Users/jeff/src/buildwarden-native/.scratch/tmpA/warden-container-g32wr9rn-170683736
+  | Cleaning up after build tpbll3sr (container)
+  | Removing container: warden-build-rpohoszf
+  | Removing container: warden-holder-rpohoszf
+  | Removing container: warden-relay-rpohoszf
+  | Removing network: warden-rpohoszf
+  | Kept the cache (85411 MB, /Users/jeff/Library/Caches/warden); --cache removes it
+  | Removed 12 resource(s).
+== after clean
+  containers: warden-build-p0u7615s warden-holder-p0u7615s warden-relay-p0u7615s 
+  nets: warden-p0u7615s 
+  locks: build-container-p0u7615s.json build-container-p0u7615s.lock build-container-p0u7615s.state 
+  home2 locks: network.lock 
+  tmpA:   TMPDIR warden-*: warden-container-p0u7615s-3800211283 warden-stage-p0u7615s 
+  Y alive=yes Z alive=no
+./c6b.sh: line 10: kill: (38655) - No such process
+  Y rc=130
+  Z rc=1
+== after stopping Y and Z
+  containers: 
+  nets: 
+  locks: 
+  home2 locks: network.lock 
+  tmpA:   TMPDIR warden-*: 

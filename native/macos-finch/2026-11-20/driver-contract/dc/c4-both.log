@@ -1,0 +1,4 @@
+[warden] config: /Users/jeff/src/buildwarden-native/.scratch/fp/ri-both/warden.toml (found in the working directory)
+[warden] driver container: /Users/jeff/src/buildwarden-native/.scratch/fp/ri-both/warden.toml sets [driver.container] relay_image twice: as [driver.container] relay_image and as its old name [runtime] relay_image
+[warden] ERROR: /Users/jeff/src/buildwarden-native/.scratch/fp/ri-both/warden.toml sets [driver.container] relay_image twice: as [driver.container] relay_image and as its old name [runtime] relay_image
+  To fix: remove [runtime] relay_image from /Users/jeff/src/buildwarden-native/.scratch/fp/ri-both/warden.toml

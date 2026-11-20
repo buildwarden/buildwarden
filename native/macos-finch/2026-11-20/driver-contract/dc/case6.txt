@@ -1,0 +1,38 @@
+== start X (--tmpdir tmpA, with warden.toml)
+  X warden=35664 driver=35670
+./c6.sh: line 6: 35664 Killed: 9               ( cd fp/c6 && exec $B --tmpdir $S/tmpA build -o $S/out-c6x . > $E/c6x.log 2>&1 )
+== X killed (warden and driver)
+  containers: warden-build-g32wr9rn warden-holder-g32wr9rn warden-relay-g32wr9rn 
+  nets: warden-g32wr9rn 
+  locks: build-container-g32wr9rn.json build-container-g32wr9rn.lock build-container-g32wr9rn.state build-container-tpbll3sr.json build-container-tpbll3sr.lock build-container-tpbll3sr.state 
+  home2 locks: 
+  tmpA: warden-container-g32wr9rn-170683736 warden-stage-g32wr9rn   TMPDIR warden-*: warden-stage-tpbll3sr 
+== start Y (running, default tmpdir)
+== start Z (running, HOME=home2)
+36529 /Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container run
+36732 /Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container run
+== before clean
+  containers: warden-build-08fy5bop warden-build-30z73uxy warden-build-g32wr9rn warden-holder-08fy5bop warden-holder-30z73uxy warden-holder-g32wr9rn warden-relay-08fy5bop warden-relay-30z73uxy warden-relay-g32wr9rn 
+  nets: warden-08fy5bop warden-30z73uxy warden-g32wr9rn 
+  locks: build-container-30z73uxy.json build-container-30z73uxy.lock build-container-30z73uxy.state build-container-g32wr9rn.json build-container-g32wr9rn.lock build-container-g32wr9rn.state build-container-tpbll3sr.json build-container-tpbll3sr.lock build-container-tpbll3sr.state 
+  home2 locks: build-container-08fy5bop.json build-container-08fy5bop.lock build-container-08fy5bop.state network.lock 
+  tmpA: warden-container-g32wr9rn-170683736 warden-stage-g32wr9rn   TMPDIR warden-*: warden-container-08fy5bop-2177535302 warden-container-30z73uxy-3753464335 warden-stage-08fy5bop warden-stage-30z73uxy warden-stage-tpbll3sr 
+== warden clean --tmpdir tmpB (from fp/c6, warden.toml deleted)
+  clean rc=1
+  | [warden] ERROR: unknown flag --tmpdir for driver "container"
+  |   To fix: see 'warden clean --driver container --help' for the flags this driver takes
+== after clean
+  containers: warden-build-08fy5bop warden-build-30z73uxy warden-build-g32wr9rn warden-holder-08fy5bop warden-holder-30z73uxy warden-holder-g32wr9rn warden-relay-08fy5bop warden-relay-30z73uxy warden-relay-g32wr9rn 
+  nets: warden-08fy5bop warden-30z73uxy warden-g32wr9rn 
+  locks: build-container-30z73uxy.json build-container-30z73uxy.lock build-container-30z73uxy.state build-container-g32wr9rn.json build-container-g32wr9rn.lock build-container-g32wr9rn.state build-container-tpbll3sr.json build-container-tpbll3sr.lock build-container-tpbll3sr.state 
+  home2 locks: build-container-08fy5bop.json build-container-08fy5bop.lock build-container-08fy5bop.state network.lock 
+  tmpA: warden-container-g32wr9rn-170683736 warden-stage-g32wr9rn   TMPDIR warden-*: warden-container-08fy5bop-2177535302 warden-container-30z73uxy-3753464335 warden-stage-08fy5bop warden-stage-30z73uxy warden-stage-tpbll3sr 
+  Y alive=yes Z alive=yes
+  Y rc=130
+  Z rc=130
+== after stopping Y and Z
+  containers: warden-build-g32wr9rn warden-holder-g32wr9rn warden-relay-g32wr9rn 
+  nets: warden-g32wr9rn 
+  locks: build-container-g32wr9rn.json build-container-g32wr9rn.lock build-container-g32wr9rn.state build-container-tpbll3sr.json build-container-tpbll3sr.lock build-container-tpbll3sr.state 
+  home2 locks: network.lock 
+  tmpA: warden-container-g32wr9rn-170683736 warden-stage-g32wr9rn   TMPDIR warden-*: warden-stage-tpbll3sr 

@@ -1,0 +1,22 @@
+^Dgo run ./conformance/driver/cmd/driver-conformance --driver dist/warden-driver-container \
+		--tier lifecycle --base-image alpine:3.21 --skip sequence --skip success --skip inputs --skip failure --skip stop --skip end-of-input --skip orphaned --skip kill --skip reap --skip diagnostics --skip two-at-once --skip clean --skip exited --skip probe --skip doctor
+skip lifecycle: probe (DRV-30, DRV-32, DRV-33): skipped with --skip
+skip lifecycle: sequence (DRV-16, DRV-20, DRV-39, DRV-42, DRV-45, DRV-46, DRV-47, DRV-49): skipped with --skip
+skip lifecycle: success (DRV-14, DRV-15, DRV-43, DRV-45): skipped with --skip
+skip lifecycle: inputs (DRV-45): skipped with --skip
+skip lifecycle: failure (DRV-45): skipped with --skip
+skip lifecycle: stop (DRV-24, DRV-49): skipped with --skip
+FAIL lifecycle: end of input (DRV-50, DRV-51): after relay: waiting for stopped, the driver failed: map[code:internal msg:the orchestrator's input ended before the relay was claimed]
+skip lifecycle: orphaned (DRV-51): skipped with --skip
+skip lifecycle: kill (DRV-24, DRV-61, DRV-C10): skipped with --skip
+skip lifecycle: reap (DRV-24): skipped with --skip
+skip lifecycle: diagnostics (DRV-45): skipped with --skip
+ok   lifecycle: two at once (DRV-45)
+skip lifecycle: clean (DRV-27, DRV-55, DRV-58): skipped with --skip
+skip lifecycle: keep (DRV-24, DRV-49): capabilities.keep is none
+FAIL lifecycle: shell (DRV-28, DRV-53, DRV-65, DRV-66): attach running exit 7 exited 1 with map[]: time="2026-11-20T15:31:43-08:00" level=fatal msg="provided file is not a console"
+
+skip lifecycle: exited (DRV-48): skipped with --skip
+skip lifecycle: doctor (DRV-25): skipped with --skip
+exit status 1
+make: *** [driver-conformance] Error 1

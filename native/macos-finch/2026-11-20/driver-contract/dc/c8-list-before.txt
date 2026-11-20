@@ -1,0 +1,7 @@
+NAME            RUNS                                                                                                   FOUND
+container    *  /Users/jeff/src/buildwarden-native/.scratch/pathA/warden-driver-container                              PATH
+                  shadows /Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container (beside warden)  
+qemu            (linked into warden)                                                                                   linked
+vz              (linked into warden)                                                                                   linked
+hyperv          (linked into warden)                                                                                   linked
+firecracker     (linked into warden)                                                                                   linked

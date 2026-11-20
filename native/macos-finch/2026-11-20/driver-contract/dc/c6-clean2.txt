@@ -1,0 +1,15 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+Cleaning up after build g32wr9rn (container)
+Removing container: warden-build-g32wr9rn
+Removing container: warden-holder-g32wr9rn
+Removing container: warden-relay-g32wr9rn
+Removing network: warden-g32wr9rn
+Removing image: warden-relay:g32wr9rn
+Removing /Users/jeff/src/buildwarden-native/.scratch/tmpA/warden-container-g32wr9rn-170683736
+Cleaning up after build tpbll3sr (container)
+Removing container: warden-build-rpohoszf
+Removing container: warden-holder-rpohoszf
+Removing container: warden-relay-rpohoszf
+Removing network: warden-rpohoszf
+Kept the cache (85411 MB, /Users/jeff/Library/Caches/warden); --cache removes it
+Removed 12 resource(s).

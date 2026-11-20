@@ -1,0 +1,25 @@
+== INT; before: containers=0 warden-nets=0 workdirs=0 drivers=0
+   mid-build: containers=3 warden-nets=1 workdirs=2 drivers=1
+   warden rc=130; after 20s: containers=0 warden-nets=0 workdirs=0 drivers=0
+   | Interrupted, cleaning up... (press ctrl+c again to force)
+   | [warden] Tearing down environment...
+   | warden: build interrupted
+== TERM; before: containers=0 warden-nets=0 workdirs=0 drivers=0
+   mid-build: containers=3 warden-nets=1 workdirs=2 drivers=1
+   warden rc=1; after 20s: containers=0 warden-nets=0 workdirs=0 drivers=0
+   | build-started
+   | [warden] Tearing down environment...
+   | warden: build terminated (SIGTERM)
+== KILLDRIVER; before: containers=0 warden-nets=0 workdirs=0 drivers=0
+   mid-build: containers=3 warden-nets=1 workdirs=2 drivers=1
+   warden rc=1; after 20s: containers=0 warden-nets=0 workdirs=0 drivers=0
+   | [warden] ERROR: build failed: lost the connection to the relay
+   |   If this is unexpected, please file a bug:
+   |   https://github.com/buildwarden/buildwarden/issues/new?title=Bug%3A+build+failed%3A+lost+the+connection+to+the+relay&body=%23%23+Environment%0A-+OS%3A+darwin%2Farm64%0A-+Version%3A+dev%0A%0A%23%23+Error%0A%60%60%60%0Abuild+failed%3A+lost+the+connection+to+the+relay%0A%60%60%60%0A%0A%23%23+Steps+to+reproduce%0A1.+%0A
+== KILLWARDEN; before: containers=0 warden-nets=0 workdirs=0 drivers=0
+   mid-build: containers=3 warden-nets=1 workdirs=2 drivers=1
+./sig5.sh: line 11: 35048 Killed: 9               ( cd fp/long && exec $B build -o ../../out-sig$mode . > $E/sig$mode.log 2>&1 )
+   warden rc=137; after 20s: containers=0 warden-nets=0 workdirs=1 drivers=0
+   | [warden] Starting build container...
+   | [warden] Executing build...
+   | build-started

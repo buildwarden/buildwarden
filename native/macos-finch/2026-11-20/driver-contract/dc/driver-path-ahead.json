@@ -1,0 +1,14 @@
+{
+  "name": "container",
+  "version": "dev",
+  "contract": 1,
+  "path": "/Users/jeff/src/buildwarden-native/.scratch/pathA/warden-driver-container",
+  "sha256": "d8caa457369275db482d3f99949d2d1a21219baf5df4c6b611b5ca1a5cbb7d27",
+  "found": "PATH",
+  "shadowed": [
+    {
+      "path": "/Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container",
+      "found": "beside-warden"
+    }
+  ]
+}

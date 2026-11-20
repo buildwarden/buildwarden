@@ -1,0 +1,4 @@
+[warden] config: /Users/jeff/src/buildwarden-native/.scratch/fp/c7dcli5/warden.toml (found in the working directory)
+[warden] driver container: /Users/jeff/src/buildwarden-native/.scratch/fp/c7dcli5/warden.toml [driver.container] cli: want a string, not an integer
+[warden] ERROR: /Users/jeff/src/buildwarden-native/.scratch/fp/c7dcli5/warden.toml [driver.container] cli: want a string, not an integer
+  To fix: set it to a string
