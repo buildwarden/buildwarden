@@ -158,14 +158,14 @@ steps:
     status: pending
     lease:
       claimed_by: cloud/20261120T203034Z
-      expires: 2026-11-20T23:55:03.852389677Z
+      expires: 2026-11-21T00:07:44.536242706Z
 budget:
   estimate:
     runs: 5
     steps: 30
   spent:
     runs: 4
-    steps: 15
+    steps: 16
 questions:
   - id: a16
     kind: assumed
@@ -710,3 +710,6 @@ history:
   - at: 2026-11-20T21:55:03Z
     by: cloud/20261120T203034Z
     event: claimed f4-review until 2026-11-20T23:55:03Z
+  - at: 2026-11-20T22:07:44Z
+    by: cloud/20261120T203034Z
+    event: claimed f4-review until 2026-11-21T00:07:44Z
