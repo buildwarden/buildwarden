@@ -995,6 +995,9 @@ gaps:
       (design only), and q1 is still open: driver-contract still waits on human step f2-design-review-r2.
       2026-11-19 (host:container-any/windows-desktop.20261119T171002Z, unattended, main e9315c2): not run,
       nothing changed. feat/prebuilt-artifacts is still 49b513a (design only), and q1 is still open.
+      2026-11-20 (host:container-any/windows-desktop.20261120T224051Z, unattended, main be13847): not run.
+      main moved (#130 to #133), but feat/prebuilt-artifacts is still 49b513a (design only), and q1 is
+      still open: driver-contract waits on cloud step f6-consolidate.
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: open
@@ -1058,6 +1061,9 @@ gaps:
       f2-answer-q1.
       2026-11-19 (host:container-any/windows-desktop.20261119T171002Z, unattended, main e9315c2): not run,
       nothing changed. feat/workdir-in-context is still 24376c0 (design only), held on f2-answer-q1.
+      2026-11-20 (host:container-any/windows-desktop.20261120T224051Z, unattended, main be13847): not run.
+      main moved (#130 to #133, none in cmd/warden's context checks); feat/workdir-in-context is still
+      24376c0 (design only), held on f2-answer-q1.
   - id: workdir-in-context-macos
     host: macos-finch
     status: open
@@ -1095,6 +1101,9 @@ gaps:
       Tracked, not blocking (design tier2_gaps). Added at x4-state (Jeff, 2026-11-20). Runs on main
       since the merge: 2026-11-19T17:10Z worked (f6-validate-windows-hyperv, pushed through
       wf commit), later runs idle. native-push.sh has not yet pushed a feature branch: no item is led.
+      2026-11-20 (host:windows-hyperv/windows-desktop.20261120T224051Z, unattended, main be13847): the
+      scheduled run started under Git Bash and pushed through wf commit; no led item and no queue step
+      for this machine's hosts, so native-push.sh is still unexercised.
   - id: loop-native-lead-cleanup
     host: windows-hyperv
     status: open
@@ -1106,3 +1115,5 @@ gaps:
     note: >-
       Tracked, not blocking (design tier2_gaps). Added at x4-state (Jeff, 2026-11-20). Needs a done
       item's leftovers on the machine, which only a led item's .scratch/ worktree makes; none yet.
+      2026-11-20 (host:windows-hyperv/windows-desktop.20261120T224051Z, unattended, main be13847): not run.
+      No .scratch/ directory or local feature branch on windows-desktop; nothing to clean.
