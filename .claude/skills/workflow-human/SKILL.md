@@ -133,7 +133,7 @@ Read the latest file in `.dev/workflow/digest/`.
    history; raise an estimate only on Jeff's word.
 5. **Open PRs**: record `main`'s CI and its ruleset as `workflow-tick`
    step 2 does (`dist/wf main`), then run
-   `dist/wf stale -state .dev/workflow -repo . -worker $W`, which skips a PR
+   `dist/wf stale -state .dev/workflow -repo . -checkouts .dev/checkouts -worker $W`, which skips a PR
    Jeff has already merged. List the PRs that are ready to merge apart from
    those that wait for a refresh (FLOW-08, FLOW-10), each with the tier-2
    MUST findings it lists, and offer only the ready ones for merging. Jeff

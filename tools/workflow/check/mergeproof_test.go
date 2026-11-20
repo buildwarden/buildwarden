@@ -72,7 +72,7 @@ func TestMergeTreeProof(t *testing.T) {
 		if !want && !strings.Contains(info, sha) {
 			t.Errorf("info %q does not name the PR commit %s", info, sha)
 		}
-		if rs := Phase(Env{Repo: work}, x3(42)); OK(rs) != want {
+		if rs := Phase(here(work), x3(42)); OK(rs) != want {
 			t.Errorf("x3: %v (%s), want %v", OK(rs), failures(rs)+rs[0].Info, want)
 		}
 	}
@@ -146,7 +146,7 @@ func TestMergeTreeProof(t *testing.T) {
 		check(t, work, fullHead(t, work, "main"), false)
 		// wf stale asks Merged before it lands an item at its merge step.
 		f := x3(42)
-		if Merged(Env{Repo: work}, f) {
+		if Merged(here(work), f) {
 			t.Error("Merged reports a branch that never merged as merged")
 		}
 	})
@@ -200,7 +200,7 @@ func TestMergeTreeProofNeedsGit240(t *testing.T) {
 			t.Errorf("info %q, want %q", info, want)
 		}
 	}
-	if rs := Phase(Env{Repo: work}, x3(9)); OK(rs) {
+	if rs := Phase(here(work), x3(9)); OK(rs) {
 		t.Errorf("x3 with a git that refuses --merge-base: %s", rs[0].Info)
 	}
 }
@@ -297,7 +297,7 @@ func TestMergeTreeProofIgnoresMergeDrivers(t *testing.T) {
 				if ok == dropAfter {
 					t.Errorf("proof: %v (%s), want %v", ok, got, !dropAfter)
 				}
-				if Merged(Env{Repo: work}, x3(42)) == dropAfter {
+				if Merged(here(work), x3(42)) == dropAfter {
 					t.Errorf("Merged: %v, want %v", dropAfter, !dropAfter)
 				}
 			})

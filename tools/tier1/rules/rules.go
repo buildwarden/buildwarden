@@ -5,16 +5,12 @@ package rules
 
 import (
 	"fmt"
-	"os"
-	"path"
-	"path/filepath"
-	"regexp"
-	"sort"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
 
 	"github.com/buildwarden/buildwarden/tools/tier1/report"
+	"github.com/buildwarden/buildwarden/tools/workflow/check"
 )
 
 // Dir is where the standards live, relative to the repo root.
@@ -49,97 +45,37 @@ func (ix *Index) Severity(id string) report.Severity {
 	return report.Must
 }
 
-var (
-	headerRe = regexp.MustCompile(`^### ([A-Z]+-\d{2}) — (.+)$`)
-	sevRe    = regexp.MustCompile(`^\*\*Severity:\*\*\s*(.*)$`)
-	checkRe  = regexp.MustCompile(`^\*\*Check:\*\*\s*(.*)$`)
-	qualRe   = regexp.MustCompile(`\s*\([^)]*\)$`)
-)
-
 // Load parses every docs/development/*.md under root except README.md, whose
-// RELAY-01 header is the format example.
+// RELAY-01 header is the format example. The parse is wf's
+// (tools/workflow/check, LINT-01), which a component's CI runs as wf rules.
 func Load(root string) (*Index, error) {
-	files, err := filepath.Glob(filepath.Join(root, filepath.FromSlash(Dir), "*.md"))
+	cix, err := check.LoadRuleIndex(root, Dir)
 	if err != nil {
 		return nil, err
 	}
-	sort.Strings(files)
-	ix := &Index{}
-	for _, f := range files {
-		if filepath.Base(f) == "README.md" {
-			continue
-		}
-		text, err := os.ReadFile(f)
-		if err != nil {
-			return nil, err
-		}
-		ix.parse(path.Join(Dir, filepath.Base(f)), string(text))
+	ix := &Index{Problems: toReport(cix.Problems)}
+	for _, r := range cix.Rules {
+		ix.Rules = append(ix.Rules, Rule{ID: r.ID, Title: r.Title,
+			Severity: report.Severity(r.Severity), Check: r.Check,
+			Automated: r.Automated,
+			File:      r.File, Line: r.Line})
 	}
 	return ix, nil
 }
 
-func (ix *Index) parse(file, text string) {
-	var cur *Rule
-	finish := func() {
-		if cur != nil {
-			ix.validate(*cur)
-			ix.Rules = append(ix.Rules, *cur)
-		}
-		cur = nil
+// toReport converts wf's findings to tier 1's.
+func toReport(fs []check.Finding) []report.Finding {
+	var out []report.Finding
+	for _, f := range fs {
+		out = append(out, report.Finding{Rule: f.Rule,
+			Severity: report.Severity(f.Severity),
+			File:     f.File, Line: f.Line, Check: f.Check, Message: f.Message})
 	}
-	for i, line := range strings.Split(text, "\n") {
-		line = strings.TrimSuffix(line, "\r")
-		if m := headerRe.FindStringSubmatch(line); m != nil {
-			finish()
-			cur = &Rule{ID: m[1], Title: m[2], File: file, Line: i + 1}
-			continue
-		}
-		if cur == nil {
-			continue
-		}
-		if strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "### ") {
-			finish()
-		} else if m := sevRe.FindStringSubmatch(line); m != nil && cur.Severity == "" {
-			cur.Severity = report.Severity(strings.TrimSpace(m[1]))
-		} else if m := checkRe.FindStringSubmatch(line); m != nil && cur.Check == "" {
-			cur.Check = strings.TrimSpace(m[1])
-			cur.Automated = strings.Contains(cur.Check, "automated")
-		}
-	}
-	finish()
-}
-
-func (ix *Index) validate(r Rule) {
-	bad := func(format string, a ...any) {
-		ix.Problems = append(ix.Problems, report.Finding{Rule: "LINT-01",
-			Severity: report.Must, File: r.File, Line: r.Line, Check: "rule-index",
-			Message: r.ID + ": " + fmt.Sprintf(format, a...)})
-	}
-	switch r.Severity {
-	case report.Must, report.MustReview, report.Should:
-	case "":
-		bad("no **Severity:** line")
-	default:
-		bad("severity %q is not MUST, MUST-review or SHOULD", r.Severity)
-	}
-	if r.Check == "" {
-		bad("no **Check:** line")
-		return
-	}
-	for _, part := range strings.Split(r.Check, "+") {
-		p := qualRe.ReplaceAllString(strings.TrimSpace(part), "")
-		if p != "automated" && p != "agent-judgment" {
-			bad("check %q: %q is not automated or agent-judgment", r.Check, p)
-		}
-	}
+	return out
 }
 
 // Mapping is one rules.yaml entry. Exactly one field is set.
-type Mapping struct {
-	Check    []string `yaml:"check"`
-	Owner    string   `yaml:"owner"`
-	FollowUp string   `yaml:"follow-up"`
-}
+type Mapping = check.RuleMapping
 
 // Seam is a versioned seam with a contract document (GLOBAL-08).
 type Seam struct {
@@ -203,58 +139,19 @@ var Checks = []string{
 
 // SelfCheck is the rule-index check: the index's own problems, every
 // automated rule mapped, every mapping naming a live rule and exactly one
-// tier (LINT-01, LINT-02).
+// tier (LINT-01, LINT-02), run by wf's check with tier 1's check IDs.
 func SelfCheck(ix *Index, c *Config) []report.Finding {
-	out := append([]report.Finding(nil), ix.Problems...)
-	f := func(rule, format string, a ...any) {
-		out = append(out, report.Finding{Rule: "LINT-02", Severity: ix.Severity("LINT-02"),
-			File: "tools/tier1/rules.yaml", Check: "rule-index",
-			Message: rule + ": " + fmt.Sprintf(format, a...)})
+	cix := &check.RuleIndex{}
+	for _, f := range ix.Problems {
+		cix.Problems = append(cix.Problems, check.Finding{Rule: f.Rule,
+			Severity: string(f.Severity), File: f.File, Line: f.Line, Check: f.Check,
+			Message: f.Message})
 	}
-	live := map[string]bool{}
 	for _, r := range ix.Rules {
-		live[r.ID] = true
-		if _, ok := c.Rules[r.ID]; r.Automated && !ok {
-			f(r.ID, "automated-tagged in %s but not mapped in rules.yaml", r.File)
-		}
+		cix.Rules = append(cix.Rules, check.IndexedRule{ID: r.ID, Title: r.Title,
+			Severity: string(r.Severity), Check: r.Check, Automated: r.Automated,
+			File: r.File, Line: r.Line})
 	}
-	for _, id := range sortedKeys(c.Rules) {
-		m := c.Rules[id]
-		if !live[id] {
-			f(id, "mapped in rules.yaml but no such rule in %s", Dir)
-		}
-		n := 0
-		for _, set := range []bool{len(m.Check) > 0, m.Owner != "", m.FollowUp != ""} {
-			if set {
-				n++
-			}
-		}
-		if n != 1 {
-			f(id, "needs exactly one of check, owner or follow-up")
-		}
-		for _, ch := range m.Check {
-			if !contains(Checks, ch) {
-				f(id, "unknown check %q", ch)
-			}
-		}
-	}
-	return out
-}
-
-func sortedKeys(m map[string]Mapping) []string {
-	var out []string
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func contains(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
+	m := &check.RuleMap{Rules: c.Rules, DesignTolerate: c.DesignTolerate}
+	return toReport(check.SelfCheck(cix, m, "tools/tier1/rules.yaml", Dir, Checks))
 }

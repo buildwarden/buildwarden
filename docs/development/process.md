@@ -74,46 +74,66 @@ front-matter; the agent part judges whether the design actually covers the chang
 A design's front-matter declares what the change reaches, so the behavioral linter
 can compare the claim against the diff and the queue can route the work:
 
-- `drivers` — which drivers are touched, or `interface` for a change made at the
-  level of the driver contract or `driver.Session` (ORCH-01).
+- `drivers` — here: which drivers are touched, or `interface` for a
+  change made at the level of the driver contract or `driver.Session`
+  (ORCH-01).
 - `seams` — which versioned seams change (GLOBAL-08).
-- `surfaces` — which user-facing surfaces change (UX-01, ORCH-03).
+- `surfaces` — here: which user-facing surfaces change (UX-01, ORCH-03).
 - `repos` — every repository the change works in, the one that holds the
   design first, when there is more than that one (LOOP-04).
-- `areas` — the areas of the repository's area map whose files the change
-  edits (FLOW-05). A design that leaves the key out is undeclared, as
-  FLOW-05 defines it, and FLOW-05 then treats the item as colliding with
-  every item in its repositories. `areas: []` is a declaration: the
-  change edits nothing but its own design, though an item whose home
-  repository has no map is undeclared whatever it declares (FLOW-05).
-- `security_boundary` — which GLOBAL-06 boundary is altered, if any. Any value other
-  than `none` requires a security note in the design.
-- `alters_relationships` — `true` when the change alters a component's role or
-  how components interact: a versioned seam (GLOBAL-08), the bootstrap model
-  (BOOT rules), which component owns a responsibility (relay, collector,
-  executor, orchestrator, a driver), or the driver contract or
-  `driver.Session`. Changes inside one component's existing role are `false`.
-  FLOW-05 limits how many such features are in flight.
+- `merge_first` — the repositories in `repos`, other than the home, whose
+  pull request merges before the home's is listed ready (FLOW-08). Empty
+  or absent means none.
+- `areas` — the areas of an area map whose files the change edits
+  (FLOW-05). A bare name is an area of the map of the item's home
+  repository; an area of another repository the item works in is written
+  `<owner>/<name>:<area>`. A design that leaves the key out is
+  undeclared, as FLOW-05 defines it, and FLOW-05 then treats the item as
+  colliding with every item in its repositories. `areas: []` is a
+  declaration: the change edits nothing but its own design, though an
+  item whose home repository has no map is undeclared whatever it
+  declares (FLOW-05).
+- `security_boundary` — here: which GLOBAL-06 boundary is altered, if
+  any. Any value other than `none` requires a security note in the
+  design.
+- `alters_relationships` — `true` when the change alters a component's
+  role or how components interact: a versioned seam (GLOBAL-08), or which
+  component owns a responsibility; here also the bootstrap model (BOOT
+  rules), which of relay, collector, executor, orchestrator or a driver
+  owns a responsibility, or the driver contract or `driver.Session`.
+  Changes inside one component's existing role are `false`. FLOW-05
+  limits how many such features are in flight.
 - `native_validation` — which native hosts must validate the change, and whether
   each blocks merge (FLOW-09).
-- `tier2_gaps` — platform validation knowingly deferred (TEST-03).
+- `tier2_gaps` — here: platform validation knowingly deferred (TEST-03).
 - `rules` — the rule IDs the design relies on or changes.
 - `rule_changes` — each rule change the feature makes (FLOW-14), as
   `{rule, change: add | amend | retire, paths}`, `paths` naming every file it
   edits, enforcement included. Empty or absent means none.
 - `concepts` — retrieval tags for the archive (FLOW-12).
 
-Declarations are derived conservatively: a change to a shared package (`relay/`,
-`ledger/`, `collector/`, `driver/`) declares every dependent driver and host, per
-the TEST-02 caveat. `areas` name what the change edits, not what depends on
-it: the area map says which area reaches which.
+A key whose bullet begins "here:" is one this repository's profile file
+adds to the loop's keys (LOOP-01, its impact keys), and the rest of the
+bullet is this repository's entry for that term; a design in a component
+whose profile file does not add it leaves it out. Elsewhere, in a bullet
+of one of the loop's keys and in the paragraphs below, "here" introduces
+this repository's examples of the term.
 
-The automated part diffs the declared `drivers` / `seams` / `surfaces` against the
-trees and files the change reaches. It checks the declared `areas` against
-what `drivers`, `surfaces` and the `rule_changes` paths imply, at Design,
-and against the paths the change edits, from Implement through Publish
-and at each refresh of a feature (FLOW-03). The agent part judges the
-security note.
+Declarations are derived conservatively: a change to a shared package
+declares everything that depends on it (here a change to `relay/`,
+`ledger/`, `collector/` or `driver/` declares every dependent driver and
+host, per the TEST-02 caveat). `areas` name what the change edits, not
+what depends on it: the area map says which area reaches which.
+
+The automated part diffs the declared `seams`, and the keys the profile
+file adds that name trees or files (here `drivers` and `surfaces`),
+against the trees and files the change reaches. It checks the declared
+`areas` against what those profile keys and the `rule_changes` paths
+imply (here `drivers` and `surfaces`), at Design, and against the paths
+the change edits, from Implement through Publish and at each refresh of
+a feature (FLOW-03). The agent part judges the
+security note, where the profile's keys require one (here a
+`security_boundary` other than `none`).
 
 ---
 
@@ -131,10 +151,10 @@ branch, the repositories it works in and what its design declares
 | 0 | Branch setup | Branch exists on the remote. |
 | 1 | Design | Design doc complete per FLOW-02; the queue records what it declares, and its areas cover what its other fields imply (FLOW-02); no unanswered blocking question (FLOW-07); whether it needs a design review decided (FLOW-19). |
 | 2 | Plan | The design review recorded as approved, or validly skipped, before planning starts (FLOW-19). Implementation and testing tasks listed, each citing the rules it must satisfy; rework of existing code is listed as explicit tasks. The design's impact fields and `rule_changes` unchanged since its last approval, when there is one (FLOW-19); a skipped review is rechecked by its skip criteria. |
-| 3 | Implement | Tasks done; `make lint` and `make test` green; reference docs updated in the same change (UX-01); every edit to the rules or their enforcement cleared by an approved rule change (FLOW-14). |
+| 3 | Implement | Tasks done; the fast gate green (LOOP-01; here `make lint` and `make test`); reference docs updated in the same change (UX-01); every edit to the rules or their enforcement cleared by an approved rule change (FLOW-14). |
 | 4 | Review | Behavioral-linter tier 1 green; tier-2 report produced for the diff (LINT-04); the rule-change clearance still passes (FLOW-14). |
 | 5 | Guide | User-facing narrative docs (guides, examples) written or updated. |
-| 6 | Publish | Once the PR slot is free (FLOW-05): current `main` merged; consolidation section filled (FLOW-10, FLOW-15); the rule-change clearance still passes (FLOW-14); design archived with its summary on the branch (FLOW-12); PR opened (no confirmation needed, FLOW-08) with CI green (FLOW-11); blocking native validation done (FLOW-09). |
+| 6 | Publish | Once the PR slot is free (FLOW-05): current `main` merged; consolidation section filled (FLOW-10, FLOW-15); the rule-change clearance still passes (FLOW-14); design archived with its summary on the branch (FLOW-12); PR opened (no confirmation needed, FLOW-08) with CI green (FLOW-11); blocking native validation done (FLOW-09); each pull request its design names to merge first merged, and the loop has seen it (FLOW-08). |
 | 7 | Merge | The human merged the PR (FLOW-08). The loop confirms it; there is no step for the human to claim. The PR is ready for the merge only while its branch contains `main` (FLOW-08); when `main` moves past it, a refresh step brings it up to date (FLOW-10). |
 | 8 | Close | Merged branches and validation leftovers cleaned up (FLOW-16); the design is archived on `main`. |
 
@@ -143,8 +163,9 @@ A transition happens only when the phase's done-when checks pass mechanically
 that it is done. From Plan through Publish, and at each refresh of a
 feature (FLOW-10), each done-when also checks that the queue still
 records what the design declares; from Implement through Publish, and
-at each refresh of a feature, that every path the branch changes lies
-in an area the design declares (FLOW-02). A path outside them is
+at each refresh of a feature, that every path each of its branches
+changes lies in an area the design declares in that repository's map
+(FLOW-02). A path outside them is
 settled by widening the declaration inside the approved design, or by a
 return to Design (FLOW-06). The merge confirmation (phase 7's
 done-when) and Close run neither; a feature's refresh runs both,
@@ -154,6 +175,18 @@ no declaration for, because it finished Design before the queue
 recorded declarations, is not compared with its design; its diff check
 reads the areas the queue records, so with none it is undeclared
 (FLOW-05) and no path lies outside them.
+
+An item has a branch in each repository it works in, under one name, and
+the queue records each branch and its pull request. Where a done-when
+names the branch, the fast gate, `main`, the reference documents or the
+PR, it holds in each of those repositories, read through that
+repository's profile (LOOP-01). In a repository that has not adopted the
+contract (LOOP-08), which the loop's configuration records with no
+profile, there is no profile to name a gate: the fast gate and the
+reference-document checks do not run there, no path there is a rule
+path, and the branch, area, trunk and pull-request checks do run. The
+design and its review are the home's. "`main`" in the tables above reads
+as each repository's trunk.
 
 A **process item** (queue `kind: process`) changes the rules the loops run
 under: `docs/development/`, `.claude/` or `tools/workflow/`. Its design is the
@@ -171,8 +204,9 @@ rest of `tools/workflow/` change only through a process item:
 | 3 | Merge | A human merged it into `main` (FLOW-08). Its PR is ready and is refreshed as a feature's is (FLOW-08, FLOW-10). |
 | 4 | Close | As phase 8. |
 
-A feature whose home is a repository in which the loop's gates do not
-run is **tracked**. The queue records it, its repository and its pull
+A feature whose home has adopted the contract has the phases above,
+whichever repository that is. A feature whose home has not adopted it is
+**tracked**. The queue records it, its repository and its pull
 request. Its phases are two, Work and then Merge, each one `human` step
 (FLOW-04), and no done-when check runs for them. FLOW-05's limits
 neither count it nor hold it.
@@ -194,9 +228,8 @@ Every pending step carries an affinity:
 - `human` — answering blocking questions, the design review (FLOW-19), and
   escalations: a runaway budget (FLOW-13), CI repair exhausted (FLOW-11), a third
   return to Design (FLOW-06), a branch that did not delete on merge (FLOW-16).
-  Also the steps of work in a repository where the loop's gates do not
-  run: a tracked item's steps (FLOW-03), and a step that records the
-  human's merge there (FLOW-08).
+  Also a tracked item's steps (FLOW-03), and a step its design adds that
+  only the human may take, such as cutting a release.
 - `host:<name>` — work that needs native hardware, for example `host:macos-vz`
   (the macOS/arm64 laptop) or `host:windows-hyperv` (the Windows desktop). A
   name `<os>-<driver>` is specific to that platform; `<os>-any` needs the
@@ -213,8 +246,11 @@ Publish, Merge and Close stay `cloud`. A claim by a worker that serves the
 lead starts a queued led feature, and no other claim does.
 
 A worker takes only steps whose affinity it satisfies: a machine satisfies
-each host name the table lists for it, and a `host:<name>` step goes to
-whichever such worker next takes steps. A step is offered when
+each host name the table lists for it, for a step in a repository the
+table lists for that machine (only the queue's own repository when it
+lists none; a led item's step is in every repository the item works
+in), and a `host:<name>` step goes to whichever such worker next takes
+steps. A step is offered when
 every step it needs is done and, unless it is `human`, its feature has reached
 the step's phase; no worker may claim or complete a host or cloud step of a
 later phase. A step is claimed with a
@@ -420,29 +456,33 @@ has not already settled. Questions live in the feature's queue state on the
 **Severity:** MUST
 **Check:** automated
 
-This is LINT-03 applied to the process. No agent approves or merges a PR to `main`,
-and auto-merge is not enabled by agents. The human's merge is the sign-off: it
+This is LINT-03 applied to the process. No agent approves or merges a PR
+to a trunk, in any repository, and auto-merge is not enabled by agents. The human's merge is the sign-off: it
 covers the PR, the archived design it carries, and the tier-2 behavioral report,
 whose MUST findings the PR body lists. The human acknowledges them by merging, or
 dismisses one with a recorded reason in a PR comment. Changes that declare a
 `security_boundary` additionally need the security note acknowledged (GLOBAL-06).
-There is no sign-off step in the queue for a pull request the loop can
-see: the loop sees the merge (FLOW-03, phase 7). For a pull request in a
-repository where the loop's gates do not run, a `human` step records the
-merge (FLOW-04). The merge is still the sign-off; the step is only the
-queue's record of it.
+There is no sign-off step in the queue: the loop sees the merge of each
+pull request an item records, in whichever repository it is (FLOW-03,
+phase 7). Only a tracked item's merge is recorded by a `human` step
+(FLOW-04); the merge is still the sign-off, and the step only the queue's
+record of it. An item with pull requests in several repositories is
+signed off by the merge of each. Its design names any that must merge
+first. Each of those is opened in Publish and is ready for the merge as
+any other is, and the home's Publish, and any step that needs one of
+those merges, waits until the loop has seen it (FLOW-03, phase 6).
 
 A pull request is ready for the human's merge only while its branch
 contains trunk and its checks have passed on that head. Each merge to
-trunk therefore leaves every other open pull request waiting for a
-refresh (FLOW-10), and the loop lists none of them as ready until it
-has had one. Where the trunk's host can refuse a merge that is not
+a trunk therefore leaves every other open pull request to that trunk
+waiting for a refresh (FLOW-10), and the loop lists none of them as
+ready until it has had one. Where the trunk's host can refuse a merge that is not
 ready, the human has it do so (LOOP-08). That setting is the human's,
 as the merge is: no agent changes a trunk's protection. A merge the
 human makes all the same is still the sign-off.
 
-Neither pushing a feature branch (FLOW-17) nor opening its PR to `main` is a
-trunk change, and neither needs confirmation. An agent opens the PR once the work
+Neither pushing a feature branch (FLOW-17) nor opening its PR to its
+trunk is a trunk change, and neither needs confirmation. An agent opens the PR once the work
 is ready (Publish, or a fix); the human's review is the merge, or comments on the
 PR when more is wanted.
 
@@ -505,9 +545,9 @@ native gaps, as its design says; it is never led.
 **Severity:** MUST
 **Check:** agent-judgment
 
-Publish, after merging current `main`, reviews the feature against everything
-that landed on `main` since its branch forked, and records in the design's
-consolidation section:
+Publish, after merging each trunk the item has a branch on (FLOW-03),
+reviews the feature against everything that landed on each since the
+branch forked, and records in the design's consolidation section:
 
 - terminology aligned with the canonical terms used in `main` and these standards,
 - shared abstractions reused instead of duplicated (one code path where two
@@ -526,23 +566,25 @@ back: to Implement for work the plan already covers, or to Design (FLOW-06)
 when the design must change.
 
 A PR that waits for the human's merge may be merged only while its
-branch contains `main` (FLOW-08). Whenever `main`
-has moved past its branch, a **refresh** step merges `main` into the
-branch again, runs the gates, and repeats this review, and FLOW-15's
-sweep, over what landed since the branch last merged `main`, as a dated
-entry in the consolidation section. The PR is ready again when the
-step's checks pass. It pushes only while the pull
-request is still open. A feature that has merged `main` in Publish and
-has not finished Publish is refreshed the same way when `main` moves,
-before its PR is opened or listed as ready. No refresh is taken while
-`main` is known to
-fail its own checks, except for the item that fixes it (FLOW-09): it
+branch contains its trunk (FLOW-08). Whenever a trunk has moved past the
+item's branch on it, a **refresh** step merges that trunk into that
+branch again, runs the gates in that repository, and repeats this review
+and FLOW-15's sweep over what landed since that branch last merged its
+trunk, as a dated entry in the consolidation section naming the trunk.
+The PR is ready again when the step's checks pass. It pushes only while
+the pull request is still open. A feature that has merged its trunks in
+Publish and has not finished Publish is refreshed the same way when a
+trunk moves, before its PR is opened or listed as ready. No refresh of a
+branch is taken while its trunk is known to fail its own checks (the
+trunk's `main.yaml`, `repos/<owner>/<name>/main.yaml` for a second
+repository), except for the item that fixes that trunk (FLOW-09): it
 would fail on the same failure. A refresh that finds work beyond
-conflict fixes
-and wording sends the feature back as above; its pull request is then a
-draft until the feature is published again, and it keeps the PR slot
-(FLOW-05). A process item's open PR is refreshed the same way, without
-the review.
+conflict fixes and wording sends the feature back as above; its pull
+request is then a draft until the feature is published again, and it
+keeps the PR slot (FLOW-05). A process item's open PR is refreshed the
+same way, without the review.
+
+"Its pull request" reads per repository throughout.
 
 ---
 
@@ -694,13 +736,16 @@ merged:
 When a feature's PR merges, the Close phase removes what the feature no
 longer needs, with no PR and no human step:
 
-- its branch, on the remote and locally, and any worktree checked out on it.
-  GitHub deletes the remote branch on merge (the repository's "Automatically
-  delete head branches" setting); Close confirms it is gone, and escalates to a
-  `human` step with the exact command if it is not;
+- its branch in each repository it works in, on the remote and locally,
+  and any worktree checked out on it. The host deletes a remote branch on
+  merge where the repository is set to (on GitHub, "Automatically delete
+  head branches"); Close confirms each is gone, and escalates to a
+  `human` step with the exact command for each that is not;
 - on each native machine, the worktrees and local branch its sessions made for
-  the item: not by Close, which cannot reach them, but by the machine at its
-  next scheduled run once the item is done or its branch is gone from the
+  the item, in each repository's checkout there: not by Close, which cannot
+  reach them, but by the machine at its
+  next scheduled run once the item is done or its branch is gone from
+  that repository's
   remote, with `git worktree remove` and `git branch -d` only, reporting a
   worktree with uncommitted changes or a branch `-d` refuses instead of
   removing it;
@@ -742,16 +787,20 @@ that no open design claims.
 **Check:** agent-judgment
 
 An agent pushes its feature branch to the remote, without asking, whenever the
-work reaches a successful checkpoint: the change is committed, and `make test`
-and `make lint` are green (lint run for each platform whose build-tagged files
-the change touches). The pushed branch is the backup and the hand-off point.
+work reaches a successful checkpoint: the change is committed, and the
+repository's fast gate is green (LOOP-01; here `make test` and `make lint`,
+lint run for each platform whose build-tagged files the change touches). An
+item that works in several repositories has a branch of the same name in
+each, pushed to that repository at its own checkpoints. The pushed branch is
+the backup and the hand-off point.
 
-Opening the PR to `main` needs no confirmation either (FLOW-08). Pushing
-never includes `main` itself, a force-push, rewriting history that is already on
-the remote, or deleting a remote branch (FLOW-16). An unattended session on a
-native machine pushes a feature branch only through the loop's push script
-on trunk, which pushes one branch of an item in progress, fast-forward only,
-and the queue state only through the loop's state commit; it runs no other
+Opening the PR to its trunk needs no confirmation either (FLOW-08).
+Pushing never includes any repository's trunk itself, a force-push,
+rewriting history that is already on the remote, or deleting a remote
+branch (FLOW-16). An unattended session on a native machine pushes a
+feature branch only through the loop's push script on trunk, which
+pushes one branch of an item in progress, fast-forward only, and the
+queue state only through the loop's state commit; it runs no other
 push.
 
 ---

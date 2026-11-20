@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/buildwarden/buildwarden/tools/tier1/report"
+	"github.com/buildwarden/buildwarden/tools/workflow/check"
 )
 
 // File is one changed path. Status is git's letter: A, M, D, R, C or T. Old
@@ -26,11 +27,9 @@ type File struct {
 // Range is an inclusive span of HEAD line numbers the diff added or changed.
 type Range struct{ Start, End int }
 
-// Allow is one Tier1-Allow trailer: findings against Rule on paths matching
-// Glob are suppressed, and Reason is printed with them.
-type Allow struct {
-	Rule, Glob, Reason, Commit string
-}
+// Allow is one Tier1-Allow trailer, parsed by wf's suppression check
+// (tools/workflow/check, LINT-05).
+type Allow = check.Allow
 
 // Diff is the change from Base (the merge base) to Head.
 type Diff struct {
@@ -175,11 +174,6 @@ func (d *Diff) readLines() error {
 	return sc.Err()
 }
 
-var (
-	trailerRe = regexp.MustCompile(`^Tier1-Allow:\s*(.*)$`)
-	allowRe   = regexp.MustCompile(`^([A-Z]+-\d{2})\s+(\S+):(.*)$`)
-)
-
 func (d *Diff) readTrailers() error {
 	out, err := d.git("log", "--format=%H%x00%B%x1e", d.Base+".."+d.Head)
 	if err != nil {
@@ -190,27 +184,15 @@ func (d *Diff) readTrailers() error {
 		if !ok {
 			continue
 		}
-		for _, line := range strings.Split(body, "\n") {
-			m := trailerRe.FindStringSubmatch(strings.TrimSpace(line))
-			if m != nil {
-				d.trailer(sha, m[1])
-			}
+		allows, bad := check.Trailers(sha, body)
+		d.Allows = append(d.Allows, allows...)
+		for _, f := range bad {
+			d.Bad = append(d.Bad, report.Finding{Rule: f.Rule,
+				Severity: report.Severity(f.Severity), Check: f.Check,
+				Message: f.Message})
 		}
 	}
 	return nil
-}
-
-func (d *Diff) trailer(sha, value string) {
-	m := allowRe.FindStringSubmatch(strings.TrimSpace(value))
-	if m == nil || strings.TrimSpace(m[3]) == "" {
-		d.Bad = append(d.Bad, report.Finding{Rule: "LINT-05", Severity: report.Must,
-			Check: "suppression",
-			Message: fmt.Sprintf("commit %.12s: Tier1-Allow %q needs the form "+
-				"\"<RULE-ID> <path-glob>: <reason>\" with a reason", sha, value)})
-		return
-	}
-	d.Allows = append(d.Allows, Allow{Rule: m[1], Glob: m[2],
-		Reason: strings.TrimSpace(m[3]), Commit: sha})
 }
 
 // Touched reports whether the diff changed path, as either side of a rename.

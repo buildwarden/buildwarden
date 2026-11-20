@@ -253,7 +253,7 @@ func commitQueueConflict(t *testing.T) {
 }
 
 func commitMainAndAreas(t *testing.T) {
-	a, b := stateRepos(t, "repository: o/here\n", "x")
+	a, b := stateRepos(t, here, "x")
 	write(t, b, "main.yaml", "sha: bbbbbbb\nci: green\n")
 	pushed(t, b, "cloud/b", "main: green", "main.yaml")
 	write(t, a, "main.yaml", "sha: aaaaaaa\nci: red\n")
@@ -345,7 +345,7 @@ func commitNothing(t *testing.T) {
 // TestCommitAreasHumanOnly: a change to areas.yaml is the human's word, and
 // wf commit makes it only for a human worker (FLOW-05).
 func TestCommitAreasHumanOnly(t *testing.T) {
-	a, _ := stateRepos(t, "repository: o/here\n")
+	a, _ := stateRepos(t, here)
 	write(t, a, "areas.yaml", areasYAML("o/here", "a/"))
 	for _, w := range []string{"cloud/run", "host:macbook/s"} {
 		out, code := commit(t, a, w, "areas: a", "areas.yaml")
@@ -365,7 +365,7 @@ func TestCommitAreasHumanOnly(t *testing.T) {
 // TestCommitAreasUnpushedCommit: a worker that is not human does not push an
 // earlier unpushed commit that changed areas.yaml under its own (FLOW-05).
 func TestCommitAreasUnpushedCommit(t *testing.T) {
-	a, _ := stateRepos(t, "repository: o/here\n", "x")
+	a, _ := stateRepos(t, here, "x")
 	write(t, a, "areas.yaml", areasYAML("o/here", "a/"))
 	gitT(t, a, "add", "areas.yaml")
 	gitT(t, a, "commit", "-q", "-m", "hand areas")

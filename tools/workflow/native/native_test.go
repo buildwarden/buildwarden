@@ -350,3 +350,53 @@ func runLauncher(t *testing.T, launcher, dir string, args []string) (string, str
 	}
 	return stdout.String(), stderr.String(), 0
 }
+
+// TestNativeClonesRules: a session makes a worktree of a second
+// repository's clone with the two narrow allows, and runs no other git
+// command in the clone; every push from a clone stays denied, so
+// native-push.sh is the only route (docs/design/loop-repository.md).
+func TestNativeClonesRules(t *testing.T) {
+	raw, err := os.ReadFile("settings.native.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s struct {
+		Permissions struct {
+			Allow []string `json:"allow"`
+			Deny  []string `json:"deny"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(raw, &s); err != nil {
+		t.Fatal(err)
+	}
+	any := func(rules []string, command string) bool {
+		for _, r := range rules {
+			if matches(r, command) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, c := range []struct {
+		command       string
+		allow, denied bool
+	}{
+		{"git -C .dev/checkouts/o/r fetch origin", true, false},
+		{"git -C .dev/checkouts/o/r worktree add ../../../../.scratch/o/r/x feat/x", true,
+			false},
+		{"git -C .dev/checkouts/o/r commit -m x", false, false},
+		{"git -C .dev/checkouts/o/r checkout main", false, false},
+		{"git -C .dev/checkouts/o/r reset --hard", false, false},
+		{"git -C .dev/checkouts/o/r config user.name x", false, false},
+		{"git -C .dev/checkouts/o/r push origin feat/x", false, true},
+		{"git -C .dev/checkouts/o/r push --force origin feat/x", false, true},
+		{"git -C .dev/checkouts/o/r push origin main", false, true},
+	} {
+		if got := any(s.Permissions.Allow, c.command); got != c.allow {
+			t.Errorf("%q allowed %v, want %v", c.command, got, c.allow)
+		}
+		if got := any(s.Permissions.Deny, c.command); got != c.denied {
+			t.Errorf("%q denied %v, want %v", c.command, got, c.denied)
+		}
+	}
+}
