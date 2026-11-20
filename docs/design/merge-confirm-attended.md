@@ -37,8 +37,9 @@ loop changes in one PR, on Jeff's word of 2026-11-20 (fewer merges):
 - **A. Approvals.** `wf check` reads a design's approval from the review
   entry that records it, not from any `approved at <sha>` in the Design
   review section.
-- **B. Merge confirmation.** An attended session (a `human/<name>` worker)
-  may confirm a merge with `wf done` on the merge step. The done-when check
+- **B. Merge confirmation.** An attended session (a `human/<name>` worker),
+  or a native machine's session, may confirm a merge with `wf done` on the
+  merge step. The done-when check
   is unchanged.
 - **C. State step.** A state step recorded at review (`state_step`) is
   seeded by `wf` as `x4-state` when the item enters Close, and `x4-close`
@@ -165,9 +166,9 @@ words stop it being done before the merge.
      approved: ... approved at `<old>`" would still count.
    - *Rejected: a strict regex for the canonical head (S).* It breaks the
      test fixtures (`- r1: approved at`) and the legacy forms.
-2. **A human worker may complete a merge step; it still never claims one
-   (a3, a4).** In `stepCmd`, `done` accepts a worker of kind `human` (as
-   well as `cloud`) on a step for which `queue.IsMerge` or
+2. **A human or host worker may complete a merge step; it still never
+   claims one (a3, a4).** In `stepCmd`, `done` accepts a worker of kind
+   `human` or `host` (as well as `cloud`) on a step for which `queue.IsMerge` or
    `queue.MergedFirst` holds. The step's affinity stays `cloud`. Claim,
    release and renew stay affinity-exact. FLOW-05's order, the limits, `wf
    status`, the lead relabelling and the templates are untouched, and no
@@ -216,7 +217,7 @@ None.
 a1 to a9 are the cross-check's Q2 to Q10.
 
 - **a1. Which text counts as a design's approval** (cross-check Q2).
-  Proceeding with (a); confirm.
+  **Confirmed (a), as recommended (batch), Jeff, 2026-11-20.**
   - (a) H: the first non-rule-change `approved at` in each top-level bullet
     whose head is `r<N>` (bold or not; `Re-review` allowed). The latest is
     the last such entry in document order. Other approvals in the same
@@ -235,8 +236,7 @@ a1 to a9 are the cross-check's Q2 to Q10.
   its unheaded `71df1d1` entry; no check reads an archived design again (`check.go:62-72`,
   `:222-230` load only the active item's).
 - **a2. Where the review-entry head format is stated** (cross-check Q3).
-  Flagged: option (b) changes FLOW-19's wording. Proceeding with (a);
-  confirm.
+  Flagged: option (b) changes FLOW-19's wording. **Confirmed (a), Jeff, 2026-11-20.**
   - (a) `TEMPLATE.md` (Design review guidance, `:120-124`) and
     `workflow-human` step 3.5 only.
   - (b) Also one sentence in FLOW-19, as a third `rule_changes` entry
@@ -247,8 +247,7 @@ a1 to a9 are the cross-check's Q2 to Q10.
   sits in the entry is a format detail the template carries. This keeps the
   item at two rule changes.
 - **a3. How an attended session completes a merge step** (cross-check Q4).
-  Flagged: changes FLOW-04's and FLOW-03's wording. Proceeding with (a);
-  confirm.
+  Flagged: changes FLOW-04's and FLOW-03's wording. **Confirmed (a), Jeff, 2026-11-20.**
   - (a) `stepCmd` lets a human worker run `done` (only) on an `IsMerge` or
     `MergedFirst` step; the affinity stays `cloud`.
   - (b) A new affinity kind for merge steps (a migration of templates,
@@ -259,8 +258,7 @@ a1 to a9 are the cross-check's Q2 to Q10.
   Recommended: (a). About 15 lines of Go, no state migration, and the
   done-when check that caught PR #82's empty Archive summary runs unchanged.
 - **a4. Which workers may confirm, and which items** (cross-check Q5).
-  Flagged: sets the scope of the new FLOW-04 sentence. Proceeding with (a);
-  confirm.
+  Flagged: sets the scope of the new FLOW-04 sentence. **Answered (b), Jeff, 2026-11-20:** any worker kind, a host included; FLOW-04's paragraph is approved with that change.
   - (a) Human (plus cloud), for any item whose merge check passes.
   - (b) Any worker kind, `host:<name>` included.
   - (c) Human, only for a PR merged during the sitting.
@@ -272,7 +270,7 @@ a1 to a9 are the cross-check's Q2 to Q10.
   tick, an attended native sitting has Jeff, who can run as `human/jeff`,
   and a native checkout may lag `origin`.
 - **a5. A second confirmation** (cross-check Q6). Flagged: sets a clause
-  of the new FLOW-04 paragraph. Proceeding with (a); confirm.
+  of the new FLOW-04 paragraph. **Confirmed (a), Jeff, 2026-11-20.**
   - (a) `wf done` refuses a step that is already done.
   - (b) Leave as is: the check re-runs and a duplicate `done` line is
     logged.
@@ -280,7 +278,7 @@ a1 to a9 are the cross-check's Q2 to Q10.
   Recommended: (a). A 3-line guard keeps history clean, and `wf commit`'s
   re-read absorbs a lost race.
 - **a6. How the state step is declared** (cross-check Q7). Flagged: changes
-  FLOW-03's process Close row. Proceeding with (a); confirm.
+  FLOW-03's process Close row. **Confirmed (a), Jeff, 2026-11-20.**
   - (a) A `state_step` queue field set at review by a human-only `wf
     state-step`; `Seed` adds `x4-state` at phase 4 unless a step with that
     ID exists.
@@ -292,7 +290,7 @@ a1 to a9 are the cross-check's Q2 to Q10.
   the step is seeded only after the merge is confirmed, B lets Jeff do it in
   the same sitting.
 - **a7. How `x4-close` comes to wait for `x4-state`** (cross-check Q8).
-  Proceeding with (a); confirm.
+  **Confirmed (a), as recommended (batch), Jeff, 2026-11-20.**
   - (a) `waitsAdded` on the process `close` template, reusing `linkAdded`.
     The comments on `waiter` (`phases.go:168`) and `rerunPublishHostSteps`
     (`:588-592`) are generalized, since that function finds "Publish" as
@@ -307,7 +305,7 @@ a1 to a9 are the cross-check's Q2 to Q10.
   design adds. Choose (b) if `waiter` should keep meaning Publish only.
 - **a8. How much of wf-state-migration-step's filed source this item
   takes** (cross-check Q9). Flagged: option (c) changes FLOW-19's wording.
-  Proceeding with (a), Jeff's word of 2026-11-20; confirm.
+  **Confirmed (a), Jeff, 2026-11-20.**
   - (a) Only the seeded step (C(1)). The migration stays a human checklist
     (C(2)); the FLOW-19 mechanical-rebase exemption (C(3)) is split off to
     `wf-state-migration-step`; the lease-precondition check is deferred.
@@ -320,7 +318,7 @@ a1 to a9 are the cross-check's Q2 to Q10.
   text, a comparator (200 to 400 lines of Go) and MUST wording on approval
   integrity, and its case has happened once.
 - **a9. detached-prepare-windows-exe, whose `f2-plan-r2` compared against
-  r1** (cross-check Q10). Proceeding with (a); confirm.
+  r1** (cross-check Q10). **Confirmed (a), as recommended (batch), Jeff, 2026-11-20.**
   - (a) No action; cite it as evidence here.
   - (b) Re-run `wf check -phase 2` on its branch after the fix.
   - (c) Edit its Design review prose now.
@@ -364,7 +362,11 @@ earlier approval cited in the entry comes after it". `wf-plan.md:11`,
 
 - **`queue.MayComplete(worker string, st *Step) bool`**, beside
   `Satisfies`: true when `Satisfies` holds, or when the worker's kind is
-  `human` and `IsMerge(st)` or `MergedFirst(st)` holds.
+  `human` or `host` and `IsMerge(st)` or `MergedFirst(st)` holds (a4 (b),
+  Jeff, 2026-11-20). A native session may confirm a merge, and is not
+  required to: `workflow-native` is unchanged. A native checkout that lags
+  `origin` fails safe, since the check then finds no merge and the step
+  stays pending.
 - **`stepCmd`**: for `cmd == "done"`, the affinity test is `MayComplete`;
   claim, release and renew keep `Satisfies`. Before `finish`, `done` refuses
   a step whose status is `done`: "`<step>` is already done; nothing to
@@ -470,7 +472,7 @@ the merged `main`:
    `x4-state` (human, seeded at Close from `state_step`; `x4-close` waits
    for it).
 4. `README.md:224` (the refresh paragraph): the merge step is the cloud's,
-   and a human worker may also complete it with `wf done`.
+   and a human or host worker may also complete it with `wf done`.
 5. `README.md:379` (other commands): add `wf state-step` (human only).
 6. `wf validate`, then `wf commit`.
 
@@ -489,13 +491,12 @@ under FLOW-19's delta rule.
 - A generic `wf migrate` run by `x4-close`, or a done-when check on
   `x4-state` (lease precondition).
 - Seeding human steps in phases other than Close (a8 (b)).
-- Letting a host worker confirm a merge (a4 (b)).
 - Re-checking detached-prepare-windows-exe (a9).
 
 ## Defaults and overrides
 
-- **Who may complete a merge step.** Cloud and human workers. No override:
-  the done-when check is the same for both.
+- **Who may complete a merge step.** Cloud, human and host workers. No
+  override: the done-when check is the same for each.
 - **The review entry's approval** is its first design approval. No
   override; a citation belongs after the entry's own approval.
 - **A state step.** None by default. Set only by the human with `wf
@@ -569,7 +570,7 @@ only steps whose affinity it satisfies":
 > A merge step, and a step confirming that a pull request its design names
 > to merge first has merged (FLOW-08), stays `cloud` and is never offered
 > to a worker (FLOW-05).
-> A `human` worker may also complete one, which is the one exception to
+> A `human` or `host:<name>` worker may also complete one, which is the one exception to
 > taking only steps whose affinity a worker satisfies: the same done-when
 > check runs, so the step completes only once the merge has happened, and a
 > step already done is not completed again. Completing it records the
@@ -609,7 +610,8 @@ is added before the approval, and a new sentence is inserted after
     when the r2 body cites r1. `TestApprovalMayWrap` and the rule-change
     tests pass unchanged.
   - `queue`: `MayComplete` for human, cloud and host workers on `x3-merge`,
-    `f7-merge`, `f6-merged-1` and an ordinary cloud step. `Seed`: a process
+    `f7-merge`, `f6-merged-1` and an ordinary cloud step: human and host
+    pass on the merge steps, and neither passes on the ordinary step. `Seed`: a process
     item entering phase 4 with `state_step` gets `x4-state` with the note,
     and `x4-close` needs it; without it, no `x4-state` and no need; with a
     hand-added `x4-state` already present, no duplicate and the need is
@@ -620,8 +622,9 @@ is added before the approval, and a new sentence is inserted after
     feature.
   - `cmd/wf` (modelled on `TestDoneRunsTheRefreshCheck`,
     `stale_test.go:394`, and `TestTrackedDone`, `main_test.go:387`): `wf
-    done -worker human/jeff` on `x3-merge` passes when the branch is merged
-    and fails with the check's output when not; `wf claim` of `x3-merge` by
+    done -worker human/jeff`, and `-worker host:qemu-any/macbook.run`, on
+    `x3-merge` passes when the branch is merged and fails with the check's
+    output when not; `wf claim` of `x3-merge` by
     a human is still refused; a second `done` is refused; after a human
     confirmation with `state_step` set, `wf next -worker human/jeff` offers
     `x4-state`. `wf state-step`: human only, process only, empty note
