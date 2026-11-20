@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/lesiw/ctrctl"
@@ -59,7 +60,7 @@ func removeResources(w io.Writer, dead func(id string) bool) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	for _, name := range containers {
+	for _, name := range removalOrder(containers) {
 		if id, ok := buildIDOf(name); ok && dead(id) {
 			fmt.Fprintf(w, "Removing container: %s\n", name)
 			// Volumes: true removes the anonymous volumes of a build.
@@ -91,6 +92,26 @@ func removeResources(w io.Writer, dead func(id string) bool) (int, error) {
 		}
 	}
 	return removed, nil
+}
+
+// removalOrder is names in the order a build's containers can be removed:
+// the build container joins the holder's network namespace, and podman
+// refuses to remove the holder while it does (a dependent container), which
+// then keeps the network too. So every build container goes first and every
+// holder last; the rest keep the listing's order.
+func removalOrder(names []string) []string {
+	rank := func(name string) int {
+		switch {
+		case strings.HasPrefix(name, "warden-build-"):
+			return 0
+		case strings.HasPrefix(name, "warden-holder-"):
+			return 2
+		}
+		return 1
+	}
+	out := slices.Clone(names)
+	slices.SortStableFunc(out, func(a, b string) int { return rank(a) - rank(b) })
+	return out
 }
 
 // removeWorkDirs removes the work directories of build id under tmpdir (the
