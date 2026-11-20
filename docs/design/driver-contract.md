@@ -8097,6 +8097,48 @@ acceptance; then the outcome.
   it otherwise, and records `approved at <sha>`; Plan then works from
   the design so approved.
 
+### r3, 2026-11-20: the delta approved, with D1, D2 and seven fixes folded in
+
+- **r3, 2026-11-20: approved at `33a3563`** (Jeff, workflow-human,
+  FLOW-19); read at `028ffe2`, the delta from `a6c8f0b` (r3's commits
+  `975e8cc` and `028ffe2`; Plan's `f89cff6` before them). Page:
+  https://claude.ai/artifact/1qZGMLeMTr2HqkHJxvSU87.
+- **Decisions.** a27 confirmed (i), as stated, flagged. Repositories:
+  none besides this one (LOOP-04); areas stay undeclared. No rule
+  change is in the delta, so none was asked; the eleven approved at
+  `a6c8f0b` stand.
+- **An independent check before the walkthrough** (four report-only
+  reviewers, consistency, scope, implementability and plan, each finding
+  then given to a refuter): nine findings held, seven were refuted. Two
+  needed Jeff's decision and seven were plain fixes, all folded in at
+  `33a3563`:
+  - **D1**, answered "follow C10": C12 applies in `reap` and `attach`
+    only where DRV-C10 has the driver read the recorded file because no
+    state file exists; with a state file nothing is refused. In a27 (3),
+    the C12 row, the errors row, option (b), DRV-C12's text and the
+    kit's Validation case.
+  - **D2**, answered "DRV-C4 forbids such pairs": DRV-C4 gains one
+    sentence, no two places of one driver equal when ASCII is folded,
+    checked by the suite's static tier on `describe.keys` and by the
+    kit's `checkSettings`; tasks 19a to 19c take it. This changes a
+    third requirement of `v1.md` beside DRV-C5 and DRV-C12.
+  - The plain fixes: the Validation case for `warden`'s own keys
+    selects container (with qemu selected the key is ignored, Behaviour
+    13); task 20 rewrites `TestRuntimeKeyInOtherSpellings` and adds the
+    miscased request-table rows, and task 22 only moves it; the fix line
+    when the exact key is already in the file; q2's note lists tasks 20,
+    21, 22, 25 and 35; a27 (1) records the non-ASCII letters `main`'s
+    decoder folded as its one accepted exception; and a kit case for the
+    refusal in `reap` and `attach` with no state file.
+- **The area map** (Jeff, the same sitting): `core` gains `reaches:
+  [collector, relaycfg]`, since `conformance/driver/` imports both;
+  saved when this item's PR merges, not before, so that `main`'s
+  `wf areas -check` stays clean meanwhile (the candidate is in the
+  queue's history).
+- **Next:** Plan re-enters, confirms tasks 19a to 19c, and Implement
+  runs them first, the specification first (LOOP-02).
+- sitting: 19:25-19:42 UTC, asks: 7 (0 in batches)
+
 ## Consolidation
 
 ## Rollback notes
