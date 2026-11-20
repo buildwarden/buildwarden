@@ -1,4 +1,4 @@
-.PHONY: build test release-build integration-test lint tier1 enforcement fmt tidy cover clean sign relay-vm deadcode pin-specs conformance
+.PHONY: build test release-build integration-test driver-conformance lint tier1 enforcement fmt tidy cover clean sign relay-vm deadcode pin-specs conformance
 
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
@@ -50,6 +50,15 @@ release-build:
 
 integration-test:
 	./test-integration.sh
+
+# The driver contract's conformance suite, both tiers, against the driver
+# binary DRIVER. The lifecycle tier runs real builds, so it needs a host the
+# driver runs on; DRIVER_CONFORMANCE_FLAGS are driver-conformance's flags for
+# that host (--driver-arg, --config-file, --base-image, --skip, ...).
+DRIVER ?= dist/warden-driver-container
+driver-conformance:
+	go run ./conformance/driver/cmd/driver-conformance --driver $(DRIVER) \
+		$(DRIVER_CONFORMANCE_FLAGS)
 
 integration-test-vz:
 ifeq ($(UNAME_S),Darwin)

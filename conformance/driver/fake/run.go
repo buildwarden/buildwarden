@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -129,6 +130,9 @@ func build(st *start, cfg *config, relayPath string, in <-chan map[string]any) i
 		_ = os.RemoveAll(dir)
 		return failed(err)
 	}
+	// reap and clean stop the relay of a build whose driver was killed.
+	_ = os.WriteFile(filepath.Join(dir, relayPIDFile),
+		[]byte(strconv.Itoa(relay.Process.Pid)), 0o600)
 	stopping := make(chan struct{})
 	go func() {
 		_ = relay.Wait()

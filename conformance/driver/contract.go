@@ -85,6 +85,7 @@ type description struct {
 		VM             bool     `json:"vm"`
 		Shell          bool     `json:"shell"`
 		Keep           string   `json:"keep"`
+		Exited         bool     `json:"exited"`
 		GuestOS        []string `json:"guest_os"`
 		ImageOS        []string `json:"image_os"`
 		DefaultImageOS string   `json:"default_image_os"`

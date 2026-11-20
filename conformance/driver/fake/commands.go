@@ -59,12 +59,28 @@ func reap(req *request, _ *config, _ []string) (map[string]any, error) {
 	}
 	removed := 0
 	if _, err := os.Stat(dir); err == nil && fault != faultReapNoLook {
+		stopRelay(dir)
 		if err := os.RemoveAll(dir); err != nil {
 			return nil, err
 		}
 		removed = 1
 	}
 	return map[string]any{"removed": removed}, nil
+}
+
+// relayPIDFile, in a build's work directory, holds its relay's process ID.
+const relayPIDFile = "relay.pid"
+
+// stopRelay kills the relay of the build whose work directory is dir, left
+// running when its driver was killed.
+func stopRelay(dir string) {
+	data, err := os.ReadFile(filepath.Join(dir, relayPIDFile))
+	if err != nil {
+		return
+	}
+	if p, err := os.FindProcess(atoi(string(data))); err == nil && atoi(string(data)) > 0 {
+		_ = p.Kill()
+	}
 }
 
 func doctor(_ *request, cfg *config, _ []string) (map[string]any, error) {
@@ -127,6 +143,7 @@ func clean(req *request, _ *config, _ []string) (map[string]any, error) {
 		}
 		path := filepath.Join(root(req.TempDir), e.Name())
 		fmt.Fprintf(os.Stderr, "Removing %s\n", path)
+		stopRelay(path)
 		if err := os.RemoveAll(path); err != nil {
 			return nil, err
 		}
