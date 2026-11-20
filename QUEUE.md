@@ -34,7 +34,7 @@ None.
 
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | loop-native-lead | process | - | buildwarden/buildwarden | - | 4 close | x4-close (cloud) | - | [#129](https://github.com/buildwarden/buildwarden/pull/129) | 4 / 12 |
+| 1 | loop-native-lead | process | - | buildwarden/buildwarden | - | 4 close | x4-close (cloud, leased to cloud/20261120T203034Z) | - | [#129](https://github.com/buildwarden/buildwarden/pull/129) | 5 / 12 |
 | 2 | detached-prepare-windows-exe | fix (follows project-config-trust) | - | buildwarden/buildwarden | driver-core, driver/hyperv, driver/qemu, book, designs | 6 publish | f6-refresh (cloud) | - | - | 14 / 10 |
 | 3 | merge-confirm-attended | process | - | buildwarden/buildwarden | - | 2 implement | x4-state (human), x2-implement (cloud) | - | - | 1 / 5 |
 | 4 | loop-repository | process | - | buildwarden/buildwarden | - | 4 close | x4-close (cloud) | - | [#130](https://github.com/buildwarden/buildwarden/pull/130) | 4 / 10 |
