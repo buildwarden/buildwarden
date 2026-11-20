@@ -699,7 +699,7 @@ sees or what the contract asks of every driver:
   Folded in by r3 as Decision 24, requirement DRV-C12 (with DRV-C5
   amended to point to it), Behaviour 19, a row of **Defaults and
   overrides**, a row of the errors table, the kit's and the suite's
-  cases in the **Validation plan**, and tasks 20 to 25 of the
+  cases in the **Validation plan**, and tasks 20, 21, 22, 25 and 35 of the
   **Implementation plan** with the rework of tasks 2, 13 and 14 as
   tasks 19a to 19c. Rejected: (a), matching without regard to letter
   case, and (c), another spelling read as another key and ignored. The
@@ -1675,7 +1675,13 @@ once more before the design is approved.
      any of TOML's forms (a table header, a dotted key, an inline
      table), since the kit compares the decoded tree, not the text.
      Only ASCII is folded: TOML's bare keys are ASCII, and a quoted key
-     with other letters is another key, ignored (DRV-C5).
+     with other letters is another key, ignored (DRV-C5). One accepted
+     exception, folded in at the r3 review: `main`'s decoder matches with
+     Go's `strings.EqualFold`, which also folds a few non-ASCII letters
+     to ASCII ones (the Kelvin sign `K` to `k`, the long s `ſ` to `s`),
+     so a quoted key spelt with one of them, which `main` read, is now
+     ignored without a message. No reference documents such a spelling,
+     and option (ii) is what would close it.
   2. *Which places.* Every place a listed key may be written: its name,
      the override `driver.<name>.<key>` of a common key it lists, and
      each old name the contract lists for the driver (DRV-C4, DRV-C11).
@@ -1684,8 +1690,11 @@ once more before the design is approved.
      selected (Behaviour 13).
   3. *When.* Where DRV-C6 refuses a value: in the probe of `run` and of
      `clean`, and first in every other command, before any work
-     (DRV-C7); in `reap` and `attach` the state file is authoritative and
-     nothing is refused (DRV-C10).
+     (DRV-C7). In `reap` and `attach` it follows DRV-C10: with a state
+     file, the state file is authoritative and nothing is refused; with
+     none, where DRV-C10 has the driver resolve a setting from the
+     recorded file, a miscased key in it is refused as at the other points (r3
+     review, D1).
   4. *Order.* This refusal comes before the value is read, so before the
      check of a value and before the refusal of both names (DRV-C11): a
      file with `[Runtime] CLI = "./rt"` gets this message, and the
@@ -3057,7 +3066,7 @@ to each.
 | C1 | Declare every flag it takes in `describe.flags`, with its arity and its commands, and use no name `warden` uses on the same command (the specification lists them) | Static tier: the schema, the name form, the reserved names, and that each flag names only commands the driver lists |
 | C2 | Take each declared flag from `args`: a flag with a value as `--name=value` (for a flag that holds one value, the last occurrence wins), a switch as `--name`, on when present and off when absent; and refuse an element it did not declare with a `fixable` error that names it | Static tier: a probe of each listed command with an undeclared element exits 1 with a `fixable` error naming it, and creates nothing |
 | C3 | Read configuration only from the file named in `config_file`. It never looks for a `warden.toml` by itself, in its working directory or through `WARDEN_CONFIG`, which it inherits from `warden`; sent no `config_file`, or started with no request (a service), it reads none and uses its defaults | Static tier: with an invalid `warden.toml` in its working directory and `WARDEN_CONFIG` naming another invalid file, and no `config_file` in the request, a probe ends as it does with neither file present |
-| C4 | List the keys it reads in `describe.keys`, each in its place in the config file (below) and with the commands that read it: a common key it honours as `driver.<key>`, with the type the specification gives it; a key of its own under `driver.<name>.`, with the TOML type of its value (or `any`) and a name that is no common key's. Listing a common key is also listing its override, `driver.<name>.<key>`. It reads nothing in `[driver]` that it did not list, and no override of a common key it did not list (C5) | Static tier: every listed key is `driver.<key>` for a common key of the contract version, with that key's type, or is under `driver.<name>.` and does not have a common key's name; every old name listed with a key is one the specification lists for that driver name (C11); each has a type of the allowed set and names only commands the driver lists. A key read but not listed cannot be seen from outside |
+| C4 | List the keys it reads in `describe.keys`, each in its place in the config file (below) and with the commands that read it: a common key it honours as `driver.<key>`, with the type the specification gives it; a key of its own under `driver.<name>.`, with the TOML type of its value (or `any`) and a name that is no common key's. Listing a common key is also listing its override, `driver.<name>.<key>`. It reads nothing in `[driver]` that it did not list, and no override of a common key it did not list (C5). No two of its places (each key's name, the override of each common key it lists, each old name) are equal when ASCII letters are folded (C12; r3 review, D2) | Static tier: no two places in `describe.keys` equal when ASCII is folded; every listed key is `driver.<key>` for a common key of the contract version, with that key's type, or is under `driver.<name>.` and does not have a common key's name; every old name listed with a key is one the specification lists for that driver name (C11); each has a type of the allowed set and names only commands the driver lists. A key read but not listed cannot be seen from outside |
 | C5 | Ignore every table and key it does not own, a common key it does not list among them, in `[driver]` and in its own table (C4), except as C12 says; and read any file `warden` reads: the file is TOML v1.1.0 | Static tier: with a config file that holds `warden`'s tables, another driver's table, an unknown one, and every common key of the contract version that the driver does not list, written in `[driver]` and in the driver's own table with a value of another TOML type than the specification gives it, a probe ends as it does with no file; a driver that reads a common key it did not list, and checks what it reads, fails here. One of those tables is written with syntax that TOML 1.0 does not have (an inline table over several lines with a trailing comma), so a driver whose parser stops at 1.0 fails here, in the suite, and not on a user's file that `warden` accepted |
 | C6 | When it lists a key: refuse a `config_file` that does not exist, cannot be read or cannot be parsed, and a key of its own whose value has the wrong type, with a `fixable` error that names the file, and the key where there is one (not in `reap` and `attach`: C10). A file that was named and is missing is never read as if none had been named, and no other file is tried in its place | Static tier, for each listed key: a `config_file` that names a path where nothing exists, and a file that is not TOML, each make a probe of a command the key names exit 1 with a `fixable` error naming the file; and, for a key whose type is not `any`, a file that gives that key a value of another TOML type makes it exit 1 naming the file and the key. All three create nothing. The check works from the key's declared `type` and `commands`, and is made at each place the key may be written: for a common key in `[driver]` and in the driver's own table, and for a key with an old name under that name too |
 | C7 | Read and check all of it before any work: in the probe of `run`, and first in every other command but `reap` and `attach` (C10) | Static tier, through C2 and C6: the refusals come from a probe, which must create nothing |
@@ -3065,7 +3074,7 @@ to each.
 | C9 | Take its settings as flags and keys, not as environment variables of its own (UX-07). The two that exist, `WARDEN_CTR_CLI` and `WARDEN_IMAGE`, stay the container driver's | Not checkable: a process may read any variable |
 | C10 | In `reap` and `attach`: take from the state file what it holds; read a `config_file` that no longer exists as if none had been named, saying so on stderr; and, when a state file exists, not fail because a recorded file cannot be parsed or holds a value it would refuse | Static tier: `reap` of an ID that never existed, sent a `config_file` that does not exist, ends as it does with none named. Lifecycle tier, Kill: before `reap`, the config file the build was started with is deleted in one run and overwritten with text that is not TOML in another, and `reap` still removes what the build left |
 | C11 | Read a key under an old name only where the specification lists that name for the driver's own name, as the same key; refuse a file that sets a key under both names, with a `fixable` error that names the file and both; and say on stderr, once per old name the file sets, that the name is deprecated and what the new one is: when it answers a probe, and in a request that is not a probe only for a command `warden` does not probe first (`doctor`, `setup`, the image commands, `ext`), so not in a `run` or `clean` that is not a probe, nor in `reap` or `attach`. A driver whose name has no old names reads none | Static tier: the old names in `describe.keys` are the specification's for that name (C4), and a wrong type under an old name is refused (C6). That a value under an old name is used, that a file with both is refused, and when the warning is printed, is **not checkable against an arbitrary binary**, since the suite cannot make a value a driver accepts; held by the kit's tests, for each of the seven |
-| C12 | Refuse a file that holds, at a key path equal ignoring ASCII letter case to a place where one of its listed keys may be written (its name, the override of a common key it lists, an old name the specification lists for it), a key not spelt as that place, with a `fixable` error that names the file, each spelling found and the key to write; at the points of C7, before the value is read and before C11's refusal of both names, and not in `reap` and `attach` (C10). Two spellings of one key in one table are so refused every time. A key that matches no listed place, in any case, is ignored (C5). *New in r3, `q2` answered (b); Decision 24, a27* | Static tier: for each listed key and each of its places, the key written with its last element in upper case, and with its first table's name capitalized, makes a probe of a command the key names exit 1 with a `fixable` error holding the spelling as written, and creates nothing; the place as spelt beside the same place in upper case, in one table, is refused the same way; an unlisted common key in upper case is ignored (with C5's case) |
+| C12 | Refuse a file that holds, at a key path equal ignoring ASCII letter case to a place where one of its listed keys may be written (its name, the override of a common key it lists, an old name the specification lists for it), a key not spelt as that place, with a `fixable` error that names the file, each spelling found and the key to write; at the points of C7, before the value is read and before C11's refusal of both names; in `reap` and `attach` only where C10 has it read the recorded file because no state file exists (r3 review, D1). Two spellings of one key in one table are so refused every time. A key that matches no listed place, in any case, is ignored (C5). *New in r3, `q2` answered (b); Decision 24, a27* | Static tier: for each listed key and each of its places, the key written with its last element in upper case, and with its first table's name capitalized, makes a probe of a command the key names exit 1 with a `fixable` error holding the spelling as written, and creates nothing; the place as spelt beside the same place in upper case, in one table, is refused the same way; an unlisted common key in upper case is ignored (with C5's case) |
 
 A driver that takes no flag and reads no key lists none and has nothing
 to do here but C2's refusal. One that reads keys needs a parser for
@@ -3339,7 +3348,7 @@ code (UX-04, UX-08, UX-09):
 | A driver's key of the wrong type, or with a value it cannot use | The driver | The same points | `fixable`, naming the file and the key | 1 |
 | A `config_file` that does not exist or cannot be read, on a command for which the driver lists a key. `warden` has already refused a named file it cannot read on the commands where it opens the file itself, so this is a command where it does not (`image list`, `image verify`, `warden <name> ...`), or a file that went between `warden`'s reading and the driver's | The driver | The same points | `fixable`, naming the file. Nothing is read in its place: not `./warden.toml`, and not the defaults as if no file had been named (GLOBAL-10) | 1 |
 | A file that sets one of a driver's keys under its new name and its old one | The driver | The same points | `fixable`, naming the file and both names; the fix is to remove the old one | 1 |
-| A driver's listed key, an override of a common key or an old name, spelt in another letter case (`[Runtime] CLI`, `[driver.Qemu] image_refresh_after`), or two spellings of one key in one table. New in r3 (Decision 24, C12) | The driver | The same points, before the value is read and before the refusal of both names; not in `reap` or `attach` (C10) | `fixable`, naming the file, each spelling found and the key to write (for an old name, the new one) | 1 |
+| A driver's listed key, an override of a common key or an old name, spelt in another letter case (`[Runtime] CLI`, `[driver.Qemu] image_refresh_after`), or two spellings of one key in one table. New in r3 (Decision 24, C12) | The driver | The same points, before the value is read and before the refusal of both names; in `reap` or `attach` only with no state file, where the recorded file is read (C10; r3 review, D1) | `fixable`, naming the file, each spelling found and the key to write (for an old name, the new one) | 1 |
 | A file that sets a driver's key under its old name only | Nobody fails. The driver warns | The same points, and at no other: not again in the `run` or `clean` that follows its probe, and not in `reap` or `attach` (C11) | One `[warden] warning:` line on stderr for each old name the file sets, naming the new one; the value is used | |
 | A driver's key, while another driver is selected | Nobody | | It is not read (Behaviour 13). So a common key in `[driver]` is checked only by a driver that honours it, and an override in `[driver.<name>]` only when `<name>` is selected | |
 | A key nobody declares: a mistyped key, or a key that equals no listed place of the selected driver in any letter case | Nobody, as today | | Ignored, as unknown keys are today | |
@@ -4708,8 +4717,10 @@ warden.toml [Runtime] CLI: keys are case-sensitive; the container driver reads [
 
 For a new name the fix is the name itself (`write it as
 [driver.container] cli`). Both spellings in one table, `cli` and `CLI`,
-are refused the same way, every time. In `reap` and `attach` the state
-file is authoritative and nothing is refused (DRV-C10). A key the
+are refused the same way, every time. In `reap` and `attach` with a
+state file, the state file is authoritative and nothing is refused;
+with none, the recorded file is refused as anywhere else (DRV-C10; r3
+review, D1). A key the
 driver does not list, in any case, is still ignored (DRV-C5).
 
 - *For a user:* a config that spells one of the seven keys otherwise
@@ -4738,7 +4749,7 @@ driver does not list, in any case, is still ignored (DRV-C5).
   **Old names**), `conformance/driver/` (a static case that names
   DRV-C12, and the fake refuses as the kit does), `cmd/warden/
   runtime_test.go` (`TestRuntimeKeyInOtherSpellings` rewritten to the
-  refusal and moved with task 22; rows for `[driver.container] cli` in
+  refusal by task 20 and moved with task 22; rows for `[driver.container] cli` in
   other spellings added beside them, per hand-off point 5), task 1's
   goldens (one refusal golden per driver that owns one of the seven),
   `docs/book/src/guide/configuration.md` (keys are case-sensitive; the
@@ -4795,13 +4806,18 @@ flagged, as stated there).
   document lists for it), a key that is not spelt as that place, with a
   `fixable` error that names the file, each spelling found and the key
   to write. It MUST do so at the points DRV-C7 gives, before it reads
-  the value or applies DRV-C11, and not in `reap` and `attach`
-  (DRV-C10). A key that equals no listed place ignoring letter case is
-  ignored (DRV-C5)." The **Old names** section gains one sentence: an
-  old name in another letter case is refused as DRV-C12 says, and the
-  key to write is the new name. DRV-C12 is checked by the suite's
-  static tier, so it is not added to the list of what is not
-  machine-checked.
+  the value or applies DRV-C11; in `reap` and `attach`, only where
+  DRV-C10 has it resolve a setting from the recorded file because no
+  state file exists. A key that equals no listed place ignoring letter
+  case is ignored (DRV-C5)." DRV-C4 gains one sentence (r3 review, D2):
+  "No two places where a driver's listed keys may be written (each
+  key's name, the override of each common key it lists, and each old
+  name) may be equal when ASCII letters are folded." So a correctly
+  spelt listed key is never a miscasing of another. The **Old names**
+  section gains one sentence: an old name in another letter case is
+  refused as DRV-C12 says, and the key to write is the new name.
+  DRV-C12 and DRV-C4's sentence are checked by the suite's static tier,
+  so neither is added to the list of what is not machine-checked.
 - *The kit.* `fromFile` (`driver/drivercmd/settings.go`), before it
   looks a place up by its exact path, walks the decoded tree along each
   of a setting's places comparing each element with ASCII letters
@@ -4809,7 +4825,10 @@ flagged, as stated there).
   place byte for byte. One or more is a `fixable` error, the spellings
   sorted bytewise so the message is the same on every run. What
   `Resolve` returns is otherwise unchanged; `Common` and `Aliases` give
-  the places, so a driver's declarations need nothing new.
+  the places, so a driver's declarations need nothing new. The kit's
+  `checkSettings` refuses a declaration with two places equal when
+  ASCII is folded (DRV-C4's sentence, D2); the five bundled drivers'
+  keys are all lower case, so none changes.
 - *The messages* (`warden` prints them as every driver error,
   `[warden] ERROR:` and `To fix:`):
 
@@ -4824,7 +4843,14 @@ flagged, as stated there).
 
   For an old name the key to write is the new one, so following the fix
   gives no deprecation warning. A file that holds `[Runtime] CLI` and
-  `[driver.container] cli` gets this refusal, not DRV-C11's (a27, 4).
+  `[driver.container] cli` gets this refusal, not DRV-C11's (a27, 4);
+  since the key to write is already there, its fix line says to remove
+  the other spelling (folded in at the r3 review):
+
+  ```
+  warden.toml: [Runtime] CLI: keys are case-sensitive, and the container driver reads [driver.container] cli (old name [runtime] cli)
+    To fix: remove [Runtime] CLI; [driver.container] cli is already set
+  ```
 - *The suite* (`conformance/driver/`, static tier): for each listed key
   and each of its places, a file that writes it with its last element
   in upper case, and one with its first table's name capitalized, each
@@ -5361,8 +5387,10 @@ again. DRV-C5 gains "except as DRV-C12 says"; DRV-C12 is new: a listed
 key, override or old name in another ASCII letter case, and two
 spellings of one key in one table, are refused with a `fixable` error
 that names the file, each spelling and the key to write; and the **Old
-names** section gains one sentence. Its wording is under **Design**, **A
-driver's key in another letter case**, **The answer**. Contract version
+names** section gains one sentence; and DRV-C4 gains one sentence
+forbidding two places of one driver equal when ASCII is folded (r3
+review, D2). Its wording is under **Design**, **A driver's key in
+another letter case**, **The answer**. Contract version
 1 has not been released or pinned (a17), so this is a change to the
 draft and needs no new version. It is made first in Implement, as task
 19a, before the kit and the suite change (LOOP-02).
@@ -6693,9 +6721,11 @@ differs per platform, so it adds one job (Decision 20):
   the driver's `clean` before it reaps; and that
   `attach` and `reap` receive the build's `args` and `config_file` from
   its record; *(r3, a27 (6))* `warden`'s own keys still read in
-  any letter case, as on `main` (`[Runtime] driver = "qemu"` selects
-  qemu, `[BUILD] teardown_timeout` is read), while the same file's
-  `[Runtime] CLI` is passed on untouched for the driver to refuse.
+  any letter case, as on `main` (`[Runtime] driver = "container"`
+  selects container, `[BUILD] teardown_timeout` is read), while the same
+  file's `[Runtime] CLI` is passed on untouched for the container driver
+  to refuse (folded in at the r3 review: with qemu selected the key is
+  container's and ignored, Behaviour 13).
 - Configuration, the kit's side (`drivercmd.Resolve`), per bundled
   driver: precedence (flag, variable, file) over the
   rows of `main`'s request tables, written once with the old names and
@@ -6722,7 +6752,10 @@ differs per platform, so it adds one job (Decision 20):
   of a hundred runs, with one message; a quoted key with a non-ASCII
   letter, and an unlisted key in upper case, ignored; another driver's
   key in another case ignored while that driver is not selected; none of
-  this in `reap` or `attach` with a state file; a declaration with a `Key` outside the driver's table,
+  this in `reap` or `attach` with a state file, and the refusal in
+  `reap` and `attach` with none, where the recorded file is read (r3
+  review, D1); a declaration with two places equal when ASCII is folded
+  refused (D2); a declaration with a `Key` outside the driver's table,
   with a common key's name, or with an alias the specification does
   not list, refused; a value of the wrong type refused with
   the file and key named; an undeclared argument refused; another
@@ -7022,13 +7055,15 @@ approved it (FLOW-19), in this order, the specification first
 (LOOP-02).
 
 19a. Rework of task 2: `specs/driver-contract/v1.md` gains DRV-C12 as
-     **The answer** words it, DRV-C5 ends "except as DRV-C12 says", and
+     **The answer** words it, DRV-C5 ends "except as DRV-C12 says",
+     DRV-C4 gains its sentence on places equal when folded (D2), and
      **Old names** gains its sentence; `v1.schema.json` is unchanged
      (no field is added). `specs/specs_test.go` and the `schema-doc`
      pair stay green (LOOP-02, TEST-05).
 19b. Rework of task 13: `driver/drivercmd/settings.go`'s `fromFile`
      refuses another letter case before the exact lookup, as **The
-     answer** says, with the spellings sorted; tier 0 in
+     answer** says, with the spellings sorted, and `checkSettings`
+     refuses a declaration with two places equal when folded; tier 0 in
      `settings_test.go`: the kit's DRV-C12 cases of the **Validation
      plan** (Configuration, the kit's side), each naming DRV-C12, run
      through `Main`, `Call` and `Resolve` (GLOBAL-10, GLOBAL-11, UX-04,
@@ -7036,8 +7071,9 @@ approved it (FLOW-19), in this order, the specification first
 19c. Rework of task 14: `conformance/driver/`: the static tier's DRV-C12
      cases, the fake's by-hand refusal and its fault switch that skips
      it, and the self-test against that switch; the DRV-C5 case gains an
-     unlisted common key in upper case (tier 0; TEST-05, TEST-01,
-     LOOP-03).
+     unlisted common key in upper case; and the static check of
+     `describe.keys` refuses two places equal when folded (DRV-C4, D2)
+     (tier 0; TEST-05, TEST-01, LOOP-03).
 
 20. Every driver-owned flag and key moves into its driver's `Setting`
     declarations, the seven keys under their new names in `[driver]`
@@ -7060,9 +7096,12 @@ approved it (FLOW-19), in this order, the specification first
     cases of the **Validation plan**, and task 1's goldens updated for
     the nineteen differences of **Behaviour** only, with one refusal
     golden of Behaviour 19 for each driver that owns one of the seven
-    keys (container, qemu, hyperv); the request-table rows that spell
-    one of the seven in another letter case assert the refusal (r3,
-    Decision 24) (ORCH-03, UX-03, UX-07, UX-08, GLOBAL-10, TEST-01).
+    keys (container, qemu, hyperv); request-table rows that spell each
+    of the seven in another letter case are added and assert the
+    refusal; and `TestRuntimeKeyInOtherSpellings` is rewritten here to
+    Decision 24's refusal, since removing the fields from `Config`
+    breaks it, so `make test` stays green; task 22 only moves it (r3,
+    Decision 24; folded in at the r3 review) (ORCH-03, UX-03, UX-07, UX-08, GLOBAL-10, TEST-01).
 21. `warden`'s end-to-end tests through `warden-driver-fake` and
     `stubrelay`, for every command, as the **Validation plan** lists
     them, the fake's DRV-C12 refusal through `warden build` included
@@ -7081,9 +7120,9 @@ approved it (FLOW-19), in this order, the specification first
     the rows for `[driver.container] cli` added beside those for
     `[runtime] cli` (the removal item `runtime-former-values-removal`
     refers to this as "K1 plan task 20"; it is this task), and
-    `TestRuntimeKeyInOtherSpellings` with its rows rewritten to Decision
-    24's refusal and the same spellings added for `[driver.container]
-    cli` (r3; hand-off point 5); the relay
+    `TestRuntimeKeyInOtherSpellings`, rewritten by task 20, moved here
+    with the same spellings added for `[driver.container] cli` (r3;
+    hand-off point 5); the relay
     image's shape check moved with `relay_image`; `reap` (exit 1 when
     the runtime does not answer) and `clean` with `keep_ids` beside the
     process scan. It leaves `linked.go`, and `warden clean` cleans up
