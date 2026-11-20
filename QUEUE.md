@@ -34,7 +34,7 @@ None.
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 4 review | f4-review (cloud, leased to cloud/20261120T203034Z) | - | - | 16 / 30 |
-| 2 | rule-paths-shared | process | - | buildwarden/buildwarden | - | 2 implement | x2-implement (cloud) | - | - | 1 / 4 |
+| 2 | rule-paths-shared | process | - | buildwarden/buildwarden | - | 2 implement | x2-implement (cloud, leased to cloud/20261120T203034Z) | - | - | 2 / 4 |
 | 4 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 5 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
 | 6 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 9 |
