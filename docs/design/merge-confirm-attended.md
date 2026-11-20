@@ -688,7 +688,27 @@ the state step of the 5-step estimate (4 steps + 1, one run).
 
 ## Design review
 
-Pending.
+- **r1, 2026-11-20: approved at `89f753b`** (Jeff, workflow-human,
+  FLOW-19); read at `55f8ff5`. Page:
+  https://claude.ai/artifact/CNKkAgm8b5g47mYoQvXwGu.
+  - Repositories: this one only (LOOP-04).
+  - Assumed: a1, a7 and a9 confirmed (a) as recommended (batch); a2, a3,
+    a5, a6 and a8 confirmed (a); a4 answered (b), any worker kind, a host
+    included, folded in at `89f753b` (Decision 2, Design B, Defaults, the
+    Validation plan, FLOW-04's paragraph, the README checklist).
+  - The draft had an independent check before the sitting: three
+    report-only reviewers (code claims, rule wording, plan and questions)
+    and a fixer; fifteen defects fixed at `55f8ff5`.
+  - Changes folded in: a4 (b) and FLOW-04's wording, below.
+  - This item's `x4-state` (What this item cannot do for itself) is added
+    to the queue by hand at this outcome, the last item that needs one.
+  - sitting: 20:17-20:27 UTC, asks: 12 (1 in batches)
+- **rule change FLOW-03 approved at `89f753b`**, as worded under **Rule
+  changes**.
+- **rule change FLOW-04 approved at `89f753b`**, approved with a change:
+  "A `human` or `host:<name>` worker may also complete one" in place of
+  "A `human` worker may also complete one" (a4 (b)), folded in at
+  `89f753b`.
 
 ## Consolidation
 
