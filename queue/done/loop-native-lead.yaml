@@ -1,8 +1,7 @@
 feature: loop-native-lead
 title: 'A native machine may lead an item from its first step: the lead, general host names, any-capability work under a refreshable 20-hour lease, the wrapper and the push script (componentization P1, fourth item)'
-priority: 1
 kind: process
-status: in_progress
+status: done
 round: process
 phase: 4
 design: docs/design/loop-native-lead.md
@@ -54,12 +53,12 @@ steps:
   - id: x4-close
     phase: 4
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - x4-state
     lease:
-      claimed_by: cloud/20261120T203034Z
-      expires: 2026-11-20T22:31:27.700297062Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 3
@@ -135,3 +134,9 @@ history:
   - at: 2026-11-20T20:31:27Z
     by: cloud/20261120T203034Z
     event: claimed x4-close until 2026-11-20T22:31:27Z
+  - at: 2026-11-20T20:31:30Z
+    by: cloud/20261120T203034Z
+    event: done x4-close
+  - at: 2026-11-20T20:31:30Z
+    by: cloud/20261120T203034Z
+    event: closed; feature done

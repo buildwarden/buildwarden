@@ -1,6 +1,6 @@
 feature: relay-collector-failure-fails-open
 title: 'Relay: a collector failure on build-script, bootstrap or cwd is served as 404, so exclusive trust becomes append (fails open)'
-priority: 9
+priority: 8
 status: in_progress
 round: feature
 phase: 2
