@@ -1,9 +1,11 @@
 // Package specs_test ties the ledger producer, the specification documents
 // under specs/ and the book's mirror of them together (RELAY-05), the book's
 // seams page to the pins of the seam specifications under tools/conformance/
-// (TEST-05), and the driver contract's schema to its document's examples. It
-// holds no code of its own: specs/ is a documentation tree, and this test only
-// reads it, through the exported relay and ledger APIs.
+// (TEST-05), the driver contract's schema to its document's examples, and the
+// three Go copies of that contract's tables to its document. It holds no code
+// of its own: specs/ is a documentation tree, and this test only reads it,
+// through the exported relay and ledger APIs and, for the tables, the Go
+// source that holds them.
 package specs_test
 
 import (

@@ -8302,6 +8302,8 @@ doctor` prints `container runtime: finch` and `ok`" holds as written.
   the specification to publish the tables once. Until then a change to
   either table is a change to the seam, which GLOBAL-08's `seam-contract`
   check ties to `v1.md` for `drivercall.go` and `drivercmd/`.
+  The three tables are held to v1 by `TestDriverContractTables`
+  (`specs/driver_tables_test.go`) (Jeff, 2026-11-20).
 - *The old-name table and the drivers' `Settings`.* `driver/hyperv` and
   `driver/qemu` declare their `Aliases` in their own `settings.go`. The
   kit checks each against its table at declaration, so a driver and the
