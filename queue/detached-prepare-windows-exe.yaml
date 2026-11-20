@@ -132,10 +132,10 @@ steps:
   - id: f6-refresh
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261120T203034Z
-      expires: 2026-11-20T22:31:50.674069855Z
+      claimed_by: ""
+      expires: null
     note: 'main at 480e205: 1 commit since the branch merged it; no file changed by both'
 budget:
   estimate:
@@ -354,3 +354,6 @@ history:
   - at: 2026-11-20T20:31:50Z
     by: cloud/20261120T203034Z
     event: claimed f6-refresh until 2026-11-20T22:31:50Z
+  - at: 2026-11-20T20:35:33Z
+    by: cloud/20261120T203034Z
+    event: done f6-refresh
