@@ -1,6 +1,6 @@
 ---
 feature: rule-paths-shared
-status: draft
+status: archived
 drivers: []              # the loop's check code only (tools/workflow/check); no driver tree is reached
 seams: []                # no GLOBAL-08 seam changes
 surfaces: []             # `wf` is the loop's tool, not a user-facing surface of the product
@@ -173,4 +173,29 @@ None.
 
 ## Archive summary
 
-Filled in at `x2-implement` (FLOW-12).
+Implemented on 2026-11-20 as a process item (`x2-implement`, attended tick
+`cloud/20261120T203034Z`), after design review r1 approved it at `161af8a`
+(Jeff, a1 (a)). `main` was still at `8531790` when the PR was opened.
+
+- **Built** (`tools/workflow/check/rulechange.go`). `cleared()` returns
+  `map[string][]string`: each path an approved rule change lists, with every
+  rule that clears it, sorted and without duplicates (1). `ruleClearance`
+  fails a path whose list is empty and prints the cleared ones as `path
+  (RULE-A, RULE-B)` (2). `approvedRules` counts every rule in every list (3).
+- **Tests** (`check/rulechange_test.go`), both seen failing on `main`'s
+  code before the fix: `TestRuleClearanceSharedPath` (two approved rule
+  changes on one path, approved in reverse order; the clearance names both,
+  sorted) and a case at the end of `TestDrops` (a finding on either of two
+  rule changes sharing every path is dropped and passes).
+- **Deviations.** None.
+- **Decisions taken.** A sorted, deduplicated list per path for both callers
+  (a1 (a)). No rule wording changed.
+- **Rejected.** Keeping the one-rule map and reading rule names straight
+  from each approved entry in `approvedRules` (a1 (b)): it left the
+  clearance line naming one rule of several.
+- **For future designs touching `workflow`, `rule-changes`,
+  `rule-clearance`, `wf-drops` or `enforcement`:** any number of approved
+  rule changes may list the same path; each one clears it and each one's
+  rule is named for `wf drops`. The real check is driver-contract's Review,
+  re-run after this merges: `surface.go (ORCH-03, UX-01, UX-03)` and `make
+  enforcement` green.
