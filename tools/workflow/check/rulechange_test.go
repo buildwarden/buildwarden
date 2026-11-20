@@ -13,6 +13,11 @@ var ruled = strings.Replace(strings.Replace(design, "design_review: skip",
 	"rule_changes:\n  - {rule: TEST-09, change: add, paths: [docs/development/testing.md]}\n",
 	1) + "\n## Rule changes\n\nTEST-09 is new: ...\n"
 
+// sharing is ruled with a second rule change, TEST-10, on the same path.
+var sharing = strings.Replace(strings.Replace(ruled, "rules: [ORCH-02, TEST-09]\n",
+	"rules: [ORCH-02, TEST-09, TEST-10]\n", 1), "rule_changes:\n", "rule_changes:\n"+
+	"  - {rule: TEST-10, change: add, paths: [docs/development/testing.md]}\n", 1)
+
 // put writes files on feat/demo, then commits and pushes them.
 func put(t *testing.T, work string, files map[string]string) {
 	t.Helper()
@@ -166,6 +171,34 @@ func TestRuleClearance(t *testing.T) {
 	}
 }
 
+// TestRuleClearanceSharedPath: a path two approved rule changes list is
+// cleared by both, and the clearance names them sorted, whichever was
+// approved last (rule-paths-shared).
+func TestRuleClearanceSharedPath(t *testing.T) {
+	work := repo(t, sharing)
+	env := here(work)
+	sha := commit(t, work, sharing+"\n<!-- as reviewed -->\n")
+	commit(t, work, sharing+"\n## Design review\n\n- r1: approved at `"+sha+
+		"`;\n  rule change TEST-10 approved at `"+sha+
+		"`;\n  rule change TEST-09 approved at `"+sha+"`.\n")
+	put(t, work, map[string]string{"docs/development/testing.md": "### TEST-09\n"})
+	f := demo(3)
+	f.DesignReview = "required"
+	var got []string
+	for _, r := range Phase(env, f) {
+		if r.Name == "rule changes cleared (FLOW-14)" {
+			if !r.OK {
+				t.Errorf("shared path: %s", r.Info)
+			}
+			got = append(got, r.Info)
+		}
+	}
+	want := "cleared: docs/development/testing.md (TEST-09, TEST-10)"
+	if len(got) != 1 || got[0] != want {
+		t.Errorf("clearance = %q, want %q", got, want)
+	}
+}
+
 // TestRuleClearanceWorkflowJobs: a workflow edit is a rule change only when
 // it changes a rule-running job or drops a needs: on one
 // (rule-running-line-match). The incident, a job added to ci-ok's needs:,
@@ -240,5 +273,18 @@ func TestDrops(t *testing.T) {
 	}
 	if rs := drops([]byte("{"), report()); OK(rs) {
 		t.Error("an unreadable report passed")
+	}
+
+	// The first of two approved rule changes that share every path still
+	// names its rule (the driver-contract shape, rule-paths-shared).
+	work = repo(t, sharing)
+	sha = commit(t, work, sharing+"\n<!-- as reviewed -->\n")
+	commit(t, work, sharing+"\n## Design review\n\n- r1: approved at `"+sha+
+		"`; rule change TEST-09 approved at `"+sha+
+		"`; rule change TEST-10 approved at `"+sha+"`.\n")
+	for _, rule := range []string{"TEST-09", "TEST-10"} {
+		if rs := drops(report(rule, "GLOBAL-01"), report("GLOBAL-01")); !OK(rs) {
+			t.Errorf("dropped a %s finding on a shared path: %s", rule, failures(rs))
+		}
 	}
 }
