@@ -4,11 +4,15 @@ priority: 2
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/rule-paths-shared.md
 branch: feat/rule-paths-shared
 alters_relationships: null
 source: 'Filed on Jeff''s word, 2026-11-20, from driver-contract''s f4-review at dd370cb (report reports/driver-contract/dd370cbbf4f4.md): cleared() in tools/workflow/check/rulechange.go keeps one rule per path (paths[p] = rule), so when several approved rule changes list the same file only the last counts; driver-contract''s UX-01, UX-03 and ORCH-03 all list tools/tier1/surface/surface.go, only ORCH-03 is named, and make enforcement (wf drops) refuses UX-03''s approved surface drop. Fix: a set of rules per path, wherever cleared()''s map is read. Blocks driver-contract''s Review until merged (enforcement-check.sh builds wf drops from the merge base). Estimate from the process size row: 4 steps, no state step.'
+pr:
+  number: 133
+  ci: green
+  head: 7be99d26c5da1496499973dc0a45c855186fe4dc
 steps:
   - id: x1-design
     phase: 1
@@ -20,10 +24,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261120T203034Z
-      expires: 2026-11-21T00:11:11.360292641Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -51,3 +62,9 @@ history:
   - at: 2026-11-20T22:11:11Z
     by: cloud/20261120T203034Z
     event: claimed x2-implement until 2026-11-21T00:11:11Z
+  - at: 2026-11-20T22:18:38Z
+    by: cloud/20261120T203034Z
+    event: done x2-implement
+  - at: 2026-11-20T22:18:38Z
+    by: cloud/20261120T203034Z
+    event: entered phase 3 (merge)
