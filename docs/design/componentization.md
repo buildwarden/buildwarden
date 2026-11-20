@@ -5,7 +5,7 @@ drivers: [interface]     # the program's reach: every driver. This item's own PR
 seams: [relay-claim, collector, relay-guest-api, executor-initialize, ledger-format, bootstrap-model]
                          # the program's reach, for retrieval. This item's own PR changes none;
                          # each program item declares what it changes.
-surfaces: [cli, config]  # the program's reach (the `warden` dispatcher). This item's PR: none.
+surfaces: [cli, config]  # the program's reach (`warden` and the driver binaries). This item's PR: none.
 security_boundary: env-relay  # declared conservatively for the program: the truststore moves
                          # into the relay and the relay is rewritten. See the Security note.
 alters_relationships: true
@@ -117,15 +117,24 @@ alternatives are the ones weighed in those sessions.
    repository.** Alternative: Go contract tests in this repository (TEST-05 as
    it stands). It lost because a Rust relay cannot share them. The
    `buildwarden` book and the specs repository link to each other.
-4. **Drivers become separate binaries on a public Go kit, then separate
-   modules, then separate repositories.** Alternatives: only complete the
-   in-tree contract (does not let an integrator ship a driver); drivers as RPC
-   plugins (a second protocol to version, and no gain over a binary that links
-   the kit). Hyper-V is extracted first as the pilot.
-5. **A top-level `warden` dispatcher that works like git's CLI.** It finds a
-   driver binary by name and runs it. Alternative: users call driver binaries
-   directly; it lost because driver auto-detection and one entry point are
-   worth keeping.
+4. **Drivers become separate binaries that `warden` runs through a written
+   command contract, then separate modules, then separate repositories.** A
+   public Go kit implements the contract for a driver that wants it; a driver
+   may be written without it, in any language. Alternatives: only complete the
+   in-tree contract (does not let an integrator ship a driver); a Go API that
+   every driver links (an existing `warden` could not run a new driver without
+   being rebuilt); drivers as long-lived RPC plugin processes behind a plugin
+   framework (commands, JSON and the standard streams are enough). The command
+   contract is a second protocol to version, and that cost is accepted. Hyper-V
+   is extracted first as the pilot.
+5. **`warden` finds a driver binary the way git finds a subcommand, and stays
+   the orchestrator.** It keeps the session, the collector and the reporting,
+   and calls the driver's commands for primitives: start the relay, create the
+   environment, tear both down. Alternatives: users call driver binaries
+   directly (one entry point and one configuration are worth keeping); a
+   dispatcher that hands the whole build to the driver (every driver would carry
+   the session and a collector, and the collector could not be chosen apart from
+   the driver).
 6. **The guest families are public, unstable kit packages for now.**
    `driver/linuxguest` (qemu, firecracker) and `driver/winguest` (qemu,
    hyperv) hold what drivers share because they boot the same kind of guest.
@@ -255,10 +264,10 @@ what was drafted and what was decided.
 | Hermit forks | `buildwarden/hermit-kernel`, `hermit-loader`, `hermit-rs` | Rust | Upstream plus carried commits |
 | Loop | `buildwarden/buildwarden-ai-workflow` (name provisional) | n/a | The Loop Contract, the queue, run reports, `wf`, skills and agents |
 | Specs and conformance | `buildwarden/buildwarden-specs` (a10) | Language-neutral, plus a test harness | One specification and one black-box suite per seam |
-| Kit | `buildwarden/buildwarden` | Go | Session, claim client, ledger reader, script translator, the driver contract, `drivertest`, the `warden` dispatcher, the book |
+| Kit | `buildwarden/buildwarden` | Go | `warden` (the orchestrator: session, claim client, collector hand-off), the kit's Go library for drivers, ledger reader, script translator, the book |
 | Collector | With the kit for now | Go | The disk collector, behind its specification |
 | Executor and guest-side pieces | With the kit for now | Go | `warden-io`; `linuxguest`, `winguest` |
-| Drivers | One repository each: container, qemu, vz, hyperv, firecracker | Go | One driver, as its own binary built on the kit |
+| Drivers | One repository each: container, qemu, vz, hyperv, firecracker | Go | One driver, as its own binary that speaks the driver contract; the project's own are built on the kit |
 | Driver index | To be designed (K5) | n/a | Known drivers and their current releases |
 
 The Go relay (`relay/`, `cmd/relay`, `tools/relay-vm`) stays in this
@@ -266,21 +275,21 @@ repository until every driver has adopted the Rust relay, and is then retired.
 
 ### The seams
 
-Every boundary between components is one of these. Seams 1 to 8 each get a
-specification and a black-box conformance suite in the specs repository. Seam
-9 is a Go API. Seam 10 is a document.
+Every boundary between components is one of these. Seams 1 to 9 each get a
+specification and a black-box conformance suite in the specs repository; seam
+9's start in this repository (K1) and move there in K2. Seam 10 is a document.
 
 | # | Seam | Between | Written today | Change in the program |
 |---|---|---|---|---|
-| 1 | Claim protocol (`relay-claim`) | Driver and relay | No | Written down. The connection it runs over is supplied by the driver (TCP or vsock). |
+| 1 | Claim protocol (`relay-claim`) | Claimant (`warden`'s session) and relay | No | Written down. The claimant opens the connection at an endpoint the driver reports (TCP in K1; other transports are what remains of S4). |
 | 2 | Collector protocol (`collector`) | Relay and collector | A package comment in `collector/collector.go` | Written down, with a suite that runs against any collector as well as any relay (a1). |
 | 3 | Relay guest API (`relay-guest-api`) | Relay and executor | No | Written down. Truststore endpoints added. |
 | 4 | Ledger format and schemas (`ledger-format`) | Relay and every reader | Yes, `specs/` | Moves to the specs repository at M6, with RELAY-01 to RELAY-08. |
 | 5 | `initialize` contract (`executor-initialize`) | Driver and executor | No | Written down. |
-| 6 | Bootstrap config | Driver and executor, through the relay | Code only (`bootstrap/`) | Written down. |
+| 6 | Bootstrap config | `warden`'s session and executor, through the collector and the relay; the driver reports the guest OS | Code only (`bootstrap/`) | Written down. |
 | 7 | Build-link contract | Driver and the isolation guarantee | No | New (Decision 10). One shared suite proves the guarantee on every driver. |
 | 8 | Relay release forms | Relay releases and drivers | No | New: each form (host-mode binary per platform, unikernel image, appliance image, OCI image) with a published hash, and the devices a relay VM needs. The list is open-ended. |
-| 9 | Driver contract | Kit and drivers | The four-method `driver.Driver` | New Go API: registration, doctor, setup, images, clean, driver-owned configuration, the relay source and the claim connection; plus the convention by which the dispatcher finds and runs a driver binary. |
+| 9 | Driver contract | `warden` and a driver binary | The four-method `driver.Driver` | New command contract: how `warden` finds a driver binary, and the required and optional commands it runs on it (describe, the build, cleanup after a dead driver, doctor, setup, images, clean, shell, a driver's own), with driver-owned configuration and the claim endpoint. A Go kit implements it; the relay source is the kit's. |
 | 10 | Loop Contract | The loop and every repository it works in | Draft, outside any repository | Finished against the running loop. |
 
 ### The phases
@@ -302,17 +311,17 @@ no M4.
 | S1 | Create the specs repository. Write seams 1, 2, 3, 5 and 6. Build the conformance harness so it runs against any relay binary or image, and against any collector. Link the book and the specs both ways. Fill `seams` in `tools/tier1/rules.yaml`. | The suites pass against the Go relay and the disk collector. |
 | S2 | Truststore endpoints: the specification, then the Go relay serves JKS and the executor fetches it. | `cmd/warden-io/jks.go` is gone and the keytool comparison runs against the relay. |
 | S3 | The build-link contract and its suite. Each driver declares its class. | The suite passes on every driver. |
-| S4 | The claim connection: `driver.Session` takes a connection from the driver, not a TCP address. | Every driver claims through it. |
+| S4 | Mostly absorbed into K1, which settles that `warden` claims at an endpoint the driver reports. What remains: the claim specification's transport section, and a claim endpoint that is not TCP. | A relay reachable only over a non-TCP endpoint is claimed without a driver-side forward. |
 
 **Track K, kit and drivers**
 
 | Phase | Work | Done when |
 |---|---|---|
-| K1 | Complete the driver contract in-tree, including the relay source. `cmd/warden` stops naming drivers. `drivertest` exists. | Adding a driver touches only its own directory. |
-| K2 | Each driver becomes its own Go module and binary in-tree. `warden` becomes the dispatcher. A tier-1 check limits each driver to the kit's public packages. | The check passes for all five, and `warden` runs each driver as a separate binary. |
+| K1 | The driver command contract, its conformance suite and the kit, including the relay source. `warden` runs a driver binary; the container driver is one, and every driver's build runs through `warden`'s build sequence. | An unmodified `warden` runs a driver it was not built with, and the suite passes against the container driver. |
+| K2 | Each VM driver becomes a binary and adopts the relay source; then every driver becomes its own Go module in-tree. `warden` links no driver. The driver specification and suite move to the specs repository. A tier-1 check limits each driver to the kit's public packages. | The check and the suite pass for all five, and `warden` runs each driver as a separate binary. |
 | K3 | Extract the Hyper-V driver as the pilot. | It releases from its own repository and passes native validation there. |
-| K4 | Extract the remaining drivers. | This repository holds the kit, the collector, the executor, the dispatcher and the book. |
-| K5 | The driver index. | The dispatcher can report and fetch a newer release of one driver. |
+| K4 | Extract the remaining drivers. | This repository holds the kit, the collector, the executor, `warden` and the book. |
+| K5 | The driver index. | `warden` can report and fetch a newer release of one driver binary. |
 
 **Track R, relay** (items in the one queue that name the relay repository, once P1 lets the queue hold them)
 
@@ -331,8 +340,8 @@ no M4.
 |---|---|---|
 | 0 | The queue drain, then P0 | P0 merged; the freeze starts |
 | 1 | P1, S1, M1 | The one queue works across repositories; suites pass on the Go relay |
-| 2 | S2, S3, S4, K1, M2 | Driver contract complete |
-| 3 | K2, M3 | Modules isolated; unikernel and host mode pass the suites |
+| 2 | S2, S3, K1, M2 | `warden` runs a driver binary; the suite passes |
+| 3 | K2, M3, S4 | Modules isolated; unikernel and host mode pass the suites |
 | 4 | K3, M5 | Pilot driver released |
 | 5 | M6 per driver, K4 | Go relay retired |
 | 6 | K5 | Driver index live |
@@ -340,11 +349,17 @@ no M4.
 What sets the order: S1 comes before M1's real work, because the relay has no
 written target until then. P1 comes before K3, because a second repository
 needs a loop that spans repositories. K1 does not depend on the relay and can
-start as soon as P0 merges. M6 needs K1's relay source, not driver extraction.
+start as soon as P0 merges. Its specification and suite start in this
+repository and move to the specs repository in K2. M6 needs the relay source,
+not repository extraction: K1's for the container driver, and K2's adoption of
+it for the four VM drivers.
 
 **Later, not scheduled.** The program's job is to leave each of these easy:
 alternative collectors and a collector repository (seam 2; the collector's
-storage boundary is designed with the first of them); the executor
+storage boundary is designed with the first of them), among them a shared local
+or remote collector with a session token per build and a client-facing side for
+opening a session, supplying inputs, watching console and status, and fetching
+outputs; the executor
 and guest families in their own repository (seams 3, 5 and 6); more relay
 release forms such as cloud images (seam 8); upstreaming to `hermit-os`
 (Decision 15).
@@ -398,12 +413,17 @@ approved in the design of the item shown (Decision 18).
 
 | Rule | Change | Item |
 |---|---|---|
-| GLOBAL-08 | The driver contract becomes a supported seam, unstable before 1.0. The seam list gains the truststore endpoints, the build-link contract and the claim connection. | K1; S2, S3, S4 for their seams |
-| BOOT-02, BOOT-05, the `bootstrap.md` mapping | As in the Bootstrap comparison. | K2; S2; S3 |
+| GLOBAL-08 | The driver contract (the commands `warden` runs on a driver binary) becomes a supported seam, unstable before 1.0. The seam list gains the truststore endpoints and the build-link contract. | K1; S2, S3 for their seams |
+| BOOT-02, BOOT-05, the `bootstrap.md` mapping | As in the Bootstrap comparison; BOOT-02 as in K1's own comparison. | K1; S2; S3 |
 | RELAY-04 | Three-mode parity is restated for the Rust relay's release forms and its two network paths. | M6 |
 | RELAY-01 to RELAY-08 | Move to the relay or specs repository, restated where they describe Go internals. RELAY-05 moves with the ledger format (seam 4). | M6 |
-| TEST-05 | Contract tests for the seams become the specs repository's suites. | S1 |
-| ORCH-01 | Driver parity becomes passing `drivertest`. | K1 |
+| TEST-05 | Contract tests for the seams become the specs repository's suites. | S1; K1 for the driver suite |
+| ORCH-01 | Driver parity is held by the driver contract and its suite. | K1 |
+| ORCH-02 | `warden` stages and records inputs; a driver alters none. | K1 |
+| ORCH-04 | A driver tears down when its input ends; `reap` reaches what a killed driver left. | K1 |
+| UX-01, UX-03 | Enforcement only: tier 1 also reads the flags and keys the bundled drivers declare. | K1 |
+| ORCH-03 | The same enforcement change; and one paragraph and a clause: a driver reads its own flags and keys, with the same precedence. | K1 |
+| PROFILE-01 | The profile names the driver contract's specification, its suite and its CI job, the surface the drivers declare, and what `interface` stands for. | K1 |
 | FLOW-*, LINT-* | Become the Loop Contract's detail, in place, and move with it to the loop repository in P1's last item. The FLOW rules that one queue changes are amended by P1's later items, each declaring its own. | P1 |
 | FLOW-20 | Retired. | A process item, when Jeff ends the program |
 
@@ -422,22 +442,24 @@ approved in the design of the item shown (Decision 18).
   has to settle it for the by-configuration class.
 - **P1 pauses the loop** while the queue moves.
 - **One person merges in every repository.**
-- **A public Go API** has to be kept usable for integrators.
+- **A command contract** has to be kept usable for integrators, and is a second
+  protocol to version beside the kit's Go API.
 
 ## Defaults and overrides
 
 None. This item changes no behaviour. The defaults the program will add are
-settled in the designs of the items that add them: which driver the
-dispatcher picks when none is named and how it finds a driver binary (K2),
+settled in the designs of the items that add them: which driver `warden` picks
+when none is named and how it finds a driver binary (K1),
 which relay release form each driver uses and how it is overridden (K1, M6),
 and where a driver's own configuration lives (K1).
 
 ## Cross-driver impact
 
 This item's PR changes no driver. Across the program every driver is touched
-the same way: it implements the completed driver contract (K1), becomes a
-module and a binary (K2), declares its build-link class (S3), supplies its
-claim connection (S4), moves to its own repository (K3, K4) and adopts the
+the same way: its build runs through `warden`'s build sequence (K1), it becomes
+a binary that speaks the driver contract (K1 for container, K2 for the rest) and
+a module (K2), declares its build-link class (S3), reports its claim endpoint
+(K1), moves to its own repository (K3, K4) and adopts the
 Rust relay (M6). What differs by driver:
 
 | Driver | Build-link class | Relay form expected at M6 | Other |
@@ -477,8 +499,7 @@ The diagram in [`bootstrap.md`](../development/bootstrap.md), unchanged on
 
 ```
   (2) deliver the executor ----------------->  warden-io + a launcher
-      per build, from the driver's own
-      kit version
+      per build, the driver's version
 
                                                  |-- GET  /ca.pem         trust
                                                  |-- GET  /bootstrap      trust policy
@@ -497,7 +518,7 @@ column (1), the build-link class of each row.
 | Invariant | Current | Proposed | Per-driver effect | Item |
 |---|---|---|---|---|
 | BOOT-01 isolation precedes execution | "Topological isolation satisfies this by construction." Firecracker's row already describes isolation that rests on host configuration. | The requirement is unchanged. The rule refers to the build-link contract, and each mapping row names its class. | firecracker and container are named by-configuration; the others by-construction. qemu changes its link to an inherited socket pair. | S3 |
-| BOOT-02 the executor is the only out-of-band input | "It is delivered per build and matches the orchestrator's version." | It is delivered per build and comes from the kit version the driver was built from. The relay is versioned separately; the executor and the relay agree through the relay guest API's version. | None in what is delivered. Each driver binary carries its own executor version. D2 (vz) is unchanged. | K2 |
+| BOOT-02 the executor is the only out-of-band input | "It is delivered per build and matches the orchestrator's version." | It is delivered per build by the driver and matches the version of the driver that delivers it. The relay is versioned separately; the executor and the relay agree through the relay guest API's version. | None in what is delivered. Each driver binary carries its own executor version. D2 (vz) is unchanged. | K1 (its own comparison) |
 | BOOT-03 one start, then hands off | As written | Unchanged | None | |
 | BOOT-04 build inputs come from the relay | CA, script and context fetched by the executor | Unchanged | None | |
 | BOOT-05 setup is the executor's domain | The baseline, the Java truststore included, is "derived from the CA" by `initialize`. "The orchestrator generates no setup material." "The guest runs no setup code it did not ship with." | `initialize` still applies the baseline. The Java truststores are fetched from the relay, which generates them from its CA. The orchestrator still generates no setup material, and the guest still runs no setup code it did not ship with: a truststore is data. | Every driver alike; the change is in the relay and the executor. | S2 |
@@ -605,9 +626,10 @@ item's own PR changes rules and documentation only.
   too. It weakens nothing: it states today's guarantee as behaviour, tests it
   on every driver, and names which drivers rest on host configuration.
 - **Drivers from outside the project** (K1 onward) run with the host user's
-  privileges like any driver. The kit cannot make an integrator's driver
-  safe; the build-link suite and `drivertest` are what an integrator runs to
-  show theirs is.
+  privileges like any driver. `warden` runs whichever binary of that name it
+  finds, and records it; it cannot make an integrator's driver safe. The
+  build-link suite and the driver suite are what an integrator runs to show
+  theirs is.
 
 **What the TEST-08 suite should exercise:** for S2, that the served keystores
 contain exactly the relay's CA and that the ledger records their bytes; for
@@ -623,7 +645,7 @@ validation and no tier-2 gap.
 
 The program: each seam's conformance suite is the validation of that seam,
 run against the Go relay first and against each Rust release form as it
-appears. `drivertest` and the build-link suite validate each driver. Every
+appears. The driver suite and the build-link suite validate each driver. Every
 program item's design states its own tiers and native hosts (FLOW-09); the
 gates in the order table are the points at which a wave's validation must be
 complete.
@@ -682,6 +704,12 @@ ledger format's move to the specs repository at M6, with RELAY-01 to RELAY-08
 RELAY-08 row and the RELAY-05 and TEST-05 row of **Rule changes the program
 will make**. The wording each had is in [`seam-specs`](seam-specs.md), under
 **Amendments to the umbrella design**.
+
+**2026-11-15, by `driver-contract` (K1)**, approved in its design review.
+Decisions 4 and 5, seams 1, 6 and 9 and the K1, K2 and S4 rows were reworded,
+and the sentences that follow from them. The wording each had is in
+[`driver-contract`](driver-contract.md), under **Amendments to the umbrella
+design**.
 
 ## Consolidation
 
@@ -777,40 +805,42 @@ Implemented and published the same day as a process item (FLOW-03).
   `limits.alters_relationships` goes to 3 in the workflow branch's
   `config.yaml`, and P1, S1 and K1 are filed through intake. The six held
   items are already out of the queue (**Items closed for re-intake**).
-- **Decisions taken.** One program under one umbrella design (1). A
-  repository per component, coupled through written seams and tagged
-  releases, and one queue for work in all of them (2, as amended on
-  2026-11-14). Seams as specifications with black-box conformance
-  suites in `buildwarden/buildwarden-specs` (3, a10). Drivers as separate
-  binaries on a public Go kit, then modules, then repositories, with Hyper-V
-  as the pilot (4), behind a `warden` dispatcher that works like git's (5).
-  The guest families and the executor stay with the kit for now (6, 7). The
-  collector is specified in two parts and gets no storage boundary in this
-  program (8, a1, a2). Truststore generation moves into the relay, JKS and
-  PKCS12 (9). The build-link contract has one guarantee and two classes, and
-  the class is not recorded in the ledger (10, a7). The relay ships native
-  binaries usable at host level as well as unikernel images, with host mode
-  built for Linux first, then macOS (11, a3), and its Linux appliance uses
-  the kernel network path (12). The loop gets its
-  own public repository (13). A feature freeze, with regression and security
-  fixes exempt, ended by Jeff no earlier than wave 4 (14, a4). Carried Hermit
-  forks, with nothing raised upstream before the end of M6 (15, a9).
+- **Decisions taken.** One program under one umbrella design (1). A repository
+  per component, coupled through written seams and tagged releases, and one
+  queue for work in all of them (2, as amended on 2026-11-14). Seams as
+  specifications with black-box conformance suites in
+  `buildwarden/buildwarden-specs` (3, a10). Drivers as separate binaries that
+  `warden` runs through a written command contract, then modules, then
+  repositories, with Hyper-V as the pilot (4); `warden` finds them as git finds
+  a subcommand and stays the orchestrator (5); both reworded by the design
+  review of `driver-contract`, approved 2026-11-15. The guest families and the
+  executor stay with the kit for now (6, 7). The collector is specified in two
+  parts and gets no storage boundary in this program (8, a1, a2). Truststore
+  generation moves into the relay, JKS and PKCS12 (9). The build-link contract
+  has one guarantee and two classes, and the class is not recorded in the
+  ledger (10, a7). The relay ships native binaries usable at host level as well
+  as unikernel images, with host mode built for Linux first, then macOS (11,
+  a3), and its Linux appliance uses the kernel network path (12). The loop gets
+  its own public repository (13). A feature freeze, with regression and
+  security fixes exempt, ended by Jeff no earlier than wave 4 (14, a4). Carried
+  Hermit forks, with nothing raised upstream before the end of M6 (15, a9).
   `buildwarden-relay` public at M1 (16). A driver index last (17). A rule
-  changes in the item that makes it true (18). No waiver of the per-item
-  design (19). The Bootstrap comparison is accepted for three model changes,
-  BOOT-01 (S3), BOOT-02 (K2) and BOOT-05 (S2), each made later by the item
-  named (a12).
-- **Rejected.** The relay split first and the drivers after, or the reverse.
-  Go contract tests in this repository as the seams' check. Completing only
-  the in-tree driver contract; drivers as RPC plugins; users calling driver
-  binaries directly. A copy of the guest families in each driver, or their
-  own module now. Naming firecracker an exception to the build-link
-  contract, or loosening its wording until firecracker passes. The relay's
-  own network stack on the appliance. The loop in the private sessions
+  changes in the item that makes it true (18). No waiver of the per-item design
+  (19). The Bootstrap comparison is accepted for two model changes, BOOT-01
+  (S3) and BOOT-05 (S2), each made later by the item named (a12); BOOT-02's
+  change is made in K1 under K1's own comparison.
+- **Rejected.** The relay split first and the drivers after, or the reverse. Go
+  contract tests in this repository as the seams' check. Completing only the
+  in-tree driver contract; a Go API every driver links; drivers behind an RPC
+  plugin framework; users calling driver binaries directly; a dispatcher that
+  hands the whole build to the driver. A copy of the guest families in each
+  driver, or their own module now. Naming firecracker an exception to the
+  build-link contract, or loosening its wording until firecracker passes. The
+  relay's own network stack on the appliance. The loop in the private sessions
   repository. Changing every rule now. A waiver of the design for move-only
-  changes. In the review: a storage boundary for the collector in K1 (a2),
-  the build-link class in the signed environment record (a7), leaving the
-  held items on hold until P1 (a8), contact with `hermit-os` after the first
+  changes. In the review: a storage boundary for the collector in K1 (a2), the
+  build-link class in the signed environment record (a7), leaving the held
+  items on hold until P1 (a8), contact with `hermit-os` after the first
   driver's adoption (a9), and repositories created by Jeff alone (a11).
 - **For future designs touching `componentization`,
   `component-independence`, `driver-contract`, `driver-binaries`, `kit`,
@@ -820,11 +850,12 @@ Implemented and published the same day as a process item (FLOW-03).
   - A design is a program item only when it lists this document in
     `related`. While FLOW-20 stands, intake files anything else on hold,
     unless it fixes a regression on `main` or a security problem.
-  - This design approves one rule change, FLOW-20. The table **Rule changes
-    the program will make** is direction only: each change is declared in
-    `rule_changes` and approved by name in the design of the item that makes
-    it true (Decision 18, FLOW-14). That includes the three `bootstrap.md`
-    edits, whose comparison is already accepted here (BOOT-07).
+  - This design approves one rule change, FLOW-20. The table **Rule changes the
+    program will make** is direction only: each change is declared in
+    `rule_changes` and approved by name in the design of the item that makes it
+    true (Decision 18, FLOW-14). That includes the BOOT-01 and BOOT-05 edits to
+    `bootstrap.md`, whose comparison is accepted here (BOOT-07); BOOT-02's is
+    accepted in K1's design.
   - FLOW-20 relaxes four things and nothing else. FLOW-19 still decides, for
     each item, whether its review can be skipped.
   - A phase that touches a seam changes the seam's specification first, then
