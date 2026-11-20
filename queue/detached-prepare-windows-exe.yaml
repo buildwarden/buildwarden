@@ -134,15 +134,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261120T203034Z
+      expires: 2026-11-20T22:31:50.674069855Z
     note: 'main at 480e205: 1 commit since the branch merged it; no file changed by both'
 budget:
   estimate:
     runs: 5
     steps: 10
   spent:
-    runs: 4
+    runs: 5
     steps: 14
 questions:
   - id: a1
@@ -351,3 +351,6 @@ history:
   - at: 2026-11-20T19:42:36Z
     by: human/jeff
     event: 'seeded f6-refresh: main at 480e205: 1 commit since the branch merged it; no file changed by both'
+  - at: 2026-11-20T20:31:50Z
+    by: cloud/20261120T203034Z
+    event: claimed f6-refresh until 2026-11-20T22:31:50Z
