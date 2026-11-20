@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -88,6 +89,47 @@ func TestCallExitCodes(t *testing.T) {
 			_, err := d.call("doctor", map[string]any{"contract": 1}, callOpts{})
 			if !check(err) {
 				t.Errorf("doctor exiting as %s: %v", variant, err)
+			}
+		})
+	}
+}
+
+// doctor of a driver binary prints ok only when neither warden's part nor
+// the driver's result is blocked, and fails when either is: a blocked doctor
+// has no ok line (UX-09). A driver that lists no doctor has no result, so
+// warden's part alone decides.
+func TestDoctorBinaryOk(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		lists         bool
+		call          string
+		wardenBlocked bool
+		failed        bool
+	}{
+		{"nothing blocked", true, "ok", false, false},
+		{"warden's part blocked", true, "ok", true, true},
+		{"the driver blocked", true, "blocked", false, true},
+		{"both blocked", true, "blocked", true, true},
+		{"no doctor listed", false, "ok", false, false},
+		{"no doctor listed, warden's part blocked", false, "ok", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			useTestDriver(t, "WARDEN_TEST_CALL", tc.call)
+			d := describedTest(t, time.After)
+			if !tc.lists {
+				d.desc.Commands = slices.DeleteFunc(slices.Clone(d.desc.Commands),
+					func(c string) bool { return c == "doctor" })
+			}
+			var out strings.Builder
+			failed, err := doctorBinary(&out, &Config{},
+				&selectedDriver{found: testFound(), bin: d}, tc.wardenBlocked)
+			want := "ok\n"
+			if tc.failed {
+				want = ""
+			}
+			if err != nil || failed != tc.failed || out.String() != want {
+				t.Errorf("doctor = %v, %v, printed %q; want %v, printed %q",
+					failed, err, out.String(), tc.failed, want)
 			}
 		})
 	}

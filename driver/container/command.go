@@ -125,7 +125,8 @@ func reap(_ context.Context, req *drivercmd.ReapRequest) (int, error) {
 }
 
 // doctor checks what a build checks before it creates anything: the relay
-// image's shape and the runtime, which it names (DRV-25).
+// image's shape and the runtime, which it names (DRV-25). warden prints ok
+// after it when nothing blocks.
 func doctor(_ context.Context, req *drivercmd.DoctorRequest) (bool, error) {
 	d, err := buildRunner(req.Settings)
 	if err != nil {
@@ -133,7 +134,6 @@ func doctor(_ context.Context, req *drivercmd.DoctorRequest) (bool, error) {
 	}
 	out := stdoutOf(req.Streams)
 	fmt.Fprintf(out, "container runtime: %s\n", d.runtime)
-	fmt.Fprintln(out, "ok")
 	return false, nil
 }
 

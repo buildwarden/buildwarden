@@ -19,8 +19,8 @@ import (
 //
 //	WARDEN_TEST_DESCRIBE  ok, hang, wrong-name, no-reap, clash, bad-key,
 //	                      contract-9
-//	WARDEN_TEST_CALL      ok, fixable, busy, exit-2, exit-3, exit-4, exit-7,
-//	                      no-result, not-json, hang
+//	WARDEN_TEST_CALL      ok, blocked, fixable, busy, exit-2, exit-3, exit-4,
+//	                      exit-7, no-result, not-json, hang
 //	WARDEN_TEST_RUN       ok, failed, noise, early, no-stop, probe-hang
 //	WARDEN_TEST_REAP      ok, fail, hang
 //	WARDEN_TEST_LOG       a file each request is appended to, as one line
@@ -189,6 +189,9 @@ func testCall(variant, ok string) int {
 			"fix": "do what the test says"}}`
 	}
 	switch variant {
+	case "blocked":
+		result(`{"blocked": true}`)
+		return 0
 	case "fixable", "fail":
 		result(errObj("fixable"))
 		return 1

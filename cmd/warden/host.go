@@ -91,7 +91,11 @@ or agent gate.`,
 			return err
 		}
 		if sd.bin != nil {
-			return doctorBinary(cfg, sd, blocked)
+			failed, err := doctorBinary(out, cfg, sd, blocked)
+			if failed {
+				os.Exit(1)
+			}
+			return err
 		}
 		set, err := linkedSettings(cfg, sd, "doctor")
 		if err != nil {
@@ -412,30 +416,29 @@ func hostRequest(cfg *Config, sd *selectedDriver, command string) (map[string]an
 }
 
 // doctorBinary runs a driver binary's doctor after warden's own part of the
-// report; blocked is whether warden's part blocks a build. It exits 1 when
-// either does (UX-09).
-func doctorBinary(cfg *Config, sd *selectedDriver, blocked bool) error {
-	if !sd.bin.desc.lists("doctor") {
-		fmt.Println("ok")
-		if blocked {
-			os.Exit(1)
+// report; blocked is whether warden's part blocks a build. It reports
+// whether doctor fails, which it does when either part blocks (UX-09), and
+// prints ok to out only when neither does: a blocked doctor ends with no
+// extra line. A driver that lists no doctor leaves warden's part to decide.
+func doctorBinary(out io.Writer, cfg *Config, sd *selectedDriver, blocked bool) (bool,
+	error) {
+	if sd.bin.desc.lists("doctor") {
+		req, err := hostRequest(cfg, sd, "doctor")
+		if err != nil {
+			return false, err
 		}
-		return nil
+		res, err := sd.bin.call("doctor", req, callOpts{})
+		if err != nil {
+			return false, err
+		}
+		var driverBlocked bool
+		_ = json.Unmarshal(res["blocked"], &driverBlocked)
+		blocked = blocked || driverBlocked
 	}
-	req, err := hostRequest(cfg, sd, "doctor")
-	if err != nil {
-		return err
+	if !blocked {
+		fmt.Fprintln(out, "ok")
 	}
-	res, err := sd.bin.call("doctor", req, callOpts{})
-	if err != nil {
-		return err
-	}
-	var driverBlocked bool
-	_ = json.Unmarshal(res["blocked"], &driverBlocked)
-	if blocked || driverBlocked {
-		os.Exit(1)
-	}
-	return nil
+	return blocked, nil
 }
 
 // setupBinary runs a driver binary's setup.

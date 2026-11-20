@@ -170,12 +170,12 @@ func TestCleanKeepsTheLiveBuilds(t *testing.T) {
 	}
 }
 
-// doctor names the runtime it resolved, then ok (DRV-25).
+// doctor names the runtime it resolved, and leaves ok to warden (DRV-25).
 func TestDoctorNamesTheRuntime(t *testing.T) {
 	dockerOnPath(t, `"info "*) exit 0 ;;`)
 	res, out, err := callContainer(t, drivercmd.CmdDoctor, &drivercmd.Request{Contract: 1,
 		Args: []string{}})
-	if err != nil || res.Blocked || out != "container runtime: docker\nok\n" {
+	if err != nil || res.Blocked || out != "container runtime: docker\n" {
 		t.Errorf("doctor = %+v, %v:\n%q", res, err, out)
 	}
 }

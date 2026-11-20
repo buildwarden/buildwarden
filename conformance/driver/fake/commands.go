@@ -84,7 +84,7 @@ func stopRelay(dir string) {
 }
 
 func doctor(_ *request, cfg *config, _ []string) (map[string]any, error) {
-	fmt.Printf("fake: %s\nok\n", cfg.greeting)
+	fmt.Printf("fake: %s\n", cfg.greeting)
 	return map[string]any{"blocked": false}, nil
 }
 
