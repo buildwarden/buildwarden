@@ -169,14 +169,18 @@ type sequenceTest struct {
 	clock   *fakeClock
 	signals chan os.Signal
 	stopped bool // stopSignals was called
-	seq     *buildSequence
-	out     chan buildOutcome
+	// signalsStopped is closed when stopSignals is called: the sequence
+	// has taken a signal and is stopping the build.
+	signalsStopped chan struct{}
+	seq            *buildSequence
+	out            chan buildOutcome
 }
 
 func newSequenceTest(run fakeRun, timeout time.Duration) *sequenceTest {
 	tr := &trace{}
 	st := &sequenceTest{tr: tr, sess: newFakeSession(tr), clock: newFakeClock(),
-		signals: make(chan os.Signal, 1), out: make(chan buildOutcome, 1)}
+		signals: make(chan os.Signal, 1), signalsStopped: make(chan struct{}),
+		out: make(chan buildOutcome, 1)}
 	d := &linkedDriver{Commands: []string{"run"}, Run: func(_ context.Context, _ *Config,
 		_ *driver.BuildRequest,
 		start *driver.Start, h driver.Host) ([]string, error) {
@@ -188,7 +192,7 @@ func newSequenceTest(run fakeRun, timeout time.Duration) *sequenceTest {
 		peer:    newLinkedPeer(d, "fake", &Config{}, &driver.BuildRequest{}),
 		session: st.sess,
 		timeout: timeout, signals: st.signals, after: st.clock.after,
-		stopSignals: func() { st.stopped = true },
+		stopSignals: func() { st.stopped = true; close(st.signalsStopped) },
 	}
 	return st
 }
@@ -304,7 +308,8 @@ func TestBuildSequenceStop(t *testing.T) {
 }
 
 // A signal before the relay is up stops the build there: the driver's claim
-// is refused and nothing more is started.
+// is refused and nothing more is started. The driver reports its relay only
+// once the sequence has taken the signal, so the order is fixed.
 func TestBuildSequenceSignalBeforeTheRelay(t *testing.T) {
 	gate := make(chan struct{})
 	s := newSequenceTest(func(tr *trace, st *driver.Start, h driver.Host) ([]string, error) {
@@ -313,7 +318,11 @@ func TestBuildSequenceSignalBeforeTheRelay(t *testing.T) {
 	}, 0)
 	s.begin()
 	s.signals <- os.Interrupt
-	time.Sleep(10 * time.Millisecond)
+	select {
+	case <-s.signalsStopped:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("the signal was not taken; trace %v", s.tr.get())
+	}
 	close(gate)
 	out := s.end(t)
 	wantTrace(t, s.tr.get(), "relay-started", "claim refused: the build was stopped",
