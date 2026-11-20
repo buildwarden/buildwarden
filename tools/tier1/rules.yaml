@@ -62,7 +62,7 @@ rules:
   TEST-01: {owner: "make test"}
   TEST-02: {follow-up: "test scoping and tier2_gaps consistency"}
   TEST-03: {follow-up: "test scoping and tier2_gaps consistency"}
-  TEST-05: {owner: "the conformance workflow (the specs repository's suites at the pinned releases) and make test (the ledger round-trip tests)"}
+  TEST-05: {owner: "the conformance workflow (the specs repository's suites at the pinned releases) and make test (the ledger round-trip tests; the driver suite's static tier runs there)"}
   TEST-07: {follow-up: "test scoping and tier2_gaps consistency"}
   TEST-08: {owner: "the security suite (security-suite item)"}
 
