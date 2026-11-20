@@ -1,6 +1,6 @@
 ---
 feature: merge-confirm-attended
-status: draft
+status: archived
 drivers: []              # the loop's queue code, checks and skills; no driver tree is reached
 seams: []                # no GLOBAL-08 seam changes
 surfaces: []             # `wf` and the skills are the loop's tools, not a user-facing surface of the product
@@ -731,7 +731,8 @@ the state step of the 5-step estimate (4 steps + 1, one run).
 ## Consolidation
 
 A process item has no Publish phase and no consolidation pass (FLOW-03). The
-implement step merges current `main` before it opens the PR.
+implement step merges current `main` before it opens the PR: `0cd7eba`
+(#131), merged at `7a534fc` with no conflicts.
 
 ## Rollback notes
 
@@ -739,4 +740,86 @@ None.
 
 ## Archive summary
 
-Filled in at `x2-implement` (FLOW-12).
+Implemented on 2026-11-20 as a process item (`x2-implement`, attended tick
+`cloud/20261120T203034Z`), after design review r1 approved the design and
+both rule changes at `89f753b` (Jeff; FLOW-04 approved with a change, a4
+(b)) and the delta review r2 approved at `afc6158`. `main` had moved to
+`0cd7eba` (#131, detached-prepare-windows-exe), merged without conflicts
+at `7a534fc` before the PR was opened.
+
+- **Built: A, entry-scoped approvals** (`check/review.go`,
+  `check/declared.go`). `approvals` splits the Design review section into
+  top-level bullets; a bullet whose head matches `(Re-review )?r<N>` is a
+  review entry, and its approval is its first `approved at <sha>`, rule-change
+  approvals removed, whose sha no earlier entry recorded (compared by
+  prefix). One sha per entry, in document order; `lastApproval` replaces
+  `a[len(a)-1]` at its three callers. `reviewed()` counts entries with an
+  approval, so an entry that only cites an older approval fails.
+- **Built: the r2 delta.** A sha an earlier entry recorded is a citation,
+  not the entry's approval, wherever it appears in the entry (two table
+  cases). No rule, impact field or other decision changed.
+- **Built: B, attended merge confirmation** (`queue/next.go`,
+  `cmd/wf/main.go`). `queue.MayComplete` lets a `human` or `host` worker
+  complete a merge step or an `f6-merged-<n>` with `wf done`, the same
+  done-when check running; claim, release and renew keep `Satisfies`.
+  `done` refuses a step already done. `wf stale` prints `merged: F (confirm:
+  wf done -feature F -step S)`. `workflow-human` confirms the merges Jeff
+  makes in the sitting (step 5); `workflow-tick` step 2 notes a merge step
+  may already be done.
+- **Built: C, the seeded state step** (`queue/queue.go`, `queue/phases.go`,
+  `queue/statestep.go`, `cmd/wf/main.go`). `state_step` (process items only,
+  refused by `Validate` elsewhere); `wf state-step -note TEXT | -clear`,
+  human only; `Seed` adds `x4-state<suffix>` before `linkAdded` for a process
+  item entering Close; the process `close` template waits for added steps;
+  `rerunPublishHostSteps` is kept to the feature round (the waiter
+  coupling, with its test). `workflow-human` step 3.5 records the state step
+  with `wf state-step` instead of a hand-added stanza.
+- **Built: rule text and guidance.** FLOW-03's three table rows and FLOW-04's
+  new paragraph as approved at `89f753b`; `TEMPLATE.md`'s Design review
+  guidance (the entry head), `wf-plan.md`, `wf-design.md` and
+  `workflow-human` ("the newest review entry's `approved at <sha>`").
+- **Deviations.** `wf state-step` refuses `-note` together with `-clear`
+  (the design named the flags, not their combination). A pending `x4-state`
+  takes a new note only in Close; before Close the command records the field
+  alone, which `Seed` reads. `-clear` in Close removes any pending
+  `x4-state`, a hand-added one included, not only a seeded one, and its
+  need on `x4-close`; a done one is refused. A package-doc paragraph in
+  `wf`'s `main.go` describes `done`'s merge exception and `state-step`.
+- **Decisions taken.** Approvals read per entry, the first un-cited sha
+  (1, a1, r2); the entry head stated in `TEMPLATE.md` and `workflow-human`,
+  FLOW-19's wording unchanged (a2 (a)); `done` by a `human` or `host`
+  worker on a merge step, which stays `cloud` and is never offered (2, a3
+  (a), a4 (b)); a second `done` refused (3, a5); `state_step` recorded by
+  the human with `wf state-step` and seeded at Close (4, a6); `waitsAdded`
+  on the process `close` (a7 (a)); the migration stays a human checklist,
+  only the seeded step taken (5, a8 (a)); the attended session runs only
+  human steps after a merge (6); `wf stale` names the command (7);
+  detached-prepare-windows-exe left as is (a9 (a)).
+- **Rejected.** Counting every `approved at` in the section (the bug), any
+  bullet whose head says "approved" (F) and a strict head regex (S); a
+  FLOW-19 sentence for the entry head (a2 (b)); a new affinity kind for
+  merge steps and a `wf confirm` command (a3 (b), (c)); confirmation by
+  human workers only (a4 (a)) or only for PRs merged in the sitting (a4
+  (c)); a duplicate `done` line (a5 (b)); a design front-matter key or the
+  hand-added step for the state step (a6 (b), (c)); `Seed` writing the need
+  directly (a7 (b)); seeding steps in other phases, a generic `wf migrate`
+  run by `x4-close`, a done-when check on `x4-state`, and the FLOW-19
+  mechanical-rebase exemption (a8 (b), (c); the exemption is split off to
+  `wf-state-migration-step`).
+- **For future designs touching `workflow`, `merge-confirmation`,
+  `attended-session`, `workflow-human`, `state-step`, `x4-state`, `close`,
+  `design-review`, `approvals`, `process-item`, `wf-done` or `wf-stale`:**
+  a review entry is one top-level bullet led by `r<N>, <date>: <outcome>`;
+  its own `approved at <sha>` comes before any earlier approval it cites,
+  and a sha an earlier entry recorded never counts as the entry's approval.
+  A merge step is completed by whichever of the tick, an attended session
+  or a native session runs `wf done` first; the check reads local refs, so
+  a stale checkout leaves it pending. A process item's post-merge work on
+  the `workflow` branch is its `state_step`, recorded only by a human;
+  `x4-close` waits for every pending step added to Close before it is
+  seeded, and a step added later is not linked.
+- **After the merge**, at this item's hand-added `x4-state` (the last
+  one), once `dist/wf` is rebuilt from the merged `main`: check that
+  `x4-close` needs `x4-state`, update the `workflow` branch's README (the
+  `f7-merge` row, the process round, the refresh paragraph, `wf
+  state-step`), `wf validate`, `wf commit`.
