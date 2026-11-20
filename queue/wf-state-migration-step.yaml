@@ -1,6 +1,6 @@
 feature: wf-state-migration-step
 title: Exempt a mechanical rebase of approved rule text from FLOW-19's delta re-review, when wf check can prove it
-priority: 3
+priority: 4
 kind: process
 status: queued
 round: process
