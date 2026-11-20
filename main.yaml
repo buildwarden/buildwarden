@@ -3,7 +3,5 @@ ci: green
 up_to_date: required
 areas:
   sha: 480e205c969fbc678128b80af17b25328834cd9d
-  differences: 2
-  lines:
-    - 'reaches: core lacks collector (conformance/driver depends on collector)'
-    - 'reaches: core lacks relaycfg (conformance/driver depends on relaycfg)'
+  differences: 0
+  lines: []
