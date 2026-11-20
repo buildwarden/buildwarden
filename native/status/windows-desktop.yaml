@@ -1,6 +1,6 @@
 # Written by native-tick.sh; see the workflow README. One line of reason, no logs (FLOW-18).
 machine: windows-desktop
-last_run: 2026-11-19T23:10:02Z
-outcome: idle
-reason: "idle: 2 open gaps, nothing moved since 2026-11-19T17:10:27Z"
-since: 2026-11-19T23:10:02Z
+last_run: 2026-11-20T22:40:51Z
+outcome: worked
+reason: "claude exited 0"
+since: 2026-11-20T22:40:51Z
