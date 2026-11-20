@@ -1,0 +1,33 @@
+feature: relay-release-forms-spec
+title: 'Seam 8: specify the relay''s release forms (form names, file roles, manifest and hash) before M6 adopts a release'
+priority: 7
+status: queued
+round: feature
+phase: 0
+design: docs/design/relay-release-forms-spec.md
+branch: feat/relay-release-forms-spec
+repos:
+  - buildwarden/buildwarden
+  - buildwarden/buildwarden-specs
+alters_relationships: null
+source: 'Filed on Jeff''s word, 2026-11-20, as driver-contract''s plan task 38 (its assumed question a11, answered (a)): the componentization umbrella lists seam 8 (relay release forms: each form, host-mode binary per platform, unikernel image, appliance image, OCI image, with a published hash, and the devices a relay VM needs) among the seams that get a specification, but no phase writes it; K1 defines the four form names and four file roles as provisional Go constants of the kit (driver/relaysource) and writes no seam 8 text. This S-track program item (FLOW-20) writes the specification, in buildwarden/buildwarden-specs with its conformance, before M6 adopts a relay release. Areas undeclared until its design.'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 2
+    steps: 12
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-20T22:53:31Z
+    by: human/jeff
+    event: queued at position 7
