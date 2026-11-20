@@ -215,23 +215,6 @@ func announcedConfig() (*Config, error) {
 	return cfg, nil
 }
 
-// resolveRuntime returns the container runtime to run: the one the
-// container driver's settings name when it is a supported runtime, the
-// detected one when none does. Another value is refused here, before
-// anything is looked up, run or created. Only the commands that run the
-// container runtime call this, so a run that does not use the setting does
-// not validate it (UX-08).
-func resolveRuntime(set driver.Settings) (string, error) {
-	v, _ := set.String("runtime")
-	if v == "" {
-		return DetectRuntime()
-	}
-	if name, ok := supportedRuntime(v); ok {
-		return name, nil
-	}
-	return "", unsupportedRuntime(v, set.Source("runtime"))
-}
-
 // validateGuestOS refuses a --guest-os the driver does not take: the bundled
 // drivers with today's messages, another driver by its describe's list.
 func validateGuestOS(guestOS, driverName string, caps capabilities) error {

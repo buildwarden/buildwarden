@@ -143,6 +143,16 @@ func init() {
 	rootCmd.AddCommand(imageCmd)
 }
 
+// noImageFor is the refusal of an image prepare for a guest os the bundled
+// driver drv has no image for, the container driver's every one.
+func noImageFor(osName, drv string) error {
+	return driver.Fixable("",
+		"no %s image for --driver %q "+
+			"(vz: macos; qemu: linux, windows; hyperv: windows; "+
+			"firecracker: linux)",
+		osName, drv)
+}
+
 func defaultImageOS(drv string) string {
 	switch drv {
 	case "vz":
@@ -194,11 +204,7 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 	case "hyperv/windows":
 		path, err = prepareHyperVWindows(cmd.Context(), source, opts)
 	default:
-		return driver.Fixable("",
-			"no %s image for --driver %q "+
-				"(vz: macos; qemu: linux, windows; hyperv: windows; "+
-				"firecracker: linux)",
-			osName, drv)
+		return noImageFor(osName, drv)
 	}
 	if err != nil {
 		return err
@@ -416,6 +422,13 @@ func formatVZImages(imgs []vz.Image) []string {
 // driver's default_image_os.
 func prepareBinary(cfg *Config, sd *selectedDriver, args []string) error {
 	bin := sd.bin
+	if !bin.desc.lists("image-prepare") && contains(bundledDrivers, sd.name()) {
+		osName := flagImgOS
+		if osName == "" {
+			osName = defaultImageOS(sd.name())
+		}
+		return noImageFor(osName, sd.name())
+	}
 	if !bin.desc.lists("image-prepare") {
 		return driver.Fixable("", "driver %q prepares no images", sd.name())
 	}

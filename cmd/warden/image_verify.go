@@ -78,7 +78,10 @@ func runImageVerify(_ *cobra.Command, _ []string) error {
 		}
 		drift += resultInt(res, "drift")
 	}
-	if flagDriver != "" && bins[flagDriver] != nil {
+	// A driver binary that keeps no layer cache, the container driver's, gets
+	// layerCaches' refusal.
+	if bin := bins[flagDriver]; flagDriver != "" && bin != nil &&
+		bin.desc.lists("image-verify") {
 		return finishVerify(drift)
 	}
 	caches, err := layerCaches(flagDriver)

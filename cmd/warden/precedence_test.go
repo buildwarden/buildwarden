@@ -11,6 +11,7 @@ import (
 
 	"github.com/fatih/color"
 
+	"github.com/buildwarden/buildwarden/driver/container"
 	"github.com/buildwarden/buildwarden/driver/drivercmd"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
 )
@@ -67,12 +68,16 @@ func setArg(v string) func(*testing.T) {
 // from the config file warden read, precedenceArgs and the environment.
 func driverSetting(drv, command, name string) func(*testing.T, *Config) string {
 	return func(t *testing.T, c *Config) string {
-		set, err := drivercmd.Resolve(drv, linkedDrivers[drv].Settings, command,
+		settings := container.Settings
+		if l := linkedDrivers[drv]; l != nil {
+			settings = l.Settings
+		}
+		set, err := drivercmd.Resolve(drv, settings, command,
 			precedenceArgs, absConfigFile(c), os.Environ())
 		if err != nil {
 			t.Fatalf("resolving: %v", err)
 		}
-		for _, s := range linkedDrivers[drv].Settings {
+		for _, s := range settings {
 			if s.Name == name && s.Type == drivercmd.Age {
 				d, _ := set.Age(name)
 				return d.String()

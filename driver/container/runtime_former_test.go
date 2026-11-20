@@ -1,7 +1,7 @@
 // TRANSITIONAL(runtime-former-values): removed with runtime_former.go, in
 // the change that prepares 1.0.
 
-package main
+package container
 
 import (
 	"errors"
@@ -88,7 +88,7 @@ func TestFormerRuntimeValueInTheError(t *testing.T) {
 			`--runtime is "docker.exe"; the container runtime ` +
 				"is named in lower case, without an extension",
 			"pass --runtime docker"},
-		{projectConfig, "nerdctl",
+		{"warden.toml", "nerdctl",
 			`[runtime] cli in warden.toml is "nerdctl"; the container driver ` +
 				"supports finch, docker and podman and no longer runs another " +
 				"runtime",
@@ -96,7 +96,7 @@ func TestFormerRuntimeValueInTheError(t *testing.T) {
 				"use nerdctl with the container driver"},
 	} {
 		source := tc.source
-		if source == projectConfig {
+		if source == "warden.toml" {
 			source += " [runtime] cli"
 		}
 		err := unsupportedRuntime(tc.v, source)

@@ -3,11 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/buildwarden/buildwarden/driver"
-	"github.com/buildwarden/buildwarden/driver/container"
 	"github.com/buildwarden/buildwarden/driver/drivercmd"
 	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
@@ -15,9 +13,9 @@ import (
 	"github.com/buildwarden/buildwarden/driver/vz"
 )
 
-// The drivers linked into warden, until each becomes a binary (K2; the
-// container driver in K1). This is the one file besides their doctor, setup,
-// image and clean code that names them. A linked driver takes part in the
+// The four VM drivers, linked into warden until each becomes a binary (K2).
+// This is the one file besides their doctor, setup, image and clean code
+// that names them. A linked driver takes part in the
 // same build sequence as a driver binary (buildseq.go), with the messages as
 // Go calls.
 
@@ -78,16 +76,11 @@ type linkedDriver struct {
 		buildID string) (code int, err error)
 }
 
-// The commands warden serves for the linked drivers: the container driver's,
-// and the VM drivers', whose doctor, setup, image and clean code stays in
-// warden in K1.
-var (
-	containerCommands = []string{drivercmd.CmdRun, drivercmd.CmdReap, drivercmd.CmdDoctor,
-		drivercmd.CmdClean, drivercmd.CmdAttach}
-	vmCommands = []string{drivercmd.CmdRun, drivercmd.CmdReap, drivercmd.CmdDoctor,
-		drivercmd.CmdSetup, drivercmd.CmdImagePrepare, drivercmd.CmdImageList,
-		drivercmd.CmdImageVerify, drivercmd.CmdClean}
-)
+// vmCommands are the commands warden serves for the linked VM drivers, whose
+// doctor, setup, image and clean code stays in warden in K1.
+var vmCommands = []string{drivercmd.CmdRun, drivercmd.CmdReap, drivercmd.CmdDoctor,
+	drivercmd.CmdSetup, drivercmd.CmdImagePrepare, drivercmd.CmdImageList,
+	drivercmd.CmdImageVerify, drivercmd.CmdClean}
 
 // description is the describe of the linked driver called name, built by
 // the kit from its declarations as a driver binary's is.
@@ -107,10 +100,6 @@ func (l *linkedDriver) description(name string) (*drivercmd.Description, error) 
 
 // linkedDrivers are the drivers linked into warden, by name.
 var linkedDrivers = map[string]*linkedDriver{
-	"container": {Capabilities: capabilities{Shell: true, Keep: keepNone, Exited: true,
-		Containerfile: containerfileTranslate, GuestOS: []string{"linux"}},
-		Commands: containerCommands, Settings: container.Settings,
-		Preflight: containerPreflight, Run: containerRun, Attach: containerAttach},
 	"qemu": {Capabilities: capabilities{VM: true, Keep: keepStopped,
 		Containerfile: containerfileTranslate, GuestOS: []string{"linux", "windows"}},
 		Commands: vmCommands, ImageOS: []string{"linux", "windows"},
@@ -216,9 +205,9 @@ func (l *linkedDriver) kit(name string, cfg *Config,
 }
 
 // settingsToRequest puts the linked drivers' settings that their code takes
-// in the build request there: the ages of qemu and hyperv, hyperv's network
-// and the container driver's relay image. A setting the driver does not
-// declare is not set, and leaves the field at its default.
+// in the build request there: the ages of qemu and hyperv, and hyperv's
+// network. A setting the driver does not declare is not set, and leaves the
+// field at its default.
 func settingsToRequest(set driver.Settings, req *driver.BuildRequest) {
 	if v, ok := set.Age("image-refresh-after"); ok {
 		req.ImageRefreshAfter = v
@@ -228,9 +217,6 @@ func settingsToRequest(set driver.Settings, req *driver.BuildRequest) {
 	}
 	if v, ok := set.String("network"); ok {
 		req.Network = v
-	}
-	if v, ok := set.String("relay-image"); ok {
-		req.RelayImage = v
 	}
 }
 
@@ -244,70 +230,4 @@ func callLinkedRun(ctx context.Context, l *linkedDriver, name string, cfg *Confi
 		return nil, err
 	}
 	return res.Kept, nil
-}
-
-// containerPreflight is the container driver's probe: it refuses a relay
-// image that is not one, and resolves the container runtime (the configured
-// one, else detection), refusing one that is not supported or does not
-// answer, before anything is created.
-func containerPreflight(_ context.Context, _ *Config, req *driver.BuildRequest,
-	start *driver.Start) error {
-	if err := checkRelayImage(req.RelayImage,
-		start.Settings.Source("relay-image")); err != nil {
-		return err
-	}
-	_, err := resolveRuntime(start.Settings)
-	return err
-}
-
-// containerRun is the container driver's run. It resolves the runtime once
-// more, as a build of a driver binary does after its probe.
-func containerRun(ctx context.Context, cfg *Config, req *driver.BuildRequest,
-	start *driver.Start, host driver.Host) ([]string, error) {
-	d, err := containerDriver(cfg, start.Settings)
-	if err != nil {
-		return nil, err
-	}
-	return d.Run(ctx, req, start, host)
-}
-
-// containerAttach is the container driver's attach, on the runtime it
-// resolves from the build's flags and config file, with the request's
-// streams, else the process's own.
-func containerAttach(_ context.Context, cfg *Config, req *driver.BuildRequest,
-	buildID string) (int, error) {
-	set, err := drivercmd.Resolve("container", container.Settings, drivercmd.CmdAttach,
-		driverFlags.argsFor(drivercmd.CmdRun), absConfigFile(cfg), os.Environ())
-	if err != nil {
-		return 0, err
-	}
-	d, err := containerDriver(cfg, set)
-	if err == nil {
-		err = set.Err()
-	}
-	if err != nil {
-		return 0, err
-	}
-	var stdin io.Reader = os.Stdin
-	var stdout, stderr io.Writer = os.Stdout, os.Stderr
-	if req.Stdin != nil {
-		stdin = req.Stdin
-	}
-	if req.Stdout != nil {
-		stdout = req.Stdout
-	}
-	if req.Stderr != nil {
-		stderr = req.Stderr
-	}
-	return d.Attach(buildID, stdin, stdout, stderr)
-}
-
-// containerDriver is the container driver on the runtime set resolves.
-func containerDriver(cfg *Config, set driver.Settings) (*container.Driver, error) {
-	runtime, err := resolveRuntime(set)
-	if err != nil {
-		return nil, err
-	}
-	return &container.Driver{Runtime: runtime, Verbose: cfg.Output.Verbose,
-		Version: version}, nil
 }

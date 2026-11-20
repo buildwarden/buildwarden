@@ -1,12 +1,12 @@
 // TRANSITIONAL(runtime-former-values): removed in the change that prepares
-// 1.0, together with the call in unsupportedRuntime (config.go),
+// 1.0, together with the call in unsupportedRuntime (runtime.go),
 // runtime_former_test.go, the "A path, or another runtime" subsection of the
 // configuration reference (guide/configuration.md) and the upgrade note in
 // getting-started/installation.md that links to it. A search for the marker
 // finds all five. It also finds docs/design/runtime-cli-project-path.md, the
 // archived design that records them, which is kept.
 //
-// Until the container runtime was limited to containerRuntimes, warden ran
+// Until the container runtime was limited to runtimes, warden ran
 // whatever program the setting named, and four forms of that were in use: a
 // supported runtime in another letter case or with .exe, a path to one,
 // nerdctl, and a path to any other program. supportedRuntime refuses each
@@ -14,14 +14,14 @@
 // permanent error only lists the supported values. It words a refusal that
 // has already been made and never changes whether a value is accepted.
 
-package main
+package container
 
 import "strings"
 
 // formerRuntimeValue recognizes a refused runtime value in one of the forms
 // that ran before, and words the refusal: what says what is wrong with the
 // value, and fix follows the level's "set it to". Neither holds text from v.
-// A name in them is containerRuntimes' own, and a directory in v is not
+// A name in them is runtimes' own, and a directory in v is not
 // repeated: a project's warden.toml may have chosen it, and warden would be
 // telling the user to put a directory someone else named on PATH.
 func formerRuntimeValue(v string) (what, fix string, ok bool) {

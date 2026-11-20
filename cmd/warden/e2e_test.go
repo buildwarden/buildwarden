@@ -17,10 +17,10 @@ import (
 )
 
 // warden's end-to-end tests run a copy of this test binary as warden (its
-// main), with warden-driver-fake and stubrelay beside it: a driver warden was
-// not built with, through every command of the contract
-// (specs/driver-contract/v1.md). The cases that signal a process are in
-// e2e_unix_test.go.
+// main), with warden-driver-container, warden-driver-fake and stubrelay
+// beside it: the fake is a driver warden was not built with, through every
+// command of the contract (specs/driver-contract/v1.md). The cases that
+// signal a process are in e2e_unix_test.go.
 
 var e2eBin struct {
 	once sync.Once
@@ -45,6 +45,7 @@ func e2eBinaries(t *testing.T) string {
 			return
 		}
 		for _, b := range []struct{ out, pkg string }{
+			{driverFileName("container", isWindows), "../warden-driver-container"},
 			{driverFileName("fake", isWindows), "../../conformance/driver/fake"},
 			{exeName("stubrelay"), "../../conformance/driver/stubrelay"},
 		} {
@@ -310,14 +311,30 @@ func TestE2EDriverByPath(t *testing.T) {
 	}
 }
 
-// driver list shows the fake beside warden, the linked drivers, and with
-// --driver a path, that path selected (DRV-4).
+// driver list shows the container driver and the fake beside warden, the
+// linked drivers, and with --driver a path, that path selected (DRV-4).
 func TestE2EDriverList(t *testing.T) {
 	e := newE2E(t)
 	stdout, stderr, code := e.run("", nil, "driver", "list")
 	wantExit(t, code, 0, stderr)
-	wantIn(t, "driver list", stdout, "container    *  (linked into warden)",
-		filepath.Join(e.bin, driverFileName("fake", isWindows))+"  beside warden")
+	rows := map[string]string{}
+	for _, line := range strings.Split(stdout, "\n") {
+		if f := strings.Fields(line); len(f) > 0 {
+			rows[f[0]] = strings.Join(f[1:], " ")
+		}
+	}
+	for name, want := range map[string]string{
+		"container": "* " + filepath.Join(e.bin, driverFileName("container", isWindows)) +
+			" beside warden",
+		"qemu": "(linked into warden) linked",
+		"fake": filepath.Join(e.bin, driverFileName("fake", isWindows)) +
+			" beside warden",
+	} {
+		if rows[name] != want {
+			t.Errorf("driver list's %s row is %q, want %q:\n%s", name, rows[name],
+				want, stdout)
+		}
+	}
 
 	path := filepath.Join(e.bin, driverFileName("fake", isWindows))
 	stdout, stderr, code = e.run("", nil, "driver", "list", "--json", "--driver", path)

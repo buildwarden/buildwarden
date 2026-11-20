@@ -148,7 +148,7 @@ func TestAttach(t *testing.T) {
 	*" cat /.warden/shell-exit") echo 7 ;;
 	*) exit 1 ;;
 	esac ;;`)
-	code, err := (&Driver{Runtime: rt}).Attach("k3v9x2ab", strings.NewReader(""),
+	code, err := (&runner{runtime: rt}).Attach("k3v9x2ab", strings.NewReader(""),
 		&strings.Builder{}, &strings.Builder{})
 	if err != nil || code != 7 {
 		t.Fatalf("Attach = %d, %v; want the shell's 7", code, err)
@@ -164,7 +164,7 @@ func TestAttach(t *testing.T) {
 // (UX-09).
 func TestAttachFails(t *testing.T) {
 	rt, log := fakeCLI(t, `"container inspect") echo 'no such container' >&2; exit 1 ;;`)
-	code, err := (&Driver{Runtime: rt}).Attach("k3v9x2ab", strings.NewReader(""),
+	code, err := (&runner{runtime: rt}).Attach("k3v9x2ab", strings.NewReader(""),
 		&strings.Builder{}, &strings.Builder{})
 	var fe *driver.FixableError
 	if !errors.As(err, &fe) || code != 0 ||

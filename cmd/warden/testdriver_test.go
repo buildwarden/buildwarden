@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -41,9 +42,38 @@ func TestMain(m *testing.M) {
 	if err := copyFile(os.Args[0], testDriverPath, 0o755); err != nil {
 		panic(err)
 	}
+	container, built, err := buildContainerDriver()
+	if err != nil {
+		panic(err)
+	}
 	code := m.Run()
 	_ = os.RemoveAll(dir)
+	if built {
+		_ = os.Remove(container)
+	}
 	os.Exit(code)
+}
+
+// buildContainerDriver builds warden-driver-container beside the test binary,
+// where warden finds its bundled drivers, so that the commands the tests run
+// in this process find the default driver as an installed warden does. It
+// returns the file's path, and whether it built it: a test's child process,
+// the same binary, finds the parent's.
+func buildContainerDriver() (string, bool, error) {
+	self, err := os.Executable()
+	if err != nil {
+		return "", false, err
+	}
+	path := filepath.Join(filepath.Dir(self), driverFileName("container", isWindows))
+	if _, err := os.Stat(path); err == nil {
+		return path, false, nil
+	}
+	cmd := exec.Command(goCommand(), "build", "-o", path, "../warden-driver-container")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return "", false, fmt.Errorf("building warden-driver-container: %w\n%s", err,
+			out)
+	}
+	return path, true, nil
 }
 
 // testDriverPath is the test binary's copy as warden-driver-tst.

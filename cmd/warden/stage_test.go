@@ -62,7 +62,7 @@ func TestStageBuildBaseImage(t *testing.T) {
 				Script:        write(t, ctx, "own.sh", "true\n"),
 				OutputDir:     filepath.Join(t.TempDir(), "out"),
 				TempDir:       t.TempDir()}
-			caps := linkedDrivers[tc.driver].Capabilities
+			caps := testCaps(tc.driver)
 			unstage, err := stageBuild(req, caps, "k3v9x2ab", nil)
 			if err != nil {
 				t.Fatal(err)

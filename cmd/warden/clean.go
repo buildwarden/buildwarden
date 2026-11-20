@@ -2,12 +2,10 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
-	"github.com/lesiw/ctrctl"
 	"github.com/spf13/cobra"
 
 	"github.com/buildwarden/buildwarden/driver"
@@ -58,101 +56,28 @@ func runClean(cmd *cobra.Command, args []string) error {
 	}
 	// The driver's settings are resolved, and refused, before anything is
 	// removed, where a driver binary's clean is probed.
-	set, err := linkedSettings(cfg, sd, "clean")
-	if err != nil {
+	if _, err := linkedSettings(cfg, sd, "clean"); err != nil {
 		return err
 	}
 	removed := cleanAfterLinkedBuilds(driverName(cfg))
-	if cfg.Runtime.Driver == "firecracker" {
+	var clean func(io.Writer, string) int
+	switch cfg.Runtime.Driver {
+	case "firecracker":
+		clean = firecracker.Clean
+	case "hyperv":
+		clean = hyperv.Clean
+	}
+	// qemu and vz have no clean of their own beyond dead builds; the
+	// container runtime is not theirs to clean (Decision 16).
+	if clean != nil {
 		tempDir, err := resolveTempDir(cfg)
 		if err != nil {
 			return err
 		}
-		removed += firecracker.Clean(os.Stderr, tempDir)
-		finishClean(removed)
-		return nil
+		removed += clean(os.Stderr, tempDir)
 	}
-	if cfg.Runtime.Driver == "hyperv" {
-		tempDir, err := resolveTempDir(cfg)
-		if err != nil {
-			return err
-		}
-		removed += hyperv.Clean(os.Stderr, tempDir)
-		finishClean(removed)
-		return nil
-	}
-	if cfg.Runtime.Driver != "" && cfg.Runtime.Driver != "container" {
-		// qemu and vz have no clean of their own beyond dead builds; the
-		// container runtime is not theirs to clean (Decision 16).
-		finishClean(removed)
-		return nil
-	}
-	n, err := cleanContainers(set)
-	if err != nil {
-		return err
-	}
-	// Build containers are removed with their anonymous volumes; other
-	// dangling volumes on the runtime are not warden's to prune.
-	finishClean(removed + n)
+	finishClean(removed)
 	return nil
-}
-
-// cleanContainers removes the containers, networks and per-build relay
-// images of builds that are no longer running, on the container runtime
-// cfg resolves, and reports how many it removed.
-func cleanContainers(set driver.Settings) (int, error) {
-	removed := 0
-	runtime, err := resolveRuntime(set)
-	if err != nil {
-		return 0, err
-	}
-	ctrctl.Cli = []string{runtime}
-
-	liveBuildIDs := findLiveWardenProcesses()
-
-	// Clean containers (Volumes: true removes anonymous DinD volumes)
-	containers := listResources("container", "ls", "-a",
-		"--filter", "name=warden-", "--format", "{{.Names}}")
-	for _, name := range containers {
-		if isOrphan(name, liveBuildIDs) {
-			fmt.Fprintf(os.Stderr, "Removing container: %s\n", name)
-			_, _ = ctrctl.ContainerRm(
-				&ctrctl.ContainerRmOpts{Force: true, Volumes: true},
-				name)
-			removed++
-		}
-	}
-
-	// Clean networks
-	networks := listResources("network", "ls",
-		"--format", "{{.Name}}")
-	for _, name := range networks {
-		if !strings.HasPrefix(name, "warden-") {
-			continue
-		}
-		if isOrphan(name, liveBuildIDs) {
-			fmt.Fprintf(os.Stderr, "Removing network: %s\n", name)
-			_, _ = ctrctl.NetworkRm(nil, name)
-			removed++
-		}
-	}
-
-	// Clean images
-	images := listResources("image", "ls",
-		"--format", "{{.Repository}}:{{.Tag}}")
-	for _, img := range images {
-		if !strings.HasPrefix(img, "warden-relay:") {
-			continue
-		}
-		buildID := strings.TrimPrefix(img, "warden-relay:")
-		if !liveBuildIDs[buildID] {
-			fmt.Fprintf(os.Stderr, "Removing image: %s\n", img)
-			_, _ = ctrctl.ImageRm(nil, img)
-			removed++
-		}
-	}
-
-	return removed, nil
 }
 
 // cleanAfterLinkedBuilds removes the stage directory, record and lock of each
@@ -212,58 +137,6 @@ func dirSize(dir string) int64 {
 		return nil
 	})
 	return size
-}
-
-func listResources(args ...string) []string {
-	cmdArgs := append(ctrctl.Cli, args...)
-	out, err := exec.Command(cmdArgs[0], cmdArgs[1:]...).Output()
-	if err != nil {
-		return nil
-	}
-	var results []string
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line != "" {
-			results = append(results, line)
-		}
-	}
-	return results
-}
-
-func findLiveWardenProcesses() map[string]bool {
-	out, err := exec.Command("ps", "aux").Output()
-	if err != nil {
-		return nil
-	}
-	ids := make(map[string]bool)
-	for _, line := range strings.Split(string(out), "\n") {
-		if !strings.Contains(line, "warden") {
-			continue
-		}
-		// Extract build IDs from running warden-relay-XXXX or warden-build-XXXX
-		for _, field := range strings.Fields(line) {
-			if strings.HasPrefix(field, "warden-relay-") ||
-				strings.HasPrefix(field, "warden-build-") {
-				parts := strings.SplitN(field, "-", 3)
-				if len(parts) == 3 {
-					ids[parts[2]] = true
-				}
-			}
-		}
-	}
-	return ids
-}
-
-func isOrphan(name string, liveIDs map[string]bool) bool {
-	if !strings.HasPrefix(name, "warden-") {
-		return false
-	}
-	// Extract build ID: warden-relay-XXXX or warden-build-XXXX or warden-XXXX
-	parts := strings.Split(name, "-")
-	if len(parts) < 2 {
-		return false
-	}
-	buildID := parts[len(parts)-1]
-	return !liveIDs[buildID]
 }
 
 // cleanBinary is warden clean for a driver binary (the design's warden

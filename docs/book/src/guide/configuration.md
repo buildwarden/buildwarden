@@ -424,7 +424,7 @@ No other value is tried in its place: neither a lower level's nor a detected
 runtime.
 
 <!-- TRANSITIONAL(runtime-former-values): this subsection is removed with
-     cmd/warden/runtime_former.go, in the change that prepares 1.0. -->
+     driver/container/runtime_former.go, in the change that prepares 1.0. -->
 ### A path, or another runtime
 
 Earlier releases ran whatever program the setting named, from every level.

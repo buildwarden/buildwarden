@@ -1,10 +1,14 @@
 package main
 
 import (
+	"os"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/buildwarden/buildwarden/driver/container"
+	"github.com/buildwarden/buildwarden/driver/drivercmd"
 )
 
 // The scan finds the driver before the parse, with three lines in
@@ -113,7 +117,8 @@ func TestWardensOwnKeysInAnyCase(t *testing.T) {
 		t.Errorf("driver %q, teardown %v; want container and 90s", cfg.Runtime.Driver,
 			cfg.Build.teardown())
 	}
-	_, err = linkedSettings(cfg, linkedSel(cfg), "run")
+	_, err = drivercmd.Resolve("container", container.Settings, drivercmd.CmdRun, nil,
+		absConfigFile(cfg), os.Environ())
 	wantFixable(t, err, configPath(t)+": [Runtime] CLI: keys are case-sensitive, and "+
 		"the container driver reads [driver.container] cli (old name [runtime] cli)",
 		"write it as [driver.container] cli")

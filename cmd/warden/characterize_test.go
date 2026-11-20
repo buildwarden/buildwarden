@@ -27,6 +27,7 @@ import (
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
+	"github.com/buildwarden/buildwarden/driver/container"
 	"github.com/buildwarden/buildwarden/driver/drivercmd"
 	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/linuxguest"
@@ -352,6 +353,17 @@ func parsedRequest(t *testing.T, args ...string) (*driver.BuildRequest, error) {
 	if err != nil {
 		return nil, err
 	}
+	if sd.linked == nil {
+		// The container driver's binary: the request its run builds from
+		// start, with its relay image (container.run).
+		set, err := drivercmd.Resolve(sd.name(), container.Settings, drivercmd.CmdRun,
+			driverFlags.argsFor(drivercmd.CmdRun), absConfigFile(cfg), os.Environ())
+		if err != nil {
+			return nil, err
+		}
+		req.RelayImage, _ = set.String("relay-image")
+		return req, nil
+	}
 	set, err := drivercmd.Resolve(sd.name(), sd.linked.Settings, drivercmd.CmdRun,
 		driverFlags.argsFor(drivercmd.CmdRun), absConfigFile(cfg), os.Environ())
 	if err != nil {
@@ -456,7 +468,7 @@ const stagedName = "staged"
 // driver.StageBuildScript and driver.RecordInputs; the goldens are main's.
 func stageForCharacterization(t *testing.T, d string, req *driver.BuildRequest) error {
 	t.Helper()
-	unstage, err := stageBuild(req, linkedDrivers[d].Capabilities,
+	unstage, err := stageBuild(req, testCaps(d),
 		driver.RandAlphaNum(8), nil)
 	if err != nil {
 		return err
@@ -548,7 +560,7 @@ func TestCharacterizeContainerfileImage(t *testing.T) {
 				b.WriteString(strings.TrimSpace(describeErr(err, dir)) + "\n")
 				continue
 			}
-			unstage, err := stageBuild(req, linkedDrivers[d].Capabilities,
+			unstage, err := stageBuild(req, testCaps(d),
 				driver.RandAlphaNum(8), nil)
 			if err != nil {
 				t.Fatal(err)

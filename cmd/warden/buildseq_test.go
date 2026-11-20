@@ -584,8 +584,9 @@ func TestNewStart(t *testing.T) {
 		vm.DiagnosticsDir == "" || vm.ClaimToken != "tok" || vm.StateFile != "/s" {
 		t.Errorf("qemu's start %+v", vm)
 	}
-	ctr := newStart(cfg, req, linkedDrivers["container"].Capabilities, "k3v9x2ab", "tok",
-		"/s")
+	ctr := newStart(cfg, req, capabilities{Shell: true, Keep: keepNone, Exited: true,
+		Containerfile: containerfileTranslate, GuestOS: []string{"linux"}}, "k3v9x2ab",
+		"tok", "/s")
 	if ctr.VM != nil || ctr.Keep {
 		t.Errorf("the container driver's start %+v carries the VM settings or keep", ctr)
 	}

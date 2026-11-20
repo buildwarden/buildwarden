@@ -254,7 +254,9 @@ func TestUpstreamCALinesOfABuild(t *testing.T) {
 // doctor prints the same lines in its report, on stdout without the prefix,
 // after its config: line; with a path a build refuses it prints BLOCKED and
 // exits 1. Run in a child process, since doctor ends the process itself;
-// the container driver finds a docker that answers.
+// the container driver finds a docker that answers. Since the container
+// driver is a binary its doctor prints its own ok, which warden's BLOCKED
+// line does not stop: warden exits 1 after it.
 func TestUpstreamCALinesOfDoctor(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the fake docker is a shell script")
@@ -276,7 +278,7 @@ func TestUpstreamCALinesOfDoctor(t *testing.T) {
 					" (from WARDEN_UPSTREAM_CA_CERTS) does not exist",
 				"upstream CA: to fix: name an existing file or directory of PEM " +
 					"certificates, or remove the path",
-				"container runtime: docker",
+				"container runtime: docker", "ok",
 			}
 		}, 1},
 		{"a path that gives no certificate", noCert, func(string) []string {
@@ -289,7 +291,7 @@ func TestUpstreamCALinesOfDoctor(t *testing.T) {
 				"upstream CA: to fix: put at least one PEM certificate in a " +
 					".pem, " +
 					".crt or .cer file there, or remove the path",
-				"container runtime: docker",
+				"container runtime: docker", "ok",
 			}
 		}, 1},
 	} {

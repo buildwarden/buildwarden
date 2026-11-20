@@ -158,6 +158,13 @@ func (m *mainRun) request(rest []string) (*Request, error) {
 		return nil, &Error{Code: CodeUnsupportedCommand,
 			Msg: fmt.Sprintf("%q is not a command of the driver contract", m.command)}
 	}
+	// A command the driver does not list exits 3 before its request is
+	// checked (DRV-21).
+	if !slices.Contains(m.d.commands(), m.command) {
+		return nil, &Error{Code: CodeUnsupportedCommand,
+			Msg: fmt.Sprintf("driver %q does not implement %s", m.d.Describe.Name,
+				m.command)}
+	}
 	data, err := m.requestData()
 	if err != nil || data == nil {
 		return req, err
@@ -174,17 +181,23 @@ func (m *mainRun) request(rest []string) (*Request, error) {
 			return nil, invalid("the %s request has no %s", m.command, f)
 		}
 	}
-	if m.command != CmdReap && m.command != CmdAttach {
-		return req, nil
+	return req, checkBuildID(m.command, req, rest)
+}
+
+// checkBuildID refuses a reap or attach whose build_id is not a build ID or
+// not its argument.
+func checkBuildID(command string, req *Request, rest []string) error {
+	if command != CmdReap && command != CmdAttach {
+		return nil
 	}
 	if !buildIDRE.MatchString(req.BuildID) {
-		return nil, invalid("build_id %q is not a build ID", req.BuildID)
+		return invalid("build_id %q is not a build ID", req.BuildID)
 	}
 	if len(rest) > 0 && rest[0] != req.BuildID {
-		return nil, invalid("the argument %q is not the request's build_id %q",
+		return invalid("the argument %q is not the request's build_id %q",
 			rest[0], req.BuildID)
 	}
-	return req, nil
+	return nil
 }
 
 // requestData is the request's bytes: standard input, or the request file

@@ -37,17 +37,19 @@ const (
 	relayImageRepo = "ghcr.io/buildwarden/relay"
 )
 
-// Driver orchestrates builds inside containers with network
+// Version is the driver binary's version, stamped at build time; "dev" for
+// a build from the source tree, which builds its relay and executor from it.
+var Version = "dev"
+
+// runner runs builds inside containers on one runtime, with network
 // isolation enforced by iptables.
-type Driver struct {
-	Runtime string // CLI name: "finch", "docker", "podman"
-	Verbose bool
-	Version string
+type runner struct {
+	runtime string // "finch", "docker" or "podman", supportedRuntime's own
 }
 
 // build holds the mutable state for a single build invocation.
 type build struct {
-	d               *Driver
+	d               *runner
 	req             *driver.BuildRequest
 	buildContainer  string
 	holderContainer string
@@ -78,9 +80,9 @@ type build struct {
 // the container held (initialize --hold) and reports it started once setup
 // is done, so that Attach can enter it. It tears everything down when
 // host.Wait returns. Run keeps nothing, so it returns no kept names.
-func (d *Driver) Run(ctx context.Context, req *driver.BuildRequest, start *driver.Start,
+func (d *runner) Run(ctx context.Context, req *driver.BuildRequest, start *driver.Start,
 	host driver.Host) ([]string, error) {
-	ctrctl.Cli = []string{d.Runtime}
+	ctrctl.Cli = []string{d.runtime}
 	b := &build{d: d, req: req, buildID: start.BuildID, outputDir: start.DiagnosticsDir}
 	defer b.teardown()
 
@@ -204,9 +206,9 @@ func (b *build) containerLogs() string {
 // "exit code N" line on the terminal stream, not stderr, and its own exit
 // status is always 1. An error is the attach's own failure: no held
 // environment of that build, or a runtime that could not run the shell.
-func (d *Driver) Attach(buildID string, stdin io.Reader, stdout,
+func (d *runner) Attach(buildID string, stdin io.Reader, stdout,
 	stderr io.Writer) (int, error) {
-	ctrctl.Cli = []string{d.Runtime}
+	ctrctl.Cli = []string{d.runtime}
 	b := &build{d: d, buildContainer: buildContainerName(buildID)}
 	if !b.containerRunning() {
 		return 0, driver.Fixable("start a shell with warden shell",
@@ -291,6 +293,15 @@ func (b *build) shellExitCode(execErr error) (int, bool) {
 
 // --- build lifecycle ---
 
+// containerfileName is the Containerfile for a message: its path when the
+// request has one, which a driver binary's start message does not carry.
+func containerfileName(path string) string {
+	if path == "" {
+		return "the build's Containerfile"
+	}
+	return path
+}
+
 // setup readies everything the relay and the build container need: the
 // work directory, the executor, the relay and support images, the base image
 // and its environment record, and the build's network. It returns the
@@ -310,7 +321,7 @@ func (b *build) setup() (*relaycfg.Environment, error) {
 		return nil, driver.Fixable("give the Containerfile a FROM image the container "+
 			"runtime can pull",
 			"%s names no base image to run (FROM scratch, or none)",
-			b.req.Containerfile)
+			containerfileName(b.req.Containerfile))
 	}
 
 	if err := b.buildWardenIO(); err != nil {
@@ -473,7 +484,7 @@ const executorPath = "/.warden/warden-io"
 // not the host filesystem's (a Windows host has no exec bit). nerdctl (finch)
 // takes the staged directory, from a macOS or Linux host that keeps the mode.
 func (b *build) copyExecutor() error {
-	switch filepath.Base(b.d.Runtime) {
+	switch filepath.Base(b.d.runtime) {
 	case "finch", "nerdctl":
 		_, err := ctrctl.ContainerCp(nil,
 			filepath.Dir(b.executorStagePath())+"/.",
@@ -611,7 +622,7 @@ func isPortConflict(stderr string) bool {
 
 func (b *build) resolveRelayImage() error {
 	img := b.req.RelayImage
-	ver := b.d.Version
+	ver := Version
 	switch {
 	case img == "dev" || (img == "" && ver == "dev"):
 		logInfo(b.req, "Building relay from source...")
@@ -693,7 +704,7 @@ func (b *build) buildWardenIO() error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return err
 	}
-	if b.d.Version != "dev" {
+	if Version != "dev" {
 		exe, err := os.Executable()
 		if err == nil {
 			candidate := filepath.Join(

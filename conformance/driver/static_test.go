@@ -17,8 +17,8 @@ import (
 	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
-// bin holds warden-driver-fake and stubrelay, built once for the package's
-// tests with the toolchain that runs them (TEST-01).
+// bin holds warden-driver-fake, stubrelay and warden-driver-container, built
+// once for the package's tests with the toolchain that runs them (TEST-01).
 var bin string
 
 func exe(name string) string {
@@ -55,6 +55,7 @@ func build(dir string) int {
 	for _, b := range []struct{ out, pkg string }{
 		{exe("warden-driver-fake"), "./fake"},
 		{exe("stubrelay"), "./stubrelay"},
+		{exe("warden-driver-container"), "../../cmd/warden-driver-container"},
 	} {
 		cmd := exec.Command(goTool(), "build", "-o", filepath.Join(dir, b.out), b.pkg)
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -97,6 +98,23 @@ func TestStaticFake(t *testing.T) {
 		}
 		if len(r.Requirements) == 0 {
 			t.Errorf("%s names no requirement", r.Check)
+		}
+	}
+}
+
+// The static tier passes against the container driver, on a host with or
+// without a container runtime (TEST-05).
+func TestStaticContainer(t *testing.T) {
+	t.Parallel()
+	s, err := New(filepath.Join(bin, exe("warden-driver-container")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	for _, r := range s.Static() {
+		if r.Failure != "" {
+			t.Errorf("%s (%s): %s", r.Check, strings.Join(r.Requirements, ", "),
+				r.Failure)
 		}
 	}
 }

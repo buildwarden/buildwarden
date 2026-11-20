@@ -1,19 +1,15 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"net/netip"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/BurntSushi/toml"
 
@@ -75,25 +71,6 @@ type RuntimeConfig struct {
 	// empty for the config file.
 	Driver       string `toml:"driver"`
 	DriverSource string `toml:"-"`
-}
-
-// The sources the kit gives the container driver's settings when they were
-// not read from a file: the flag and the two variables.
-const (
-	cliFromFlag       = "--runtime"
-	cliFromEnv        = "WARDEN_CTR_CLI"
-	relayImageFromEnv = "WARDEN_IMAGE"
-)
-
-// keyInFile words a source the kit gives for a key read from a file,
-// "<file> [table] key", as warden's messages put it: "[table] key in <file>".
-// Another source is returned as it is.
-func keyInFile(source string) string {
-	i := strings.LastIndex(source, " [")
-	if i < 0 {
-		return source
-	}
-	return source[i+1:] + " in " + source[:i]
 }
 
 // projectConfig is the config file read when none is named: the one of this
@@ -498,99 +475,6 @@ func checkBuildLink(s string) (buildlink.Link, error) {
 	return link, nil
 }
 
-// containerRuntimes are the runtimes the container driver supports, in the
-// order detection prefers them. A runtime named by a flag, a variable or a
-// config file is one of these or is refused (resolveRuntime).
-var containerRuntimes = []string{"finch", "docker", "podman"}
-
-// supportedRuntime returns the member of containerRuntimes that v equals.
-// The comparison is exact, and what is returned is the list's own string,
-// never v: no text from a flag, a variable or a config file reaches exec.
-func supportedRuntime(v string) (string, bool) {
-	for _, name := range containerRuntimes {
-		if v == name {
-			return name, true
-		}
-	}
-	return "", false
-}
-
-// runtimeNames lists containerRuntimes in prose, the last after conj:
-// "finch, docker or podman".
-func runtimeNames(conj string) string {
-	last := len(containerRuntimes) - 1
-	return strings.Join(containerRuntimes[:last], ", ") +
-		" " + conj + " " + containerRuntimes[last]
-}
-
-// unsupportedRuntime is the error for a runtime in effect that is not one of
-// containerRuntimes. It names the level that set the value and gives the fix
-// for that level. The value is printed once, quoted: it may come from a file
-// someone else wrote, and %q keeps control characters out of the terminal.
-// Nothing else in the message or the fix is taken from the value.
-func unsupportedRuntime(value, source string) error {
-	var setting, set, orNot string
-	switch source {
-	case cliFromFlag:
-		setting, set, orNot = cliFromFlag, "pass --runtime ", ", or leave it out"
-	case cliFromEnv:
-		setting, set, orNot = cliFromEnv, "set WARDEN_CTR_CLI to ", ", or unset it"
-	default:
-		setting, set = keyInFile(source), "set it to "
-		orNot = ", or remove it; --runtime with one of those replaces it " +
-			"for one command"
-	}
-	what := "the container driver supports " + runtimeNames("and")
-	fix := set + runtimeNames("or") + orNot
-	// TRANSITIONAL(runtime-former-values): a value that ran before this
-	// check existed gets a message that says what to change.
-	if formerWhat, formerFix, ok := formerRuntimeValue(value); ok {
-		what, fix = formerWhat, set+formerFix
-	}
-	return driver.Fixable(fix, "%s is %q; %s", setting, value, what)
-}
-
-// DetectRuntime probes for a working container runtime, in
-// containerRuntimes' order.
-func DetectRuntime() (string, error) {
-	var installed []string
-	for _, name := range containerRuntimes {
-		if _, err := exec.LookPath(name); err != nil {
-			continue
-		}
-		installed = append(installed, name)
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		err := exec.CommandContext(ctx, name, "info").Run()
-		cancel()
-		if err == nil {
-			return name, nil
-		}
-	}
-	if len(installed) == 0 {
-		return "", driver.Fixable(
-			"install Finch (brew install --cask finch && finch vm init), "+
-				"Docker or Podman, or use a VM driver (--driver qemu or vz)",
-			"no container runtime found (tried finch, docker, podman)")
-	}
-	// Installed but not answering: almost always its VM or daemon is down.
-	return "", driver.Fixable(runtimeStartHint(installed[0]),
-		"container runtime %s is installed but not running (`%s info` failed)",
-		strings.Join(installed, ", "), installed[0])
-}
-
-// runtimeStartHint is the command that starts a stopped runtime.
-func runtimeStartHint(name string) string {
-	switch name {
-	case "finch":
-		return "start its VM: finch vm start (or finch vm init the first time)"
-	case "podman":
-		return "start its machine: podman machine start " +
-			"(or podman machine init the first time)"
-	default:
-		return "start Docker (Docker Desktop, or the docker service)"
-	}
-}
-
 // ResolvePath handles the single-argument path logic:
 //   - If path is a file: use it as Dockerfile, parent dir as context
 //   - If path is a directory: use it as context, discover Dockerfile inside
@@ -770,31 +654,4 @@ func validateFlagsForDriver(isVM bool) error {
 		}
 	}
 	return nil
-}
-
-// checkRelayImage refuses a relay image that is not shaped like an image
-// reference. The value goes to `<runtime> pull` and to the container's
-// creation as one argument, so one that starts with "-" would be read as an
-// option, and a space or a control character has no place in a reference.
-// A control character here is any that does not print: the C0 and C1
-// controls, and the format characters (a right-to-left override, a
-// zero-width space, a byte order mark) that reorder or hide the text around
-// them where the value is printed; a byte that is not valid UTF-8 too.
-// Empty and "dev" are the release's image and a development build; nothing
-// more of a reference is checked here, which the runtime's own error does.
-// Only the container driver uses the image, so only its runs call this.
-func checkRelayImage(img, source string) error {
-	if img == "" || img == "dev" {
-		return nil
-	}
-	bad := strings.HasPrefix(img, "-") || strings.IndexFunc(img, func(r rune) bool {
-		return r == ' ' || r == utf8.RuneError || !unicode.IsPrint(r)
-	}) >= 0
-	if !bad {
-		return nil
-	}
-	where := keyInFile(source)
-	return driver.Fixable("set it to an image reference such as "+
-		"ghcr.io/buildwarden/relay:v0.2.0 or to \"dev\", or remove it",
-		"%s is %q: not an image reference", where, img)
 }

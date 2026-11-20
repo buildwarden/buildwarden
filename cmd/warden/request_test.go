@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -124,10 +125,24 @@ func TestFirecrackerIsAVMDriver(t *testing.T) {
 	}
 }
 
-// linkedSel is the selection of the linked driver cfg names, as prepare finds
-// it when no driver binary of that name is on PATH or beside warden.
+// linkedSel is the selection of the driver cfg names, as prepare finds it
+// when no driver binary of that name is on PATH or beside warden: a linked
+// driver, or the container driver's binary, which the tests build beside the
+// test binary (TestMain).
 func linkedSel(cfg *Config) *selectedDriver {
 	n := driverName(cfg)
-	return &selectedDriver{found: &foundDriver{Name: n, Found: foundLinked, Linked: true},
-		linked: linkedDrivers[n]}
+	if l := linkedDrivers[n]; l != nil {
+		return &selectedDriver{found: &foundDriver{Name: n, Found: foundLinked,
+			Linked: true}, linked: l}
+	}
+	sd, err := findSelected(cfg)
+	if err != nil {
+		panic(fmt.Sprintf("the driver %s: %v", n, err))
+	}
+	return sd
+}
+
+// testCaps is the capabilities of the driver named d, as linkedSel finds it.
+func testCaps(d string) capabilities {
+	return linkedSel(&Config{Runtime: RuntimeConfig{Driver: d}}).caps()
 }

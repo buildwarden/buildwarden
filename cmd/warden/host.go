@@ -129,17 +129,6 @@ or agent gate.`,
 				doctorResolvers(out, vz.Resolvers, link, vmDNS) {
 				blocked = true
 			}
-		default:
-			// The check a build makes, so that doctor does not pass a relay
-			// image the build refuses.
-			img, _ := set.String("relay-image")
-			if err = checkRelayImage(img, set.Source("relay-image")); err != nil {
-				return err
-			}
-			var rt string
-			if rt, err = resolveRuntime(set); err == nil {
-				fmt.Fprintf(out, "container runtime: %s\n", rt)
-			}
 		}
 		if err != nil {
 			return err

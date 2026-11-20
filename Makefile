@@ -6,6 +6,7 @@ UNAME_M := $(shell uname -m)
 build:
 	@mkdir -p dist
 	go build -o dist/warden ./cmd/warden/
+	go build -o dist/warden-driver-container ./cmd/warden-driver-container/
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/warden-relay-linux-amd64 ./cmd/relay/
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/warden-relay-linux-arm64 ./cmd/relay/
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/warden-io-linux-amd64 ./cmd/warden-io/

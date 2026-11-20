@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -36,48 +33,6 @@ func TestErrorWithFixHasRemedyAndNoIssueLink(t *testing.T) {
 	if strings.Contains(out, "issues/new") {
 		t.Errorf("a fixable error printed the issue link: %q", out)
 	}
-}
-
-// fakeRuntime puts an executable named name on a PATH of its own; its
-// `info` subcommand exits with code.
-func fakeRuntime(t *testing.T, name string, code int) {
-	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("shell-script fakes need a POSIX shell")
-	}
-	dir := t.TempDir()
-	script := fmt.Sprintf("#!/bin/sh\nexit %d\n", code)
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir)
-}
-
-func TestDetectRuntimeExplainsTheFix(t *testing.T) {
-	t.Run("none installed", func(t *testing.T) {
-		t.Setenv("PATH", t.TempDir())
-		_, err := DetectRuntime()
-		var fe *driver.FixableError
-		if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "install") {
-			t.Fatalf("DetectRuntime = %v, "+
-				"want a FixableError with an install hint", err)
-		}
-	})
-	t.Run("installed but stopped", func(t *testing.T) {
-		fakeRuntime(t, "finch", 1)
-		_, err := DetectRuntime()
-		var fe *driver.FixableError
-		if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "finch vm start") {
-			t.Fatalf("DetectRuntime = %v, want a FixableError saying to "+
-				"start finch's VM", err)
-		}
-	})
-	t.Run("running", func(t *testing.T) {
-		fakeRuntime(t, "podman", 0)
-		if rt, err := DetectRuntime(); err != nil || rt != "podman" {
-			t.Fatalf("DetectRuntime = %q, %v; want podman", rt, err)
-		}
-	})
 }
 
 func TestInputErrorsAreFixable(t *testing.T) {

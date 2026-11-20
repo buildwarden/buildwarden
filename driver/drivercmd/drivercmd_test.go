@@ -216,7 +216,7 @@ func TestDispatch(t *testing.T) {
 // cannot take, each with its error object.
 func TestRefusals(t *testing.T) {
 	d := kitDriver(t)
-	d.Setup = nil
+	d.Setup, d.Prepare = nil, nil
 	for _, tc := range []struct {
 		name, command, request string
 		code                   int
@@ -233,6 +233,10 @@ func TestRefusals(t *testing.T) {
 			CodeInvalidRequest},
 		{"no common version", CmdDoctor, `{"contract":99}`, 4, CodeUnsupportedContract},
 		{"not listed", CmdSetup, `{"contract":1}`, 3, CodeUnsupportedCommand},
+		// DRV-21: a command the driver does not list exits 3 whatever its
+		// request lacks; image-prepare's requires os.
+		{"not listed, a field missing", CmdImagePrepare, `{"contract":1}`, 3,
+			CodeUnsupportedCommand},
 		{"not a command", "frobnicate", `{"contract":1}`, 3, CodeUnsupportedCommand},
 		{"undeclared flag", CmdDoctor, `{"contract":1,"args":["--nope=1"]}`, 1,
 			CodeFixable},
