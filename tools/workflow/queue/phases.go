@@ -429,8 +429,8 @@ func Landed(f *Feature, by string, now time.Time) {
 // and each added host step needs what the gate needs (consolidate), so
 // validation runs on the branch the PR opens on (FLOW-03, FLOW-09). A process
 // item entering Close first gets its state step (seedStateStep), so x4-close
-// waits for it. A step added after seeding is not linked. A led feature's cloud template steps of phases 0 to 5 get its
-// lead (FLOW-04).
+// waits for it. A step added after seeding is not linked. A led feature's
+// cloud template steps of phases 0 to 5 get its lead (FLOW-04).
 func Seed(f *Feature) {
 	ts := templates[f.Round]
 	if f.Phase >= len(ts) || len(ts[f.Phase]) == 0 {
@@ -614,14 +614,9 @@ func Back(f *Feature, by string, now time.Time, finding string, to int) {
 // Steps are grouped by id without its -r<n> suffix; the copy takes the next
 // suffix and the latest step's affinity and note.
 func rerunPublishHostSteps(f *Feature, steps []Step, now time.Time, by string) []Step {
-	if f.Round != "feature" {
+	publish := publishPhase(f)
+	if publish < 0 {
 		return nil
-	}
-	publish := -1
-	for phase, ts := range templates[f.Round] {
-		if _, ok := waiter(ts); ok {
-			publish = phase
-		}
 	}
 	type group struct {
 		latest        Step
@@ -665,6 +660,20 @@ func rerunPublishHostSteps(f *Feature, steps []Step, now time.Time, by string) [
 		out = append(out, st)
 	}
 	return out
+}
+
+// publishPhase is the feature round's phase whose gate waits for added
+// steps, Publish, or -1 for another round.
+func publishPhase(f *Feature) int {
+	if f.Round != "feature" {
+		return -1
+	}
+	for phase, ts := range templates[f.Round] {
+		if _, ok := waiter(ts); ok {
+			return phase
+		}
+	}
+	return -1
 }
 
 // Complete marks a step done and, once every step of the current phase is

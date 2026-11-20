@@ -1236,10 +1236,10 @@ func staleSeed(s *queue.State, f *queue.Feature, head string, o opts) (string, b
 func staleMerged(f *queue.Feature, o opts) (line string, changed bool) {
 	switch {
 	case f.AtMerge():
+		const confirm = "merged: %[1]s (confirm: wf done -feature %[1]s -step %[2]s)"
 		for _, st := range f.Steps {
 			if st.Status == "pending" && queue.IsMerge(&st) {
-				return fmt.Sprintf("merged: %s (confirm: wf done -feature %s -step %s)",
-					f.Feature, f.Feature, st.ID), false
+				return fmt.Sprintf(confirm, f.Feature, st.ID), false
 			}
 		}
 		return "merged: " + f.Feature, false

@@ -19,11 +19,13 @@ func TestApprovalsAreEntryScoped(t *testing.T) {
 	}{
 		{"an entry citing an older approval",
 			"- **r1, 2026-11-17: approved at `b7619b5`**\n" +
-				"- **r2, 2026-11-18: approved at `0c1cad5`**, read again; the design\n" +
-				"  approved at `b7619b5` declared drivers: [qemu].\n",
+				"- **r2, 2026-11-18: approved at `0c1cad5`**, read again; the\n" +
+				"  design" +
+				" approved at `b7619b5` declared drivers: [qemu].\n",
 			[]string{"b7619b5", "0c1cad5"}},
 		{"a bullet that is not an entry",
-			"- r1: approved at `aaa1111`.\n- **Decisions.** Kept as approved at `bbb2222`.\n",
+			"- r1: approved at `aaa1111`.\n" +
+				"- **Decisions.** Kept as approved at `bbb2222`.\n",
 			[]string{"aaa1111"}},
 		{"a nested citation bullet",
 			"- r1: approved at `aaa1111`.\n- r2: approved at `bbb2222`.\n" +
@@ -31,14 +33,16 @@ func TestApprovalsAreEntryScoped(t *testing.T) {
 				"  - r3: approved at `ccc3333` in a draft.\n",
 			[]string{"aaa1111", "bbb2222"}},
 		{"the legacy head, wrapped",
-			"- **r1, 2026-11-01: approved** after the sitting. Approved\n  at `ddd4444`.\n",
+			"- **r1, 2026-11-01: approved** after the sitting. Approved\n" +
+				"  at `ddd4444`.\n",
 			[]string{"ddd4444"}},
 		{"a rule change's approval",
 			"- r1 addendum: rule change TEST-09 approved at `eee5555`.\n", nil},
 		{"a heading ends an entry",
 			"- r1: changes requested.\n### Notes\n  approved at `fff6666`\n", nil},
 		{"an unindented line ends an entry",
-			"- r1: changes requested.\nThe draft was approved at `fff6666` once.\n", nil},
+			"- r1: changes requested.\n" +
+				"The draft was approved at `fff6666` once.\n", nil},
 		{"a re-review",
 			"- r1: approved at `aaa1111`.\n- Re-review r2: approved at `bbb2222`.\n",
 			[]string{"aaa1111", "bbb2222"}},

@@ -40,19 +40,28 @@ func SetStateStep(f *Feature, note string, clear bool, worker string, now time.T
 	return nil
 }
 
-// closeStateStep applies a state step's change to Close's steps when the
-// item is in Close with its x4-close pending; before Close there is nothing
-// to change.
-func (f *Feature) closeStateStep(note string, clear bool) error {
-	gate := -1
+// pendingClose is the index of a process item's pending x4-close while it is
+// in Close, or -1.
+func (f *Feature) pendingClose() int {
+	if f.Phase != 4 {
+		return -1
+	}
 	for i := range f.Steps {
 		r, ok := stepTemplates(f.Steps[i].ID)
 		if ok && r.round == "process" && r.phase == 4 && r.name == "close" &&
 			f.Steps[i].Status == "pending" {
-			gate = i
+			return i
 		}
 	}
-	if f.Phase != 4 || gate < 0 {
+	return -1
+}
+
+// closeStateStep applies a state step's change to Close's steps when the
+// item is in Close with its x4-close pending; before Close there is nothing
+// to change.
+func (f *Feature) closeStateStep(note string, clear bool) error {
+	gate := f.pendingClose()
+	if gate < 0 {
 		return nil
 	}
 	suffix := f.Steps[gate].ID[len(StepID(f.Round, 4, "close")):]
