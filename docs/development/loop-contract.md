@@ -94,9 +94,22 @@ as `none`, and a rule read through a `none` term does not apply there. A
 term left unfilled is a finding; it is never read as another component's
 entry.
 
+The entries the loop's tools read are also written in a **profile
+file**, in the format the loop's tools document, which the profile names
+and the loop's configuration records for the repository. The file is
+part of the profile: a change to it is a change to the profile, and
+where the file and the profile differ, that is a finding. A key the file
+leaves out is the term `none`. The loop's configuration also records
+each repository's trunk, and that record is the trunk the loop's tools
+use, never the file's: a profile file whose trunk differs from it is a
+finding, and every check of the loop's tools that reads the file fails
+on it. The configuration records a repository's profile file only once
+the change that adopts the repository (LOOP-08) has merged.
+
 The agent part: the design review of a change to a profile judges that
-every term is filled or `none`; Review judges that the paths and commands
-a change relies on are the profile's.
+every term is filled or `none`, and that the profile file agrees with
+it; Review judges that the paths and commands a change relies on are the
+profile's.
 
 ---
 
@@ -339,7 +352,8 @@ A repository becomes a component by:
 1. linking to this contract from its README and its agent context file.
    The link is to the contract's trunk: never a copy, and never a pinned
    version;
-2. writing its profile (LOOP-01), every term filled or `none`;
+2. writing its profile (LOOP-01), every term filled or `none`, and its
+   profile file;
 3. writing its invariants as rules in LINT-01's format, under prefixes
    it names in its profile, its safety invariants among them (LOOP-03);
 4. keeping designs with the front-matter and sections the detail names
@@ -370,7 +384,8 @@ adopts, it and the other components couple only through releases
 
 The contract assumes of a component: git, a trunk and feature branches,
 pull requests that a human merges, a deterministic check that can block
-a pull request, Markdown rule files, and designs with front-matter. It
+a pull request, Markdown rule files, a profile file in the loop's
+format, and designs with front-matter. It
 assumes nothing else. No loop rule may require a language, a build tool,
 a test framework, a directory layout beyond what the profile names, an
 agent tool, a CI system, or that a component has drivers, user-facing

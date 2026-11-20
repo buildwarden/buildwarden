@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -21,7 +22,104 @@ import (
 type Machine struct {
 	Name  string   `yaml:"name"`
 	Hosts []string `yaml:"hosts"`
-	Note  string   `yaml:"note,omitempty"`
+	// Repositories are those whose host steps the machine takes, each with a
+	// clone its owner made (LOOP-05). Absent, the queue's own only.
+	Repositories []string `yaml:"repositories,omitempty"`
+	Note         string   `yaml:"note,omitempty"`
+}
+
+// Lists returns the repositories the machine takes steps in: its
+// repositories, or the queue's own when it lists none (FLOW-04).
+func (s *State) Lists(m *Machine) []string {
+	if len(m.Repositories) > 0 {
+		return m.Repositories
+	}
+	return []string{s.Config.Repository}
+}
+
+// stepRepos are the repositories a step runs its work in: every repository
+// the item works in for a led step, which runs the gates in each, and
+// otherwise the step's repo or the item's home (FLOW-04).
+func (s *State) stepRepos(f *Feature, st *Step) []string {
+	if aff, ok := templateAffinity(st); ok && aff == "cloud" && f.Lead != "" &&
+		st.Affinity == f.Lead {
+		return s.ReposOf(f)
+	}
+	if st.Repo != "" {
+		return []string{st.Repo}
+	}
+	return []string{s.Home(f)}
+}
+
+// missingOn returns the repositories of repos the machine does not list.
+func (s *State) missingOn(m *Machine, repos []string) []string {
+	return minus(repos, s.Lists(m))
+}
+
+// takers returns the machines that serve the host name and list every
+// repository, and the names of all machines that serve it.
+func (s *State) takers(host string, repos []string) (ok, serving []string) {
+	for i := range s.Machines {
+		m := &s.Machines[i]
+		if !slices.Contains(m.Hosts, host) {
+			continue
+		}
+		serving = append(serving, m.Name)
+		if len(s.missingOn(m, repos)) == 0 {
+			ok = append(ok, m.Name)
+		}
+	}
+	return ok, serving
+}
+
+// unlisted is the finding for a host name whose serving machines none list
+// every repository: each machine with the repositories missing from it.
+func (s *State) unlisted(host string, repos []string) string {
+	var each []string
+	for i := range s.Machines {
+		m := &s.Machines[i]
+		if slices.Contains(m.Hosts, host) {
+			each = append(each, fmt.Sprintf("%s lacks %s", m.Name,
+				strings.Join(s.missingOn(m, repos), ", ")))
+		}
+	}
+	return fmt.Sprintf("no machine serving host %s lists %s in hosts.yaml (%s): Jeff "+
+		"adds them to one machine's repositories (FLOW-04)", host,
+		strings.Join(repos, ", "), strings.Join(each, "; "))
+}
+
+// MayLeadOn returns why no machine can take the lead's steps for the item:
+// none serving it lists every repository in the item's repos (FLOW-04). A
+// state with no hosts.yaml routes nothing and refuses nothing.
+func (s *State) MayLeadOn(f *Feature, lead string) error {
+	h, ok := strings.CutPrefix(lead, "host:")
+	if !ok || len(s.Machines) == 0 {
+		return nil
+	}
+	if took, serving := s.takers(h, s.ReposOf(f)); len(serving) > 0 && len(took) == 0 {
+		return fmt.Errorf("%s: lead %s: %s, or a worker clears the lead with wf lead "+
+			"-clear", f.Feature, lead, s.unlisted(h, s.ReposOf(f)))
+	}
+	return nil
+}
+
+// machineRefuses says why the machine a host worker's session names may not
+// take the step, which runs in a repository the machine does not list, or
+// "". A session that names no machine of hosts.yaml is not routed by it.
+func (s *State) machineRefuses(f *Feature, st *Step, worker string) string {
+	name, _, _ := strings.Cut(Session(worker), ".")
+	if !strings.HasPrefix(Kind(worker), "host:") || name == "" {
+		return ""
+	}
+	m, err := s.Machine(name)
+	if err != nil {
+		return ""
+	}
+	if gone := s.missingOn(m, s.stepRepos(f, st)); len(gone) > 0 {
+		return fmt.Sprintf("step %s runs in %s, which %s does not list in hosts.yaml "+
+			"(FLOW-04)", st.ID, strings.Join(gone, ", "), m.Name)
+	}
+	return ""
 }
 
 // Gap is one entry of backlog/native-gaps.yaml (FLOW-09, TEST-03).
@@ -171,6 +269,7 @@ func (s *State) validateNative() []string {
 	served := s.served()
 	for _, f := range s.Features {
 		f.validateServed(served, bad)
+		s.validateListed(f, served, bad)
 	}
 	for _, g := range s.Gaps {
 		if g.Status == "open" && !served[g.Host] {
@@ -191,6 +290,33 @@ func (f *Feature) validateServed(served map[string]bool, bad func(string, ...any
 	}
 	if h, ok := strings.CutPrefix(f.Lead, "host:"); ok && f.Status != "done" && !served[h] {
 		bad("%s: lead: no machine serves host %s", f.Feature, h)
+	}
+}
+
+// validateListed checks that each pending host step of the item, and its
+// lead while it is open, has a machine that serves its host name and lists
+// the repositories it runs in (FLOW-04). A name no machine serves is
+// validateServed's finding.
+func (s *State) validateListed(f *Feature, served map[string]bool,
+	bad func(string, ...any),
+) {
+	for i := range f.Steps {
+		st := &f.Steps[i]
+		h, ok := strings.CutPrefix(st.Affinity, "host:")
+		aff, _ := templateAffinity(st)
+		// A led step's finding is the lead's, below.
+		if !ok || st.Status != "pending" || !served[h] ||
+			(aff == "cloud" && st.Affinity == f.Lead) {
+			continue
+		}
+		if took, _ := s.takers(h, s.stepRepos(f, st)); len(took) == 0 {
+			bad("%s: step %s: %s", f.Feature, st.ID, s.unlisted(h, s.stepRepos(f, st)))
+		}
+	}
+	if h, ok := strings.CutPrefix(f.Lead, "host:"); ok && f.Status != "done" && served[h] {
+		if took, _ := s.takers(h, s.ReposOf(f)); len(took) == 0 {
+			bad("%s: lead: %s", f.Feature, s.unlisted(h, s.ReposOf(f)))
+		}
 	}
 }
 
@@ -221,7 +347,7 @@ func (s *State) Gate(m *Machine, repo string, last *GateStamp, sweepDays int,
 	}
 	g := &Gate{}
 	for _, h := range m.Hosts {
-		if p, _ := s.Next("host:"+h+"/gate", now); p != nil {
+		if p, _ := s.Next("host:"+h+"/"+m.Name+".gate", now); p != nil {
 			g.Run = true
 			g.Reasons = append(g.Reasons, fmt.Sprintf("step\thost:%s\t%s\t%s", h,
 				p.Feature.Feature, p.Step.ID))
@@ -234,7 +360,7 @@ func (s *State) Gate(m *Machine, repo string, last *GateStamp, sweepDays int,
 			open = append(open, gap.ID)
 		}
 	}
-	print, err := s.fingerprint(repo)
+	print, err := s.fingerprint(m, repo)
 	if err != nil {
 		return nil, err
 	}
@@ -278,25 +404,46 @@ func (s *State) unheld(m *Machine, g *Gate) map[string]bool {
 	return serves
 }
 
-// fingerprint hashes origin/main and the branch of every in-progress feature,
-// as last fetched into repo.
-func (s *State) fingerprint(repo string) (string, error) {
-	refs := []string{"refs/remotes/origin/main"}
-	for _, f := range s.Features {
-		if f.Status == "in_progress" && f.Branch != "" {
-			refs = append(refs, "refs/remotes/origin/"+f.Branch)
-		}
-	}
-	sort.Strings(refs[1:])
+// fingerprint hashes, for each repository the machine lists, its trunk and
+// the branch there of every in-progress feature that works in it, as last
+// fetched: the queue's own in repo, the machine's dedicated checkout, and
+// each other in its clone at repo/.dev/checkouts/<owner>/<name> (a14 of
+// docs/design/loop-repository.md). A repository with no entry is an error.
+func (s *State) fingerprint(m *Machine, repo string) (string, error) {
 	h := sha256.New()
-	for _, r := range refs {
-		out, err := exec.Command("git", "-C", repo, "rev-parse", "-q", "--verify",
-			r+"^{commit}").Output()
-		sha := strings.TrimSpace(string(out))
-		if err != nil {
-			sha = "absent"
+	for _, name := range s.Lists(m) {
+		dir, label := repo, ""
+		trunk := "main"
+		if name != "" {
+			t, err := s.Config.Trunk(name)
+			if err != nil && s.Config.Repository != "" {
+				return "", err
+			}
+			if t != "" {
+				trunk = t
+			}
 		}
-		fmt.Fprintf(h, "%s %s\n", r, sha)
+		if name != s.Config.Repository {
+			dir = filepath.Join(repo, ".dev", "checkouts", filepath.FromSlash(name))
+			label = name + " "
+		}
+		refs := []string{"refs/remotes/origin/" + trunk}
+		for _, f := range s.Features {
+			if f.Status == "in_progress" && f.Branch != "" &&
+				slices.Contains(s.ReposOf(f), name) {
+				refs = append(refs, "refs/remotes/origin/"+f.Branch)
+			}
+		}
+		sort.Strings(refs[1:])
+		for _, r := range refs {
+			out, err := exec.Command("git", "-C", dir, "rev-parse", "-q", "--verify",
+				r+"^{commit}").Output()
+			sha := strings.TrimSpace(string(out))
+			if err != nil {
+				sha = "absent"
+			}
+			fmt.Fprintf(h, "%s%s %s\n", label, r, sha)
+		}
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16], nil
 }

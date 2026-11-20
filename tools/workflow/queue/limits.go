@@ -406,7 +406,7 @@ func (s *State) waitsOnHuman(f *Feature) bool {
 		if st.Status != "pending" || st.Phase > f.Phase || !allDone(st.Needs, done) {
 			continue
 		}
-		if st.Affinity == "human" || (IsMerge(st) && f.hasPR()) {
+		if st.Affinity == "human" || (IsMerge(st) && f.hasPR()) || isMergedFirst(st) {
 			return true
 		}
 	}

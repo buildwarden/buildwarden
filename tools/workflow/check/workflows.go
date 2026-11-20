@@ -10,13 +10,6 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// workflowRunsRe matches a step's run: or uses: value, or a job's uses:,
-// that runs the rule enforcement (FLOW-14): tier 1, golangci-lint or the
-// workflow tools, directly or through the make targets that run them without
-// naming them (Makefile: lint, enforcement).
-var workflowRunsRe = regexp.MustCompile(
-	`tier1|golangci-lint|tools/workflow|\bmake\s+(lint|enforcement)\b`)
-
 // shellCommentRe matches a whole-line shell comment in a run: script. It is
 // removed before matching so that a script's comment naming a tool does not
 // make its job rule-running. A trailing comment is left in: telling it from
@@ -41,13 +34,13 @@ type guarded struct {
 // needs: entry is not a change, so a new job can join the required check.
 // A nil side is a missing file and has no jobs, so adding or deleting a
 // workflow with a rule-running job is guarded. A side that does not parse is
-// an error: fail closed and say why.
-func workflowGuardChanged(before, after []byte) (bool, error) {
-	a, err := guardedParts(before)
+// an error: fail closed and say why. runs is the profile's rule_jobs.
+func workflowGuardChanged(runs *regexp.Regexp, before, after []byte) (bool, error) {
+	a, err := guardedParts(runs, before)
 	if err != nil {
 		return false, fmt.Errorf("merge base: %w", err)
 	}
-	b, err := guardedParts(after)
+	b, err := guardedParts(runs, after)
 	if err != nil {
 		return false, fmt.Errorf("branch: %w", err)
 	}
@@ -66,7 +59,7 @@ func workflowGuardChanged(before, after []byte) (bool, error) {
 // resolves anchors and aliases, and the bodies are compared as canonical
 // JSON, so YAML comments and formatting do not count and an alias cannot
 // hide a change.
-func guardedParts(text []byte) (guarded, error) {
+func guardedParts(runs *regexp.Regexp, text []byte) (guarded, error) {
 	g := guarded{edges: map[[2]string]bool{}}
 	var doc map[string]any
 	if err := yaml.Unmarshal(text, &doc); err != nil {
@@ -90,7 +83,7 @@ func guardedParts(text []byte) (guarded, error) {
 	}
 	body := map[string]string{} // rule-running jobs only
 	for k, job := range all {
-		if !runsRules(job) {
+		if !runsRules(runs, job) {
 			continue
 		}
 		b, err := json.Marshal(job)
@@ -113,19 +106,18 @@ func guardedParts(text []byte) (guarded, error) {
 
 // runsRules reports whether a job runs the rule enforcement: its uses:, or a
 // step's uses: or run: with whole-line comments removed, matches
-// workflowRunsRe. Keys, names, needs:, if:, env:, with: and
+// runs, the profile's rule_jobs. Keys, names, needs:, if:, env:, with: and
 // working-directory: are not searched; they only name things (FLOW-14,
 // rule-running-line-match Decision 1).
-func runsRules(job map[string]any) bool {
-	if workflowRunsRe.MatchString(scalar(job["uses"])) {
+func runsRules(runs *regexp.Regexp, job map[string]any) bool {
+	if runs.MatchString(scalar(job["uses"])) {
 		return true
 	}
 	steps, _ := job["steps"].([]any)
 	for _, s := range steps {
 		step, _ := s.(map[string]any)
 		run := shellCommentRe.ReplaceAllString(scalar(step["run"]), "")
-		if workflowRunsRe.MatchString(scalar(step["uses"])) ||
-			workflowRunsRe.MatchString(run) {
+		if runs.MatchString(scalar(step["uses"])) || runs.MatchString(run) {
 			return true
 		}
 	}

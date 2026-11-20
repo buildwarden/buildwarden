@@ -28,8 +28,14 @@ type Config struct {
 	// Repository is the repository whose gates wf runs and whose area map an
 	// item's areas name, as owner/name. It has no default: unset, an item
 	// that names repos fails Validate.
-	Repository string     `yaml:"repository,omitempty"`
-	RunBudget  StepBudget `yaml:"run_budget"`
+	Repository string `yaml:"repository,omitempty"`
+	// Repositories has one entry for every repository an item may name, the
+	// queue's own included: its trunk, which is the only place wf reads a
+	// trunk from, and, once the change that adopts it has merged, its
+	// profile file (LOOP-01, LOOP-08). An absent entry is never read as a
+	// default.
+	Repositories []RepositoryEntry `yaml:"repositories,omitempty"`
+	RunBudget    StepBudget        `yaml:"run_budget"`
 	// NativeBudget bounds one scheduled native session's batch, so native
 	// work never competes with the cloud loop (FLOW-13). Nil falls back to
 	// RunBudget.
@@ -56,6 +62,42 @@ type Config struct {
 	// (FLOW-04). A value below 0 is an error.
 	HostLeaseMinutes int     `yaml:"host_lease_minutes,omitempty"`
 	RunawayFactor    float64 `yaml:"runaway_factor"`
+}
+
+// RepositoryEntry is one config.yaml repositories entry.
+type RepositoryEntry struct {
+	// Name is owner/name.
+	Name string `yaml:"name"`
+	// Trunk is the branch the repository's pull requests merge to.
+	Trunk string `yaml:"trunk"`
+	// Profile is the path of the repository's profile file in it. Empty,
+	// the repository has not adopted the contract (LOOP-08).
+	Profile string `yaml:"profile,omitempty"`
+}
+
+// Entry returns repo's repositories entry, or nil when it has none.
+func (c Config) Entry(repo string) *RepositoryEntry {
+	for i := range c.Repositories {
+		if c.Repositories[i].Name == repo {
+			return &c.Repositories[i]
+		}
+	}
+	return nil
+}
+
+// Trunk returns repo's trunk from its repositories entry, the only place wf
+// reads one (LOOP-01). A repository with no entry, or an entry with no
+// trunk, is an error naming the fix.
+func (c Config) Trunk(repo string) (string, error) {
+	e := c.Entry(repo)
+	switch {
+	case e == nil:
+		return "", fmt.Errorf("config.yaml's repositories has no entry for %s: an "+
+			"attended session adds it with its trunk", repo)
+	case e.Trunk == "":
+		return "", fmt.Errorf("config.yaml's repositories entry %s has no trunk", repo)
+	}
+	return e.Trunk, nil
 }
 
 // StepBudget is how many steps one run may take.
@@ -112,6 +154,11 @@ type Feature struct {
 	// home first: the home holds its design, its branch and its PR
 	// (LOOP-04). Empty, the item works only in Config.Repository.
 	Repos []string `yaml:"repos,omitempty"`
+	// Work has one entry per repository in Repos after the home: the item's
+	// branch and pull request there (FLOW-03, FLOW-08). wf declare writes it
+	// from the design. Empty on an item declared before it existed, which
+	// keeps its gates in its home only.
+	Work []Work `yaml:"work,omitempty"`
 	// Areas names the areas of the area map whose files the item changes
 	// (FLOW-02, FLOW-05). Nil, the key absent, is undeclared: the item
 	// collides with every item it shares a repository with. An empty list is
@@ -151,6 +198,23 @@ type Feature struct {
 	file   string
 }
 
+// Work is the item's branch and pull request in one repository other than
+// its home.
+type Work struct {
+	Repo string `yaml:"repo"`
+	// Branch is the home's branch name: an item has one name in every
+	// repository (FLOW-17).
+	Branch string `yaml:"branch"`
+	// First says the design names the repository in merge_first: its pull
+	// request merges before the home's is listed ready, confirmed in Publish
+	// (FLOW-08).
+	First bool `yaml:"first,omitempty"`
+	PR    *PR  `yaml:"pr,omitempty"`
+	// Merged is the merge commit the loop confirmed on the repository's
+	// trunk.
+	Merged string `yaml:"merged,omitempty"`
+}
+
 // Adopts is what a reconciliation item adopts: a release of a consumable
 // (LOOP-07).
 type Adopts struct {
@@ -183,6 +247,9 @@ type Step struct {
 	Needs    []string `yaml:"needs,omitempty"`
 	Lease    Lease    `yaml:"lease"`
 	Note     string   `yaml:"note,omitempty"`
+	// Repo is the repository a host step runs in, one of the item's work
+	// entries; empty, the item's home (FLOW-04).
+	Repo string `yaml:"repo,omitempty"`
 }
 
 // Lease is a claim on a step: who holds it and until when.
@@ -247,6 +314,14 @@ type State struct {
 	// doneDir records that queue/done/ exists: done items are written there
 	// and carry no number (queue-positions, Decision 8).
 	doneDir bool
+	// repos are the views ForRepository has made, by repository.
+	repos map[string]*State
+	// queueRepo is, in such a view, the queue's own repository, which the
+	// view's Config.Repository is not.
+	queueRepo string
+	// summaryDir is where a view's writes regenerate QUEUE.md: the queue
+	// state's own directory. Empty, it is Dir.
+	summaryDir string
 }
 
 // doneFolder is where done items live once wf migrate -done has created it.
@@ -376,8 +451,16 @@ func (s *State) SaveMain() error {
 	if err := enc.Encode(s.Main); err != nil {
 		return err
 	}
+	if err := s.mkdir(); err != nil {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join(s.Dir, "main.yaml"), buf.Bytes(), 0o644); err != nil {
 		return err
+	}
+	if s.summaryDir != "" {
+		// A view's main.yaml is a second repository's; QUEUE.md is the
+		// queue state's, which the next wf validate or status writes.
+		return nil
 	}
 	return s.WriteSummary()
 }
@@ -901,11 +984,30 @@ func (s *State) waitingLimit() int {
 	return 8
 }
 
-// Tracked reports whether the item's home, its first repository, is not the
-// queue's own: wf sees no branch, design or PR there, so it runs no gate for
-// the item and counts it in no limit (FLOW-03, FLOW-05).
+// Home is the item's home repository: its first repository, or the queue's
+// own when it names none (LOOP-04).
+func (s *State) Home(f *Feature) string {
+	return s.ReposOf(f)[0]
+}
+
+// Tracked reports whether the item's home has not adopted the contract: its
+// config.yaml entry names no profile, so wf has no gate to run there and
+// counts the item in no limit (FLOW-03, FLOW-05). An adopted home, whichever
+// repository it is, gets the feature round (a6 of
+// docs/design/loop-repository.md). With no queue repository set, the
+// fallback Problems names: an item that names repos is tracked.
 func (s *State) Tracked(f *Feature) bool {
-	return len(f.Repos) > 0 && f.Repos[0] != s.Config.Repository
+	if s.Config.Repository == "" {
+		return len(f.Repos) > 0
+	}
+	e := s.Config.Entry(s.Home(f))
+	return e == nil || e.Profile == ""
+}
+
+// homedHere reports whether the item's home is the queue's own repository,
+// where a process item is homed (a6).
+func (s *State) homedHere(f *Feature) bool {
+	return s.Config.Repository == "" || s.Home(f) == s.Config.Repository
 }
 
 // validateConfig checks config.yaml's budgets and limits. A limit is checked
@@ -933,6 +1035,36 @@ func (s *State) validateConfig() []error {
 			errs = append(errs, fmt.Errorf("config: limits.%s %d is below 1", l.key,
 				l.value))
 		}
+	}
+	return append(errs, s.validateRepositories()...)
+}
+
+// validateRepositories checks config.yaml's repositories: each entry names
+// a repository once and gives its trunk, and the queue's own repository has
+// one like any other (GLOBAL-11).
+func (s *State) validateRepositories() []error {
+	var errs []error
+	seen := map[string]bool{}
+	for i, e := range s.Config.Repositories {
+		who := e.Name
+		if !repoRe.MatchString(e.Name) {
+			who = fmt.Sprintf("entry %d", i+1)
+			errs = append(errs, fmt.Errorf("config: repositories %s: name %q is not "+
+				"owner/name", who, e.Name))
+		}
+		if seen[e.Name] {
+			errs = append(errs, fmt.Errorf("config: repositories names %s twice",
+				e.Name))
+		}
+		seen[e.Name] = true
+		if e.Trunk == "" {
+			errs = append(errs, fmt.Errorf("config: repositories %s has no trunk",
+				who))
+		}
+	}
+	if r := s.Config.Repository; r != "" && !seen[r] {
+		errs = append(errs, fmt.Errorf("config: repositories has no entry for %s, the "+
+			"queue's own repository: an attended session adds it with its trunk", r))
 	}
 	return errs
 }
@@ -989,14 +1121,62 @@ func (s *State) Problems(f *Feature) []error {
 		// whether the item is tracked: its round is checked as written.
 		tracked = f.Round == "tracked"
 	}
-	f.validate(bad, tracked)
+	f.validate(bad, tracked, s.homedHere(f))
+	s.validateEntered(f, bad)
 	s.validateDeclared(f, bad)
 	s.validateUrgent(f, bad)
 	s.validateLead(f, bad)
 	if f.PR != nil && f.PR.Head != "" && !commitRe.MatchString(f.PR.Head) {
 		bad("pr.head %q is not a commit id", f.PR.Head)
 	}
+	validateWork(f, bad)
 	return errs
+}
+
+// validateEntered checks that each repository the item names has a
+// repositories entry. With no queue repository set, the fallback of
+// Problems, entries are not read either.
+func (s *State) validateEntered(f *Feature, bad func(string, ...any)) {
+	if s.Config.Repository == "" {
+		return
+	}
+	for i, r := range f.Repos {
+		if repoRe.MatchString(r) && s.Config.Entry(r) == nil &&
+			!slices.Contains(f.Repos[:i], r) {
+			bad("repos names %s, which has no entry in config.yaml's repositories: "+
+				"an attended session adds it with its trunk", r)
+		}
+	}
+}
+
+// validateWork checks that work, once written, has one entry for each
+// repository in repos after the home, in its order, on the home's branch
+// name (FLOW-03, FLOW-17).
+func validateWork(f *Feature, bad func(string, ...any)) {
+	if len(f.Work) == 0 {
+		return
+	}
+	var want, got []string
+	if len(f.Repos) > 1 {
+		want = f.Repos[1:]
+	}
+	for _, w := range f.Work {
+		got = append(got, w.Repo)
+		if w.Branch != f.Branch {
+			bad("work %s: branch %q is not the item's branch %q", w.Repo, w.Branch,
+				f.Branch)
+		}
+		if w.PR != nil && w.PR.Head != "" && !commitRe.MatchString(w.PR.Head) {
+			bad("work %s: pr.head %q is not a commit id", w.Repo, w.PR.Head)
+		}
+		if w.Merged != "" && !commitRe.MatchString(w.Merged) {
+			bad("work %s: merged %q is not a commit id", w.Repo, w.Merged)
+		}
+	}
+	if !slices.Equal(got, want) {
+		bad("work names %v, but repos after the home are %v: wf declare writes work "+
+			"from the design", got, want)
+	}
 }
 
 // Inherit gives a new item that follows parent the parent's repositories and
@@ -1120,11 +1300,11 @@ func (s *State) validateUrgent(f *Feature, bad func(string, ...any)) {
 	}
 }
 
-func (f *Feature) validate(bad func(string, ...any), tracked bool) {
+func (f *Feature) validate(bad func(string, ...any), tracked, homedHere bool) {
 	if !oneOf(f.Status, "queued", "in_progress", "done") {
 		bad("status %q is not queued, in_progress or done", f.Status)
 	}
-	f.validateKind(bad, tracked)
+	f.validateKind(bad, tracked, homedHere)
 	if !oneOf(f.DesignReview, "", "required", "skip") {
 		bad("design_review %q is not required or skip", f.DesignReview)
 	}
@@ -1144,13 +1324,12 @@ func (f *Feature) validate(bad func(string, ...any), tracked bool) {
 
 // validateKind checks the item's kind against its round. tracked says the
 // item is homed in another repository.
-func (f *Feature) validateKind(bad func(string, ...any), tracked bool) {
+func (f *Feature) validateKind(bad func(string, ...any), tracked, homedHere bool) {
 	switch {
 	case !oneOf(f.Kind, "", "feature", "process"):
 		bad("kind %q is not feature or process", f.Kind)
-	case f.IsProcess() && tracked:
-		bad("a process item is homed in the queue's repository, not %s "+
-			"(an item homed in another repository is tracked)", f.Repos[0])
+	case f.IsProcess() && !homedHere:
+		bad("a process item is homed in the queue's repository, not %s", f.Repos[0])
 	case f.IsProcess():
 		f.validateProcess(bad)
 	default:
@@ -1159,8 +1338,8 @@ func (f *Feature) validateKind(bad func(string, ...any), tracked bool) {
 		case tracked && f.Round != "tracked":
 			bad("a tracked item's round is tracked, not %q", f.Round)
 		case !tracked && f.Round == "tracked":
-			bad("round tracked is for an item homed in another repository, and this " +
-				"one is homed in the queue's")
+			bad("round tracked is for an item whose home has not adopted the " +
+				"contract (no profile in config.yaml), and this one's has")
 		case !tracked && f.Round != "feature" && !legacy:
 			bad("round %q is not feature (run wf migrate)", f.Round)
 		}

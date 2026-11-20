@@ -316,13 +316,12 @@ func (s *State) waitingLine() string {
 // known; a tracked item's names its repository.
 func (s *State) prLink(f *Feature, text string) string {
 	if s.Tracked(f) {
-		return fmt.Sprintf("%s#%d", f.Repos[0], f.PR.Number)
+		return fmt.Sprintf("%s#%d", s.Home(f), f.PR.Number)
 	}
-	if s.Config.Repository == "" {
+	if s.Home(f) == "" {
 		return text
 	}
-	return fmt.Sprintf("[%s](https://github.com/%s/pull/%d)", text, s.Config.Repository,
-		f.PR.Number)
+	return fmt.Sprintf("[%s](https://github.com/%s/pull/%d)", text, s.Home(f), f.PR.Number)
 }
 
 // readyToMerge lists the open pull requests ready for the human's merge.
@@ -446,7 +445,7 @@ func (s *State) notCounted() []string {
 				if strings.HasSuffix(st.ID, "-merge") {
 					what = "your merge (`" + st.ID + "`)"
 				}
-				where := f.Repos[0]
+				where := s.Home(f)
 				if f.hasPR() {
 					where = s.prLink(f, "")
 				}
@@ -611,7 +610,11 @@ func (s *State) areasLabel(f *Feature) string {
 	names := make([]string, len(*f.Areas))
 	for i, a := range *f.Areas {
 		names[i] = a
-		if s.Areas == nil || !s.Areas.Has(a) {
+		repo, area, prefixed := strings.Cut(a, ":")
+		if !prefixed {
+			repo, area = s.ReposOf(f)[0], a
+		}
+		if m := s.mapOf(repo); m == nil || !m.Has(area) {
 			names[i] += "*"
 		}
 	}

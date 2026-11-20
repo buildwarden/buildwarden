@@ -63,6 +63,25 @@ check_host() {
 	esac
 }
 
+# check_clones runs wf native -check, built from this checkout, on the
+# workflow branch as origin has it: each clone of a repository hosts.yaml
+# lists for the machine is at .dev/checkouts/<owner>/<repo>, names that
+# repository and is clean, and each profile file's toolchain_check and the
+# native.check of each host the machine serves pass (LOOP-05). A missing
+# clone is reported with the command for the owner; nothing is cloned.
+check_clones() {
+	local tmp
+	tmp=$(mktemp -d)
+	if (cd "$repo/tools/workflow" && go build -o "$tmp/wf" ./cmd/wf) 2>/dev/null &&
+		mkdir -p "$tmp/state" && git -C "$repo" archive origin/workflow | tar -x -C "$tmp/state"; then
+		"$tmp/wf" native -check -state "$tmp/state" -repo "$repo" -machine "$machine" &&
+			ok "clones and profiles (wf native -check)" || bad "wf native -check: see above"
+	else
+		bad "could not build wf or read origin/workflow for the clone check"
+	fi
+	rm -rf "$tmp"
+}
+
 check() {
 	echo "Checking $repo for machine $machine"
 	[ "$(uname -s)/$(uname -m)" = Darwin/arm64 ] && ok "macOS arm64 ($(sw_vers -productVersion))" ||
@@ -111,6 +130,7 @@ check() {
 	else
 		bad "hosts.yaml on origin/workflow has no machine $machine (or no hosts for it)"
 	fi
+	check_clones
 	if [ -f "$plist" ]; then ok "installed: $plist"; else warn "not installed yet"; fi
 	pmset -g sched 2>/dev/null | grep -qi wake && ok "a scheduled wake is set" ||
 		warn "no scheduled wake: sudo pmset repeat wakeorpoweron MTWRFSU ${wake:-04:35}:00"

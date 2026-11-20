@@ -4,9 +4,11 @@
 #   tools/workflow/native/native-tick.sh <machine>      # e.g. macbook
 #
 # Run by launchd (install-macos.sh) from a dedicated checkout of
-# buildwarden/buildwarden that nobody edits by hand. It syncs the checkout and
-# the workflow branch, asks `wf gate` whether the machine has native work, and
-# only then starts a headless Claude Code session on the workflow-native skill
+# buildwarden/buildwarden that nobody edits by hand. It syncs the checkout,
+# each clone of a second repository the machine lists in hosts.yaml
+# (.dev/checkouts/<owner>/<repo>, reset to its trunk), and the workflow
+# branch, asks `wf gate` whether the machine has native work, and only then
+# starts a headless Claude Code session on the workflow-native skill
 # in unattended mode. An idle night starts no agent and costs nothing.
 #
 # Every exit after the lock is taken records the run in
@@ -185,14 +187,20 @@ release_leases() {
 # note_leftover adds one note to leftover, the cleanup's "; "-separated list.
 note_leftover() { leftover="${leftover:+$leftover; }$1"; }
 
-# clean_worktrees removes each .scratch/ worktree on a branch feat/<item>
-# whose item is done or whose branch is gone from origin after the prune
-# fetch, and then the local branch, with git's safe forms only (FLOW-16).
+# clean_worktrees removes each worktree under .scratch/ on a branch
+# feat/<item> whose item is done or whose branch is gone from origin after the
+# prune fetch, and then the local branch, with git's safe forms only
+# (FLOW-16). With no argument it cleans the dedicated checkout's worktrees,
+# .scratch/<name>; with <owner>/<repo>, those of that repository's clone,
+# .scratch/<owner>/<repo>/<name>, each note naming the repository.
 clean_worktrees() {
-	local d name branch item q
-	for d in .scratch/*/; do
+	local d name branch item q clone=. scratch=.scratch/ in=""
+	if [ -n "${1:-}" ]; then
+		clone=.dev/checkouts/$1 scratch=.scratch/$1/ in=" in $1"
+	fi
+	for d in "$scratch"*/; do
 		[ -d "$d" ] || continue
-		name=$(basename "$d")
+		name=${d%/}
 		[ "$(git -C "$d" rev-parse --show-prefix 2>/dev/null)" = "" ] || continue
 		[ -f "$d.git" ] || continue
 		branch=$(git -C "$d" symbolic-ref -q --short HEAD) || continue
@@ -200,22 +208,48 @@ clean_worktrees() {
 		[ "$item" != "$branch" ] || continue
 		q=.dev/workflow/queue/$item.yaml
 		if ! grep -qx 'status: done' "$q" 2>/dev/null &&
-			git rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null; then
+			git -C "$clone" rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null; then
 			continue
 		fi
 		if [ -n "$(git -C "$d" status --porcelain)" ]; then
-			note_leftover "leftover worktree .scratch/$name has changes"
+			note_leftover "leftover worktree $name has changes"
 			dirty_worktree=1
 			continue
 		fi
-		git worktree remove ".scratch/$name" || {
-			note_leftover "leftover worktree .scratch/$name not removed"
+		git -C "$clone" worktree remove "$repo/$name" || {
+			note_leftover "leftover worktree $name not removed"
 			continue
 		}
-		echo "cleanup: removed .scratch/$name ($branch)"
-		git branch -d "$branch" ||
-			note_leftover "branch $branch not deleted (not merged; FLOW-16)"
+		echo "cleanup: removed $name ($branch$in)"
+		git -C "$clone" branch -d "$branch" ||
+			note_leftover "branch $branch$in not deleted (not merged; FLOW-16)"
 	done
+}
+
+# reset_clones resets each clone of a second repository the machine lists,
+# .dev/checkouts/<owner>/<repo>, to its trunk (the one its config.yaml entry
+# gives), whatever branch or changes a session left there; with cleanup it
+# also cleans the clone's worktrees. A clone that is not there stops the
+# run: its owner makes it (LOOP-05).
+reset_clones() {
+	local list name trunk c tab
+	tab=$(printf '\t')
+	list=$(dist/wf native -state .dev/workflow -repo . -machine "$machine" -clones) ||
+		stop "wf native -clones failed"
+	while IFS="$tab" read -r name trunk; do
+		[ -n "$name" ] || continue
+		c=.dev/checkouts/$name
+		git -C "$c" rev-parse --git-dir >/dev/null 2>&1 ||
+			stop "no clone of $name at $c (LOOP-05: its owner clones it)"
+		(cd "$c" && fetch --prune origin) || stop "fetch of $name failed"
+		git -C "$c" switch -q -f -C "$trunk" "origin/$trunk"
+		git -C "$c" reset -q --hard "origin/$trunk"
+		git -C "$c" clean -fdq
+		git -C "$c" worktree prune
+		[ "${1:-}" != cleanup ] || clean_worktrees "$name"
+	done <<LIST
+$list
+LIST
 }
 
 # with_leftover appends the cleanup's notes to reason, and records a dirty
@@ -293,6 +327,9 @@ esac
 stage="build wf"
 mkdir -p dist
 (cd tools/workflow && go build -o ../../dist/wf ./cmd/wf)
+stage="clones"
+reset_clones cleanup
+[ -z "$leftover" ] || echo "cleanup: $leftover"
 # The gate does not offer a step leased to another worker, so the leases an
 # earlier scheduled session of this machine left are released first.
 stage="release"
@@ -326,24 +363,19 @@ else
 fi
 
 stage="native assets"
-# A host's cached build assets follow origin/main, so a session never tests
-# behind a merged fix. windows-hyperv: the relay boot VHDX in warden's cache.
-# A failed refresh stales only the hosts that use the asset: the session still
-# runs, told to skip them, so the machine's other hosts are not blocked.
-served=$(awk -v m="$machine" '
-	$1 == "-" && $2 == "name:" { mine = ($3 == m); next }
-	mine && $1 == "hosts:" { print; mine = 0 }' .dev/workflow/hosts.yaml)
-stale=""
-case "$served" in
-*windows-hyperv*)
-	if ! tools/relay-vm/hyperv/refresh-cache.sh; then
-		stale="windows-hyperv"
-		echo "native assets: relay boot VHDX refresh failed; skipping windows-hyperv this run"
-	fi
-	;;
-esac
+# A host's cached build assets follow the trunk, so a session never tests
+# behind a merged fix: each listed repository's profile file names, as
+# native.prepare, the commands for the hosts it has assets for (here
+# windows-hyperv: the relay boot VHDX in warden's cache). A failed prepare
+# stales only the hosts it is listed under: the session still runs, told to
+# skip them, so the machine's other hosts are not blocked.
+prepared=$(dist/wf native -state .dev/workflow -repo . -machine "$machine" -prepare) ||
+	stop "wf native -prepare failed"
+printf '%s\n' "$prepared"
+stale=$(printf '%s\n' "$prepared" | awk -F '\t' '$1 == "stale" { printf "%s%s", sep, $2; sep = " " }')
+[ -z "$stale" ] || echo "native assets: native.prepare failed; skipping $stale this run"
 skip=""
-[ -z "$stale" ] || skip=" Stale hosts: $stale (relay boot VHDX refresh failed); skip their steps and gaps this run and say why in the digest."
+[ -z "$stale" ] || skip=" Stale hosts: $stale (native.prepare failed); skip their steps and gaps this run and say why in the digest."
 leftovers=""
 [ -z "$leftover" ] || leftovers=" Leftovers: $leftover."
 
@@ -367,13 +399,15 @@ else
 	outcome=failed
 fi
 reason="claude exited $rc"
-[ -z "$stale" ] || reason="$reason; skipped $stale (relay boot VHDX refresh failed)"
+[ -z "$stale" ] || reason="$reason; skipped $stale (native.prepare failed)"
 [ -z "$recorded" ] || reason="$reason; sessions not recorded (FLOW-18)"
 with_leftover
 stage="cleanup"
 
-# Leave the checkout on main and clean, whatever the session did.
+# Leave the checkout on main and each clone on its trunk, clean, whatever
+# the session did.
 git switch -q -f main && git reset -q --hard origin/main
+reset_clones
 
 if [ $rc -eq 0 ]; then
 	mv "$stamp.pending" "$stamp"

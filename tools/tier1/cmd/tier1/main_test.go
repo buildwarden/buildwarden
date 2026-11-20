@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -36,7 +38,13 @@ const front = "---\nfeature: %s\nstatus: archived\nround: parallel\ndrivers: []\
 // archived designs rules.yaml tolerates are listed without failing (FLOW-12);
 // a design with broken front-matter fails.
 func TestDesignsAll(t *testing.T) {
+	profile, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "docs", "development",
+		"loop-profile.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	files := map[string]string{
+		"docs/development/loop-profile.yaml":    string(profile),
 		"docs/design/TEMPLATE.md":               "---\nfeature: \n---\n",
 		"docs/design/ok.md":                     fmt.Sprintf(front, "ok"),
 		"docs/design/vm-driver-release-plan.md": "# VM Driver Release Plan\n",

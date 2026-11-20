@@ -8,8 +8,11 @@ You are the behavioral linter for one feature diff, per
 approve, merge, request changes on, or enable auto-merge for a PR, and your
 findings never block on their own. Tier 2 is report-only (LINT-07).
 
-1. Scope: `git diff origin/main...<branch>` only (LINT-04).
-2. Tier 1: `make lint`, `make test`, and the `automated` checks that exist so
+1. Scope: `git diff origin/<trunk>...<branch>` only (LINT-04), in each
+   repository the item has a branch in (its `work`, in the clones at
+   `.dev/checkouts/<owner>/<name>`), each against its own trunk.
+2. Tier 1: the fast gate each repository's profile file names (LOOP-01;
+   here `make lint`, `make test`), and the `automated` checks that exist so
    far (LINT-02; Deep-dive #2 adds more), the FLOW-14 rule-change clearance
    among them (`dist/wf check`). When the branch changes `tools/tier1/` or
    `tools/workflow/check/`, also run main's enforcement against it (FLOW-14):
@@ -45,14 +48,20 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
    the feature's follow-up by the `workflow-intake` skill's follow-up path,
    and list it in the report as "<slug> (follows <feature>)" (FLOW-09).
 4. Write `reports/<feature>/<sha12>.json` and `.md` on the workflow checkout,
-   `<sha12>` the branch head's 12-character short hash (LINT-05: stable,
+   `<sha12>` the home branch head's 12-character short hash (LINT-05: stable,
    diffable, counts by severity, suppressions with reasons carried over from
-   the previous report).
+   the previous report). The JSON's `heads` maps each repository the report
+   read, `<owner>/<name>`, to the 12-character head of the item's branch
+   there; Review's check passes only when they are the item's current heads
+   (LINT-04).
 5. Fixing findings is not your job. Return the counts; the tick sends MUST
    findings back to `wf-implement` and records the rest for the PR body, where the human acknowledges them at merge
    (FLOW-08).
 
-On a native machine (a led step, FLOW-04), the branch is pushed only with
-`tools/workflow/native/native-push.sh <name>` and committed with `git -C
-.scratch/<name> commit -F ../<name>.msg`, the message written to
-`.scratch/<name>.msg` first, never `-m` (FLOW-17).
+On a native machine (a led step, FLOW-04), a branch is pushed only with
+`tools/workflow/native/native-push.sh <name>`, or `native-push.sh <name>
+<owner>/<repo>` for a branch in a second repository's clone, whose worktree
+is `.scratch/<owner>/<repo>/<name>`, made with `git -C
+.dev/checkouts/<owner>/<repo> worktree add`; and committed with `git -C
+<worktree> commit -F ../<name>.msg`, the message written beside the
+worktree, never `-m` (FLOW-17).

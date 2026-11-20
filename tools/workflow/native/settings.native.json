@@ -25,6 +25,8 @@
       "Bash(git merge-base:*)",
       "Bash(git -C .dev/workflow:*)",
       "Bash(git -C .scratch/*)",
+      "Bash(git -C .dev/checkouts/* fetch*)",
+      "Bash(git -C .dev/checkouts/* worktree*)",
       "Bash(.scratch/*/dist/warden*)",
       "Bash(dist/wf:*)",
       "Bash(./dist/wf:*)",

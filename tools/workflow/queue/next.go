@@ -223,10 +223,15 @@ func (s *State) wait(f *Feature, st *Step, worker string, now time.Time) (string
 	switch {
 	case IsMerge(st):
 		return mergeWait(f), refusal{}
+	case isMergedFirst(st):
+		return mergedFirstWait(f, st), refusal{}
 	case !Satisfies(worker, st.Affinity):
 		return fmt.Sprintf("%s step %s", st.Affinity, st.ID), refusal{}
 	case st.Lease.Held(now) && st.Lease.ClaimedBy != worker:
 		return fmt.Sprintf("step %s leased to %s", st.ID, st.Lease.ClaimedBy), refusal{}
+	}
+	if why := s.machineRefuses(f, st, worker); why != "" {
+		return why, refusal{}
 	}
 	if Kind(worker) != "human" {
 		if why, red := s.unattendedHold(f, st); why != "" {
@@ -238,6 +243,27 @@ func (s *State) wait(f *Feature, st *Step, worker string, now time.Time) (string
 }
 
 // mergeWait is the reason an item at its merge step waits.
+// isMergedFirst reports whether the step is an f6-merged-<n>.
+func isMergedFirst(st *Step) bool {
+	_, ok := MergedFirst(st)
+	return ok
+}
+
+// mergedFirstWait is what an f6-merged-<n> waits on: the human's merge of
+// that work entry's pull request.
+func mergedFirstWait(f *Feature, st *Step) string {
+	n, _ := MergedFirst(st)
+	if n > len(f.Work) {
+		return fmt.Sprintf("the human's merge (%s names no work entry %d, FLOW-08)",
+			st.ID, n)
+	}
+	w := f.Work[n-1]
+	if w.PR != nil && w.PR.Number > 0 {
+		return fmt.Sprintf("the human's merge of %s PR #%d (FLOW-08)", w.Repo, w.PR.Number)
+	}
+	return fmt.Sprintf("the human's merge in %s (no PR recorded, FLOW-08)", w.Repo)
+}
+
 func mergeWait(f *Feature) string {
 	if f.PR != nil && f.PR.Number > 0 {
 		return fmt.Sprintf("the human's merge of PR #%d (FLOW-08)", f.PR.Number)
@@ -267,9 +293,20 @@ func (s *State) unattendedHold(f *Feature, st *Step) (why string, red bool) {
 			"escalate to human, FLOW-13)",
 			f.Budget.Spent.Steps, f.Budget.Estimate.Steps), false
 	}
-	if IsRefresh(st) && s.Main != nil && s.Main.CI == "red" && !s.fixesMain(f) {
-		return fmt.Sprintf("main is red at %s: no refresh until it is green (FLOW-10)",
-			s.Main.SHA), true
+	if !IsRefresh(st) {
+		return "", false
+	}
+	for _, repo := range s.ReposOf(f) {
+		m := s.MainOf(repo)
+		if m == nil || m.CI != "red" || m.Followup == f.Feature {
+			continue
+		}
+		if repo == s.Config.Repository || repo == "" {
+			return fmt.Sprintf("main is red at %s: no refresh until it is green "+
+				"(FLOW-10)", m.SHA), true
+		}
+		return fmt.Sprintf("the trunk of %s is red at %s: no refresh until it is green "+
+			"(FLOW-10)", repo, m.SHA), true
 	}
 	return "", false
 }

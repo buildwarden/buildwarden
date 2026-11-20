@@ -129,9 +129,17 @@ func TestClaimIsGuarded(t *testing.T) {
 }
 
 const (
-	here = "repository: o/here\n"
+	here = "repository: o/here\n" + "repositories:\n" + entries
 	away = "o/relay"
 )
+
+// entries are config.yaml's repositories entries for the tests' repositories:
+// o/here and buildwarden/buildwarden adopted, the others not.
+const entries = "  - {name: o/here, trunk: main, profile: docs/development/loop-profile.yaml}\n" +
+	"  - {name: buildwarden/buildwarden, trunk: main, " +
+	"profile: docs/development/loop-profile.yaml}\n" +
+	"  - {name: o/specs, trunk: main}\n  - {name: o/relay, trunk: main}\n" +
+	"  - {name: buildwarden/buildwarden-specs, trunk: main}\n"
 
 // events are the item's history lines, without their times.
 func events(f *queue.Feature) []string {

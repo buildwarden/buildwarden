@@ -43,7 +43,7 @@ func (fm *Front) rulePaths() []string {
 // A design whose review was skipped has no approved commit and is read on the
 // branch. With neither an approval nor a skip, Within is empty.
 func Declarations(env Env, f *queue.Feature) (queue.Declaration, error) {
-	c := &checker{env: env, f: f}
+	c := newChecker(env, f)
 	commit, err := c.git("rev-parse", "--short", "refs/heads/"+f.Branch)
 	if err != nil {
 		return queue.Declaration{}, err
@@ -55,7 +55,21 @@ func Declarations(env Env, f *queue.Feature) (queue.Declaration, error) {
 	fm := &d.Front
 	out := queue.Declaration{Commit: commit, Repos: fm.Repos, Areas: fm.Areas,
 		Seams: fm.Seams, RulesChanged: fm.ruleIDs(), Alters: fm.Alters,
-		DesignReview: fm.DesignReview}
+		DesignReview: fm.DesignReview, MergeFirst: fm.MergeFirst}
+	for _, w := range f.Work {
+		if slices.Contains(fm.Repos[min(1, len(fm.Repos)):], w.Repo) {
+			continue
+		}
+		// The design drops the repository: wf declare refuses while the
+		// branch is there.
+		head, err := c.remoteHeadIn(w.Repo, w.Branch)
+		if err != nil {
+			return queue.Declaration{}, err
+		}
+		if head != "" {
+			out.Live = append(out.Live, w.Repo)
+		}
+	}
 	within := func(fm *Front) queue.Within {
 		return queue.Within{Areas: fm.Areas, Drivers: fm.Drivers, Surfaces: fm.Surfaces,
 			RulePaths: fm.rulePaths()}

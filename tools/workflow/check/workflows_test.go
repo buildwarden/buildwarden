@@ -161,7 +161,8 @@ func TestWorkflowGuardChanged(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			after := edit(t, tc.before, tc.edits...)
-			got, err := workflowGuardChanged([]byte(tc.before), []byte(after))
+			got, err := workflowGuardChanged(hereRuns(t), []byte(tc.before),
+				[]byte(after))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -184,7 +185,7 @@ func TestWorkflowGuardAddedDeleted(t *testing.T) {
 		{"a workflow with none added", nil, []byte(integrationYML), false},
 		{"a workflow with none deleted", []byte(integrationYML), nil, false},
 	} {
-		got, err := workflowGuardChanged(tc.before, tc.after)
+		got, err := workflowGuardChanged(hereRuns(t), tc.before, tc.after)
 		if err != nil || got != tc.want {
 			t.Errorf("%s: changed = %v, %v; want %v", tc.name, got, err, tc.want)
 		}
@@ -203,7 +204,7 @@ func TestWorkflowGuardUnparseable(t *testing.T) {
 		{"jobs not a mapping", []byte(mainYML), []byte("jobs: [lint]\n"),
 			"jobs is not a mapping"},
 	} {
-		if _, err := workflowGuardChanged(tc.before, tc.after); err == nil ||
+		if _, err := workflowGuardChanged(hereRuns(t), tc.before, tc.after); err == nil ||
 			!strings.Contains(err.Error(), tc.where) {
 			t.Errorf("%s: err = %v, want it to name %q", tc.name, err, tc.where)
 		}

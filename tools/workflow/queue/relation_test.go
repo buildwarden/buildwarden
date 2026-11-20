@@ -270,7 +270,7 @@ func TestRelationTable(t *testing.T) {
 // behaviour, and the reason says so.
 func TestRelationNoMap(t *testing.T) {
 	s := state()
-	s.Config.Repository = here
+	own(s, here)
 	for _, c := range []relationCase{
 		{"declared items", item("a", "driver/hyperv"), item("b", "relay"),
 			Colliding, 4, here + " has no area map"},
@@ -309,7 +309,7 @@ func TestRelationUndeclaredIsToday(t *testing.T) {
 	}
 	fs[1].Follows, fs[2].Seams, fs[4].Repos = "f3", []string{"relay-claim"}, []string{here}
 	bare := state(fs...)
-	bare.Config.Repository = here
+	own(bare, here)
 	for _, s := range []*State{mapped(t, fs...), bare} {
 		for _, p := range pairs(fs) {
 			if got := s.Relation(p[0], p[1]); got.Kind != Colliding {
@@ -392,7 +392,7 @@ func generated() []*Feature {
 func TestRelationSymmetric(t *testing.T) {
 	fs := generated()
 	bare := state(fs...)
-	bare.Config.Repository = here
+	own(bare, here)
 	seen := map[string]int{}
 	for _, s := range []*State{mapped(t, fs...), bare} {
 		for _, p := range pairs(fs) {
