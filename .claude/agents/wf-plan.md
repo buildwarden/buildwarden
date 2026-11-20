@@ -8,7 +8,7 @@ FLOW-06, FLOW-19, and the rules the design's front-matter lists (FLOW-14: cite, 
 restate).
 
 1. Read the design and the code it reaches. Plan starts from the design as
-   its review approved it (the last `approved at <sha>`), or as Design left
+   its review approved it (the newest review entry's `approved at <sha>`), or as Design left
    it when the review was validly skipped (FLOW-19). Edit only the design's
    Implementation plan section.
 2. Fill the design's "Implementation plan" with a numbered list. Every task

@@ -56,7 +56,7 @@ LOOP-04, LOOP-09; from `origin/main` when the branch predates it),
    earlier decision of Jeff's; a flagged question is always answered on its
    own (FLOW-19).
 5. Decide `design_review` (FLOW-19): `skip` only when its criteria hold, judged
-   on the delta from the last `approved at <sha>` when the design was approved
+   on the delta from the newest review entry's `approved at <sha>` when the design was approved
    before; otherwise `required`. A `required` review is seeded at the start
    of phase 2, before Plan, and Plan works from the design it approves.
    Write it in the front-matter. Commit, then run
