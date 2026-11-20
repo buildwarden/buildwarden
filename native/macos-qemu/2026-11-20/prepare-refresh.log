@@ -1,0 +1,4 @@
+[warden] config: /Users/jeff/src/buildwarden-native/.scratch/dpw-qemu/warden.toml (--config)
+[warden] preparing windows-arm64-20261120T224235Z.qcow2 (no network)...
+[warden] prepared windows-arm64-20261120T224235Z.qcow2
+Base image ready: /Users/jeff/Library/Caches/warden/images/prepared/windows-arm64-20261120T224235Z.qcow2

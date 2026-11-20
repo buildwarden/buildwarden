@@ -79,6 +79,11 @@ gaps:
       2026-11-19 (host:macos-qemu/20261119T124005Z, unattended, main e9315c2): not run. Since 0cd3c02 main
       changed only loop and process files (#126-#129), nothing in driver/, cmd/, relay/ or tools/relay-vm,
       tools/build-vm, and no queue item carries a qemu Windows build-guest fix.
+      2026-11-20 (host:macos-qemu/macbook.20261120T224036Z, unattended, main be13847): not rerun at 25m. Since
+      e9315c2 driver/qemu changed only in #131 (the detached prepare start), nothing in the build guest. The
+      two detached-prepare-windows-exe-qemu builds (4m timeout, no --image, from prepared layers made today
+      at 16:09Z and 22:42Z) started the relay and the build VM and timed out like before; too short to read
+      more into. No ISO reachable. Logs: native/macos-qemu/2026-11-20/.
     status: open
   - id: qemu-linux-exclusive-trust
     host: macos-qemu
@@ -247,6 +252,9 @@ gaps:
       2026-11-19 (host:qemu-any/20261119T124005Z, unattended, main e9315c2): not rerun. Since 0cd3c02 main
       changed only loop and process files (#126-#129), so the 2026-11-17 Linux pass stands; Windows half
       still waits on qemu-windows-guest-package.
+      2026-11-20 (host:qemu-any/macbook.20261120T224036Z, unattended, main be13847): not rerun. Since e9315c2
+      driver/qemu changed only in the Windows prepared-layer refresh start (#131), which a Linux build does
+      not reach, so the 2026-11-17 Linux pass stands; Windows half still waits on qemu-windows-guest-package.
     status: open
   - id: hyperv-eval-image-verify-disks
     host: windows-hyperv
@@ -496,6 +504,8 @@ gaps:
       2026-11-18 (host:macos-qemu/20261118T124004Z, unattended, main 0cd3c02): not run, for the same reason.
       2026-11-19 (host:macos-qemu/20261119T124005Z, unattended, main e9315c2): not run, for the same reason
       (no code change on main since 0cd3c02).
+      2026-11-20 (host:macos-qemu/macbook.20261120T224036Z, unattended, main be13847): not run. qemu Windows
+      builds still fail on main (#131 changed only the detached prepare start; qemu-windows-guest-package).
     status: open
   - id: hyperv-relay-per-build-channel-qemu-windows
     host: macos-qemu
@@ -518,6 +528,8 @@ gaps:
       2026-11-18 (host:macos-qemu/20261118T124004Z, unattended, main 0cd3c02): not run, for the same reason.
       2026-11-19 (host:macos-qemu/20261119T124005Z, unattended, main e9315c2): not run, for the same reason
       (no code change on main since 0cd3c02).
+      2026-11-20 (host:macos-qemu/macbook.20261120T224036Z, unattended, main be13847): not run. qemu Windows
+      builds still fail on main (qemu-windows-guest-package), and warden-run.log stays unreadable here.
     status: open
   - id: security-suite-tier2-macos-vz
     host: macos-vz
@@ -614,6 +626,8 @@ gaps:
       design-only (f68a8b1), and qemu Windows builds still fail on main.
       2026-11-19 (host:macos-qemu/20261119T124005Z, unattended, main e9315c2): not run. The branch is still
       design-only (f68a8b1), and qemu Windows builds still fail on main.
+      2026-11-20 (host:macos-qemu/macbook.20261120T224036Z, unattended, main be13847): not run. The branch is
+      still design-only (f68a8b1), and qemu Windows builds still fail on main.
     status: open
   - id: build-vm-busybox-qemu-direct-boot
     host: qemu-any
@@ -711,6 +725,9 @@ gaps:
       builds still fail on main.
       2026-11-19 (host:macos-qemu/20261119T124005Z, unattended, main e9315c2): not run. driver-contract has
       not merged (feat/driver-contract 028ffe2, r3, waiting on human step f2-design-review-r2), and qemu
+      Windows builds still fail on main.
+      2026-11-20 (host:macos-qemu/macbook.20261120T224036Z, unattended, main be13847): not run. driver-contract
+      has not merged (feat/driver-contract 9b3ba28, in Publish at cloud step f6-consolidate), and qemu
       Windows builds still fail on main.
   - id: runtime-cli-project-path-windows
     host: container-any
@@ -1015,6 +1032,8 @@ gaps:
       feat/prebuilt-artifacts is design-only (49b513a), and qemu Windows builds still fail on main.
       2026-11-19 (host:macos-qemu/20261119T124005Z, unattended, main e9315c2): not run.
       feat/prebuilt-artifacts is still design-only (49b513a), and qemu Windows builds still fail on main.
+      2026-11-20 (host:macos-qemu/macbook.20261120T224036Z, unattended, main be13847): not run.
+      feat/prebuilt-artifacts is still design-only (49b513a), and qemu Windows builds still fail on main.
   - id: detached-prepare-windows-exe-qemu
     host: macos-qemu
     status: open
@@ -1034,6 +1053,22 @@ gaps:
       feat/detached-prepare-windows-exe now carries code (c6b6fb5: driver/detach.go, driver/qemu/driver.go's
       ensureFreshWindowsLayer, driver/hyperv/freshness.go) but is mid-Implement (cloud step f3-implement
       claimed), and qemu Windows builds still fail on main, so the case cannot reach the freshness check.
+      2026-11-20 (host:macos-qemu/macbook.20261120T224036Z, unattended, main be13847, which carries
+      detached-prepare-windows-exe #131; `make build sign`, dist/warden): freshness half PASSES, build half
+      still waits on qemu-windows-guest-package. The freshness check runs before boot, on the active prepared
+      layer (a build with no --image). (1) `warden build --config warden.toml --driver qemu --guest-os
+      windows --timeout 4m .` with `[vm] image_refresh_after = "1m"`: printed "prepared Windows layer is
+      6h33m old; refreshing it in the background (log: ~/Library/Caches/warden/images/prepare-windows-arm64.log)";
+      the log's first line is the started warden's config line (`.scratch/dpw-qemu/warden.toml (--config)`),
+      the prepare finished, and windows-arm64-20261120T224235Z.qcow2 became active in
+      windows-arm64-prepared.json. (The process's path was not caught while it ran; on macOS it is
+      os.Executable, dist/warden.) (2) The same build with prepare-windows-arm64.log made read-only (0444,
+      restored after): printed "prepared Windows layer is 4m old, and its background refresh did not start:
+      open .../prepare-windows-arm64.log: permission denied; run `warden image prepare --driver qemu --os
+      windows --arch arm64` to refresh it", then went on to start the relay and the build VM. Both builds
+      then timed out at 4m (silent guest), so "still builds" is not shown. The active layer prepared at
+      16:09Z today came from an earlier run whose results were not recorded (the 12:52Z macbook run, status
+      failed). Logs: native/macos-qemu/2026-11-20/.
   - id: workdir-in-context-windows
     host: container-any
     status: open
