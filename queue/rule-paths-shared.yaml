@@ -4,7 +4,7 @@ priority: 2
 kind: process
 status: in_progress
 round: process
-phase: 3
+phase: 4
 design: docs/design/rule-paths-shared.md
 branch: feat/rule-paths-shared
 alters_relationships: null
@@ -30,6 +30,13 @@ steps:
       expires: null
   - id: x3-merge
     phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
     affinity: cloud
     status: pending
     lease:
@@ -68,3 +75,9 @@ history:
   - at: 2026-11-20T22:18:38Z
     by: cloud/20261120T203034Z
     event: entered phase 3 (merge)
+  - at: 2026-11-20T22:19:19Z
+    by: cloud/20261120T203034Z
+    event: done x3-merge
+  - at: 2026-11-20T22:19:19Z
+    by: cloud/20261120T203034Z
+    event: entered phase 4 (close)
