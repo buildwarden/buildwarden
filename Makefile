@@ -44,7 +44,8 @@ release-build:
 	@for t in $(RELEASE_TARGETS); do \
 		echo "== $$t"; \
 		GOOS=$${t%/*} GOARCH=$${t#*/} CGO_ENABLED=0 \
-			go build ./cmd/warden ./cmd/warden-io ./cmd/relay ./cmd/warden-pause || exit 1; \
+			go build ./cmd/warden ./cmd/warden-driver-container ./cmd/warden-io \
+				./cmd/relay ./cmd/warden-pause || exit 1; \
 	done
 
 integration-test:

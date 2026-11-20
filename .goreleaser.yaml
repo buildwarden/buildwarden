@@ -18,12 +18,22 @@ builds:
     goarch: [amd64, arm64]
     ldflags:
       - -s -w -X main.version={{.Version}}
+  # The container driver, beside warden in the archive: its own version
+  # stamp, and the support images it runs.
+  - id: warden-driver-container
+    main: ./cmd/warden-driver-container
+    binary: warden-driver-container
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X github.com/buildwarden/buildwarden/driver/container.Version={{.Version}}
       - -X github.com/buildwarden/buildwarden/driver/container.holderImageRef={{.Env.HOLDER_IMAGE}}
       - -X github.com/buildwarden/buildwarden/driver/container.netnsImageRef={{.Env.NETNS_IMAGE}}
 archives:
   - id: linux
-    ids: [warden]
-    builds: [warden]
+    ids: [warden, warden-driver-container]
+    builds: [warden, warden-driver-container]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
