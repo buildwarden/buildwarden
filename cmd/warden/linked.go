@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 
@@ -165,12 +166,97 @@ var linkedDrivers = map[string]*linkedDriver{
 		}},
 }
 
-// containerPreflight is the container driver's probe: it resolves the
-// container runtime (the configured one, else detection) and refuses one
-// that is not supported or does not answer, before anything is created.
-func containerPreflight(_ context.Context, cfg *Config, _ *driver.BuildRequest,
-	_ *driver.Start) error {
-	_, err := resolveRuntime(cfg)
+// linkedSettings resolves the selected linked driver's settings for command
+// with the kit, from this invocation's driver flags and config file, as a
+// driver binary resolves them from its request, and prints their old-name
+// warnings: warden calls it for a command it does not probe first, and for
+// clean where a driver binary's clean is probed (DRV-C11).
+func linkedSettings(cfg *Config, sd *selectedDriver, command string) (driver.Settings,
+	error) {
+	set, err := drivercmd.Resolve(sd.name(), sd.linked.Settings, command,
+		driverFlags.argsFor(command), absConfigFile(cfg), os.Environ())
+	if err != nil {
+		return nil, err
+	}
+	for _, w := range set.Warnings() {
+		fmt.Fprintln(os.Stderr, w)
+	}
+	return set, nil
+}
+
+// kit is the linked driver called name as the kit runs a driver: its run is
+// called through drivercmd.Call, in warden's process, which resolves its
+// settings from the start message and prints their warnings in the probe.
+// The settings a linked driver's code still takes in the build request are
+// put there before its Preflight and Run are called.
+func (l *linkedDriver) kit(name string, cfg *Config,
+	req *driver.BuildRequest) *drivercmd.Driver {
+	c := l.Capabilities
+	return &drivercmd.Driver{
+		Describe: drivercmd.Describe{Name: name, Settings: l.Settings,
+			Commands: l.Commands, Capabilities: drivercmd.Capabilities{VM: c.VM,
+				Shell: c.Shell, Keep: c.Keep, Exited: c.Exited,
+				Containerfile: c.Containerfile, GuestOS: c.GuestOS,
+				ImageOS: l.ImageOS}},
+		Preflight: func(ctx context.Context, start *driver.Start) error {
+			settingsToRequest(start.Settings, req)
+			if l.Preflight == nil {
+				return nil
+			}
+			return l.Preflight(ctx, cfg, req, start)
+		},
+		Run: func(ctx context.Context, start *driver.Start, host driver.Host) ([]string,
+			error) {
+			settingsToRequest(start.Settings, req)
+			// A background image prepare the run starts reads start's file.
+			driver.ConfigFile = start.ConfigFile
+			return l.Run(ctx, cfg, req, start, host)
+		},
+	}
+}
+
+// settingsToRequest puts the linked drivers' settings that their code takes
+// in the build request there: the ages of qemu and hyperv, hyperv's network
+// and the container driver's relay image. A setting the driver does not
+// declare is not set, and leaves the field at its default.
+func settingsToRequest(set driver.Settings, req *driver.BuildRequest) {
+	if v, ok := set.Age("image-refresh-after"); ok {
+		req.ImageRefreshAfter = v
+	}
+	if v, ok := set.Age("image-min-grace"); ok {
+		req.ImageMinGrace = v
+	}
+	if v, ok := set.String("network"); ok {
+		req.Network = v
+	}
+	if v, ok := set.String("relay-image"); ok {
+		req.RelayImage = v
+	}
+}
+
+// callLinkedRun runs the linked driver's run through the kit: a probe when
+// start.Probe is set, with host nil, else the build with warden's host.
+func callLinkedRun(ctx context.Context, l *linkedDriver, name string, cfg *Config,
+	req *driver.BuildRequest, start *driver.Start, host driver.Host) ([]string, error) {
+	res, err := drivercmd.Call(ctx, l.kit(name, cfg, req), drivercmd.CmdRun,
+		&drivercmd.Request{Start: start, Environ: os.Environ()}, host)
+	if err != nil {
+		return nil, err
+	}
+	return res.Kept, nil
+}
+
+// containerPreflight is the container driver's probe: it refuses a relay
+// image that is not one, and resolves the container runtime (the configured
+// one, else detection), refusing one that is not supported or does not
+// answer, before anything is created.
+func containerPreflight(_ context.Context, _ *Config, req *driver.BuildRequest,
+	start *driver.Start) error {
+	if err := checkRelayImage(req.RelayImage,
+		start.Settings.Source("relay-image")); err != nil {
+		return err
+	}
+	_, err := resolveRuntime(start.Settings)
 	return err
 }
 
@@ -178,7 +264,7 @@ func containerPreflight(_ context.Context, cfg *Config, _ *driver.BuildRequest,
 // more, as a build of a driver binary does after its probe.
 func containerRun(ctx context.Context, cfg *Config, req *driver.BuildRequest,
 	start *driver.Start, host driver.Host) ([]string, error) {
-	d, err := containerDriver(cfg)
+	d, err := containerDriver(cfg, start.Settings)
 	if err != nil {
 		return nil, err
 	}
@@ -186,10 +272,19 @@ func containerRun(ctx context.Context, cfg *Config, req *driver.BuildRequest,
 }
 
 // containerAttach is the container driver's attach, on the runtime it
-// resolves, with the request's streams, else the process's own.
+// resolves from the build's flags and config file, with the request's
+// streams, else the process's own.
 func containerAttach(_ context.Context, cfg *Config, req *driver.BuildRequest,
 	buildID string) (int, error) {
-	d, err := containerDriver(cfg)
+	set, err := drivercmd.Resolve("container", container.Settings, drivercmd.CmdAttach,
+		driverFlags.argsFor(drivercmd.CmdRun), absConfigFile(cfg), os.Environ())
+	if err != nil {
+		return 0, err
+	}
+	d, err := containerDriver(cfg, set)
+	if err == nil {
+		err = set.Err()
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -207,10 +302,9 @@ func containerAttach(_ context.Context, cfg *Config, req *driver.BuildRequest,
 	return d.Attach(buildID, stdin, stdout, stderr)
 }
 
-// containerDriver is the container driver for cfg, on the runtime it
-// resolves.
-func containerDriver(cfg *Config) (*container.Driver, error) {
-	runtime, err := resolveRuntime(cfg)
+// containerDriver is the container driver on the runtime set resolves.
+func containerDriver(cfg *Config, set driver.Settings) (*container.Driver, error) {
+	runtime, err := resolveRuntime(set)
 	if err != nil {
 		return nil, err
 	}

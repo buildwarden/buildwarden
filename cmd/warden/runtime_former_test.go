@@ -95,7 +95,11 @@ func TestFormerRuntimeValueInTheError(t *testing.T) {
 			"set it to finch, docker or podman; there is no supported way to " +
 				"use nerdctl with the container driver"},
 	} {
-		err := unsupportedRuntime(RuntimeConfig{CLI: tc.v, CLISource: tc.source})
+		source := tc.source
+		if source == projectConfig {
+			source += " [runtime] cli"
+		}
+		err := unsupportedRuntime(tc.v, source)
 		var fe *driver.FixableError
 		if !errors.As(err, &fe) {
 			t.Fatalf("%s = %q: %v is not a FixableError", tc.source, tc.v, err)

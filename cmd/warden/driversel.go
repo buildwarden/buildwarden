@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
@@ -23,6 +24,14 @@ type selectedDriver struct {
 }
 
 func (s *selectedDriver) name() string { return s.found.Name }
+
+// lists reports whether the driver lists command.
+func (s *selectedDriver) lists(command string) bool {
+	if s.bin != nil {
+		return s.bin.desc.lists(command)
+	}
+	return slices.Contains(s.linked.Commands, command)
+}
 
 // caps is what the driver's describe reports under capabilities.
 func (s *selectedDriver) caps() capabilities {
@@ -48,6 +57,17 @@ func driverSelection(cfg *Config) selection {
 // selectDriver finds the driver cfg selects and, for a binary, runs its
 // describe once (DRV-6, DRV-38).
 func selectDriver(cfg *Config) (*selectedDriver, error) {
+	if st := driverFlags; st.sel != nil && st.key == driverSelection(cfg) {
+		if st.sel.bin != nil {
+			st.sel.bin.teardown = cfg.Build.teardown()
+		}
+		return st.sel, nil
+	}
+	return findSelected(cfg)
+}
+
+// findSelected is selectDriver without the driver the scan selected.
+func findSelected(cfg *Config) (*selectedDriver, error) {
 	fd, err := findDriver(driverSelection(cfg), hostLookupEnv())
 	if err != nil {
 		return nil, err

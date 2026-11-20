@@ -14,6 +14,6 @@ var Settings = []drivercmd.Setting{
 	{Name: "relay-image", Type: drivercmd.String,
 		Key:     "driver.container.relay_image",
 		Aliases: []string{"runtime.relay_image"}, Env: "WARDEN_IMAGE",
-		Commands: []string{drivercmd.CmdRun},
+		Commands: []string{drivercmd.CmdRun, drivercmd.CmdDoctor},
 		Usage:    "relay image reference, or dev to build it from source"},
 }

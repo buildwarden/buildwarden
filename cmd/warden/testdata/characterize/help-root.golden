@@ -17,12 +17,11 @@ Available Commands:
   shell       Open an interactive shell in the build environment
 
 Flags:
-      --color string     color output (auto, always, never)
-      --config string    config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
-      --driver string    driver to run: container (default), qemu, vz, hyperv or firecracker, or the name or path of another driver binary
-  -h, --help             help for warden
-      --runtime string   container runtime (finch, docker, podman)
-  -v, --verbose          verbose output
-      --version          version for warden
+      --color string    color output (auto, always, never)
+      --config string   config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
+      --driver string   driver to run: container (default), qemu, vz, hyperv or firecracker, or the name or path of another driver binary
+  -h, --help            help for warden
+  -v, --verbose         verbose output
+      --version         version for warden
 
 Use "warden [command] --help" for more information about a command.

@@ -106,14 +106,162 @@ warden.toml:
   ImageRefreshAfter 72h0m0s
   ImageMinGrace     6h0m0s
   TempDir           $CTX/t
-  RelayImage        dev
+  RelayImage        
   UpstreamCACerts   0 bytes
   UpstreamSystemCA  false
   BuildLink         10.9.0.4/30
   DNS               [10.20.0.53]
   Env               map[]
 == network flag: warden build --driver qemu --network warden-x $CTX
-  error: --network is only used by --driver hyperv
+  error: unknown flag --network for driver "qemu"
+  fix:   see 'warden build --driver qemu --help' for the flags this driver takes
+== [Runtime] cli: warden build --driver qemu $CTX
+warden.toml:
+    [Runtime]
+    cli = "podman"
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
+== [runtime] Relay_Image: warden build --driver qemu $CTX
+warden.toml:
+    [runtime]
+    Relay_Image = "dev"
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
+== [VM] image_refresh_after: warden build --driver qemu $CTX
+warden.toml:
+    [VM]
+    image_refresh_after = "3d"
+  error: $CTX/warden.toml: [VM] image_refresh_after: keys are case-sensitive, and the qemu driver reads [driver] image_refresh_after (old name [vm] image_refresh_after)
+  fix:   write it as [driver] image_refresh_after
+== [vm] Image_Min_Grace: warden build --driver qemu $CTX
+warden.toml:
+    [vm]
+    Image_Min_Grace = "6h"
+  error: $CTX/warden.toml: [vm] Image_Min_Grace: keys are case-sensitive, and the qemu driver reads [driver] image_min_grace (old name [vm] image_min_grace)
+  fix:   write it as [driver] image_min_grace
+== [vm] Network: warden build --driver qemu $CTX
+warden.toml:
+    [vm]
+    Network = "warden-ci"
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
+== [Vm] windows_image: warden build --driver qemu $CTX
+warden.toml:
+    [Vm]
+    windows_image = "w.vhdx"
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
+== [vm] WINDOWS_IMAGE_UPDATE: warden build --driver qemu $CTX
+warden.toml:
+    [vm]
+    WINDOWS_IMAGE_UPDATE = "reuse"
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
 == windows guest: warden build --driver qemu --guest-os windows $CTX
   Script            
   ContextDir        $CTX

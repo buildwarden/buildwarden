@@ -39,21 +39,13 @@ type Config struct {
 	FileSource string `toml:"-"`
 }
 
-// VMConfig holds defaults for the VM-driver flags (--cpus, --memory,
-// --network); a flag always wins.
+// VMConfig holds warden's keys in [vm]: the defaults for the VM flags
+// (--cpus, --memory; a flag always wins), the build link and the resolvers.
+// The table's other keys are old names of the drivers' keys, which the
+// drivers read (v1.md, Old names).
 type VMConfig struct {
-	CPUs     int    `toml:"cpus"`
-	MemoryMB int    `toml:"memory_mb"`
-	Network  string `toml:"network"`
-	// ImageRefreshAfter / ImageMinGrace: ages such as "7d" or "36h".
-	ImageRefreshAfter string `toml:"image_refresh_after"`
-	ImageMinGrace     string `toml:"image_min_grace"`
-	// WindowsImage is the hyperv base image (a URL or local path) used when
-	// image prepare is given no --source; empty means Microsoft's current
-	// evaluation download. WindowsImageUpdate is "auto" (default: a refresh
-	// picks up new media at that URL) or "reuse" (keep the current base).
-	WindowsImage       string `toml:"windows_image"`
-	WindowsImageUpdate string `toml:"windows_image_update"`
+	CPUs     int `toml:"cpus"`
+	MemoryMB int `toml:"memory_mb"`
 	// BuildLink is the relay-to-build link (an advanced option; empty means
 	// buildlink.DefaultCIDR), checked as the file loads. BuildLinkSource is
 	// the base name of the config file when it set the key, the label
@@ -74,34 +66,35 @@ type RelayConfig struct {
 	SystemCABundle  *bool    `toml:"system_ca_bundle"`
 }
 
+// RuntimeConfig is warden's key in [runtime]: the driver. The table's other
+// keys are the container driver's old names, which it reads (v1.md, Old
+// names).
 type RuntimeConfig struct {
-	CLI string `toml:"cli"`
-	// CLISource says where CLI was named: cliFromFlag, cliFromEnv, or the
-	// path of the config file that set it, escaped for printing. It words
-	// the error that refuses an unsupported runtime; nothing that decides
-	// what is run reads it.
-	CLISource string `toml:"-"`
 	// Driver selects the driver, by name or, from the flag or the variable,
 	// by path; DriverSource says which set it: sourceFlag, sourceEnv, or
 	// empty for the config file.
 	Driver       string `toml:"driver"`
 	DriverSource string `toml:"-"`
-	RelayImage   string `toml:"relay_image"`
-	// RelayImageSource says where RelayImage was set: relayImageFromEnv, or
-	// the path of the config file, escaped for printing. It words
-	// checkRelayImage's error.
-	RelayImageSource string `toml:"-"`
 }
 
-// What RuntimeConfig.RelayImageSource holds for the variable.
-const relayImageFromEnv = "WARDEN_IMAGE"
-
-// What RuntimeConfig.CLISource holds for a runtime named outside a config
-// file.
+// The sources the kit gives the container driver's settings when they were
+// not read from a file: the flag and the two variables.
 const (
-	cliFromFlag = "--runtime"
-	cliFromEnv  = "WARDEN_CTR_CLI"
+	cliFromFlag       = "--runtime"
+	cliFromEnv        = "WARDEN_CTR_CLI"
+	relayImageFromEnv = "WARDEN_IMAGE"
 )
+
+// keyInFile words a source the kit gives for a key read from a file,
+// "<file> [table] key", as warden's messages put it: "[table] key in <file>".
+// Another source is returned as it is.
+func keyInFile(source string) string {
+	i := strings.LastIndex(source, " [")
+	if i < 0 {
+		return source
+	}
+	return source[i+1:] + " in " + source[:i]
+}
 
 // projectConfig is the config file read when none is named: the one of this
 // name in the working directory, when it exists.
@@ -200,13 +193,19 @@ type OutputConfig struct {
 // not to use, and a working directory's warden.toml that cannot be examined
 // is an error, not "no file".
 func configFile() (path, source string, err error) {
-	if f := rootCmd.PersistentFlags().Lookup("config"); f != nil && f.Changed {
-		if flagConfig == "" {
+	return configFileFrom(rootFlagChanged("config"), flagConfig)
+}
+
+// configFileFrom is configFile with --config as given: given says whether it
+// was, and value is its path.
+func configFileFrom(given bool, value string) (path, source string, err error) {
+	if given {
+		if value == "" {
 			return "", "", driver.Fixable("pass --config the path of a config "+
 				"file, or drop the flag to use WARDEN_CONFIG or ./warden.toml",
 				"--config was given an empty path")
 		}
-		path, err = filepath.Abs(flagConfig)
+		path, err = filepath.Abs(value)
 		return path, configFromFlag, err
 	}
 	if named := os.Getenv(configFromEnv); named != "" {
@@ -378,15 +377,21 @@ func configLine(cfg *Config) string {
 // WARDEN_UPSTREAM_CA_CERTS is not applied here: it replaces [relay]
 // upstream_ca_certs, and resolveUpstreamCAs reads both.
 func LoadConfig() (*Config, error) {
-	cfg := &Config{
-		Output: OutputConfig{Color: "auto"},
-	}
-
 	path, source, err := configFile()
 	if err != nil {
 		return nil, err
 	}
+	return loadConfigFile(path, source)
+}
+
+// loadConfigFile is LoadConfig for the file configFile chose: path, empty for
+// none, and how it was chosen.
+func loadConfigFile(path, source string) (*Config, error) {
+	cfg := &Config{
+		Output: OutputConfig{Color: "auto"},
+	}
 	var data []byte
+	var err error
 	if path != "" {
 		if data, err = readConfigFile(path, source); err != nil {
 			return nil, err
@@ -401,19 +406,12 @@ func LoadConfig() (*Config, error) {
 			return nil, err
 		}
 		cfg.File, cfg.FileSource = path, source
-		cfg.Runtime.CLISource = driver.EscapeOutside(path)
-		cfg.Runtime.RelayImageSource = driver.EscapeOutside(path)
 	}
 
-	// Environment variable overrides
-	if cli := os.Getenv(cliFromEnv); cli != "" {
-		cfg.Runtime.CLI, cfg.Runtime.CLISource = cli, cliFromEnv
-	}
+	// Environment variable overrides. WARDEN_CTR_CLI and WARDEN_IMAGE are the
+	// container driver's, which it reads (DRV-C9).
 	if d := os.Getenv("WARDEN_DRIVER"); d != "" {
 		cfg.Runtime.Driver, cfg.Runtime.DriverSource = d, sourceEnv
-	}
-	if img := os.Getenv(relayImageFromEnv); img != "" {
-		cfg.Runtime.RelayImage, cfg.Runtime.RelayImageSource = img, relayImageFromEnv
 	}
 	if os.Getenv("NO_COLOR") != "" {
 		cfg.Output.Color = "never"
@@ -530,15 +528,15 @@ func runtimeNames(conj string) string {
 // for that level. The value is printed once, quoted: it may come from a file
 // someone else wrote, and %q keeps control characters out of the terminal.
 // Nothing else in the message or the fix is taken from the value.
-func unsupportedRuntime(rt RuntimeConfig) error {
+func unsupportedRuntime(value, source string) error {
 	var setting, set, orNot string
-	switch rt.CLISource {
+	switch source {
 	case cliFromFlag:
 		setting, set, orNot = cliFromFlag, "pass --runtime ", ", or leave it out"
 	case cliFromEnv:
 		setting, set, orNot = cliFromEnv, "set WARDEN_CTR_CLI to ", ", or unset it"
 	default:
-		setting, set = "[runtime] cli in "+rt.CLISource, "set it to "
+		setting, set = keyInFile(source), "set it to "
 		orNot = ", or remove it; --runtime with one of those replaces it " +
 			"for one command"
 	}
@@ -546,10 +544,10 @@ func unsupportedRuntime(rt RuntimeConfig) error {
 	fix := set + runtimeNames("or") + orNot
 	// TRANSITIONAL(runtime-former-values): a value that ran before this
 	// check existed gets a message that says what to change.
-	if formerWhat, formerFix, ok := formerRuntimeValue(rt.CLI); ok {
+	if formerWhat, formerFix, ok := formerRuntimeValue(value); ok {
 		what, fix = formerWhat, set+formerFix
 	}
-	return driver.Fixable(fix, "%s is %q; %s", setting, rt.CLI, what)
+	return driver.Fixable(fix, "%s is %q; %s", setting, value, what)
 }
 
 // DetectRuntime probes for a working container runtime, in
@@ -753,7 +751,7 @@ func isVMDriver(d string) bool {
 	return false
 }
 
-func validateFlagsForDriver(d string, isVM bool) error {
+func validateFlagsForDriver(isVM bool) error {
 	for _, f := range []struct {
 		set  bool
 		name string
@@ -771,14 +769,6 @@ func validateFlagsForDriver(d string, isVM bool) error {
 					"firecracker)", f.name)
 		}
 	}
-	if flagNetwork != "" && d != "hyperv" {
-		fix := ""
-		if d == "firecracker" {
-			fix = "drop --network: firecracker builds use the slots " +
-				"'warden setup --driver firecracker' made"
-		}
-		return driver.Fixable(fix, "--network is only used by --driver hyperv")
-	}
 	return nil
 }
 
@@ -793,8 +783,7 @@ func validateFlagsForDriver(d string, isVM bool) error {
 // Empty and "dev" are the release's image and a development build; nothing
 // more of a reference is checked here, which the runtime's own error does.
 // Only the container driver uses the image, so only its runs call this.
-func checkRelayImage(rt RuntimeConfig) error {
-	img := rt.RelayImage
+func checkRelayImage(img, source string) error {
 	if img == "" || img == "dev" {
 		return nil
 	}
@@ -804,10 +793,7 @@ func checkRelayImage(rt RuntimeConfig) error {
 	if !bad {
 		return nil
 	}
-	where := relayImageFromEnv
-	if rt.RelayImageSource != relayImageFromEnv {
-		where = "[runtime] relay_image in " + rt.RelayImageSource
-	}
+	where := keyInFile(source)
 	return driver.Fixable("set it to an image reference such as "+
 		"ghcr.io/buildwarden/relay:v0.2.0 or to \"dev\", or remove it",
 		"%s is %q: not an image reference", where, img)

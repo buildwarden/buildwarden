@@ -25,15 +25,10 @@ Usage:
   warden setup [flags]
 
 Flags:
-  -h, --help                help for setup
-      --host-ip string      hyperv: host gateway IP on the NAT switch, used by every build (default 192.168.240.1)
-      --nat-prefix string   hyperv: NAT CIDR for relay egress, used by every build (default 192.168.240.0/20)
-      --network string      hyperv: durable build switch name (default: [vm] network, then warden-dev)
-      --slots int           hyperv: build switches to create, 1-64 (default 4); firecracker: network slots to create, 1-256 (default 16)
+  -h, --help   help for setup
 
 Global Flags:
-      --color string     color output (auto, always, never)
-      --config string    config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
-      --driver string    driver to run: container (default), qemu, vz, hyperv or firecracker, or the name or path of another driver binary
-      --runtime string   container runtime (finch, docker, podman)
-  -v, --verbose          verbose output
+      --color string    color output (auto, always, never)
+      --config string   config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
+      --driver string   driver to run: container (default), qemu, vz, hyperv or firecracker, or the name or path of another driver binary
+  -v, --verbose         verbose output

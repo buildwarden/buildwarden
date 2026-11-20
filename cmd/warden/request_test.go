@@ -62,49 +62,58 @@ func TestResolveBuildInputContainerNeedsDockerfile(t *testing.T) {
 }
 
 func TestValidateFlagsForDriver(t *testing.T) {
-	defer func() { flagCPUs, flagNetwork, flagKeepVMs, flagTimeout = 0, "", false, "" }()
+	defer func() { flagCPUs, flagKeepVMs, flagTimeout = 0, false, "" }()
 
 	flagTimeout = "10m"
-	if err := validateFlagsForDriver("", isVMDriver("")); err != nil {
+	if err := validateFlagsForDriver(isVMDriver("")); err != nil {
 		t.Fatalf("--timeout must be accepted by every driver: %v", err)
 	}
 	flagCPUs = 8
-	if err := validateFlagsForDriver("container", isVMDriver("container")); err == nil {
+	if err := validateFlagsForDriver(isVMDriver("container")); err == nil {
 		t.Fatal("--cpus accepted by the container driver")
 	}
 	for _, d := range []string{"qemu", "vz", "hyperv"} {
-		if err := validateFlagsForDriver(d, isVMDriver(d)); err != nil {
+		if err := validateFlagsForDriver(isVMDriver(d)); err != nil {
 			t.Fatalf("--cpus refused by %s: %v", d, err)
 		}
 	}
-	flagCPUs = 0
-	flagNetwork = "warden-dev"
-	if err := validateFlagsForDriver("qemu", isVMDriver("qemu")); err == nil {
-		t.Fatal("--network accepted by qemu")
+}
+
+// Behaviour 2 and 3: --network is hyperv's flag; another driver refuses it as
+// a flag it does not take, naming itself.
+func TestNetworkIsHypervs(t *testing.T) {
+	for _, d := range []string{"qemu", "firecracker", "vz", "container"} {
+		inConfigFiles(t, "")
+		_, err := runWarden(t, "build", "--driver", d, "--network", "warden-dev")
+		want := `unknown flag --network for driver "` + d + `"`
+		if err == nil || err.Error() != want {
+			t.Errorf("--network on %s: %v, want %q", d, err, want)
+		}
 	}
-	if err := validateFlagsForDriver("hyperv", isVMDriver("hyperv")); err != nil {
-		t.Fatalf("--network refused by hyperv: %v", err)
+	inConfigFiles(t, "")
+	if _, err := runWarden(t, "build", "--driver", "hyperv", "--network", "warden-ci",
+		"--help"); err != nil {
+		t.Fatal(err)
+	}
+	if got := driverFlags.argsFor("run"); len(got) != 1 || got[0] != "--network=warden-ci" {
+		t.Errorf("hyperv's args = %q, want [--network=warden-ci]", got)
 	}
 }
 
 func TestFirecrackerIsAVMDriver(t *testing.T) {
-	defer func() { flagCPUs, flagKeepVMs, flagImage, flagNetwork = 0, false, "", "" }()
+	defer func() { flagCPUs, flagKeepVMs, flagImage = 0, false, "" }()
 	if err := checkDriverName("firecracker"); err != nil {
 		t.Fatalf("checkDriverName(firecracker) = %v", err)
 	}
 	flagCPUs, flagKeepVMs, flagImage = 2, true, "disk.qcow2"
-	if err := validateFlagsForDriver("firecracker", isVMDriver("firecracker")); err != nil {
+	if err := validateFlagsForDriver(isVMDriver("firecracker")); err != nil {
 		t.Fatalf("VM flags refused by firecracker: %v", err)
 	}
-	if err := validateFlagsForDriver("container", isVMDriver("container")); err == nil ||
+	if err := validateFlagsForDriver(isVMDriver("container")); err == nil ||
 		!strings.Contains(err.Error(), "firecracker") {
 		t.Fatalf("the VM-driver hint does not name firecracker: %v", err)
 	}
 	flagCPUs, flagKeepVMs, flagImage = 0, false, ""
-	flagNetwork = "warden-dev"
-	if err := validateFlagsForDriver("firecracker", isVMDriver("firecracker")); err == nil {
-		t.Fatal("--network accepted by firecracker")
-	}
 	fc := linkedDrivers["firecracker"].Capabilities
 	if err := validateGuestOS("windows", "firecracker", fc); err == nil {
 		t.Fatal("--guest-os windows accepted by firecracker")

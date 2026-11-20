@@ -397,7 +397,7 @@ func runSequence(p *prepared, mode string) (buildOutcome, error) {
 		// warden keeps the signals: a second one kills the driver.
 		seq.stopSignals = func() {}
 	} else {
-		seq.peer = newLinkedPeer(p.sd.linked, p.cfg, p.req)
+		seq.peer = newLinkedPeer(p.sd.linked, p.sd.name(), p.cfg, p.req)
 	}
 	if mode == driver.ModeShell {
 		seq.timeout = 0
@@ -498,7 +498,7 @@ func newStart(cfg *Config, req *driver.BuildRequest, caps capabilities,
 		BaseImage: req.BaseImage, BuildScript: req.BuildScript,
 		ContextDir: req.ContextDir, TempDir: req.TempDir, StateFile: stateFile,
 		Keep: req.KeepVMs && caps.Keep != keepNone, Verbose: cfg.Output.Verbose,
-		ConfigFile: absConfigFile(cfg), Args: []string{},
+		ConfigFile: absConfigFile(cfg), Args: driverFlags.argsFor("run"),
 	}
 	if st.GuestOS == "" && len(caps.GuestOS) > 0 {
 		st.GuestOS = caps.GuestOS[0]
@@ -525,18 +525,20 @@ func newStart(cfg *Config, req *driver.BuildRequest, caps capabilities,
 // linkedPeer runs a linked driver's Run in warden's process, its messages as
 // the calls of the driver.Host it is given.
 type linkedPeer struct {
-	d   *linkedDriver
-	cfg *Config
-	req *driver.BuildRequest
-	ev  chan runEvent
+	d    *linkedDriver
+	name string
+	cfg  *Config
+	req  *driver.BuildRequest
+	ev   chan runEvent
 
 	once   sync.Once
 	stopCh chan struct{}
 	reason string
 }
 
-func newLinkedPeer(d *linkedDriver, cfg *Config, req *driver.BuildRequest) *linkedPeer {
-	return &linkedPeer{d: d, cfg: cfg, req: req, ev: make(chan runEvent),
+func newLinkedPeer(d *linkedDriver, name string, cfg *Config,
+	req *driver.BuildRequest) *linkedPeer {
+	return &linkedPeer{d: d, name: name, cfg: cfg, req: req, ev: make(chan runEvent),
 		stopCh: make(chan struct{})}
 }
 
@@ -544,7 +546,8 @@ func (p *linkedPeer) begin(start *driver.Start) {
 	go func() {
 		// The driver's context is not cancelled: stop is how it is told to
 		// tear down, and its teardown needs a live context.
-		kept, err := p.d.Run(context.Background(), p.cfg, p.req, start, linkedHost{p})
+		kept, err := callLinkedRun(context.Background(), p.d, p.name, p.cfg, p.req,
+			start, linkedHost{p})
 		p.ev <- runEvent{kind: evEnd, kept: kept, err: err}
 	}()
 }

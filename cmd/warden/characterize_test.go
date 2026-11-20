@@ -27,6 +27,7 @@ import (
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
+	"github.com/buildwarden/buildwarden/driver/drivercmd"
 	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/linuxguest"
 	"github.com/buildwarden/buildwarden/driver/qemu"
@@ -110,12 +111,9 @@ func runWarden(t *testing.T, args ...string) (string, error) {
 	var out bytes.Buffer
 	rootCmd.SetOut(&out)
 	rootCmd.SetErr(&out)
-	rootCmd.SetArgs(args)
-	rootCmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
-		return driver.Fixable(fmt.Sprintf("see '%s --help'", c.CommandPath()), "%v", err)
-	})
+	rootCmd.SetFlagErrorFunc(flagError)
 	fixableArgs(rootCmd)
-	err := rootCmd.Execute()
+	err := execute(args)
 	return out.String(), err
 }
 
@@ -192,6 +190,12 @@ var refusals = []struct {
 	{args: qemuBuild, conf: "[vm]\nimage_refresh_after = \"soon\"\n"},
 	{args: qemuBuild, conf: "[vm]\nimage_min_grace = \"soon\"\n"},
 	{args: qemuBuild, conf: "[vm]\nbuild_link = \"10.9.0.0/24\"\n"},
+	// Behaviour 19: a driver's key in another letter case, one for each
+	// driver that owns one of the seven keys.
+	{args: []string{"build"}, conf: "[Runtime]\nCLI = \"podman\"\n"},
+	{args: qemuBuild, conf: "[driver.Qemu]\nimage_refresh_after = \"3d\"\n"},
+	{args: []string{"build", "--driver", "hyperv"},
+		conf: "[vm]\nnetwork = \"a\"\nNetwork = \"b\"\n"},
 	{args: []string{"build"}, conf: "[build]\ncapture = \"everything\"\n"},
 	{args: []string{"build"}, conf: "not toml ["},
 	{args: []string{"shell", "--cpus", "2"}},
@@ -274,6 +278,16 @@ var requestCases = []struct {
 		"image_refresh_after = \"3d\"\nimage_min_grace = \"6h\"\n" +
 		"build_link = \"10.9.0.4/30\"\ndns = [\"10.20.0.53\"]\n"},
 	{name: "network flag", args: []string{"--network", "warden-x"}},
+	// Behaviour 19: each of the seven keys in another letter case, refused by
+	// the driver that owns it and ignored by the others (Behaviour 13).
+	{name: "[Runtime] cli", conf: "[Runtime]\ncli = \"podman\"\n"},
+	{name: "[runtime] Relay_Image", conf: "[runtime]\nRelay_Image = \"dev\"\n"},
+	{name: "[VM] image_refresh_after", conf: "[VM]\nimage_refresh_after = \"3d\"\n"},
+	{name: "[vm] Image_Min_Grace", conf: "[vm]\nImage_Min_Grace = \"6h\"\n"},
+	{name: "[vm] Network", conf: "[vm]\nNetwork = \"warden-ci\"\n"},
+	{name: "[Vm] windows_image", conf: "[Vm]\nwindows_image = \"w.vhdx\"\n"},
+	{name: "[vm] WINDOWS_IMAGE_UPDATE",
+		conf: "[vm]\nWINDOWS_IMAGE_UPDATE = \"reuse\"\n"},
 	{name: "windows guest", args: []string{"--guest-os", "windows"},
 		files: map[string]string{"build.ps1": "exit 0\r\n"}},
 }
@@ -314,23 +328,37 @@ func TestCharacterizeRequests(t *testing.T) {
 	}
 }
 
-// parsedRequest parses a build command line as rootCmd does and returns the
-// request warden makes from it, without running the build.
+// parsedRequest parses a build command line as warden does and returns the
+// request a linked driver is handed, without running the build: warden's
+// request, with the settings the driver resolves in its probe from the
+// line's driver flags and the config file put in it, as the kit does.
 func parsedRequest(t *testing.T, args ...string) (*driver.BuildRequest, error) {
 	t.Helper()
 	resetCommandFlags(t)
+	prepareDriverFlags(args)
 	c, rest, err := rootCmd.Find(args)
 	if err != nil {
 		return nil, err
 	}
 	if err := c.ParseFlags(rest); err != nil {
-		return nil, err
+		return nil, flagError(c, err)
 	}
 	cfg, err := resolveConfig()
 	if err != nil {
 		return nil, err
 	}
-	return newRequest(cfg, linkedSel(cfg), c.Flags().Args())
+	sd := linkedSel(cfg)
+	req, err := newRequest(cfg, sd, c.Flags().Args())
+	if err != nil {
+		return nil, err
+	}
+	set, err := drivercmd.Resolve(sd.name(), sd.linked.Settings, drivercmd.CmdRun,
+		driverFlags.argsFor(drivercmd.CmdRun), absConfigFile(cfg), os.Environ())
+	if err != nil {
+		return nil, err
+	}
+	settingsToRequest(set, req)
+	return req, nil
 }
 
 func indent(s string) string {

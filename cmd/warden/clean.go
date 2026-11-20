@@ -56,6 +56,12 @@ func runClean(cmd *cobra.Command, args []string) error {
 	if sd.bin != nil {
 		return cleanBinary(cfg, sd)
 	}
+	// The driver's settings are resolved, and refused, before anything is
+	// removed, where a driver binary's clean is probed.
+	set, err := linkedSettings(cfg, sd, "clean")
+	if err != nil {
+		return err
+	}
 	removed := cleanAfterLinkedBuilds(driverName(cfg))
 	if cfg.Runtime.Driver == "firecracker" {
 		tempDir, err := resolveTempDir(cfg)
@@ -75,7 +81,13 @@ func runClean(cmd *cobra.Command, args []string) error {
 		finishClean(removed)
 		return nil
 	}
-	n, err := cleanContainers(cfg)
+	if cfg.Runtime.Driver != "" && cfg.Runtime.Driver != "container" {
+		// qemu and vz have no clean of their own beyond dead builds; the
+		// container runtime is not theirs to clean (Decision 16).
+		finishClean(removed)
+		return nil
+	}
+	n, err := cleanContainers(set)
 	if err != nil {
 		return err
 	}
@@ -88,9 +100,9 @@ func runClean(cmd *cobra.Command, args []string) error {
 // cleanContainers removes the containers, networks and per-build relay
 // images of builds that are no longer running, on the container runtime
 // cfg resolves, and reports how many it removed.
-func cleanContainers(cfg *Config) (int, error) {
+func cleanContainers(set driver.Settings) (int, error) {
 	removed := 0
-	runtime, err := resolveRuntime(cfg)
+	runtime, err := resolveRuntime(set)
 	if err != nil {
 		return 0, err
 	}
@@ -269,7 +281,7 @@ func cleanBinary(cfg *Config, sd *selectedDriver) error {
 	cleanReq := func(keep []string, probe bool) map[string]any {
 		req := withConfig(map[string]any{"contract": bin.contract,
 			"keep_ids": nonNil(keep), "cache": flagCleanCache, "tmpdir": tempDir,
-			"args": []string{}}, absConfigFile(cfg))
+			"args": driverFlags.argsFor("clean")}, absConfigFile(cfg))
 		if probe {
 			req["probe"] = true
 		}

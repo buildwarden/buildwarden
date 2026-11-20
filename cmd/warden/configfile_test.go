@@ -410,12 +410,11 @@ func TestConfigFlagOnACommandThatReadsNoConfiguration(t *testing.T) {
 		{"image", "list", "--config", missing},
 		{"--config", missing, "--version"},
 	} {
-		rootCmd.SetArgs(args)
 		t.Cleanup(func() {
 			rootCmd.SetArgs(nil)
 			_ = rootCmd.Flags().Set("version", "false")
 		})
-		if err := rootCmd.Execute(); err != nil {
+		if err := execute(args); err != nil {
 			t.Errorf("warden %v: %v", args, err)
 		}
 	}

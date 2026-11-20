@@ -177,14 +177,16 @@ func newSequenceTest(run fakeRun, timeout time.Duration) *sequenceTest {
 	tr := &trace{}
 	st := &sequenceTest{tr: tr, sess: newFakeSession(tr), clock: newFakeClock(),
 		signals: make(chan os.Signal, 1), out: make(chan buildOutcome, 1)}
-	d := &linkedDriver{Run: func(_ context.Context, _ *Config, _ *driver.BuildRequest,
+	d := &linkedDriver{Commands: []string{"run"}, Run: func(_ context.Context, _ *Config,
+		_ *driver.BuildRequest,
 		start *driver.Start, h driver.Host) ([]string, error) {
 		return run(tr, start, h)
 	}}
 	st.seq = &buildSequence{
 		start: &driver.Start{Contract: 1, BuildID: "k3v9x2ab", Mode: driver.ModeBuild,
 			ClaimToken: "token"},
-		peer: newLinkedPeer(d, &Config{}, &driver.BuildRequest{}), session: st.sess,
+		peer:    newLinkedPeer(d, "fake", &Config{}, &driver.BuildRequest{}),
+		session: st.sess,
 		timeout: timeout, signals: st.signals, after: st.clock.after,
 		stopSignals: func() { st.stopped = true },
 	}

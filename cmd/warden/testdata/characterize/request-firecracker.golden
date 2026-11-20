@@ -103,17 +103,206 @@ warden.toml:
   MemoryMB          2048
   Network           
   KeepVMs           false
-  ImageRefreshAfter 72h0m0s
-  ImageMinGrace     6h0m0s
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
   TempDir           $CTX/t
-  RelayImage        dev
+  RelayImage        
   UpstreamCACerts   0 bytes
   UpstreamSystemCA  false
   BuildLink         10.9.0.4/30
   DNS               [10.20.0.53]
   Env               map[]
 == network flag: warden build --driver firecracker --network warden-x $CTX
-  error: --network is only used by --driver hyperv
-  fix:   drop --network: firecracker builds use the slots 'warden setup --driver firecracker' made
+  error: unknown flag --network for driver "firecracker"
+  fix:   see 'warden build --driver firecracker --help' for the flags this driver takes
+== [Runtime] cli: warden build --driver firecracker $CTX
+warden.toml:
+    [Runtime]
+    cli = "podman"
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
+== [runtime] Relay_Image: warden build --driver firecracker $CTX
+warden.toml:
+    [runtime]
+    Relay_Image = "dev"
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
+== [VM] image_refresh_after: warden build --driver firecracker $CTX
+warden.toml:
+    [VM]
+    image_refresh_after = "3d"
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
+== [vm] Image_Min_Grace: warden build --driver firecracker $CTX
+warden.toml:
+    [vm]
+    Image_Min_Grace = "6h"
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
+== [vm] Network: warden build --driver firecracker $CTX
+warden.toml:
+    [vm]
+    Network = "warden-ci"
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
+== [Vm] windows_image: warden build --driver firecracker $CTX
+warden.toml:
+    [Vm]
+    windows_image = "w.vhdx"
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
+== [vm] WINDOWS_IMAGE_UPDATE: warden build --driver firecracker $CTX
+warden.toml:
+    [vm]
+    WINDOWS_IMAGE_UPDATE = "reuse"
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
 == windows guest: warden build --driver firecracker --guest-os windows $CTX
   error: --guest-os windows is currently only supported by --driver qemu or --driver hyperv

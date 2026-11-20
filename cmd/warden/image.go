@@ -29,17 +29,38 @@ import (
 // nothing is prompted for. Re-running prepare is safe: cached work is reused.
 
 var (
-	flagImgOS      string
-	flagImgSource  string
-	flagImgSHA256  string
-	flagImgForce   bool
-	flagImgName    string
-	flagImgEdition string
-	flagImgVirtio  string
-	flagImgArch    string
-	flagImgKeepVMs bool
-	flagImgUpdate  bool
+	flagImgOS     string
+	flagImgSource string
 )
+
+// prepareOptions are the settings of a linked driver's image prepare, its
+// flags and keys as the kit resolves them; a driver that does not declare
+// one leaves it at its zero value.
+type prepareOptions struct {
+	force, update, keepVMs      bool
+	sha256, name, edition       string
+	virtio, arch                string
+	windowsImage, windowsUpdate string
+	// windowsUpdateSource is where windowsUpdate was set, for its error.
+	windowsUpdateSource string
+}
+
+// prepareOptionsFrom reads image prepare's settings from set.
+func prepareOptionsFrom(set driver.Settings) prepareOptions {
+	var o prepareOptions
+	o.force, _ = set.Bool("force")
+	o.update, _ = set.Bool("update")
+	o.keepVMs, _ = set.Bool("keep-vms")
+	o.sha256, _ = set.String("sha256")
+	o.name, _ = set.String("name")
+	o.edition, _ = set.String("edition")
+	o.virtio, _ = set.String("virtio")
+	o.arch, _ = set.String("arch")
+	o.windowsImage, _ = set.String("windows-image")
+	o.windowsUpdate, _ = set.String("windows-image-update")
+	o.windowsUpdateSource = set.Source("windows-image-update")
+	return o
+}
 
 var imageCmd = &cobra.Command{
 	Use:   "image",
@@ -116,20 +137,6 @@ func init() {
 	f.StringVar(&flagImgOS, "os", "", "guest OS: macos, linux or windows (default per driver)")
 	f.StringVar(&flagImgSource, "source", "",
 		"image source: local path or URL (same as [source])")
-	f.StringVar(&flagImgSHA256, "sha256", "", "expected SHA256; verified and pinned")
-	f.BoolVar(&flagImgForce, "force", false, "re-acquire even if a valid cached copy exists")
-	f.BoolVar(&flagImgUpdate, "update", false,
-		"move to the newest supported OS release: restore it, or refresh it "+
-			"when already prepared (vz)")
-	f.StringVar(&flagImgName, "name", "",
-		"registry name of the image (hyperv; default windows-server-2025)")
-	f.StringVar(&flagImgEdition, "edition", "",
-		"Windows edition / install.wim image name (qemu windows)")
-	f.BoolVar(&flagImgKeepVMs, "keep-vms", false,
-		"leave the prepare VM and its disk for inspection (hyperv)")
-	f.StringVar(&flagImgVirtio, "virtio", "",
-		"virtio-win driver ISO path or URL (qemu windows)")
-	f.StringVar(&flagImgArch, "arch", "", "guest arch: arm64 or amd64 (default host arch)")
 
 	imageCmd.AddCommand(imagePrepareCmd)
 	imageCmd.AddCommand(imageListCmd)
@@ -159,7 +166,12 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 	if sd.bin != nil {
 		return prepareBinary(cfg, sd, args)
 	}
-	drv := cfg.Runtime.Driver
+	set, err := linkedSettings(cfg, sd, "image-prepare")
+	if err != nil {
+		return err
+	}
+	opts := prepareOptionsFrom(set)
+	drv := sd.name()
 	osName := flagImgOS
 	if osName == "" {
 		osName = defaultImageOS(drv)
@@ -168,22 +180,19 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := checkImageUpdate(drv, flagImgUpdate); err != nil {
-		return err
-	}
 
 	var path string
 	switch drv + "/" + osName {
 	case "vz/macos":
-		path, err = prepareVZMacos(source, flagImgUpdate)
+		path, err = prepareVZMacos(source, opts.update)
 	case "qemu/linux":
 		path, err = linuxguest.PrepareImage(source)
 	case "firecracker/linux":
 		path, err = firecracker.PrepareImage(source)
 	case "qemu/windows":
-		path, err = prepareQemuWindows(source)
+		path, err = prepareQemuWindows(source, opts)
 	case "hyperv/windows":
-		path, err = prepareHyperVWindows(cmd.Context(), source, cfg)
+		path, err = prepareHyperVWindows(cmd.Context(), source, opts)
 	default:
 		return driver.Fixable("",
 			"no %s image for --driver %q "+
@@ -198,16 +207,6 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 	// printed its own message, so there is nothing more to report.
 	if path != "" {
 		fmt.Fprintf(os.Stderr, "Base image ready: %s\n", path)
-	}
-	return nil
-}
-
-// checkImageUpdate refuses --update, before anything runs, on a driver that
-// does not support it yet (only vz does).
-func checkImageUpdate(drv string, update bool) error {
-	if update && drv != "vz" {
-		return driver.Fixable("drop --update (only --driver vz supports it so far)",
-			"--update is not supported for --driver %s yet", drv)
 	}
 	return nil
 }
@@ -246,8 +245,8 @@ func prepareVZMacos(source string, update bool) (string, error) {
 // or there is no base yet, then the prepared layer builds boot from. With no
 // source it only re-prepares the layer, which is what the periodic refresh
 // runs.
-func prepareQemuWindows(source string) (string, error) {
-	arch := flagImgArch
+func prepareQemuWindows(source string, o prepareOptions) (string, error) {
+	arch := o.arch
 	if arch == "" {
 		arch = runtime.GOARCH
 	}
@@ -258,12 +257,12 @@ func prepareQemuWindows(source string) (string, error) {
 		return "", driver.Fixable(
 			"warden image prepare --driver qemu --os windows --source <path-or-url>",
 			"--driver qemu --os windows needs the Windows install ISO")
-	case source != "" && installed && !flagImgForce:
+	case source != "" && installed && !o.force:
 		fmt.Fprintf(os.Stderr, "Windows base already installed: %s "+
 			"(--force reinstalls it); preparing it\n", qemu.WindowsImagePath(arch))
 	case source != "":
 		opts := qemu.WindowsPrepOptions{
-			ISO: source, VirtioISO: flagImgVirtio, Edition: flagImgEdition, Arch: arch,
+			ISO: source, VirtioISO: o.virtio, Edition: o.edition, Arch: arch,
 		}
 		media, err := qemu.AcquireWindowsMedia(opts)
 		if err != nil {
@@ -274,7 +273,7 @@ func prepareQemuWindows(source string) (string, error) {
 			return "", err
 		}
 	}
-	layer, err := qemu.PrepareWindowsLayer(arch, flagImgKeepVMs, os.Stderr)
+	layer, err := qemu.PrepareWindowsLayer(arch, o.keepVMs, os.Stderr)
 	if errors.Is(err, qemu.ErrPrepareRunning) {
 		fmt.Fprintln(os.Stderr, "A qemu Windows image prepare is already running; "+
 			"its result will become the active image when it finishes.")
@@ -284,27 +283,28 @@ func prepareQemuWindows(source string) (string, error) {
 }
 
 // prepareHyperVWindows readies the hyperv Windows base, then prepares the
-// layer builds boot from. The base comes from --source, else [vm]
-// windows_image, else (first time only) the registry's default URL. Without
-// an explicit --source this is also the periodic refresh: a base that came
-// from a URL is re-checked for new media unless [vm] windows_image_update is
-// "reuse", a failed check only warns, and a base registered from a local
-// path is never replaced unless the configuration names another.
-func prepareHyperVWindows(ctx context.Context, source string, cfg *Config) (string, error) {
-	name := strings.TrimSpace(flagImgName)
+// layer builds boot from. The base comes from --source, else [driver.hyperv]
+// windows_image (or its old name), else (first time only) the registry's
+// default URL. Without an explicit --source this is also the periodic
+// refresh: a base that came from a URL is re-checked for new media unless
+// windows_image_update is "reuse", a failed check only warns, and a base
+// registered from a local path is never replaced unless the configuration
+// names another.
+func prepareHyperVWindows(ctx context.Context, source string, o prepareOptions) (string,
+	error) {
+	name := strings.TrimSpace(o.name)
 	if name == "" {
 		name = hyperv.DefaultEvalImage
 	}
-	switch cfg.VM.WindowsImageUpdate {
+	switch o.windowsUpdate {
 	case "", "auto", "reuse":
 	default:
 		return "", driver.Fixable(`set it to "auto" or "reuse"`,
-			"%s [vm] windows_image_update = %q", driver.EscapeOutside(cfg.File),
-			cfg.VM.WindowsImageUpdate)
+			"%s = %q", o.windowsUpdateSource, o.windowsUpdate)
 	}
-	if src, fetch, tolerant := hypervImageSource(source, cfg, hyperv.Status()); fetch {
+	if src, fetch, tolerant := hypervImageSource(source, o, hyperv.Status()); fetch {
 		_, err := hyperv.FetchEvalImage(ctx, hyperv.FetchOptions{
-			Name: name, URL: src, SHA256: flagImgSHA256, Force: flagImgForce,
+			Name: name, URL: src, SHA256: o.sha256, Force: o.force,
 			Progress: os.Stderr,
 		})
 		if err != nil && !tolerant {
@@ -316,7 +316,7 @@ func prepareHyperVWindows(ctx context.Context, source string, cfg *Config) (stri
 		}
 	}
 	pb, err := hyperv.PrepareBase(ctx, hyperv.PrepareOptions{
-		KeepVM: flagImgKeepVMs, Progress: os.Stderr,
+		KeepVM: o.keepVMs, Progress: os.Stderr,
 	})
 	if errors.Is(err, hyperv.ErrPrepareRunning) {
 		fmt.Fprintln(os.Stderr, "A Hyper-V image prepare is already running; "+
@@ -333,13 +333,13 @@ func prepareHyperVWindows(ctx context.Context, source string, cfg *Config) (stri
 // where ("" = the registry default), and whether a failed fetch may be
 // skipped because a usable base is already active.
 func hypervImageSource(
-	source string, cfg *Config, st hyperv.ImageStatus,
+	source string, o prepareOptions, st hyperv.ImageStatus,
 ) (src string, fetch, tolerant bool) {
-	if source != "" || flagImgSHA256 != "" || flagImgForce || st.Base == "" {
-		return firstNonEmptyStr(source, cfg.VM.WindowsImage), true, false
+	if source != "" || o.sha256 != "" || o.force || st.Base == "" {
+		return firstNonEmptyStr(source, o.windowsImage), true, false
 	}
-	reuse := cfg.VM.WindowsImageUpdate == "reuse"
-	if c := cfg.VM.WindowsImage; c != "" {
+	reuse := o.windowsUpdate == "reuse"
+	if c := o.windowsImage; c != "" {
 		if reuse && (c == st.Base || c == st.BaseURL) {
 			return "", false, false
 		}
@@ -428,7 +428,8 @@ func prepareBinary(cfg *Config, sd *selectedDriver, args []string) error {
 		return err
 	}
 	req := withConfig(map[string]any{"contract": bin.contract, "os": osName,
-		"source": source, "args": []string{}, "verbose": cfg.Output.Verbose},
+		"source": source, "args": driverFlags.argsFor("image-prepare"),
+		"verbose": cfg.Output.Verbose},
 		absConfigFile(cfg))
 	res, err := bin.call("image-prepare", req, callOpts{})
 	if err != nil {

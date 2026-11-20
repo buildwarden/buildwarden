@@ -56,21 +56,12 @@ Examples:
   warden image prepare --driver hyperv
 
 Flags:
-      --arch string      guest arch: arm64 or amd64 (default host arch)
-      --edition string   Windows edition / install.wim image name (qemu windows)
-      --force            re-acquire even if a valid cached copy exists
-  -h, --help             help for prepare
-      --keep-vms         leave the prepare VM and its disk for inspection (hyperv)
-      --name string      registry name of the image (hyperv; default windows-server-2025)
-      --os string        guest OS: macos, linux or windows (default per driver)
-      --sha256 string    expected SHA256; verified and pinned
-      --source string    image source: local path or URL (same as [source])
-      --update           move to the newest supported OS release: restore it, or refresh it when already prepared (vz)
-      --virtio string    virtio-win driver ISO path or URL (qemu windows)
+  -h, --help            help for prepare
+      --os string       guest OS: macos, linux or windows (default per driver)
+      --source string   image source: local path or URL (same as [source])
 
 Global Flags:
-      --color string     color output (auto, always, never)
-      --config string    config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
-      --driver string    driver to run: container (default), qemu, vz, hyperv or firecracker, or the name or path of another driver binary
-      --runtime string   container runtime (finch, docker, podman)
-  -v, --verbose          verbose output
+      --color string    color output (auto, always, never)
+      --config string   config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
+      --driver string   driver to run: container (default), qemu, vz, hyperv or firecracker, or the name or path of another driver binary
+  -v, --verbose         verbose output

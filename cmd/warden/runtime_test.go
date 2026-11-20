@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +15,8 @@ import (
 	"unsafe"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/container"
+	"github.com/buildwarden/buildwarden/driver/drivercmd"
 )
 
 // The three levels that can name the container runtime, lowest first.
@@ -65,7 +66,7 @@ func nameRuntime(t *testing.T, level, v string) string {
 		return "WARDEN_CTR_CLI"
 	case "flag":
 		inConfigFiles(t, "")
-		flagRuntime = strings.Clone(v)
+		runtimeFlag = strings.Clone(v)
 		return "--runtime"
 	}
 	t.Fatalf("unknown level %q", level)
@@ -78,18 +79,39 @@ func inRuntimeLevels(t *testing.T, file, env, flag string) {
 	t.Helper()
 	inConfigFiles(t, file)
 	t.Setenv("WARDEN_CTR_CLI", env)
-	flagRuntime = flag
+	runtimeFlag = flag
 }
 
-// resolvedRuntime is what a command that uses the container runtime gets:
-// the configuration as resolveConfig leaves it, through resolveRuntime.
-func resolvedRuntime(t *testing.T) (string, error) {
+// runtimeFlag is --runtime as a test gives it; warden hands it to the
+// container driver in args.
+var runtimeFlag string
+
+// containerSettings are the container driver's settings for run as the kit
+// resolves them: from the config file resolveConfig chose, runtimeFlag and
+// the environment.
+func containerSettings(t *testing.T) (driver.Settings, error) {
 	t.Helper()
 	cfg, err := resolveConfig()
 	if err != nil {
 		t.Fatalf("resolveConfig: %v", err)
 	}
-	return resolveRuntime(cfg)
+	var args []string
+	if runtimeFlag != "" {
+		args = []string{"--runtime=" + runtimeFlag}
+	}
+	return drivercmd.Resolve("container", container.Settings, drivercmd.CmdRun, args,
+		absConfigFile(cfg), os.Environ())
+}
+
+// resolvedRuntime is what a command that uses the container runtime gets:
+// the container driver's settings, through resolveRuntime.
+func resolvedRuntime(t *testing.T) (string, error) {
+	t.Helper()
+	set, err := containerSettings(t)
+	if err != nil {
+		return "", err
+	}
+	return resolveRuntime(set)
 }
 
 // wantRuntime checks that the runtime in effect resolves to want, and
@@ -280,9 +302,9 @@ func TestUnsupportedRuntimeMessage(t *testing.T) {
 			"pass --runtime finch, docker or podman, or leave it out"},
 		{cliFromEnv, "WARDEN_CTR_CLI " + supports,
 			"set WARDEN_CTR_CLI to finch, docker or podman, or unset it"},
-		{file, "[runtime] cli in " + file + " " + supports, fileFix},
+		{file + " [runtime] cli", "[runtime] cli in " + file + " " + supports, fileFix},
 	} {
-		err := unsupportedRuntime(RuntimeConfig{CLI: "dokcer", CLISource: tc.source})
+		err := unsupportedRuntime("dokcer", tc.source)
 		var fe *driver.FixableError
 		if !errors.As(err, &fe) {
 			t.Fatalf("%s: %v is not a FixableError", tc.source, err)
@@ -328,44 +350,65 @@ func wantOnlyQuoted(t *testing.T, msg, fix, v string) {
 	}
 }
 
-// The decoder fills [runtime] cli from a key in any letter case, in a table,
-// a dotted key or an inline table. The check is on the field, so it does not
-// depend on how the file spelled the key; the error names the key as
-// documented.
-func TestRuntimeKeyInOtherSpellings(t *testing.T) {
-	spellings := map[string]string{
-		"[runtime] CLI":   "[runtime]\nCLI = %s\n",
-		"[runtime] Cli":   "[runtime]\nCli = %s\n",
-		"[Runtime] cli":   "[Runtime]\ncli = %s\n",
-		"[RUNTIME] CLI":   "[RUNTIME]\nCLI = %s\n",
-		"dotted key":      "runtime.CLI = %s\n",
-		"an inline table": "Runtime = { CLI = %s }\n",
+// wantCaseRefusal checks that err is Decision 24's refusal of the container
+// driver's runtime key spelt as spelling: a FixableError that names the
+// spelling and the key to write (DRV-C12, Behaviour 19).
+func wantCaseRefusal(t *testing.T, err error, spelling string) {
+	t.Helper()
+	var fe *driver.FixableError
+	if !errors.As(err, &fe) {
+		t.Fatalf("got %v, want a FixableError refusing %s", err, spelling)
 	}
-	for name, format := range spellings {
+	want := ": " + spelling + ": keys are case-sensitive, and the container driver " +
+		"reads [driver.container] cli (old name [runtime] cli)"
+	if !strings.Contains(fe.Msg, want) || !strings.HasPrefix(fe.Fix,
+		"write it as [driver.container] cli") && !strings.HasPrefix(fe.Fix, "keep one") {
+		t.Errorf("refusal %q, fix %q; want %q and the key to write", fe.Msg, fe.Fix,
+			want)
+	}
+}
+
+// main's decoder filled [runtime] cli from a key in any letter case, in a
+// table, a dotted key or an inline table. The container driver reads it
+// exactly, and refuses another spelling with the key to write (Decision 24,
+// DRV-C12): before the runtime's check, so nothing it names is run, and a
+// supported runtime in another case is refused too. Two spellings in one
+// table are refused every time, where main took one of the two at random.
+func TestRuntimeKeyInOtherSpellings(t *testing.T) {
+	spellings := map[string]struct{ format, spelling string }{
+		"[runtime] CLI":   {"[runtime]\nCLI = %s\n", "[runtime] CLI"},
+		"[runtime] Cli":   {"[runtime]\nCli = %s\n", "[runtime] Cli"},
+		"[Runtime] cli":   {"[Runtime]\ncli = %s\n", "[Runtime] cli"},
+		"[RUNTIME] CLI":   {"[RUNTIME]\nCLI = %s\n", "[RUNTIME] CLI"},
+		"dotted key":      {"runtime.CLI = %s\n", "[runtime] CLI"},
+		"an inline table": {"Runtime = { CLI = %s }\n", "[Runtime] CLI"},
+	}
+	for name, sp := range spellings {
 		for _, v := range []string{"./rt", "sh"} {
 			t.Run(name+" "+v, func(t *testing.T) {
-				inConfigFiles(t, fmt.Sprintf(format, tomlString(v)))
-				wantRuntimeRefused(t, inProjectFile(t), v)
+				inConfigFiles(t, fmt.Sprintf(sp.format, tomlString(v)))
+				got, err := resolvedRuntime(t)
+				if got != "" {
+					t.Errorf("resolveRuntime returned %q with the refusal",
+						got)
+				}
+				wantCaseRefusal(t, err, sp.spelling)
 			})
 		}
 	}
-	t.Run("[Runtime] CLI selects a supported runtime", func(t *testing.T) {
+	t.Run("[Runtime] CLI naming a supported runtime is refused", func(t *testing.T) {
 		inConfigFiles(t, "[Runtime]\nCLI = \"podman\"\n")
-		wantRuntime(t, "podman")
+		_, err := resolvedRuntime(t)
+		wantCaseRefusal(t, err, "[Runtime] CLI")
 	})
-	// Which of two spellings in one table the decoder takes varies from run
-	// to run. Whichever it is has been checked.
 	t.Run("both spellings in one table", func(t *testing.T) {
 		inConfigFiles(t, "[runtime]\ncli = \"docker\"\nCLI = \"./rt\"\n")
 		for range 200 {
 			got, err := resolvedRuntime(t)
-			if err == nil && got == "docker" {
-				continue
-			}
 			if got != "" {
-				t.Fatalf("resolveRuntime = %q, want docker or the refusal", got)
+				t.Fatalf("resolveRuntime = %q, want the refusal", got)
 			}
-			wantRefusal(t, err, inProjectFile(t), "./rt")
+			wantCaseRefusal(t, err, "[runtime] holds cli and CLI")
 		}
 	})
 }
@@ -480,17 +523,39 @@ var runtimeCommands = []struct {
 		if err != nil {
 			t.Fatalf("resolveConfig: %v", err)
 		}
-		return linkedDrivers["container"].Preflight(context.Background(), cfg,
-			&driver.BuildRequest{}, &driver.Start{Probe: true})
+		probe := &driver.Start{Contract: 1, Probe: true, Mode: driver.ModeBuild,
+			GuestOS: "linux", ConfigFile: absConfigFile(cfg), Args: runtimeArgs()}
+		_, err = callLinkedRun(context.Background(), linkedDrivers["container"],
+			"container", cfg, &driver.BuildRequest{}, probe, nil)
+		return err
 	}},
-	{"build", func(*testing.T) error { return runBuild(buildCmd, nil) }},
-	{"shell", func(*testing.T) error { return runShell(shellCmd, nil) }},
-	{"clean", func(*testing.T) error { return runClean(cleanCmd, nil) }},
-	{"doctor", func(t *testing.T) error {
-		doctorCmd.SetOut(io.Discard)
-		t.Cleanup(func() { doctorCmd.SetOut(nil) })
-		return doctorCmd.RunE(doctorCmd, nil)
-	}},
+	{"build", func(t *testing.T) error { return runLine(t, "build") }},
+	{"shell", func(t *testing.T) error { return runLine(t, "shell") }},
+	{"clean", func(t *testing.T) error { return runLine(t, "clean") }},
+	{"doctor", func(t *testing.T) error { return runLine(t, "doctor") }},
+}
+
+// runtimeArgs are the container driver's args for runtimeFlag.
+func runtimeArgs() []string {
+	if runtimeFlag == "" {
+		return []string{}
+	}
+	return []string{"--runtime=" + runtimeFlag}
+}
+
+// runLine runs warden command with the levels the test set on its command
+// line: --driver from flagDriver, --runtime from runtimeFlag.
+func runLine(t *testing.T, command string) error {
+	t.Helper()
+	line := []string{command}
+	if flagDriver != "" {
+		line = append(line, "--driver", flagDriver)
+	}
+	if runtimeFlag != "" {
+		line = append(line, "--runtime="+runtimeFlag)
+	}
+	_, err := runWarden(t, line...)
+	return err
 }
 
 // shipPrograms writes executables of the given names into dir; each creates
@@ -535,7 +600,10 @@ func addDockerfile(t *testing.T) {
 // the file named like warden's first argument. Before the fix clean ran the
 // program, doctor accepted it, and warden handed it to the driver, which
 // build and shell then ran; now each refuses it and nothing is run. The same
-// holds for a program the flag or the variable names.
+// holds for a program the flag or the variable names. Since the driver
+// contract, [runtime] CLI is refused for its letter case before its value is
+// looked at (Behaviour 19), and clean under qemu or vz no longer runs the
+// container runtime's cleanup, so it reads no runtime (Behaviour 5).
 func TestUnsupportedRuntimeIsNeverRun(t *testing.T) {
 	const viaShell = "sh" // runs ./pull, ./container, ... from the project
 	shipped := []string{"rt", "pull", "container", "network", "image", "info"}
@@ -546,14 +614,17 @@ func TestUnsupportedRuntimeIsNeverRun(t *testing.T) {
 		driver    string // --driver
 		value     string // the value refused, when not the path
 		onlyClean bool
+		// caseRefused: refused for the key's letter case; unread: not read.
+		caseRefused, unread bool
 	}{
 		{name: `cli = "./rt"`, project: cliFile("./rt"), value: "./rt"},
-		{name: `CLI = "./rt"`, project: "[runtime]\nCLI = \"./rt\"\n", value: "./rt"},
+		{name: `CLI = "./rt"`, project: "[runtime]\nCLI = \"./rt\"\n", value: "./rt",
+			caseRefused: true},
 		{name: `cli = "sh"`, project: cliFile(viaShell), value: viaShell},
 		{name: `cli = "./rt" beside driver = "qemu"`, value: "./rt", onlyClean: true,
-			project: "[runtime]\ncli = \"./rt\"\ndriver = \"qemu\"\n"},
+			project: "[runtime]\ncli = \"./rt\"\ndriver = \"qemu\"\n", unread: true},
 		{name: `cli = "./rt" with --driver vz`, value: "./rt", onlyClean: true,
-			project: cliFile("./rt"), driver: "vz"},
+			project: cliFile("./rt"), driver: "vz", unread: true},
 		{name: "the program's path in --runtime", elsewhere: "flag"},
 		{name: "the program's path in WARDEN_CTR_CLI", elsewhere: "env"},
 	} {
@@ -578,7 +649,15 @@ func TestUnsupportedRuntimeIsNeverRun(t *testing.T) {
 				flagDriver = tc.driver
 				err := command.run(t)
 				wantNotRun(t, marker)
-				wantRefusal(t, err, setting, value)
+				switch {
+				case tc.unread && err != nil:
+					t.Errorf("err = %v, want none: no runtime is read", err)
+				case tc.unread:
+				case tc.caseRefused:
+					wantCaseRefusal(t, err, "[runtime] CLI")
+				default:
+					wantRefusal(t, err, setting, value)
+				}
 			})
 		}
 	}

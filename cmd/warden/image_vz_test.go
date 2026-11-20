@@ -36,20 +36,17 @@ func TestFormatVZImages(t *testing.T) {
 	}
 }
 
-func TestCheckImageUpdate(t *testing.T) {
-	for _, drv := range []string{"", "vz"} {
-		if err := checkImageUpdate(drv, false); err != nil {
-			t.Errorf("no --update, driver %q: %v", drv, err)
-		}
-	}
-	if err := checkImageUpdate("vz", true); err != nil {
-		t.Errorf("--update on vz: %v", err)
-	}
+// Behaviour 3: --update is vz's flag, and only vz declares it; on another
+// driver it is the one unknown-flag refusal, with the fix that points to
+// that driver's help.
+func TestImageUpdateIsVZs(t *testing.T) {
 	for _, drv := range []string{"qemu", "hyperv", "firecracker", "container"} {
-		err := checkImageUpdate(drv, true)
-		want := "--update is not supported for --driver " + drv + " yet"
+		inConfigFiles(t, "")
+		_, err := runWarden(t, "image", "prepare", "--driver", drv, "--update")
+		want := `unknown flag --update for driver "` + drv + `"`
 		var fe *driver.FixableError
-		if err == nil || err.Error() != want || !errors.As(err, &fe) || fe.Fix == "" {
+		if err == nil || err.Error() != want || !errors.As(err, &fe) ||
+			!strings.Contains(fe.Fix, "--driver "+drv+" --help") {
 			t.Errorf("--update on %s: %v (want %q with a fix)", drv, err, want)
 		}
 	}

@@ -2,9 +2,12 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/buildwarden/buildwarden/driver"
 )
 
 const relayImageFix = "set it to an image reference such as " +
@@ -28,12 +31,21 @@ func TestRelayImageShape(t *testing.T) {
 		"a leading byte order mark": "\ufeff--x",
 		"a no-break space":          "relay\u00a0x",
 	}
+	// A build checks it in the container driver's probe, before the runtime
+	// is resolved; a runtime that cannot be found is not this test's.
 	newBuild := func(t *testing.T) error {
 		cfg, err := resolveConfig()
 		if err != nil {
 			t.Fatalf("resolveConfig: %v", err)
 		}
-		_, err = newRequest(cfg, linkedSel(cfg), []string{buildProject(t)})
+		probe := &driver.Start{Contract: 1, Probe: true, Mode: driver.ModeBuild,
+			GuestOS: "linux", ConfigFile: absConfigFile(cfg), Args: []string{}}
+		_, err = callLinkedRun(context.Background(), linkedDrivers["container"],
+			"container", cfg, &driver.BuildRequest{}, probe, nil)
+		if err != nil && !strings.Contains(err.Error(), "relay_image") &&
+			!strings.Contains(err.Error(), "WARDEN_IMAGE") {
+			return nil
+		}
 		return err
 	}
 	doctor := func(t *testing.T) error {

@@ -11,12 +11,14 @@ warden build --keep-vms
 warden build --build-link 10.9.0.0/30
   error: --build-link requires a VM driver (--driver qemu, vz, hyperv or firecracker)
 warden build --network x
-  error: --network is only used by --driver hyperv
+  error: unknown flag --network for driver "container"
+  fix:   see 'warden build --driver container --help' for the flags this driver takes
 warden build --driver qemu --network x
-  error: --network is only used by --driver hyperv
+  error: unknown flag --network for driver "qemu"
+  fix:   see 'warden build --driver qemu --help' for the flags this driver takes
 warden build --driver firecracker --network x
-  error: --network is only used by --driver hyperv
-  fix:   drop --network: firecracker builds use the slots 'warden setup --driver firecracker' made
+  error: unknown flag --network for driver "firecracker"
+  fix:   see 'warden build --driver firecracker --help' for the flags this driver takes
 warden build --driver vz --guest-os windows
   error: --guest-os windows is currently only supported by --driver qemu or --driver hyperv
 warden build --driver firecracker --guest-os windows
@@ -35,8 +37,8 @@ warden build --driver qemu --build-link 10.9.0.0/24
   error: --build-link: 10.9.0.0/24 is a /24; the build link must be a /30
   fix:   pass --build-link a valid /30, e.g. --build-link 100.126.255.252/30
 warden build --regoin eu
-  error: unknown flag: --regoin
-  fix:   see 'warden build --help'
+  error: unknown flag --regoin for driver "container"
+  fix:   see 'warden build --driver container --help' for the flags this driver takes
 warden build a b
   error: accepts at most 1 arg(s), received 2
   fix:   see 'warden build --help'
@@ -62,6 +64,15 @@ warden build --driver qemu  (warden.toml: "[vm]\nimage_min_grace = \"soon\"\n")
 warden build --driver qemu  (warden.toml: "[vm]\nbuild_link = \"10.9.0.0/24\"\n")
   error: [vm] build_link in $CTX/warden.toml: 10.9.0.0/24 is a /24; the build link must be a /30
   fix:   set [vm] build_link in $CTX/warden.toml to a valid /30, e.g. build_link = "100.126.255.252/30", or remove it to use the default
+warden build  (warden.toml: "[Runtime]\nCLI = \"podman\"\n")
+  error: $CTX/warden.toml: [Runtime] CLI: keys are case-sensitive, and the container driver reads [driver.container] cli (old name [runtime] cli)
+  fix:   write it as [driver.container] cli
+warden build --driver qemu  (warden.toml: "[driver.Qemu]\nimage_refresh_after = \"3d\"\n")
+  error: $CTX/warden.toml: [driver.Qemu] image_refresh_after: keys are case-sensitive, and the qemu driver reads [driver.qemu] image_refresh_after
+  fix:   write it as [driver.qemu] image_refresh_after
+warden build --driver hyperv  (warden.toml: "[vm]\nnetwork = \"a\"\nNetwork = \"b\"\n")
+  error: $CTX/warden.toml: [vm] holds network and Network: keys are case-sensitive, and the hyperv driver reads [driver.hyperv] network (old name [vm] network)
+  fix:   keep one, written as [driver.hyperv] network
 warden build  (warden.toml: "[build]\ncapture = \"everything\"\n")
   error: invalid capture mode "everything" (valid: none, headers, bodies, all)
 warden build  (warden.toml: "not toml [")
@@ -74,8 +85,8 @@ warden image prepare --driver container
 warden image prepare --driver qemu --os macos
   error: no macos image for --driver "qemu" (vz: macos; qemu: linux, windows; hyperv: windows; firecracker: linux)
 warden image prepare --driver qemu --update
-  error: --update is not supported for --driver qemu yet
-  fix:   drop --update (only --driver vz supports it so far)
+  error: unknown flag --update for driver "qemu"
+  fix:   see 'warden image prepare --driver qemu --help' for the flags this driver takes
 warden image verify --driver container
   error: driver "container" has no base-image layer cache on this host
   fix:   warden image verify --driver qemu|hyperv|vz|firecracker
