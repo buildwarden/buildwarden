@@ -110,6 +110,20 @@ func (s *Setting) key() string {
 	return s.Key
 }
 
+// places are where the file may write s for the driver called name: its key,
+// the override driver.<name>.<key> of a common key, and its old names. None
+// for a setting with no key.
+func (s *Setting) places(name string) []string {
+	if s.key() == "" {
+		return nil
+	}
+	p := []string{s.key()}
+	if s.Common != "" {
+		p = append(p, "driver."+name+"."+s.Common)
+	}
+	return append(p, s.Aliases...)
+}
+
 // appliesTo reports whether command takes s.
 func (s *Setting) appliesTo(command string) bool {
 	return slices.Contains(s.Commands, everyCommand) || slices.Contains(s.Commands, command)
@@ -181,7 +195,7 @@ func checkSettings(name string, settings []Setting) error {
 	if !driverNameRE.MatchString(name) {
 		return fmt.Errorf("driver name %q is not of the form [a-z][a-z0-9]{0,31}", name)
 	}
-	names, flags, keys := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	names, flags, keys := map[string]bool{}, map[string]bool{}, map[string]string{}
 	for i := range settings {
 		s := &settings[i]
 		if err := checkSetting(name, s); err != nil {
@@ -197,14 +211,17 @@ func checkSettings(name string, settings []Setting) error {
 			}
 			flags[s.Flag] = true
 		}
-		for _, k := range append([]string{s.key()}, s.Aliases...) {
-			if k == "" {
-				continue
+		// No two places are equal with ASCII letters folded, so a key
+		// spelt as declared is never another key in another case (DRV-C4).
+		for _, k := range s.places(name) {
+			if prev, ok := keys[foldASCII(k)]; ok {
+				if prev == k {
+					return fmt.Errorf("key %s is declared twice", k)
+				}
+				return fmt.Errorf("keys %s and %s are one key in another "+
+					"letter case", prev, k)
 			}
-			if keys[k] {
-				return fmt.Errorf("key %s is declared twice", k)
-			}
-			keys[k] = true
+			keys[foldASCII(k)] = k
 		}
 	}
 	return nil
@@ -298,7 +315,9 @@ func checkPlace(name string, s *Setting) error {
 //
 // It refuses an element of args that settings does not declare, a value of
 // the wrong type and a file that sets a key under two names, with a
-// FixableError that names where the value came from. When a setting of
+// FixableError that names where the value came from, and, before it reads
+// any value from the file, a key the file spells in another ASCII letter
+// case than one of the settings' places (DRV-C12). When a setting of
 // command has a key, it refuses a configFile that does not exist, cannot be
 // read or is not TOML, naming the file (DRV-C6). Only for reap and attach is
 // that different: it reads nothing until a setting is asked for, and reads
@@ -366,6 +385,13 @@ func (r *resolved) resolve(command string, args, environ []string, lazy bool) er
 	tree, err := r.load(lazy)
 	if err != nil || tree == nil {
 		return err
+	}
+	for _, s := range r.settings {
+		for _, place := range s.places(r.driverName) {
+			if err := r.checkCase(tree, s, place); err != nil {
+				return err
+			}
+		}
 	}
 	return r.fromFile(tree, lazy)
 }
@@ -499,6 +525,107 @@ func (r *resolved) fromFile(tree map[string]any, lazy bool) error {
 		}
 	}
 	return nil
+}
+
+// checkCase refuses a file that writes place, a place of s, in another ASCII
+// letter case, at the same path as the place or beside it in one table: the
+// key is read as spelt and only so, and a value the user wrote must not be
+// dropped without a word (DRV-C12). It runs before any value is read and
+// before the refusal of both names (DRV-C11).
+func (r *resolved) checkCase(tree map[string]any, s Setting, place string) error {
+	var found []string
+	walkFolded(tree, strings.Split(place, "."), nil, &found)
+	found = slices.DeleteFunc(found, func(f string) bool { return f == place })
+	if len(found) == 0 {
+		return nil
+	}
+	slices.Sort(found)
+	path := driver.EscapeOutside(r.file)
+	// For an old name the key to write is the new one, so following the fix
+	// gives no deprecation warning.
+	write, reads := place, label(place)
+	if slices.Contains(s.Aliases, place) {
+		write = s.key()
+		reads = label(write) + " (old name " + label(place) + ")"
+	}
+	labels := make([]string, len(found))
+	for i, f := range found {
+		labels[i] = label(f)
+	}
+	what := joinAnd(labels)
+	table := place[:strings.LastIndex(place, ".")]
+	_, exact := lookup(tree, place)
+	_, written := lookup(tree, write)
+	fix := "write it as " + label(write)
+	switch {
+	case exact && allIn(found, table):
+		names := []string{place[len(table)+1:]}
+		for _, f := range found {
+			names = append(names, f[len(table)+1:])
+		}
+		what = "[" + table + "] holds " + joinAnd(names)
+		fix = "keep one, written as " + label(write)
+	case written:
+		fix = "remove " + what + "; " + label(write) + " is already set"
+	case exact:
+		fix = "remove " + what + "; " + label(place) + " is already set"
+	case len(found) > 1:
+		fix = "keep one, written as " + label(write)
+	}
+	return driver.Fixable(fix, "%s: %s: keys are case-sensitive, and the %s driver "+
+		"reads %s", path, what, r.driverName, reads)
+}
+
+// walkFolded adds to found the dotted path of every value in tree at a path
+// equal to parts with ASCII letters folded; at is the path so far.
+func walkFolded(tree map[string]any, parts, at []string, found *[]string) {
+	keys := make([]string, 0, len(tree))
+	for k := range tree {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	for _, k := range keys {
+		if foldASCII(k) != foldASCII(parts[0]) {
+			continue
+		}
+		here := append(slices.Clip(at), k)
+		if len(parts) == 1 {
+			*found = append(*found, strings.Join(here, "."))
+			continue
+		}
+		if sub, ok := tree[k].(map[string]any); ok {
+			walkFolded(sub, parts[1:], here, found)
+		}
+	}
+}
+
+// foldASCII is s with its ASCII upper-case letters in lower case, and every
+// other byte as it is: the contract folds ASCII letters only (DRV-C12).
+func foldASCII(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= 'A' && r <= 'Z' {
+			return r + 'a' - 'A'
+		}
+		return r
+	}, s)
+}
+
+// allIn reports whether every dotted path in keys is a key of table.
+func allIn(keys []string, table string) bool {
+	for _, k := range keys {
+		if k[:strings.LastIndex(k, ".")] != table {
+			return false
+		}
+	}
+	return true
+}
+
+// joinAnd is "a", "a and b", or "a, b and c".
+func joinAnd(items []string) string {
+	if len(items) == 1 {
+		return items[0]
+	}
+	return strings.Join(items[:len(items)-1], ", ") + " and " + items[len(items)-1]
 }
 
 // lookup finds the dotted path key in tree; an element that is not a table

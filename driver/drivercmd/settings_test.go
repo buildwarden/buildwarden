@@ -626,3 +626,283 @@ func TestResolveSameThroughEveryPath(t *testing.T) {
 		t.Errorf("probe output %q, want stopped", out.String())
 	}
 }
+
+// DRV-C12: each of the seven keys under its new name, its old name and, for
+// the two ages, each driver's override, written in another ASCII letter
+// case (the key, its table, or both, in each TOML form), is refused naming
+// the file, the spelling and the key to write; before the value is checked,
+// so a value the driver would refuse gets this error and not its own.
+func TestResolveRefusesAnotherCase(t *testing.T) {
+	settings := map[string][]Setting{"container": containerSettings,
+		"qemu": qemuSettings, "hyperv": hypervSettings}
+	const old = " (old name "
+	for _, tc := range []struct {
+		name, driverName, body, spelling, reads, fix string
+	}{
+		{"old name, both", "container", "[Runtime]\nCLI = \"podman\"\n", "[Runtime] CLI",
+			"[driver.container] cli" + old + "[runtime] cli)",
+			"write it as [driver.container] cli"},
+		{"old name, key", "container", "[runtime]\nCLI = \"./rt\"\n", "[runtime] CLI",
+			"[driver.container] cli" + old + "[runtime] cli)",
+			"write it as [driver.container] cli"},
+		{"old name, table", "container", "[RUNTIME]\ncli = \"sh\"\n", "[RUNTIME] cli",
+			"[driver.container] cli" + old + "[runtime] cli)",
+			"write it as [driver.container] cli"},
+		{"old name, dotted", "container", "runtime.CLI = \"podman\"\n", "[runtime] CLI",
+			"[driver.container] cli" + old + "[runtime] cli)",
+			"write it as [driver.container] cli"},
+		{"old name, inline", "container", "Runtime = { CLI = \"podman\" }\n",
+			"[Runtime] CLI", "[driver.container] cli" + old + "[runtime] cli)",
+			"write it as [driver.container] cli"},
+		{"new name, table", "container", "[Driver.Container]\ncli = \"podman\"\n",
+			"[Driver.Container] cli", "[driver.container] cli",
+			"write it as [driver.container] cli"},
+		{"new name, key", "container", "[driver.container]\nRelay_Image = \"dev\"\n",
+			"[driver.container] Relay_Image", "[driver.container] relay_image",
+			"write it as [driver.container] relay_image"},
+		{"old relay image", "container", "[runtime]\nRELAY_IMAGE = \"dev\"\n",
+			"[runtime] RELAY_IMAGE",
+			"[driver.container] relay_image" + old + "[runtime] relay_image)",
+			"write it as [driver.container] relay_image"},
+		{"override", "qemu", "[driver.Qemu]\nimage_refresh_after = \"7d\"\n",
+			"[driver.Qemu] image_refresh_after", "[driver.qemu] image_refresh_after",
+			"write it as [driver.qemu] image_refresh_after"},
+		{"common key", "qemu", "[Driver]\nimage_min_grace = \"bad\"\n",
+			"[Driver] image_min_grace", "[driver] image_min_grace",
+			"write it as [driver] image_min_grace"},
+		{"old age", "qemu", "[vm]\nImage_Min_Grace = \"1d\"\n", "[vm] Image_Min_Grace",
+			"[driver] image_min_grace" + old + "[vm] image_min_grace)",
+			"write it as [driver] image_min_grace"},
+		{"hyperv override", "hyperv", "[driver.HyperV]\nimage_min_grace = \"1d\"\n",
+			"[driver.HyperV] image_min_grace", "[driver.hyperv] image_min_grace",
+			"write it as [driver.hyperv] image_min_grace"},
+		{"hyperv old age", "hyperv", "[VM]\nimage_refresh_after = \"1d\"\n",
+			"[VM] image_refresh_after",
+			"[driver] image_refresh_after" + old + "[vm] image_refresh_after)",
+			"write it as [driver] image_refresh_after"},
+		{"hyperv network", "hyperv", "[vm]\nNetwork = 3\n", "[vm] Network",
+			"[driver.hyperv] network" + old + "[vm] network)",
+			"write it as [driver.hyperv] network"},
+		{"hyperv image", "hyperv", "[driver.hyperv]\nWindows_Image = \"w\"\n",
+			"[driver.hyperv] Windows_Image", "[driver.hyperv] windows_image",
+			"write it as [driver.hyperv] windows_image"},
+		{"hyperv image update", "hyperv", "[Vm]\nwindows_image_update = \"reuse\"\n",
+			"[Vm] windows_image_update",
+			"[driver.hyperv] windows_image_update" + old +
+				"[vm] windows_image_update)",
+			"write it as [driver.hyperv] windows_image_update"},
+		// Two spellings in one table: one message, every time.
+		{"two spellings", "container", "[runtime]\ncli = \"docker\"\nCLI = \"podman\"\n",
+			"[runtime] holds cli and CLI",
+			"[driver.container] cli" + old + "[runtime] cli)",
+			"keep one, written as [driver.container] cli"},
+		// Before DRV-C11's refusal of both names, and with the key to
+		// write already there, the fix is to remove the other spelling.
+		{"beside the new name", "container",
+			"[Runtime]\nCLI = \"podman\"\n[driver.container]\ncli = \"docker\"\n",
+			"[Runtime] CLI", "[driver.container] cli" + old + "[runtime] cli)",
+			"remove [Runtime] CLI; [driver.container] cli is already set"},
+		{"three spellings", "container",
+			"[Runtime]\ncli = 1\n[RUNTIME]\ncli = 2\n",
+			"[RUNTIME] cli and [Runtime] cli",
+			"[driver.container] cli" + old + "[runtime] cli)",
+			"keep one, written as [driver.container] cli"},
+	} {
+		t.Run(tc.driverName+"/"+tc.name, func(t *testing.T) {
+			file := writeFile(t, tc.body)
+			_, err := Resolve(tc.driverName, settings[tc.driverName], CmdRun, nil,
+				file, []string{})
+			want := file + ": " + tc.spelling + ": keys are case-sensitive, and the " +
+				tc.driverName + " driver reads " + tc.reads
+			var fe *driver.FixableError
+			if !errors.As(err, &fe) {
+				t.Fatalf("err = %v, want a FixableError", err)
+			}
+			if fe.Msg != want || fe.Fix != tc.fix {
+				t.Errorf("error\n %q\n %q\nwant\n %q\n %q", fe.Msg, fe.Fix, want,
+					tc.fix)
+			}
+		})
+	}
+}
+
+// DRV-C12: two spellings in one table are refused with the same message on
+// every run, whatever order the decoder gives its keys in.
+func TestResolveAnotherCaseIsStable(t *testing.T) {
+	file := writeFile(t, "[runtime]\nCLI = \"podman\"\ncli = \"docker\"\nCli = \"x\"\n")
+	var first string
+	for i := range 100 {
+		_, err := Resolve("container", containerSettings, CmdRun, nil, file, []string{})
+		if err == nil {
+			t.Fatal("not refused")
+		}
+		if i == 0 {
+			first = err.Error()
+			if !strings.Contains(first, "[runtime] holds cli, CLI and Cli") {
+				t.Fatalf("err = %q, want the three spellings in byte order", first)
+			}
+		}
+		if err.Error() != first {
+			t.Fatalf("run %d: %q, run 0: %q", i, err, first)
+		}
+	}
+}
+
+// DRV-C5, DRV-C12: what equals no listed place with ASCII letters folded is
+// ignored: an unlisted key in upper case, a quoted key whose non-ASCII
+// letter folds to a listed one's only under Unicode's folding, and another
+// driver's key in another case while that driver is not selected.
+func TestResolveIgnoresOtherKeysInAnyCase(t *testing.T) {
+	file := writeFile(t, `[Driver]
+CPUS = 4
+[driver.HyperV]
+NETWORK = "x"
+[Runtime]
+CLI = "podman"
+[vm]
+"window`+"ſ"+`_image" = "w"
+[driver.container]
+IMAGE_MIN_GRACE = 1
+`)
+	for name, set := range map[string][]Setting{"qemu": qemuSettings,
+		"hyperv": hypervSettings[:2]} {
+		s := mustResolve(t, name, set, CmdRun, nil, file, []string{})
+		if _, ok := s.Age("image-refresh-after"); ok {
+			t.Errorf("%s: image-refresh-after set by a file that does not set it",
+				name)
+		}
+	}
+	h := mustResolve(t, "hyperv", hypervSettings[3:4], CmdRun, nil, file, []string{})
+	if _, ok := h.String("windows-image"); ok {
+		t.Error("a non-ASCII letter is folded")
+	}
+}
+
+// DRV-C4: a declaration with two places equal when ASCII letters are folded
+// is the driver's defect, refused and not as the user's error.
+func TestResolveRefusesPlacesEqualFolded(t *testing.T) {
+	for name, set := range map[string][]Setting{
+		"two keys": {
+			{Name: "a", Type: String, Key: "driver.nomad.region",
+				Commands: []string{CmdRun}, Usage: "u"},
+			{Name: "b", Type: String, Key: "driver.nomad.Region",
+				Commands: []string{CmdRun}, Usage: "u"}},
+		"a key and an override": {
+			{Name: "a", Type: Age, Common: "image_min_grace",
+				Commands: []string{CmdRun}, Usage: "u"},
+			{Name: "b", Type: String, Key: "driver.nomad.Image_Min_Grace",
+				Commands: []string{CmdRun}, Usage: "u"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := Resolve("nomad", set, CmdRun, nil, "", nil)
+			var fe *driver.FixableError
+			if err == nil || errors.As(err, &fe) {
+				t.Fatalf("err = %v, want a declaration error", err)
+			}
+		})
+	}
+}
+
+// DRV-C7, DRV-C12: the refusal is the same through Call, as a linked driver
+// runs, and through Main, as a driver binary runs: in the probe of run, and
+// first in a command that is not probed (doctor).
+func TestAnotherCaseThroughCallAndMain(t *testing.T) {
+	file := writeFile(t, "[Runtime]\nCLI = \"podman\"\n")
+	want := "[Runtime] CLI: keys are case-sensitive, and the container driver " +
+		"reads [driver.container] cli (old name [runtime] cli)"
+	d := kitDriver(t)
+	d.Describe.Name = "container"
+	d.Describe.Settings = containerSettings
+	ran := false
+	d.Preflight = func(context.Context, *driver.Start) error { ran = true; return nil }
+	start := &driver.Start{Contract: 1, Probe: true, ConfigFile: file, Mode: "build",
+		GuestOS: "linux", ContextDir: "/c"}
+	_, err := Call(context.Background(), d, CmdRun, &Request{Start: start,
+		Environ: []string{}}, nil)
+	fixable(t, err, file, want)
+	if ran {
+		t.Error("the probe ran Preflight after the refusal")
+	}
+	_, err = Call(context.Background(), d, CmdDoctor, &Request{Contract: 1,
+		ConfigFile: file, Environ: []string{}}, nil)
+	fixable(t, err, want)
+
+	for _, args := range [][]string{{CmdRun}, {CmdDoctor}} {
+		req := `{"contract":1,"config_file":` + quote(file) + `}`
+		if args[0] == CmdRun {
+			req = `{"type":"start","contract":1,"probe":true,"mode":"build",` +
+				`"guest_os":"linux","context_dir":"/c","config_file":` +
+				quote(file) + "}\n"
+		}
+		code, stdout, res := invoke(t, d, args, req)
+		if code != 1 {
+			t.Errorf("%s: exit %d, want 1", args[0], code)
+		}
+		e, _ := res["error"].(map[string]any)
+		if e == nil {
+			// run reports its error on stdout, as an error message.
+			if !strings.Contains(stdout, `"code":"fixable"`) ||
+				!strings.Contains(stdout, "keys are case-sensitive") {
+				t.Errorf("%s: stdout %q, want the fixable refusal", args[0],
+					stdout)
+			}
+			continue
+		}
+		if msg, _ := e["msg"].(string); e["code"] != "fixable" ||
+			!strings.Contains(msg, want) {
+			t.Errorf("%s: error %v, want the fixable refusal", args[0], e)
+		}
+	}
+}
+
+// DRV-C10, DRV-C12: in reap and attach the state file is authoritative, so
+// with one a miscased key in the recorded file is never refused; with none,
+// the recorded file is read and the key in another case refused.
+func TestAnotherCaseInReapAndAttach(t *testing.T) {
+	file := writeFile(t, "[Runtime]\nCLI = \"podman\"\n")
+	d := kitDriver(t)
+	d.Describe.Name = "container"
+	d.Describe.Settings = containerSettings
+	runtimeOf := func(stateFile string, set driver.Settings) error {
+		var st struct{ Runtime string }
+		found, err := LoadState(stateFile, &st)
+		if err != nil || found {
+			return err
+		}
+		set.String("runtime")
+		return set.Err()
+	}
+	d.Reap = func(_ context.Context, req *ReapRequest) (int, error) {
+		return 0, runtimeOf(req.StateFile, req.Settings)
+	}
+	d.Attach = func(_ context.Context, req *AttachRequest) (int, error) {
+		return 0, runtimeOf(req.StateFile, req.Settings)
+	}
+	for _, command := range []string{CmdReap, CmdAttach} {
+		for _, withState := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/state=%v", command, withState), func(t *testing.T) {
+				stateFile := filepath.Join(t.TempDir(), "k3v9x2ab.state")
+				if withState {
+					if err := SaveState(stateFile, map[string]string{
+						"Runtime": "docker"}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				req := `{"contract":1,"build_id":"k3v9x2ab","state_file":` +
+					quote(stateFile) + `,"config_file":` + quote(file) + `}`
+				code, _, res := invoke(t, d, []string{command, "k3v9x2ab"}, req)
+				e, _ := res["error"].(map[string]any)
+				msg, _ := e["msg"].(string)
+				switch {
+				case withState && (code != 0 || e != nil):
+					t.Errorf("exit %d, error %v; want 0 with a state file",
+						code, e)
+				case !withState && (code != 1 || e["code"] != "fixable" ||
+					!strings.Contains(msg, "keys are case-sensitive")):
+					t.Errorf("exit %d, error %v; want the fixable refusal",
+						code, e)
+				}
+			})
+		}
+	}
+}
