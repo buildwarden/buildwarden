@@ -1,0 +1,474 @@
+feature: container-inputs
+title: Record container inputs under inputs/ (ORCH-02)
+status: done
+round: merge
+phase: 8
+design: docs/design/container-inputs.md
+branch: feat/container-inputs
+alters_relationships: false
+source: 'docs/development/README.md: Follow-up - Container inputs under inputs/'
+pr:
+  number: 72
+  ci: green
+steps:
+  - id: p0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p1-design
+    phase: 1
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p2-plan
+    phase: 2
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p3-implement
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p4-review
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p5-guide
+    phase: 5
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p6-publish
+    phase: 6
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p1-design-r2
+    phase: 1
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p2-plan-r2
+    phase: 2
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p3-implement-r2
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p4-review-r2
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p5-guide-r2
+    phase: 5
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p6-publish-r2
+    phase: 6
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p6-merge-round
+    phase: 6
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+    note: Waits for the serial merge queue (FLOW-05).
+  - id: m0-merge-main
+    phase: 0
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: m1-consolidate
+    phase: 1
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: m2-plan
+    phase: 2
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: m3-implement
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: m4-review
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: m5-guide
+    phase: 5
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: m6-publish
+    phase: 6
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: m7-sign-off
+    phase: 7
+    affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: m8-cleanup
+    phase: 8
+    affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+    note: Merge the archive PR buildwarden/buildwarden#74. The remote branch feat/container-inputs is already deleted; the local one was removed with git branch -d.
+  - id: m8-archive
+    phase: 8
+    affinity: cloud
+    status: done
+    needs:
+      - m8-cleanup
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 4
+    steps: 18
+  spent:
+    runs: 3
+    steps: 25
+questions:
+  - id: a1
+    kind: assumed
+    status: confirmed
+    question: Remove the top-level Dockerfile.submitted and build.sh outright, without a compatibility copy (pre-1.0 output layout)?
+    options:
+      - remove them
+      - keep a top-level copy for one release
+    recommended: remove them
+    answer: remove them
+  - id: a2
+    kind: assumed
+    status: confirmed
+    question: Record the submitted file as inputs/Dockerfile whatever its name (Containerfile, ...)?
+    options:
+      - fixed name inputs/Dockerfile
+      - keep the submitted base name
+    recommended: fixed name inputs/Dockerfile
+    answer: 'REJECTED the Dockerfile name: always record the submitted file as inputs/Containerfile (the open-standard name), whatever its original name'
+  - id: a3
+    kind: assumed
+    status: confirmed
+    question: Propose the convention this feature settled (a driver records an input it alters at staging, before the build starts, through the shared driver.RecordInputs) as an ORCH-02 amendment, and where?
+    options:
+      - a follow-up process item after this merges
+      - fold the amendment into this PR at sign-off
+      - no rule; the convention stays in this design
+    recommended: a follow-up process item after this merges
+    answer: fold the amendment into this PR at sign-off (1a30ece amends ORCH-02 in docs/development/orchestrator.md)
+history:
+  - at: 2026-10-28T23:18:38Z
+    by: attended-setup
+    event: queued at priority 2 (intake)
+  - at: 2026-10-28T23:21:48Z
+    by: cloud/20261028T2325Z-attended
+    event: started (FLOW-05)
+  - at: 2026-10-28T23:21:48Z
+    by: cloud/20261028T2325Z-attended
+    event: claimed p0-branch-setup until 2026-10-29T01:21:48Z
+  - at: 2026-10-28T23:21:57Z
+    by: cloud/20261028T2325Z-attended
+    event: done p0-branch-setup
+  - at: 2026-10-28T23:21:57Z
+    by: cloud/20261028T2325Z-attended
+    event: entered phase 1 (design)
+  - at: 2026-10-28T23:22:08Z
+    by: cloud/20261028T2325Z-attended
+    event: claimed p1-design until 2026-10-29T01:22:08Z
+  - at: 2026-10-28T23:23:00Z
+    by: cloud/20261028T2325Z-attended
+    event: done p1-design
+  - at: 2026-10-28T23:23:00Z
+    by: cloud/20261028T2325Z-attended
+    event: entered phase 2 (plan)
+  - at: 2026-10-28T23:23:06Z
+    by: cloud/20261028T2325Z-attended
+    event: claimed p2-plan until 2026-10-29T01:23:06Z
+  - at: 2026-10-28T23:23:06Z
+    by: cloud/20261028T2325Z-attended
+    event: done p2-plan
+  - at: 2026-10-28T23:23:06Z
+    by: cloud/20261028T2325Z-attended
+    event: entered phase 3 (implement)
+  - at: 2026-10-28T23:23:08Z
+    by: cloud/20261028T2325Z-attended
+    event: claimed p3-implement until 2026-10-29T01:23:08Z
+  - at: 2026-10-28T23:25:42Z
+    by: cloud/20261028T2325Z-attended
+    event: 'Implement amended the design in place: vz no longer calls RecordInputs (a no-op that broke gocyclo); recorded in the design Cross-driver impact (FLOW-06: a scope reduction, not a redesign)'
+  - at: 2026-10-28T23:25:55Z
+    by: cloud/20261028T2325Z-attended
+    event: done p3-implement
+  - at: 2026-10-28T23:25:55Z
+    by: cloud/20261028T2325Z-attended
+    event: entered phase 4 (review)
+  - at: 2026-10-28T23:25:58Z
+    by: cloud/20261028T2325Z-attended
+    event: claimed p4-review until 2026-10-29T01:25:58Z
+  - at: 2026-10-28T23:33:06Z
+    by: cloud/20261028T2325Z-attended
+    event: done p4-review
+  - at: 2026-10-28T23:33:06Z
+    by: cloud/20261028T2325Z-attended
+    event: entered phase 5 (guide)
+  - at: 2026-10-28T23:33:09Z
+    by: cloud/20261028T2325Z-attended
+    event: claimed p5-guide until 2026-10-29T01:33:09Z
+  - at: 2026-10-28T23:33:21Z
+    by: cloud/20261028T2325Z-attended
+    event: done p5-guide
+  - at: 2026-10-28T23:33:21Z
+    by: cloud/20261028T2325Z-attended
+    event: entered phase 6 (publish)
+  - at: 2026-10-28T23:33:23Z
+    by: cloud/20261028T2325Z-attended
+    event: claimed p6-publish until 2026-10-29T01:33:23Z
+  - at: 2026-10-28T23:33:34Z
+    by: cloud/20261028T2325Z-attended
+    event: done p6-publish
+  - at: 2026-10-28T23:33:34Z
+    by: cloud/20261028T2325Z-attended
+    event: parallel round done; waiting on the merge queue
+  - at: 2026-10-28T23:51:33Z
+    by: attended-setup
+    event: 'Jeff: the Dockerfile and its translated build.sh are the build''s inputs (COPY becomes warden-io fetch, recorded by the ledger). Design Problem/Decisions reframed in db59d5e; behavior unchanged. The branch head moved past the p4 report, so m4-review re-reviews in the merge round.'
+  - at: 2026-10-29T00:16:42Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: remove them'
+  - at: 2026-10-29T00:16:42Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: REJECTED the Dockerfile name: always record the submitted file as inputs/Containerfile (the open-standard name), whatever its original name'
+  - at: 2026-10-29T00:16:42Z
+    by: human/jeff
+    event: 'back to design: Jeff rejected assumption a2: the submitted file is recorded as inputs/Containerfile, not inputs/Dockerfile. The design, implementation, tests and reference docs must change from inputs/Dockerfile to inputs/Containerfile; Plan adds the rename of already-implemented code as explicit tasks.'
+  - at: 2026-10-29T00:28:10Z
+    by: human/jeff
+    event: branch rebased onto main cd42fc7 and force-pushed (db59d5e -> be62eb1) on Jeff's one-off FLOW-17 exception; make test and make lint (linux, windows, darwin) green
+  - at: 2026-10-29T09:58:54Z
+    by: cloud/20261029T095640Z
+    event: claimed p1-design-r2 until 2026-10-29T11:58:54Z
+  - at: 2026-10-29T10:00:37Z
+    by: cloud/20261029T095640Z
+    event: done p1-design-r2
+  - at: 2026-10-29T10:00:37Z
+    by: cloud/20261029T095640Z
+    event: entered phase 2 (plan)
+  - at: 2026-10-29T10:00:49Z
+    by: cloud/20261029T095640Z
+    event: claimed p2-plan-r2 until 2026-10-29T12:00:49Z
+  - at: 2026-10-29T10:02:44Z
+    by: cloud/20261029T095640Z
+    event: done p2-plan-r2
+  - at: 2026-10-29T10:02:44Z
+    by: cloud/20261029T095640Z
+    event: entered phase 3 (implement)
+  - at: 2026-10-29T10:02:51Z
+    by: cloud/20261029T095640Z
+    event: claimed p3-implement-r2 until 2026-10-29T12:02:51Z
+  - at: 2026-10-29T10:12:12Z
+    by: cloud/20261029T095640Z
+    event: done p3-implement-r2
+  - at: 2026-10-29T10:12:12Z
+    by: cloud/20261029T095640Z
+    event: entered phase 4 (review)
+  - at: 2026-10-29T10:12:36Z
+    by: cloud/20261029T095640Z
+    event: claimed p4-review-r2 until 2026-10-29T12:12:36Z
+  - at: 2026-10-29T10:15:43Z
+    by: cloud/20261029T095640Z
+    event: done p4-review-r2
+  - at: 2026-10-29T10:15:43Z
+    by: cloud/20261029T095640Z
+    event: entered phase 5 (guide)
+  - at: 2026-10-29T10:15:57Z
+    by: cloud/20261029T095640Z
+    event: claimed p5-guide-r2 until 2026-10-29T12:15:57Z
+  - at: 2026-10-29T10:17:20Z
+    by: cloud/20261029T095640Z
+    event: done p5-guide-r2
+  - at: 2026-10-29T10:17:20Z
+    by: cloud/20261029T095640Z
+    event: entered phase 6 (publish)
+  - at: 2026-10-29T10:17:27Z
+    by: cloud/20261029T095640Z
+    event: claimed p6-publish-r2 until 2026-10-29T12:17:27Z
+  - at: 2026-10-29T10:19:23Z
+    by: cloud/20261029T095640Z
+    event: done p6-publish-r2
+  - at: 2026-10-29T10:19:23Z
+    by: cloud/20261029T095640Z
+    event: parallel round done; waiting on the merge queue
+  - at: 2026-10-31T09:57:10Z
+    by: cloud/20261031T095649Z
+    event: claimed p6-merge-round until 2026-10-31T11:57:10Z
+  - at: 2026-10-31T09:57:13Z
+    by: cloud/20261031T095649Z
+    event: done p6-merge-round
+  - at: 2026-10-31T09:57:13Z
+    by: cloud/20261031T095649Z
+    event: entered the merge round
+  - at: 2026-10-31T09:57:20Z
+    by: cloud/20261031T095649Z
+    event: claimed m0-merge-main until 2026-10-31T11:57:20Z
+  - at: 2026-10-31T09:59:38Z
+    by: cloud/20261031T095649Z
+    event: done m0-merge-main
+  - at: 2026-10-31T09:59:38Z
+    by: cloud/20261031T095649Z
+    event: entered phase 1 (design)
+  - at: 2026-10-31T09:59:46Z
+    by: cloud/20261031T095649Z
+    event: claimed m1-consolidate until 2026-10-31T11:59:46Z
+  - at: 2026-10-31T10:04:56Z
+    by: cloud/20261031T095649Z
+    event: done m1-consolidate
+  - at: 2026-10-31T10:04:56Z
+    by: cloud/20261031T095649Z
+    event: entered phase 2 (plan)
+  - at: 2026-10-31T10:04:58Z
+    by: cloud/20261031T095649Z
+    event: claimed m2-plan until 2026-10-31T12:04:58Z
+  - at: 2026-10-31T10:06:05Z
+    by: cloud/20261031T095649Z
+    event: done m2-plan
+  - at: 2026-10-31T10:06:05Z
+    by: cloud/20261031T095649Z
+    event: entered phase 3 (implement)
+  - at: 2026-10-31T10:07:11Z
+    by: cloud/20261031T095649Z
+    event: claimed m3-implement until 2026-10-31T12:07:11Z
+  - at: 2026-10-31T10:08:28Z
+    by: cloud/20261031T095649Z
+    event: done m3-implement
+  - at: 2026-10-31T10:08:28Z
+    by: cloud/20261031T095649Z
+    event: entered phase 4 (review)
+  - at: 2026-10-31T10:08:41Z
+    by: cloud/20261031T095649Z
+    event: claimed m4-review until 2026-10-31T12:08:41Z
+  - at: 2026-10-31T10:12:42Z
+    by: cloud/20261031T095649Z
+    event: done m4-review
+  - at: 2026-10-31T10:12:42Z
+    by: cloud/20261031T095649Z
+    event: entered phase 5 (guide)
+  - at: 2026-10-31T10:12:47Z
+    by: cloud/20261031T095649Z
+    event: claimed m5-guide until 2026-10-31T12:12:47Z
+  - at: 2026-10-31T10:13:42Z
+    by: cloud/20261031T095649Z
+    event: done m5-guide
+  - at: 2026-10-31T10:13:42Z
+    by: cloud/20261031T095649Z
+    event: entered phase 6 (publish)
+  - at: 2026-10-31T10:13:52Z
+    by: cloud/20261031T095649Z
+    event: claimed m6-publish until 2026-10-31T12:13:52Z
+  - at: 2026-10-31T10:21:58Z
+    by: cloud/20261031T095649Z
+    event: done m6-publish
+  - at: 2026-10-31T10:21:58Z
+    by: cloud/20261031T095649Z
+    event: entered phase 7 (sign-off)
+  - at: 2026-10-31T14:50:44Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: fold the amendment into this PR at sign-off (1a30ece amends ORCH-02 in docs/development/orchestrator.md)'
+  - at: 2026-10-31T20:02:49Z
+    by: human/jeff
+    event: claimed m7-sign-off until 2026-10-31T22:02:49Z
+  - at: 2026-10-31T20:03:01Z
+    by: human/jeff
+    event: done m7-sign-off
+  - at: 2026-10-31T20:03:01Z
+    by: human/jeff
+    event: entered phase 8 (archive)
+  - at: 2026-10-31T20:03:09Z
+    by: cloud/20261031T200309Z
+    event: claimed m8-archive until 2026-10-31T22:03:09Z
+  - at: 2026-10-31T20:04:10Z
+    by: cloud/20261031T200309Z
+    event: 'released m8-archive: '
+  - at: 2026-10-31T20:14:16Z
+    by: human/jeff
+    event: claimed m8-cleanup until 2026-10-31T22:14:16Z
+  - at: 2026-10-31T20:14:16Z
+    by: human/jeff
+    event: done m8-cleanup
+  - at: 2026-10-31T20:14:16Z
+    by: cloud/20261031T201416Z
+    event: claimed m8-archive until 2026-10-31T22:14:16Z
+  - at: 2026-10-31T20:14:16Z
+    by: cloud/20261031T201416Z
+    event: done m8-archive
+  - at: 2026-10-31T20:14:16Z
+    by: cloud/20261031T201416Z
+    event: archived; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: priority 6 -> 1006 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1006 -> 1007 (renumbered by wf new: loop-streamline-2 queued at 99)'

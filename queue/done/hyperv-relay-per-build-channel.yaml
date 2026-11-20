@@ -1,0 +1,1003 @@
+feature: hyperv-relay-per-build-channel
+title: Give the Hyper-V relay VM a per-build channel before the claim
+follows: build-link-subnet
+status: done
+round: feature
+phase: 8
+design: docs/design/hyperv-relay-per-build-channel.md
+branch: feat/hyperv-relay-per-build-channel
+alters_relationships: true
+design_review: required
+source: 'build-link-subnet Decision 9 (docs/design/build-link-subnet.md), approved by Jeff at design review r3 (a18 (a)), queued at its Consolidation: Hyper-V''s relay VM has no per-build channel before the claim (its UKI command line is fixed), so every relay takes 192.168.240.2, the claim carries no token (a local process or another build''s orchestrator can win the claim: a denial of service), --nat-prefix and --host-ip are accepted at setup but ignored per build (re-check the durable NAT''s prefix against [vm] build_link once honoured), and the relay''s upstream DNS is a fixed 8.8.8.8. Also the durable strategy''s one shared Private switch (warden-dev), so concurrent durable builds share a segment. Design one pre-claim channel (seed disk or KVP) and fix all of them together; consider BOOT-06''s optional extension (no boot asset carries a per-build network value) here.'
+pr:
+  number: 115
+  ci: green
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-validate-windows-hyperv
+    phase: 6
+    affinity: host:windows-hyperv
+    status: done
+    needs:
+      - f6-consolidate-r2
+      - f6-consolidate-r3
+      - f6-consolidate-r4
+      - f6-consolidate-r5
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design Validation plan, FLOW-09; r2 cases), on the branch after consolidation: (0) stale service (r3, review S7): with main''s protocol-1 privileged service still installed, non-elevated doctor prints the service stale (protocol 1, this warden 2), Network BLOCKED and a Not ready verdict, each naming warden hyperv service uninstall then install, and never ''not installed''; a non-elevated build is refused before any VM with that fix; after the elevated reinstall doctor shows the service reachable. (1) upgrade: main''s relay VHDX (stamp 1) BLOCKED in doctor and refused before any VM, both naming tools/relay-vm/hyperv/refresh-cache.sh; after it, stamp 2 and doctor current. (2) elevated default Windows guest build succeeds, ledger verifies; relay console shows the seed''s allocated NAT address and gateway, its resolvers with source claim (the host''s), and no token value, and the seed ISO holds no resolver; warden-run.log shows initialize --gateway=<relay> with no --ip, and the guest NIC ends DHCP Enabled: Yes, PrefixOrigin Dhcp at the link''s guest address. (3) while a relay waits, a claim and a tunnel from the host with no token and a wrong token get 401; the build then succeeds. (4) two concurrent ephemeral builds succeed with different relay addresses (VM Notes, consoles). (5) on a host set up by main, a durable build is refused naming warden setup; then warden setup --driver hyperv --nat-prefix 192.168.250.0/24 --host-ip 192.168.250.1 --slots 2 (default NAT removed) retires the old warden-dev switch; doctor prints prefix, host IP and two free slots; a non-elevated Hyper-V Administrators build uses that prefix and slot warden-dev-0 (relay VM Notes) and succeeds; an elevated build reuses the same NAT on its own ephemeral switch. (6) two concurrent durable builds take warden-dev-0 and warden-dev-1 and succeed; from build VM A, ARP/ping to relay B''s and build VM B''s link addresses and a DHCP DISCOVER get no answer from B; a third concurrent durable build is refused before any VM naming both holders and --slots; a --keep-vms build''s slot stays busy (doctor names it) until its VMs are removed. (7) refusals: [vm] build_link inside the durable NAT prefix refused at build start and in doctor; [vm] dns = [<host NAT IP>] refused naming the entry; a relay VM booted by hand with no seed prints the no-seed line and starts no relay. (8) resolvers (sent in the claim, design r3): with the host DNS public and [vm] dns set to that resolver, the build resolves it and console and doctor list only the key''s resolver; with [vm] dns set to an address with no DNS server, lookups fail (no fallback to the host''s). (9) no lease: a --keep-vms build VM moved to an empty Private switch and restarted logs a failed relay wait naming the NIC address and origin (169.254 WellKnown reads no DHCP lease), applies no static address, and powers off. Jeff, attended 2026-11-12: the two host-DNS halves (case 7''s 127.0.0.1-only refusal, case 8''s host DNS on an internal resolver) are dropped from native validation, since changing the host''s DNS can cut the native session off; their tier-0 coverage (default-route DNS parser on canned output, resolvers.Check) stands in. Evidence under native/windows-hyperv/<date>/. Validated (attended, Jeff, 2026-11-12) at 61bd447, head 2080a28 docs-only on top: native/windows-hyperv/2026-11-12/attended/ (cases 0-3, 5-9 at 59d7440; 1, 3, 8, 9 code unchanged since), attended-r4/ (F2, F5, cases 2, 4, 5, 6, 7, hyperv-clean at 5ac5532) and attended-r5/ (F6: setup twice in a row; concurrent smoke through the r5 service). Host-DNS halves of cases 7 and 8 dropped by Jeff (tier 0 stands in).'
+  - id: f6-validate-qemu-any
+    phase: 6
+    affinity: host:qemu-any
+    status: done
+    needs:
+      - f6-consolidate-r2
+      - f6-consolidate-r3
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design r3, a16; FLOW-09), on the branch after consolidation, on a relay initramfs rebuilt from the branch''s tools/relay-vm/init (replaces backlog hyperv-relay-per-build-channel-qemu-relay): (1) a qemu Linux build (direct boot and a cloud image) succeeds and its ledger verifies; the relay console names its upstream from DHCP and its resolvers with source claim, the Mac''s from /etc/resolv.conf, and doctor prints the same list. (2) with [vm] dns set to a public resolver other than the Mac''s, the build resolves names and the relay lists only that resolver; set to an address with no DNS server, lookups fail (no fallback). (3) [vm] dns = ["127.0.0.1"] is refused before any VM naming the entry. Evidence under native/qemu-any/<date>/.'
+  - id: f6-validate-macos-vz
+    phase: 6
+    affinity: host:macos-vz
+    status: done
+    needs:
+      - f6-consolidate-r2
+      - f6-consolidate-r3
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design r3, a16; FLOW-09), on the branch after consolidation: (1) a vz macOS build succeeds and its ledger verifies; the host-mode relay''s log lists its resolvers with source claim, the Mac''s from /etc/resolv.conf, and doctor prints the same list. (2) with [vm] dns set to a public resolver other than the Mac''s, the build resolves names through it only (relay log); set to an address with no DNS server, lookups fail (no fallback to the Mac''s). (3) with [vm] dns naming a resolver on 127.0.0.1 (a local forwarder), the build resolves through it. Evidence under native/macos-vz/<date>/.'
+  - id: f1-design-r2
+    phase: 1
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design-r3
+    phase: 1
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review
+    phase: 2
+    affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: done
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f3-implement
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f5-guide
+    phase: 5
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f3-implement-r2
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review-r2
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f5-guide-r2
+    phase: 5
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main-r2
+    phase: 6
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate-r2
+    phase: 6
+    affinity: cloud
+    status: done
+    needs:
+      - f6-merge-main-r2
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f3-implement-r3
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review-r3
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f5-guide-r3
+    phase: 5
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main-r3
+    phase: 6
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate-r3
+    phase: 6
+    affinity: cloud
+    status: done
+    needs:
+      - f6-merge-main-r3
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-validate-qemu-any-r2
+    phase: 6
+    affinity: host:qemu-any
+    status: done
+    needs:
+      - f6-consolidate-r4
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design r3, a16; FLOW-09), on the branch after consolidation, on a relay initramfs rebuilt from the branch''s tools/relay-vm/init (replaces backlog hyperv-relay-per-build-channel-qemu-relay): (1) a qemu Linux build (direct boot and a cloud image) succeeds and its ledger verifies; the relay console names its upstream from DHCP and its resolvers with source claim, the Mac''s from /etc/resolv.conf, and doctor prints the same list. (2) with [vm] dns set to a public resolver other than the Mac''s, the build resolves names and the relay lists only that resolver; set to an address with no DNS server, lookups fail (no fallback). (3) [vm] dns = ["127.0.0.1"] is refused before any VM naming the entry. Evidence under native/qemu-any/<date>/.'
+  - id: f6-validate-macos-vz-r2
+    phase: 6
+    affinity: host:macos-vz
+    status: done
+    needs:
+      - f6-consolidate-r4
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design r3, a16; FLOW-09), on the branch after consolidation: (1) a vz macOS build succeeds and its ledger verifies; the host-mode relay''s log lists its resolvers with source claim, the Mac''s from /etc/resolv.conf, and doctor prints the same list. (2) with [vm] dns set to a public resolver other than the Mac''s, the build resolves names through it only (relay log); set to an address with no DNS server, lookups fail (no fallback to the Mac''s). (3) with [vm] dns naming a resolver on 127.0.0.1 (a local forwarder), the build resolves through it. Evidence under native/macos-vz/<date>/.'
+  - id: f3-implement-r4
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'With the back-to-Implement findings (F1-F3, history), also: cmd/warden TestSetupSlots fails on a Windows host (vmdns_test.go:160): for --driver firecracker --slots 257 the platform refusal (needs an x86_64 Linux host with /dev/kvm) comes before the 1-256 range check, so the test wants the range message and gets the platform one. CI (Linux) passes. Make the case independent of the host OS (found attended 2026-11-12, merge check against PRs 112 and 114).'
+  - id: f4-review-r4
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f5-guide-r4
+    phase: 5
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main-r4
+    phase: 6
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate-r4
+    phase: 6
+    affinity: cloud
+    status: done
+    needs:
+      - f6-merge-main-r4
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-validate-qemu-any-r3
+    phase: 6
+    affinity: host:qemu-any
+    status: done
+    needs:
+      - f6-consolidate-r5
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design r3, a16; FLOW-09), on the branch after consolidation, on a relay initramfs rebuilt from the branch''s tools/relay-vm/init (replaces backlog hyperv-relay-per-build-channel-qemu-relay): (1) a qemu Linux build (direct boot and a cloud image) succeeds and its ledger verifies; the relay console names its upstream from DHCP and its resolvers with source claim, the Mac''s from /etc/resolv.conf, and doctor prints the same list. (2) with [vm] dns set to a public resolver other than the Mac''s, the build resolves names and the relay lists only that resolver; set to an address with no DNS server, lookups fail (no fallback). (3) [vm] dns = ["127.0.0.1"] is refused before any VM naming the entry. Evidence under native/qemu-any/<date>/.'
+  - id: f6-validate-macos-vz-r3
+    phase: 6
+    affinity: host:macos-vz
+    status: done
+    needs:
+      - f6-consolidate-r5
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design r3, a16; FLOW-09), on the branch after consolidation: (1) a vz macOS build succeeds and its ledger verifies; the host-mode relay''s log lists its resolvers with source claim, the Mac''s from /etc/resolv.conf, and doctor prints the same list. (2) with [vm] dns set to a public resolver other than the Mac''s, the build resolves names through it only (relay log); set to an address with no DNS server, lookups fail (no fallback to the Mac''s). (3) with [vm] dns naming a resolver on 127.0.0.1 (a local forwarder), the build resolves through it. Evidence under native/macos-vz/<date>/.'
+  - id: f3-implement-r5
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review-r5
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f5-guide-r5
+    phase: 5
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main-r5
+    phase: 6
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate-r5
+    phase: 6
+    affinity: cloud
+    status: done
+    needs:
+      - f6-merge-main-r5
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr-r5
+    phase: 6
+    affinity: cloud
+    status: done
+    needs:
+      - f6-consolidate-r5
+      - f6-validate-windows-hyperv
+      - f6-validate-qemu-any-r3
+      - f6-validate-macos-vz-r3
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 12
+    steps: 40
+  spent:
+    runs: 8
+    steps: 47
+questions:
+  - id: a1
+    kind: assumed
+    status: confirmed
+    question: The pre-claim channel into the Hyper-V relay VM and the claim token (Decisions 1, 3).
+    options:
+      - a per-build seed ISO (IMAPI2, label WARDENRELAY) on a DVD attached before boot, read once by the init, holding the NAT address, prefix, gateway, resolvers and a fresh 32-byte claim token StartRelay then sends
+      - Hyper-V KVP host-to-guest items
+      - SMBIOS strings set through WMI
+      - a claim over hvsock instead of the NAT
+    recommended: the per-build seed ISO, with SMBIOS strings as the fallback if the DVD path fails native validation
+    answer: (a) seed ISO; SMBIOS fallback (Jeff, r1)
+  - id: a2
+    kind: assumed
+    status: confirmed
+    question: How each relay gets its own NAT address (Decision 4).
+    options:
+      - lowest free host of the NAT prefix under a host lock, in-use set read from the Notes of existing warden-relay-* VMs, the address written to the new VM's Notes before the lock is released
+      - lease files in the lock directory
+      - a per-address file lock held for the build
+    recommended: lowest free host under a host lock, recorded in the relay VM's Notes
+    answer: (a) VM Notes under a host lock (Jeff, r1)
+  - id: a3
+    kind: assumed
+    status: confirmed
+    question: The relay's upstream DNS (Decision 6).
+    options:
+      - the host's resolvers from its default-route interface, filtered by Firecracker's rule moved to a shared driver/resolvers, and a fixable refusal when none qualifies
+      - the same with a public-resolver fallback
+      - keep 8.8.8.8
+      - a new [vm] dns key
+    recommended: the host's resolvers with Firecracker's filter and a fixable refusal; a [vm] dns key only as a follow-up if the refusal proves common
+    answer: 'CHANGE (Jeff, r1): host resolvers by default; an optional [vm] dns key that, when set, is used explicitly with no fallback to the host''s; refuse if none'
+  - id: a4
+    kind: assumed
+    status: confirmed
+    question: The durable strategy's shared Private switch (Decision 7).
+    options:
+      - a per-build access VLAN on the durable switch, set on the relay's build NIC and the build VM's NIC before they start
+      - one durable build at a time (a host lock held for the build)
+      - a per-build Private switch (needs full Administrator)
+    recommended: a per-build access VLAN, with one-at-a-time as the fallback if native validation finds VLAN filtering does not hold
+    answer: 'CHANGE (Jeff, r1): (c) a per-build Private switch for durable builds (needs elevation)'
+  - id: a5
+    kind: assumed
+    status: confirmed
+    question: Honouring --nat-prefix and --host-ip per build (Decision 5).
+    options:
+      - every build reads the NAT it uses back from the host (Get-NetNat prefix, the NAT switch's host vNIC address), ephemeral builds reuse the dev switch's NAT when it exists, and a NAT prefix overlapping the build link is refused at build start and in doctor
+      - persist setup's flags and read them per build
+      - honour them on durable builds only
+    recommended: read the NAT back from the host, reuse the dev switch's NAT for ephemeral builds, refuse an overlap at build start and in doctor
+    answer: (a) read the NAT back from the host (Jeff, r1)
+  - id: a6
+    kind: assumed
+    status: confirmed
+    question: 'The Windows guest''s NIC after build-link-subnet (Decision 8; windows-desktop finding: PrefixOrigin Dhcp where main''s was Manual).'
+    options:
+      - warden-io initialize --ip on Windows turns DHCP off on the interface and sets the static address, route and DNS, logging the final state, so the guest ends Manual whether or not it took the lease first
+      - leave it DHCP-configured, as after build-link-subnet
+      - drop --ip from warden-run.ps1 and rely on the lease alone
+    recommended: make it static in initialize
+    answer: 'CHANGE (Jeff, r1): (c) drop --ip on Windows and rely on the relay''s lease alone'
+  - id: a7
+    kind: assumed
+    status: confirmed
+    question: BOOT-06's per-build network-value extension (Decision 10; rule change BOOT-06).
+    options:
+      - take the amendment now that it holds on every driver, and remove the relay init's baked network defaults
+      - remove the defaults but leave BOOT-06 as it is (alters_relationships and the bootstrap-model seam drop out; the review is still required)
+      - neither
+    recommended: take it, and remove the defaults
+    answer: (a) take BOOT-06's extension (rule change BOOT-06 approved as worded, Jeff, r1)
+  - id: a8
+    kind: assumed
+    status: confirmed
+    question: BOOT-07's bootstrap surface list (Decision 10; rule change BOOT-07).
+    options:
+      - add tools/relay-vm/, tools/build-vm/, cmd/relay/dhcp*.go and driver/hyperv/relayseed*.go to the surface in bootstrap.md and tools/tier1/rules.yaml here
+      - leave it to a process item
+    recommended: take it here
+    answer: (a) take BOOT-07's surface list (rule change BOOT-07 approved as worded, Jeff, r1)
+  - id: a9
+    kind: assumed
+    status: confirmed
+    question: Seams, relationships and validation (front-matter).
+    options:
+      - seams [bootstrap-model], alters_relationships true, security_boundary env-relay, windows-hyperv blocking, qemu-any and macos-qemu tracked
+      - the same plus relay-claim, conservatively, although the wire is unchanged
+    recommended: seams [bootstrap-model], alters_relationships true, env-relay, windows-hyperv blocking, qemu-any and macos-qemu tracked
+    answer: (a) as drafted (Jeff, r1)
+  - id: a10
+    kind: assumed
+    status: confirmed
+    question: '[vm] dns: shape, validation and which drivers read it (Decision 6, r2).'
+    options:
+      - an optional list of IPv4 addresses, no flag or env var; when set used exclusively (never merged with or followed by the host's); syntax and class checked at config load, reachability (host-local, NAT prefix, build link) at build start and in doctor, an unusable entry refusing the build rather than being dropped; read by hyperv and firecracker; a qemu or vz build with it set refused at startup; container ignores [vm]
+      - hyperv only, other VM drivers refusing it
+      - every VM driver honours it (qemu via warden.dns on its relay command line, vz via a new host-mode relay resolver option)
+      - the first option plus a --dns flag on build, shell and doctor
+    recommended: the first option; honouring it on qemu and vz as a follow-up if wanted
+    answer: 'CHANGE (Jeff, r2): the relay''s upstream DNS ([vm] dns or the host''s) is delivered in the claim, for every VM driver (qemu and vz honour [vm] dns); the build VM keeps the relay as its DNS. Rule: from here on, any relay configuration happens in the claim interface explicitly'
+  - id: a11
+    kind: assumed
+    status: confirmed
+    question: 'The durable strategy''s per-build Private switches (Decision 7, r2): where the elevation happens, the per-build privilege tier, and what a durable build holds.'
+    options:
+      - 'elevation at setup: warden setup --driver hyperv --slots N (1-64, default 4) makes Private switches <network>-0..N-1 and retires the old shared <network> switch when unattached; builds stay at Hyper-V Administrators, take the lowest unattached slot under the hyperv-network host lock, and hold it only by the relay VM''s attached NIC (no lock for the build''s life; freed when the VM is removed, kept by --keep-vms); all busy or no slots is a fixable refusal'
+      - the same with Firecracker's default of 16 slots
+      - create a Private switch per durable build, after a native spike shows Hyper-V Administrators may
+      - the first option, but keep the old <network> switch instead of removing it
+    recommended: the first option (setup-made slots, default 4)
+    answer: '(a) as drafted: setup-made per-build Private switches, --slots default 4 (Jeff, r2)'
+  - id: a12
+    kind: assumed
+    status: confirmed
+    question: 'The Windows guest on the relay''s lease (Decision 8, r2): warden-run.ps1 passes --gateway only (Hyper-V and qemu); executor-initialize unchanged; no lease is a failed build with a warden-io line naming the NIC address and origin, no static fallback.'
+    options:
+      - as stated, warden-io's Windows --ip branch left as it is for other orchestrators
+      - as stated, and make --ip on Windows strict for whoever passes it (disable DHCP, set it, fail if it does not stick)
+      - as stated, and remove --ip on Windows from the initialize contract (seam change with deprecation, UX-03)
+    recommended: as stated; a strict --ip belongs with the design-principles item if wanted
+    answer: (a) the Windows guest keeps the relay's lease, --gateway only (Jeff, r2)
+  - id: a13
+    kind: assumed
+    status: confirmed
+    question: 'No runtime fallbacks; contingencies named (Decision 11, r2): a1''s SMBIOS is a contingency chosen by a return to Design if the DVD path fails native validation, never a second channel a build tries; r1''s one-at-a-time contingency goes with the VLANs; the NAT choice (a5) is a fixed order over what the host has, not a fallback.'
+    options:
+      - as stated
+      - keep SMBIOS as an automatic second channel when the DVD is missing
+      - drop the SMBIOS contingency altogether
+    recommended: as stated
+    answer: (a) no runtime fallbacks; SMBIOS a named contingency via a return to Design (Jeff, r2)
+  - id: a14
+    kind: assumed
+    status: confirmed
+    question: What each VM driver sends when [vm] dns is unset, and the relay's default when upstream_dns is absent (Decision 6, r3).
+    options:
+      - 'every VM driver always sends upstream_dns: [vm] dns when set, else the host''s resolvers by the shared selection with the driver''s own source and reachability rule (qemu and vz read the Mac''s /etc/resolv.conf; vz keeps loopback; loopback and link-local move from the load-time check to these rules); a claim without the field (container driver, third parties) uses the relay''s own resolv.conf exclusively, refused when none is usable, named in relaycfg''s package doc'
+      - qemu and vz send the field only when [vm] dns is set, otherwise keeping the resolver their platform gives the relay (user-mode NAT's lease, the Mac's system resolver with its scoped/split-DNS resolvers)
+      - the first option, and the container driver also sends the host's resolvers
+    recommended: 'the first option (a10: the relay''s upstream DNS, [vm] dns or the host''s, is delivered in the claim for every VM driver); its cost is split DNS on vz, which [vm] dns overrides'
+    answer: (a) as drafted (Jeff, 2026-11-11, re-review r3)
+  - id: a15
+    kind: assumed
+    status: confirmed
+    question: How the relay uses the resolver list (Decision 6, r3; RELAY-04, GLOBAL-11).
+    options:
+      - one list per relay fixed at the claim, for both the guest's DNS queries (forwarded) and the relay's own upstream dials, in all three modes; entries asked in order, the next when one does not answer (the one named fallback); UPSTREAM_DNS, 8.8.8.8 and the system-resolver-first split removed; validated at the claim (IPv4, not unspecified/multicast/broadcast, not in the build link) with a 400 that leaves the relay claimable
+      - the same, but only the first entry is used and a second is refused
+      - the first option, and keep UPSTREAM_DNS for cmd/relay run by hand outside warden
+    recommended: the first option
+    answer: (a) as drafted (Jeff, 2026-11-11, re-review r3)
+  - id: a16
+    kind: assumed
+    status: confirmed
+    question: Native validation after the claim field (front-matter, r3; FLOW-09).
+    options:
+      - qemu-any and macos-vz become blocking (steps f6-validate-qemu-any, f6-validate-macos-vz), since r3 reaches driver/qemu and driver/vz and changes how the vz host-mode relay resolves; the qemu-any backlog entry folds into its step; windows-hyperv stays blocking, macos-qemu (Windows guest) tracked
+      - qemu-any and macos-vz tracked, relying on tier 0
+      - the first option, plus a linux-kvm step for Firecracker instead of CI tier 2
+    recommended: the first option
+    answer: (a) as drafted (Jeff, 2026-11-11, re-review r3)
+history:
+  - at: 2026-11-05T00:33:01Z
+    by: cloud/20261104T214530Z-attended
+    event: queued at priority 24 (intake)
+  - at: 2026-11-06T17:40:00Z
+    by: human/jeff
+    event: 'priority 24 -> 33 (Jeff; renumbered by wf new): the regression fixes from build-link-subnet''s native runs go first, as immediate follow-ups'
+  - at: 2026-11-06T17:50:00Z
+    by: human/jeff
+    event: 'priority 33 -> 45 (Jeff, 2026-11-06 order: in implementation, then process, then fixes for implemented items, then new functionality; this item: 3. fix)'
+  - at: 2026-11-07T00:36:00Z
+    by: cloud/20261106T231440Z-attended
+    event: 'follows: build-link-subnet (regression-fixes-follow-up x4-close, Decision 9, Jeff a9): a fix of class 3, ahead of new functionality; no renumbering'
+  - at: 2026-11-07T03:47:01Z
+    by: human/jeff
+    event: 'priority 45 -> 46 (renumbered by wf new: jks-test-skip-without-jdk queued at 44)'
+  - at: 2026-11-07T11:04:31Z
+    by: cloud/20261107T105651Z
+    event: 'priority 46 -> 47 (renumbered by wf new: vz-ipsw-latest-reuse queued at 45)'
+  - at: 2026-11-07T11:16:50Z
+    by: cloud/20261107T105651Z
+    event: started (FLOW-05)
+  - at: 2026-11-07T11:16:50Z
+    by: cloud/20261107T105651Z
+    event: claimed f0-branch-setup until 2026-11-07T13:16:50Z
+  - at: 2026-11-07T11:16:54Z
+    by: cloud/20261107T105651Z
+    event: done f0-branch-setup
+  - at: 2026-11-07T11:16:54Z
+    by: cloud/20261107T105651Z
+    event: entered phase 1 (design)
+  - at: 2026-11-07T11:17:06Z
+    by: cloud/20261107T105651Z
+    event: claimed f1-design until 2026-11-07T13:17:06Z
+  - at: 2026-11-07T11:31:18Z
+    by: cloud/20261107T105651Z
+    event: done f1-design
+  - at: 2026-11-07T11:31:18Z
+    by: cloud/20261107T105651Z
+    event: entered phase 2 (plan)
+  - at: 2026-11-08T22:02:35Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: (a) seed ISO; SMBIOS fallback (Jeff, r1)'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: (a) VM Notes under a host lock (Jeff, r1)'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: CHANGE (Jeff, r1): host resolvers by default; an optional [vm] dns key that, when set, is used explicitly with no fallback to the host''s; refuse if none'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: CHANGE (Jeff, r1): (c) a per-build Private switch for durable builds (needs elevation)'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: (a) read the NAT back from the host (Jeff, r1)'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: CHANGE (Jeff, r1): (c) drop --ip on Windows and rely on the relay''s lease alone'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a7 confirmed: (a) take BOOT-06''s extension (rule change BOOT-06 approved as worded, Jeff, r1)'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a8 confirmed: (a) take BOOT-07''s surface list (rule change BOOT-07 approved as worded, Jeff, r1)'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a9 confirmed: (a) as drafted (Jeff, r1)'
+  - at: 2026-11-08T22:03:00Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-09T00:03:00Z
+  - at: 2026-11-08T22:03:00Z
+    by: human/jeff
+    event: kept f6-validate-windows-hyperv pending for phase 6
+  - at: 2026-11-08T22:03:00Z
+    by: human/jeff
+    event: 'back to design: design review r1 (Jeff): a3 host resolvers by default plus an optional [vm] dns key used explicitly with no host fallback, refuse if none; a4 (c) per-build Private switch for durable builds (elevation); a6 (c) drop --ip on Windows and rely on the relay''s lease. BOOT-06 and BOOT-07 approved at 0df0a64; a1, a2, a5, a7-a9 confirmed'
+  - at: 2026-11-09T10:57:27Z
+    by: cloud/20261109T105708Z
+    event: claimed f1-design-r2 until 2026-11-09T12:57:27Z
+  - at: 2026-11-09T11:10:23Z
+    by: cloud/20261109T105708Z
+    event: done f1-design-r2
+  - at: 2026-11-09T11:10:23Z
+    by: cloud/20261109T105708Z
+    event: entered phase 2 (plan)
+  - at: 2026-11-09T19:26:16Z
+    by: human/jeff
+    event: 'assumed question a10 confirmed: CHANGE (Jeff, r2): the relay''s upstream DNS ([vm] dns or the host''s) is delivered in the claim, for every VM driver (qemu and vz honour [vm] dns); the build VM keeps the relay as its DNS. Rule: from here on, any relay configuration happens in the claim interface explicitly'
+  - at: 2026-11-09T19:26:16Z
+    by: human/jeff
+    event: 'assumed question a11 confirmed: (a) as drafted: setup-made per-build Private switches, --slots default 4 (Jeff, r2)'
+  - at: 2026-11-09T19:26:16Z
+    by: human/jeff
+    event: 'assumed question a12 confirmed: (a) the Windows guest keeps the relay''s lease, --gateway only (Jeff, r2)'
+  - at: 2026-11-09T19:26:16Z
+    by: human/jeff
+    event: 'assumed question a13 confirmed: (a) no runtime fallbacks; SMBIOS a named contingency via a return to Design (Jeff, r2)'
+  - at: 2026-11-09T19:26:35Z
+    by: human/jeff
+    event: kept f6-validate-windows-hyperv pending for phase 6
+  - at: 2026-11-09T19:26:35Z
+    by: human/jeff
+    event: 'back to design: re-review r2 (Jeff): a10 changed: the relay''s upstream DNS goes in the claim for every VM driver (relay-claim seam), not the seed/command line; rule: any relay configuration happens in the claim interface explicitly, only claim-reachability values (address, prefix, gateway, token) via the boot channel; BOOT-06''s proposed wording to be reworded to say so and re-approved; a11-a13 confirmed (a)'
+  - at: 2026-11-11T10:58:24Z
+    by: cloud/20261111T105701Z
+    event: claimed f1-design-r3 until 2026-11-11T12:58:24Z
+  - at: 2026-11-11T11:08:37Z
+    by: cloud/20261111T105701Z
+    event: done f1-design-r3
+  - at: 2026-11-11T11:08:37Z
+    by: cloud/20261111T105701Z
+    event: entered phase 2 (plan)
+  - at: 2026-11-11T17:36:47Z
+    by: human/jeff
+    event: 'assumed question a14 confirmed: (a) as drafted (Jeff, 2026-11-11, re-review r3)'
+  - at: 2026-11-11T17:36:47Z
+    by: human/jeff
+    event: 'assumed question a15 confirmed: (a) as drafted (Jeff, 2026-11-11, re-review r3)'
+  - at: 2026-11-11T17:36:47Z
+    by: human/jeff
+    event: 'assumed question a16 confirmed: (a) as drafted (Jeff, 2026-11-11, re-review r3)'
+  - at: 2026-11-11T17:37:05Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-11T19:37:05Z
+  - at: 2026-11-11T17:37:05Z
+    by: human/jeff
+    event: done f2-design-review
+  - at: 2026-11-11T18:06:28Z
+    by: cloud/20261111T173920Z
+    event: claimed f2-plan until 2026-11-11T20:06:28Z
+  - at: 2026-11-11T18:14:44Z
+    by: cloud/20261111T173920Z
+    event: done f2-plan
+  - at: 2026-11-11T18:14:44Z
+    by: cloud/20261111T173920Z
+    event: entered phase 3 (implement)
+  - at: 2026-11-11T18:23:29Z
+    by: cloud/20261111T182144Z
+    event: claimed f3-implement until 2026-11-11T20:23:29Z
+  - at: 2026-11-11T20:24:05Z
+    by: cloud/20261111T182144Z
+    event: done f3-implement
+  - at: 2026-11-11T20:24:05Z
+    by: cloud/20261111T182144Z
+    event: entered phase 4 (review)
+  - at: 2026-11-11T20:24:17Z
+    by: cloud/20261111T182144Z
+    event: claimed f4-review until 2026-11-11T22:24:17Z
+  - at: 2026-11-11T20:32:21Z
+    by: cloud/20261111T182144Z
+    event: 'priority 47 -> 48 (renumbered by wf new: relay-host-subnet-claim-only queued at 45)'
+  - at: 2026-11-11T20:32:22Z
+    by: cloud/20261111T182144Z
+    event: 'priority 48 -> 49 (renumbered by wf new: relay-init-dhcp-mask-default queued at 46)'
+  - at: 2026-11-11T20:41:30Z
+    by: cloud/20261111T182144Z
+    event: done f4-review
+  - at: 2026-11-11T20:41:30Z
+    by: cloud/20261111T182144Z
+    event: entered phase 5 (guide)
+  - at: 2026-11-11T20:41:41Z
+    by: cloud/20261111T182144Z
+    event: claimed f5-guide until 2026-11-11T22:41:41Z
+  - at: 2026-11-11T20:45:21Z
+    by: cloud/20261111T182144Z
+    event: done f5-guide
+  - at: 2026-11-11T20:45:21Z
+    by: cloud/20261111T182144Z
+    event: entered phase 6 (publish)
+  - at: 2026-11-11T22:29:24Z
+    by: cloud/20261111T182144Z
+    event: claimed f6-merge-main until 2026-11-12T00:29:24Z
+  - at: 2026-11-11T22:38:20Z
+    by: cloud/20261111T182144Z
+    event: done f6-merge-main
+  - at: 2026-11-11T22:38:20Z
+    by: cloud/20261111T182144Z
+    event: claimed f6-consolidate until 2026-11-12T00:38:20Z
+  - at: 2026-11-11T22:38:20Z
+    by: cloud/20261111T182144Z
+    event: kept f6-validate-windows-hyperv pending for phase 6
+  - at: 2026-11-11T22:38:20Z
+    by: cloud/20261111T182144Z
+    event: kept f6-validate-qemu-any pending for phase 6
+  - at: 2026-11-11T22:38:20Z
+    by: cloud/20261111T182144Z
+    event: kept f6-validate-macos-vz pending for phase 6
+  - at: 2026-11-11T22:38:20Z
+    by: cloud/20261111T182144Z
+    event: 'back to implement: f6-consolidate (547acdd): plan task 36''s tier-0 parse tests for the Provisioner''s parseRelayNotes and parseSwitchAdapters (driver/hyperv/provision.go, untagged) are missing; back to Implement (FLOW-10)'
+  - at: 2026-11-11T22:38:27Z
+    by: cloud/20261111T182144Z
+    event: claimed f3-implement-r2 until 2026-11-12T00:38:27Z
+  - at: 2026-11-11T22:41:14Z
+    by: cloud/20261111T182144Z
+    event: done f3-implement-r2
+  - at: 2026-11-11T22:41:14Z
+    by: cloud/20261111T182144Z
+    event: entered phase 4 (review)
+  - at: 2026-11-11T22:41:23Z
+    by: cloud/20261111T182144Z
+    event: claimed f4-review-r2 until 2026-11-12T00:41:23Z
+  - at: 2026-11-11T22:45:00Z
+    by: cloud/20261111T182144Z
+    event: done f4-review-r2
+  - at: 2026-11-11T22:45:00Z
+    by: cloud/20261111T182144Z
+    event: entered phase 5 (guide)
+  - at: 2026-11-11T22:45:04Z
+    by: cloud/20261111T182144Z
+    event: claimed f5-guide-r2 until 2026-11-12T00:45:04Z
+  - at: 2026-11-11T22:45:04Z
+    by: cloud/20261111T182144Z
+    event: done f5-guide-r2
+  - at: 2026-11-11T22:45:04Z
+    by: cloud/20261111T182144Z
+    event: entered phase 6 (publish)
+  - at: 2026-11-11T22:45:04Z
+    by: cloud/20261111T182144Z
+    event: claimed f6-merge-main-r2 until 2026-11-12T00:45:04Z
+  - at: 2026-11-11T22:45:04Z
+    by: cloud/20261111T182144Z
+    event: done f6-merge-main-r2
+  - at: 2026-11-11T22:45:13Z
+    by: cloud/20261111T182144Z
+    event: claimed f6-consolidate-r2 until 2026-11-12T00:45:13Z
+  - at: 2026-11-11T22:45:13Z
+    by: cloud/20261111T182144Z
+    event: done f6-consolidate-r2
+  - at: 2026-11-11T23:10:47Z
+    by: host:windows-hyperv/20261111T231002Z
+    event: claimed f6-validate-windows-hyperv until 2026-11-12T01:10:47Z
+  - at: 2026-11-11T23:13:49Z
+    by: host:windows-hyperv/20261111T231002Z
+    event: 'released f6-validate-windows-hyperv: native/windows-hyperv/2026-11-11 (976ae9f, unattended, not elevated): case 1 doctor BLOCKED naming refresh-cache.sh as planned, but the build is refused on the network instead; the installed protocol-1 privileged service reads ''not installed'' (serviceReachable swallows the version mismatch), so warden hyperv service install is never named. Cases 2-9 not run: expired base image, every build path needs elevation (service reinstall, setup --slots), and cases 7-8 change host DNS'
+  - at: 2026-11-11T23:13:49Z
+    by: host:windows-hyperv/20261111T231002Z
+    event: kept f6-validate-windows-hyperv pending for phase 6
+  - at: 2026-11-11T23:13:49Z
+    by: host:windows-hyperv/20261111T231002Z
+    event: kept f6-validate-qemu-any pending for phase 6
+  - at: 2026-11-11T23:13:49Z
+    by: host:windows-hyperv/20261111T231002Z
+    event: kept f6-validate-macos-vz pending for phase 6
+  - at: 2026-11-11T23:13:49Z
+    by: host:windows-hyperv/20261111T231002Z
+    event: 'back to implement: f6-validate-windows-hyperv (976ae9f, native/windows-hyperv/2026-11-11): the protocol bump to 2 is not surfaced: serviceReachable (driver/hyperv/service_windows.go) returns false on the ping''s version-mismatch error, so with main''s protocol-1 service installed doctor prints ''Privileged service ... not installed'' and a build is refused with the durable-switch message; the plan''s mismatch refusal naming ''warden hyperv service install'' never reaches the user, and Compatibility''s ''service builds unaffected'' does not hold. Report a stale service and name the reinstall in doctor and the strategy refusal, with tier-0 coverage (FLOW-09)'
+  - at: 2026-11-12T10:57:17Z
+    by: cloud/20261112T105657Z
+    event: claimed f3-implement-r3 until 2026-11-12T12:57:17Z
+  - at: 2026-11-12T11:05:08Z
+    by: cloud/20261112T105657Z
+    event: done f3-implement-r3
+  - at: 2026-11-12T11:05:08Z
+    by: cloud/20261112T105657Z
+    event: entered phase 4 (review)
+  - at: 2026-11-12T11:05:13Z
+    by: cloud/20261112T105657Z
+    event: claimed f4-review-r3 until 2026-11-12T13:05:13Z
+  - at: 2026-11-12T11:10:48Z
+    by: cloud/20261112T105657Z
+    event: done f4-review-r3
+  - at: 2026-11-12T11:10:48Z
+    by: cloud/20261112T105657Z
+    event: entered phase 5 (guide)
+  - at: 2026-11-12T11:10:51Z
+    by: cloud/20261112T105657Z
+    event: claimed f5-guide-r3 until 2026-11-12T13:10:51Z
+  - at: 2026-11-12T11:10:51Z
+    by: cloud/20261112T105657Z
+    event: done f5-guide-r3
+  - at: 2026-11-12T11:10:51Z
+    by: cloud/20261112T105657Z
+    event: entered phase 6 (publish)
+  - at: 2026-11-12T11:10:51Z
+    by: cloud/20261112T105657Z
+    event: claimed f6-merge-main-r3 until 2026-11-12T13:10:51Z
+  - at: 2026-11-12T11:10:51Z
+    by: cloud/20261112T105657Z
+    event: done f6-merge-main-r3
+  - at: 2026-11-12T11:11:14Z
+    by: cloud/20261112T105657Z
+    event: claimed f6-consolidate-r3 until 2026-11-12T13:11:14Z
+  - at: 2026-11-12T11:11:14Z
+    by: cloud/20261112T105657Z
+    event: done f6-consolidate-r3
+  - at: 2026-11-12T11:12:58Z
+    by: host:windows-hyperv/20261112T111001Z
+    event: claimed f6-validate-windows-hyperv until 2026-11-12T13:12:58Z
+  - at: 2026-11-12T11:14:52Z
+    by: host:windows-hyperv/20261112T111001Z
+    event: 'released f6-validate-windows-hyperv: Unattended, not elevated, at 59d7440: case 0 non-elevated half passes (doctor: service stale protocol 1 vs 2, Network BLOCKED, Not ready, each naming uninstall then install, never ''not installed''; non-elevated build refused with that fix before any VM). Case 1''s doctor stamp line holds. The rest needs Jeff attended and elevated: case 0''s reinstall check, cases 1-9, a fresh base image (grace ended 2026-11-09), and the host DNS changes for cases 7-8. Evidence: native/windows-hyperv/2026-11-12/.'
+  - at: 2026-11-12T17:11:43Z
+    by: host:windows-hyperv/20261112T171002Z
+    event: claimed f6-validate-windows-hyperv until 2026-11-12T19:11:43Z
+  - at: 2026-11-12T17:12:08Z
+    by: host:windows-hyperv/20261112T171002Z
+    event: 'released f6-validate-windows-hyperv: Unattended, not elevated (doctor: Token read current process (non-elevated), Full Administrator no): not rerun. The branch is unchanged at 59d7440 since host:windows-hyperv/20261112T111001Z, whose case 0 non-elevated pass stands (native/windows-hyperv/2026-11-12/). Still needs Jeff attended and elevated: case 0''s reinstall check, cases 1-9, a fresh prepared base (doctor: grace ended 2026-11-09T17:57Z, -71h left), and the host DNS changes for cases 7-8.'
+  - at: 2026-11-12T18:33:53Z
+    by: host:windows-hyperv/20261112T183259Z
+    event: claimed f6-validate-windows-hyperv until 2026-11-12T20:33:53Z
+  - at: 2026-11-12T18:40:26Z
+    by: host:qemu-any/20261112T184026Z
+    event: claimed f6-validate-qemu-any until 2026-11-12T20:40:26Z
+  - at: 2026-11-12T18:43:30Z
+    by: human/jeff
+    event: 'priority 49 -> 50 (renumbered by wf new: componentization queued at 24)'
+  - at: 2026-11-12T18:45:42Z
+    by: host:qemu-any/20261112T184026Z
+    event: done f6-validate-qemu-any
+  - at: 2026-11-12T18:48:19Z
+    by: host:macos-vz/20261112T184819Z
+    event: claimed f6-validate-macos-vz until 2026-11-12T20:48:19Z
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: 'priority 50 -> 51 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'
+  - at: 2026-11-12T19:08:04Z
+    by: host:macos-vz/20261112T184819Z
+    event: done f6-validate-macos-vz
+  - at: 2026-11-12T20:11:54Z
+    by: host:windows-hyperv/20261112T183259Z
+    event: claimed f6-validate-windows-hyperv until 2026-11-12T22:11:54Z
+  - at: 2026-11-12T20:17:56Z
+    by: host:windows-hyperv/20261112T183259Z
+    event: 'released f6-validate-windows-hyperv: Attended with Jeff at 59d7440 (native/windows-hyperv/2026-11-12/attended/): cases 0-3 and 5-9 PASS (case 7 and 8 host-DNS halves dropped by Jeff). Case 4 FAIL: 2 of 3 simultaneously started ephemeral builds lost one in buildSeed (IMAPI2FS COM creation 0xC0AAB138). Also F2 doctor reads a stopped service as not installed, F3 build_link refusal names the default NAT 192.168.240.0/20 not the host''s 192.168.250.0/24.'
+  - at: 2026-11-12T20:17:56Z
+    by: host:windows-hyperv/20261112T183259Z
+    event: kept f6-validate-windows-hyperv pending for phase 6
+  - at: 2026-11-12T20:17:56Z
+    by: host:windows-hyperv/20261112T183259Z
+    event: 'queued f6-validate-qemu-any-r2: f6-validate-qemu-any validated the branch before the return'
+  - at: 2026-11-12T20:17:56Z
+    by: host:windows-hyperv/20261112T183259Z
+    event: 'queued f6-validate-macos-vz-r2: f6-validate-macos-vz validated the branch before the return'
+  - at: 2026-11-12T20:17:56Z
+    by: host:windows-hyperv/20261112T183259Z
+    event: 'back to implement: f6-validate-windows-hyperv (59d7440, native/windows-hyperv/2026-11-12/attended/README.md): F1 concurrent builds race on seed ISO creation (driver/hyperv/winseed_windows.go, IMAPI2FS.MsftFileSystemImage fails 0xC0AAB138 in 2 of 3 simultaneous pairs; each build now makes two ISOs), so case 4''s two concurrent ephemeral builds do not both succeed: serialize ISO creation across processes or retry that HRESULT, with tier-0 coverage. F2 doctor prints an installed but stopped WardenHyperV as ''not installed''. F3 the [vm] build_link overlap refusal names the default NAT (192.168.240.0/20) instead of the host''s NAT read back (192.168.250.0/24). Back to Implement (FLOW-10); rerun cases 4 and 7 (durable build_link) natively after'
+  - at: 2026-11-12T20:00:00Z
+    by: human/jeff
+    event: estimate raised to 40 steps / 12 runs (Jeff, FLOW-13 runaway at 29/18 steps, 7/4 runs)
+  - at: 2026-11-12T20:45:59Z
+    by: cloud/20261112T204543Z
+    event: claimed f3-implement-r4 until 2026-11-12T22:45:59Z
+  - at: 2026-11-12T21:04:42Z
+    by: cloud/20261112T204543Z
+    event: done f3-implement-r4
+  - at: 2026-11-12T21:04:42Z
+    by: cloud/20261112T204543Z
+    event: entered phase 4 (review)
+  - at: 2026-11-12T21:05:38Z
+    by: cloud/20261112T204543Z
+    event: claimed f4-review-r4 until 2026-11-12T23:05:38Z
+  - at: 2026-11-12T21:27:14Z
+    by: cloud/20261112T204543Z
+    event: done f4-review-r4
+  - at: 2026-11-12T21:27:14Z
+    by: cloud/20261112T204543Z
+    event: entered phase 5 (guide)
+  - at: 2026-11-12T21:28:04Z
+    by: cloud/20261112T204543Z
+    event: claimed f5-guide-r4 until 2026-11-12T23:28:04Z
+  - at: 2026-11-12T21:29:20Z
+    by: cloud/20261112T204543Z
+    event: done f5-guide-r4
+  - at: 2026-11-12T21:29:20Z
+    by: cloud/20261112T204543Z
+    event: entered phase 6 (publish)
+  - at: 2026-11-12T21:29:29Z
+    by: cloud/20261112T204543Z
+    event: claimed f6-merge-main-r4 until 2026-11-12T23:29:29Z
+  - at: 2026-11-12T21:29:38Z
+    by: cloud/20261112T204543Z
+    event: done f6-merge-main-r4
+  - at: 2026-11-12T21:29:45Z
+    by: cloud/20261112T204543Z
+    event: claimed f6-consolidate-r4 until 2026-11-12T23:29:45Z
+  - at: 2026-11-12T21:35:00Z
+    by: cloud/20261112T204543Z
+    event: done f6-consolidate-r4
+  - at: 2026-11-12T21:35:45Z
+    by: host:windows-hyperv/20261112T213545Z
+    event: claimed f6-validate-windows-hyperv until 2026-11-12T23:35:45Z
+  - at: 2026-11-12T21:35:55Z
+    by: host:macos-vz/20261112T213545Z
+    event: claimed f6-validate-macos-vz-r2 until 2026-11-12T23:35:55Z
+  - at: 2026-11-12T21:40:35Z
+    by: host:macos-vz/20261112T213545Z
+    event: done f6-validate-macos-vz-r2
+  - at: 2026-11-12T21:42:09Z
+    by: host:qemu-any/20261112T214209Z
+    event: claimed f6-validate-qemu-any-r2 until 2026-11-12T23:42:09Z
+  - at: 2026-11-12T21:44:51Z
+    by: host:qemu-any/20261112T214209Z
+    event: done f6-validate-qemu-any-r2
+  - at: 2026-11-12T22:10:28Z
+    by: host:windows-hyperv/20261112T213545Z
+    event: 'released f6-validate-windows-hyperv: Attended at 5ac5532 (native/windows-hyperv/2026-11-12/attended-r4/): F2, F5 and cases 2, 4, 5, 6, 7 PASS, and hyperv-clean on the real host; cases 1, 3, 8, 9 stand (their code is unchanged since 59d7440). FAIL F6: every warden setup after the old shared switch is retired exits 1 (build switches: powershell: exit status 1).'
+  - at: 2026-11-12T22:10:28Z
+    by: host:windows-hyperv/20261112T213545Z
+    event: kept f6-validate-windows-hyperv pending for phase 6
+  - at: 2026-11-12T22:10:28Z
+    by: host:windows-hyperv/20261112T213545Z
+    event: 'queued f6-validate-qemu-any-r3: f6-validate-qemu-any-r2 validated the branch before the return'
+  - at: 2026-11-12T22:10:28Z
+    by: host:windows-hyperv/20261112T213545Z
+    event: 'queued f6-validate-macos-vz-r3: f6-validate-macos-vz-r2 validated the branch before the return'
+  - at: 2026-11-12T22:10:28Z
+    by: host:windows-hyperv/20261112T213545Z
+    event: 'back to implement: f6-validate-windows-hyperv (5ac5532, native/windows-hyperv/2026-11-12/attended-r4/README.md): F6. setupSlotsScript (driver/hyperv/setupslots.go) ends with a suppressed Get-VMSwitch for the retired shared switch, so $? is false and powershell -Command exits 1 with empty stderr: every warden setup after the first fails with ''build switches: powershell: exit status 1''. End the script with an explicit success marker or exit 0, and make runPS fall back to stdout''s tail when stderr is empty; tier-0 for both. Native rerun after: warden setup twice in a row, then a smoke build'
+  - at: 2026-11-12T22:10:49Z
+    by: cloud/20261112T204543Z
+    event: claimed f3-implement-r5 until 2026-11-13T00:10:49Z
+  - at: 2026-11-12T22:16:48Z
+    by: cloud/20261112T204543Z
+    event: done f3-implement-r5
+  - at: 2026-11-12T22:16:48Z
+    by: cloud/20261112T204543Z
+    event: entered phase 4 (review)
+  - at: 2026-11-12T22:17:42Z
+    by: cloud/20261112T204543Z
+    event: claimed f4-review-r5 until 2026-11-13T00:17:42Z
+  - at: 2026-11-12T22:20:49Z
+    by: cloud/20261112T204543Z
+    event: done f4-review-r5
+  - at: 2026-11-12T22:20:49Z
+    by: cloud/20261112T204543Z
+    event: entered phase 5 (guide)
+  - at: 2026-11-12T22:21:27Z
+    by: cloud/20261112T204543Z
+    event: claimed f5-guide-r5 until 2026-11-13T00:21:27Z
+  - at: 2026-11-12T22:21:27Z
+    by: cloud/20261112T204543Z
+    event: done f5-guide-r5
+  - at: 2026-11-12T22:21:27Z
+    by: cloud/20261112T204543Z
+    event: entered phase 6 (publish)
+  - at: 2026-11-12T22:21:37Z
+    by: cloud/20261112T204543Z
+    event: claimed f6-merge-main-r5 until 2026-11-13T00:21:37Z
+  - at: 2026-11-12T22:21:37Z
+    by: cloud/20261112T204543Z
+    event: done f6-merge-main-r5
+  - at: 2026-11-12T22:21:39Z
+    by: cloud/20261112T204543Z
+    event: claimed f6-consolidate-r5 until 2026-11-13T00:21:39Z
+  - at: 2026-11-12T22:23:37Z
+    by: cloud/20261112T204543Z
+    event: done f6-consolidate-r5
+  - at: 2026-11-12T22:23:58Z
+    by: host:windows-hyperv/20261112T222357Z
+    event: claimed f6-validate-windows-hyperv until 2026-11-13T00:23:58Z
+  - at: 2026-11-12T22:23:58Z
+    by: host:windows-hyperv/20261112T222357Z
+    event: done f6-validate-windows-hyperv
+  - at: 2026-11-12T22:26:13Z
+    by: host:macos-vz/20261112T222605Z
+    event: claimed f6-validate-macos-vz-r3 until 2026-11-13T00:26:13Z
+  - at: 2026-11-12T22:26:13Z
+    by: host:qemu-any/20261112T222605Z
+    event: claimed f6-validate-qemu-any-r3 until 2026-11-13T00:26:13Z
+  - at: 2026-11-12T22:31:21Z
+    by: host:qemu-any/20261112T222605Z
+    event: done f6-validate-qemu-any-r3
+  - at: 2026-11-12T22:33:56Z
+    by: host:macos-vz/20261112T222605Z
+    event: done f6-validate-macos-vz-r3
+  - at: 2026-11-12T22:35:17Z
+    by: cloud/20261112T204543Z
+    event: claimed f6-open-pr-r5 until 2026-11-13T00:35:17Z
+  - at: 2026-11-12T22:47:48Z
+    by: cloud/20261112T204543Z
+    event: done f6-open-pr-r5
+  - at: 2026-11-12T22:47:48Z
+    by: cloud/20261112T204543Z
+    event: entered phase 7 (merge)
+  - at: 2026-11-12T22:50:21Z
+    by: cloud/20261112T225019Z
+    event: done f7-merge
+  - at: 2026-11-12T22:50:21Z
+    by: cloud/20261112T225019Z
+    event: entered phase 8 (close)
+  - at: 2026-11-12T22:50:33Z
+    by: cloud/20261112T225019Z
+    event: claimed f8-close until 2026-11-13T00:50:33Z
+  - at: 2026-11-12T22:50:34Z
+    by: cloud/20261112T225019Z
+    event: done f8-close
+  - at: 2026-11-12T22:50:34Z
+    by: cloud/20261112T225019Z
+    event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: priority 51 -> 1051 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1051 -> 1052 (renumbered by wf new: loop-streamline-2 queued at 99)'

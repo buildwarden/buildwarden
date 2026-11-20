@@ -22,6 +22,7 @@ hand-edited when a `wf` command can make the change.
 | `main.yaml` | What a session last read about `main`, written by `wf main` and `wf areas -check`: the head, its CI (`green`, `red`, `pending`, `red_since`, a failing run, the follow-up filed for it), whether GitHub requires an up-to-date branch (`up_to_date`), and the map's comparison with that head. On a push conflict `wf commit` keeps the remote's file. |
 | `repos/<owner>/<name>/areas.yaml`, `repos/<owner>/<name>/main.yaml` | The same two files for another repository in `repositories`: its area map (absent: one exclusive area) and its trunk as `wf main -repository <owner>/<name>` and `wf areas -check -repository <owner>/<name>` last recorded it. The queue's own repository keeps the top-level `areas.yaml` and `main.yaml`. |
 | `queue/<feature>.yaml` | One file per feature: its state, steps, budget, questions and history. |
+| `queue/done/<feature>.yaml` | Done items, without a priority, read for `follows` and `wf status -all`. Created by `wf migrate -done` (queue-positions). |
 | `hosts.yaml` | Native machines, the host names each one's scheduled session serves, and the `repositories` it takes steps for (FLOW-04, FLOW-09); read by `wf gate`, `wf next` and `wf validate`. |
 | `backlog/native-gaps.yaml` | Validation deferred by merged designs, per host (FLOW-09, TEST-03). |
 | `digest/<YYYY-MM-DD>/<UTC start>-<worker>.md` | One file per run (`20261114T105653Z-cloud.md`), dated by the Pacific date of the run's start: what moved, what is blocked on Jeff, what waits on a host, what was spent (FLOW-13, LOOP-06). |
@@ -108,7 +109,7 @@ the file. `wf rules -profile FILE` runs the generic rule checks against it.
 ```yaml
 feature: container-inputs        # == file name
 title: Record container inputs under inputs/ (ORCH-02)
-priority: 2                      # 1 is highest; unique
+priority: 2                      # the position in FLOW-05's order, 1 first; wf renumbers it; none once done
 kind: feature                    # feature (default, omitted) | process (FLOW-03)
 holds: []                        # process only: affinity patterns held while in progress
 follows: build-link-subnet       # optional (FLOW-05, FLOW-09): the item this one fixes; a fix (class 3), offered once that item is done
@@ -341,7 +342,7 @@ Other commands: `wf validate [-areas <candidate> [-repo DIR]]` (with `-areas`,
 what a candidate map does to the open items), `wf status [-all]` (open items;
 `-all` adds done ones), `wf check` (done-when without moving), `wf release`,
 `wf back` (FLOW-06), `wf answer` (human only, FLOW-07), `wf new` (intake),
-`wf urgent` and `wf relate` (human only), `wf declare`, `wf relations`,
+`wf urgent`, `wf relate` and `wf move` (human only), `wf migrate -done` (once, at queue-positions' `x4-state`; refused once `queue/done/` exists), `wf declare`, `wf relations`,
 `wf stale`, `wf main` (records `main`'s CI and its up-to-date setting in
 `main.yaml`), `wf areas -list | -check [-rev REV] [-edges FILE|-]` (a report,
 never a gate), `wf digest`, `wf commit`, `wf budget [-native]`.

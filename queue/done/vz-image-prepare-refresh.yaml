@@ -1,0 +1,392 @@
+feature: vz-image-prepare-refresh
+title: vz image prepare refreshes the cached image in place, and builds pick the prepared image
+status: done
+round: feature
+phase: 8
+design: docs/design/vz-image-prepare-refresh.md
+branch: feat/vz-image-prepare-refresh
+alters_relationships: false
+design_review: required
+source: 'workflow-human 2026-11-06 (Jeff), immediate follow-up to build-link-subnet (#98): in the macos-vz attended validation, image prepare --driver vz restored a new image from the latest IPSW instead of re-preparing the cached one, and ImageCache.ImageDir then picks the first image by name, so a build without --image keeps using the old image, which the link-channel stamp check now refuses. Also on main before #98. Evidence: workflow native/macos-vz/2026-11-05/, PR #98 ''For Jeff'' item 4.'
+pr:
+  number: 108
+  ci: green
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-validate-macos-vz
+    phase: 6
+    affinity: host:macos-vz
+    status: done
+    needs:
+      - f6-consolidate
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/vz-image-prepare-refresh.md Validation plan (return r2), on the Apple-silicon Mac whose cache holds macos-90a1b1f94f64b00a (27.0.1, unstamped), macos-a139c218a2010753 (27.2, stamped) and both IPSWs with no active file. Staging before case 2: ln ~/.cache/warden/images/ipsw-a139c218a2010753.ipsw ~/UniversalMac_27.2_26B123_Restore.ipsw (hard link, same volume) so case 7 has a real local 27.2 IPSW after case 2 deletes the cache name. (1) a build with no --image uses macos-a139 (newest .prepared); image list marks it active and lists macos-90a1 as older with its IPSW name; doctor --driver vz reports macos-a139''s stamp. (2) sudo warden image prepare --driver vz with no source refreshes macos-a139 in place (no IPSW download or restore, Refreshing boot agent), writes active owned by the user, deletes ipsw-a139....ipsw and keeps ipsw-90a1....ipsw, prints no out-of-date warning; a build with no --image succeeds with a verifying ledger. (3) prepare with the macos-90a1 directory as source refreshes it in place (no restore), stamps it, makes it active and deletes ipsw-90a1....ipsw; a build with no --image boots 27.0.1 with a verifying ledger; a no-source refresh then ends with the out-of-date warning naming 27.0.1, 27.2 and --update (the already-prepared, no-download form). (4) with macos-90a1 active, --image macos-a139/disk.img after removing its link-channel is refused naming sudo warden image prepare --driver vz <macos-a139 dir>; running that fixes the build and makes macos-a139 active. (5) sudo warden image prepare --driver vz --update with 27.2 already prepared refreshes macos-a139 in place with no download and makes it active; --update with a source, and --driver qemu --update, are refused. (6) offline, prepare with no source still refreshes the active image and prints no out-of-date warning or error. (7) sudo warden image prepare --driver vz ~/UniversalMac_27.2_26B123_Restore.ipsw (plain path; curl rejected it before) restores from the file in place: no Downloading IPSW, no new ipsw-*.ipsw in the cache, the file still present, a new macos-<key> made active and listed with that file name; a build with no --image verifies; back online, a no-source refresh prints no out-of-date warning (file name matches the latest IPSW), and re-running the case 7 command refreshes in place. One restore (~15 min); afterwards make macos-a139 active again (prepare <macos-a139 dir>) and remove the new image directory and the hard link. Reaches driver/vz only (image selection, refresh in place, prepare source handling, local IPSW restore).'
+  - id: f2-design-review
+    phase: 2
+    affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design-r2
+    phase: 1
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review-r2
+    phase: 2
+    affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan-r2
+    phase: 2
+    affinity: cloud
+    status: done
+    needs:
+      - f2-design-review-r2
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f3-implement
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f5-guide
+    phase: 5
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate
+    phase: 6
+    affinity: cloud
+    status: done
+    needs:
+      - f6-merge-main
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr
+    phase: 6
+    affinity: cloud
+    status: done
+    needs:
+      - f6-consolidate
+      - f6-validate-macos-vz
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 5
+    steps: 18
+  spent:
+    runs: 4
+    steps: 20
+questions:
+  - id: a1
+    kind: assumed
+    status: confirmed
+    question: The default of image prepare --driver vz with no source (Decision 2).
+    options:
+      - refresh the active image in place with no IPSW lookup; restore the latest only when no image is prepared
+      - as Hyper-V, pick up a newer IPSW at refresh by default, with a config key to keep the current one
+      - refresh the active image and also restore the latest when it differs
+    recommended: refresh the active image in place with no IPSW lookup; restore the latest only when no image is prepared
+    answer: refresh the active image in place, no IPSW lookup; restore the latest only when nothing is prepared; end the refresh with a warning that the image is out of date, naming the update command (Jeff, design review r1)
+  - id: a2
+    kind: assumed
+    status: confirmed
+    question: How the user asks for a newer macOS (Decision 3).
+    options:
+      - the source keyword latest (positional or --source), plus a notice after a refresh when a newer IPSW has no prepared image
+      - --force
+      - a new --update flag
+    recommended: the source keyword latest (positional or --source), plus a notice after a refresh when a newer IPSW has no prepared image
+    answer: a new --update flag, vz only in this feature, refused with a source and on other drivers; cross-driver --update is a separate queued item (Jeff, design review r1)
+  - id: a3
+    kind: assumed
+    status: confirmed
+    question: Which image a build without --image uses (Decision 1).
+    options:
+      - an active pointer (<cache>/active) written by every prepare, falling back to the newest .prepared marker (name tie-break)
+      - the newest .prepared marker only
+      - refuse when more than one image is prepared and --image is absent
+    recommended: an active pointer (<cache>/active) written by every prepare, falling back to the newest .prepared marker (name tie-break)
+    answer: an active pointer (<cache>/active) written by every prepare, falling back to the newest .prepared marker (name tie-break) (Jeff, design review r1)
+  - id: a4
+    kind: assumed
+    status: confirmed
+    question: A prepared image named as the prepare source (Decision 4).
+    options:
+      - accepted (a cache image directory or its disk.img), refreshed in place and made active
+      - accepted and refreshed, active image unchanged
+      - not accepted (IPSW sources only)
+    recommended: accepted (a cache image directory or its disk.img), refreshed in place and made active
+    answer: accepted (a cache image directory or its disk.img), refreshed in place and made active (Jeff, design review r1)
+  - id: a5
+    kind: assumed
+    status: confirmed
+    question: Older vz images and their IPSWs (Decision 6).
+    options:
+      - kept and listed by image list; retention is a follow-up item (vz-image-retention)
+      - after a successful restore, delete images older than the active one and the one it replaced, with their IPSWs (Hyper-V's rule)
+      - delete only the IPSW once its image is prepared
+    recommended: kept and listed by image list; retention is a follow-up item (vz-image-retention)
+    answer: delete only the image's IPSW once its image is prepared; image directories stay (Jeff, design review r1)
+history:
+  - at: 2026-11-06T17:33:20Z
+    by: human/jeff
+    event: queued at priority 24 (intake)
+  - at: 2026-11-06T17:50:00Z
+    by: human/jeff
+    event: 'priority 24 -> 43 (Jeff, 2026-11-06 order: in implementation, then process, then fixes for implemented items, then new functionality; this item: 3. fix)'
+  - at: 2026-11-07T00:36:00Z
+    by: cloud/20261106T231440Z-attended
+    event: 'follows: build-link-subnet (regression-fixes-follow-up x4-close, Decision 9, Jeff a9): a fix of class 3, ahead of new functionality; no renumbering'
+  - at: 2026-11-07T00:40:11Z
+    by: cloud/20261107T004006Z-attended
+    event: started (FLOW-05)
+  - at: 2026-11-07T00:40:11Z
+    by: cloud/20261107T004006Z-attended
+    event: claimed f0-branch-setup until 2026-11-07T02:40:11Z
+  - at: 2026-11-07T00:40:41Z
+    by: cloud/20261107T004006Z-attended
+    event: done f0-branch-setup
+  - at: 2026-11-07T00:40:41Z
+    by: cloud/20261107T004006Z-attended
+    event: entered phase 1 (design)
+  - at: 2026-11-07T00:40:46Z
+    by: cloud/20261107T004006Z-attended
+    event: claimed f1-design until 2026-11-07T02:40:46Z
+  - at: 2026-11-07T00:45:45Z
+    by: cloud/20261107T004006Z-attended
+    event: done f1-design
+  - at: 2026-11-07T00:45:45Z
+    by: cloud/20261107T004006Z-attended
+    event: entered phase 2 (plan)
+  - at: 2026-11-07T00:45:56Z
+    by: cloud/20261107T004006Z-attended
+    event: claimed f2-plan until 2026-11-07T02:45:56Z
+  - at: 2026-11-07T00:52:00Z
+    by: cloud/20261107T004006Z-attended
+    event: 'f2-plan not started: design_review is required and no approval is recorded (wf check: 0 approvals, 1 review seeded; assumed a1-a5 open), so planning cannot start (FLOW-03 phase 2, FLOW-07, FLOW-19). Phase 2 was seeded in the pre-#101 order (f2-design-review needs f2-plan), likely by a stale wf; reordered to main''s template: f2-plan needs f2-design-review. f6-validate-macos-vz left without needs: a phase-6 step is not offered before phase 6 (queue.Offered), so it cannot be taken before Implement.'
+  - at: 2026-11-07T00:47:17Z
+    by: cloud/20261107T004006Z-attended
+    event: 'released f2-plan: design review not yet held (FLOW-19); phase 2 had been seeded in the pre-#101 order by a stale dist/wf (built before fast-forwarding main); reordered to main''s template, design-review first'
+  - at: 2026-11-07T01:23:36Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: refresh the active image in place, no IPSW lookup; restore the latest only when nothing is prepared; end the refresh with a warning that the image is out of date, naming the update command (Jeff, design review r1)'
+  - at: 2026-11-07T01:23:36Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: a new --update flag, vz only in this feature, refused with a source and on other drivers; cross-driver --update is a separate queued item (Jeff, design review r1)'
+  - at: 2026-11-07T01:23:36Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: an active pointer (<cache>/active) written by every prepare, falling back to the newest .prepared marker (name tie-break) (Jeff, design review r1)'
+  - at: 2026-11-07T01:23:36Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: accepted (a cache image directory or its disk.img), refreshed in place and made active (Jeff, design review r1)'
+  - at: 2026-11-07T01:23:36Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: delete only the image''s IPSW once its image is prepared; image directories stay (Jeff, design review r1)'
+  - at: 2026-11-07T01:23:41Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-07T03:23:41Z
+  - at: 2026-11-07T01:23:41Z
+    by: human/jeff
+    event: done f2-design-review
+  - at: 2026-11-07T01:27:40Z
+    by: cloud/20261107T012740Z-attended
+    event: claimed f2-plan until 2026-11-07T03:27:40Z
+  - at: 2026-11-07T01:29:39Z
+    by: cloud/20261107T012740Z-attended
+    event: 'f2-plan finding (back-to-design, FLOW-06), design as approved at f764e9f (branch 75f2243, impact fields and rule_changes unchanged; no plan committed): (1) the out-of-date warning''s condition contradicts the Validation plan. Decision 3 and the prepare pseudocode warn only when no prepared macos-<shortHash(latest)> exists; native case 3 expects the warning naming 27.0.1, 27.2 and --update with macos-90a1 active while macos-a139 (27.2) is prepared, and Tier-2 gaps (none) rests on case 3 staging the positive case. Design picks one: warn whenever the active image is not the latest IPSW''s (case 3 stands; a1''s answer reads this way), or only when the latest has no prepared image (case 3 drops its warning line and the positive case becomes a tier-2 gap or a staged case, e.g. after moving macos-a139 aside). Planning cannot pick: the tier-0 warning tests and the f6 case follow it. (2) A bare local IPSW path cannot be restored: classify has an ipsw-file kind and Decision 6 says a local IPSW source is never deleted, but RestoreIPSW, which the design keeps unchanged, hands the source to curl (ensureIPSWDownloaded), which refuses a path with "URL rejected: No host part"; only file:// works, and the help text and cli.md already promise "a local path". Design says whether restore uses a local IPSW in place (a change to RestoreIPSW) or a bare path refreshes only an already-prepared key and is otherwise refused with a fix (file:// or a URL). Also for Design: the f6-validate-macos-vz note predates the r1 fold-in (case 5 says "prepare --driver vz latest"; no IPSW deletion, out-of-date warning or --update refusals); bring it in line with the Validation plan.'
+  - at: 2026-11-07T01:34:43Z
+    by: cloud/20261107T012740Z-attended
+    event: kept f6-validate-macos-vz pending for phase 6
+  - at: 2026-11-07T01:34:43Z
+    by: cloud/20261107T012740Z-attended
+    event: 'back to design: Plan found two gaps (f2-plan, 2026-11-07); Jeff decided both in the attended sitting: (1) the out-of-date warning fires whenever the active image''s IPSW is not the latest supported one, even when the latest is already prepared (its fix still names --update, which then switches without a download), so Validation case 3 stands; Decision 3, the prepare pseudocode and the tier-0 warning tests change to match. (2) a plain local IPSW path as the source is restored from in place: RestoreIPSW reads the local file directly (no curl, no copy into the cache, never deleted), keyed by its path; today curl rejects it (''URL rejected: No host part'') though the help and cli.md promise a local path. Also bring the queue''s f6-validate-macos-vz note in line with the Validation plan (--update, IPSW deletion, the warning, the refusals).'
+  - at: 2026-11-07T01:34:48Z
+    by: cloud/20261107T012740Z-attended
+    event: claimed f1-design-r2 until 2026-11-07T03:34:48Z
+  - at: 2026-11-07T01:38:50Z
+    by: cloud/20261107T012740Z-attended
+    event: done f1-design-r2
+  - at: 2026-11-07T01:38:50Z
+    by: cloud/20261107T012740Z-attended
+    event: entered phase 2 (plan)
+  - at: 2026-11-07T01:40:00Z
+    by: human/jeff
+    event: claimed f2-design-review-r2 until 2026-11-07T03:40:00Z
+  - at: 2026-11-07T01:40:00Z
+    by: human/jeff
+    event: done f2-design-review-r2
+  - at: 2026-11-07T01:40:05Z
+    by: cloud/20261107T012740Z-attended
+    event: claimed f2-plan-r2 until 2026-11-07T03:40:05Z
+  - at: 2026-11-07T01:43:12Z
+    by: cloud/20261107T012740Z-attended
+    event: 'f2-plan-r2: plan committed at 771871a on feat/vz-image-prepare-refresh (25 tasks, test-first vertical slices A-I per Jeff; each marked native-no-sudo, needs-Jeff-sudo, or tier-0 only); wf check ok (impact fields and rule_changes as approved at e94a1be). No back-to-design. Note for Consolidation: Cross-driver impact says build --image <local .ipsw> stops failing in curl, but resolveImage returns any existing path as the disk first; plan follows Decision 8 (resolveImage untouched). Budget: estimate (2 runs, 9 steps) is spent with this step; about 3 runs and 9 steps remain, recommend raising to 5 runs, 18 steps.'
+  - at: 2026-11-07T01:43:31Z
+    by: cloud/20261107T012740Z-attended
+    event: done f2-plan-r2
+  - at: 2026-11-07T01:43:31Z
+    by: cloud/20261107T012740Z-attended
+    event: entered phase 3 (implement)
+  - at: 2026-11-07T02:20:00Z
+    by: human/jeff
+    event: estimate 9 steps / 2 runs -> 18 steps / 5 runs (Jeff, attended, after the Plan return and r2 re-review; the plan has 25 tasks)
+  - at: 2026-11-07T03:29:17Z
+    by: cloud/20261107T012740Z-attended
+    event: claimed f3-implement until 2026-11-07T05:29:17Z
+  - at: 2026-11-07T03:47:02Z
+    by: cloud/20261107T012740Z-attended
+    event: 'released f3-implement: implementation complete at 967c352 (25 tasks, native checks A and G pass); done-when blocked only by make test''s TestWriteJKSMatchesKeytool on the macbook (no JDK); waits on jks-test-skip-without-jdk'
+  - at: 2026-11-07T10:57:24Z
+    by: cloud/20261107T105651Z
+    event: claimed f3-implement until 2026-11-07T12:57:24Z
+  - at: 2026-11-07T11:00:54Z
+    by: cloud/20261107T105651Z
+    event: done f3-implement
+  - at: 2026-11-07T11:00:54Z
+    by: cloud/20261107T105651Z
+    event: entered phase 4 (review)
+  - at: 2026-11-07T11:01:11Z
+    by: cloud/20261107T105651Z
+    event: claimed f4-review until 2026-11-07T13:01:11Z
+  - at: 2026-11-07T11:06:08Z
+    by: cloud/20261107T105651Z
+    event: done f4-review
+  - at: 2026-11-07T11:06:08Z
+    by: cloud/20261107T105651Z
+    event: entered phase 5 (guide)
+  - at: 2026-11-07T11:06:21Z
+    by: cloud/20261107T105651Z
+    event: claimed f5-guide until 2026-11-07T13:06:21Z
+  - at: 2026-11-07T11:07:50Z
+    by: cloud/20261107T105651Z
+    event: done f5-guide
+  - at: 2026-11-07T11:07:50Z
+    by: cloud/20261107T105651Z
+    event: entered phase 6 (publish)
+  - at: 2026-11-07T11:08:04Z
+    by: cloud/20261107T105651Z
+    event: claimed f6-merge-main until 2026-11-07T13:08:04Z
+  - at: 2026-11-07T11:08:06Z
+    by: cloud/20261107T105651Z
+    event: done f6-merge-main
+  - at: 2026-11-07T11:08:24Z
+    by: cloud/20261107T105651Z
+    event: claimed f6-consolidate until 2026-11-07T13:08:24Z
+  - at: 2026-11-07T11:11:33Z
+    by: cloud/20261107T105651Z
+    event: done f6-consolidate
+  - at: 2026-11-07T12:40:27Z
+    by: host:macos-vz/20261107T124005Z
+    event: claimed f6-validate-macos-vz until 2026-11-07T14:40:27Z
+  - at: 2026-11-07T12:43:07Z
+    by: host:macos-vz/20261107T124005Z
+    event: 'released f6-validate-macos-vz: Not run in full: cases 2-7 each need ''sudo warden image prepare --driver vz ...'' and the unattended allowlist refuses sudo (even ''sudo -n true''), the plan marks them needs-Jeff-sudo, and the case-2 staging hard link into ~/.cache/warden/images is outside the sandbox. Case 1 ran on feat/vz-image-prepare-refresh 2168fe5 (macOS 27.0.1 26A434 host, make build ad-hoc signed): image list shows macos-a139c218a2010753 active with UniversalMac_27.2_26B123_Restore.ipsw and macos-90a1b1f94f64b00a older, but with NO IPSW name (case 1 expects one; ImageCache.recordedIPSW reads the layer-cache source record, which may predate this image; the cache could not be listed to check); doctor --driver vz: link-channel stamp current; warden build --driver vz with no --image booted 27.2 (26B123), HTTPS 200, SUCCEEDED; inspect --verify-disks vm-disk-chain/v1 payload verified, all four vz files [ok], 11 signatures valid, all channels closed. Logs: native/macos-vz/2026-11-07/. Needs an attended run with sudo for cases 2-7.'
+  - at: 2026-11-07T14:07:54Z
+    by: host:macos-vz/20261107T140754Z
+    event: claimed f6-validate-macos-vz until 2026-11-07T16:07:54Z
+  - at: 2026-11-11T12:41:19Z
+    by: host:macos-vz/20261111T124004Z
+    event: claimed f6-validate-macos-vz until 2026-11-11T14:41:19Z
+  - at: 2026-11-11T12:41:50Z
+    by: host:macos-vz/20261111T124004Z
+    event: 'released f6-validate-macos-vz: Not run (unattended, branch still 2168fe5, main beb51ba): cases 2-7 each need ''sudo warden image prepare --driver vz ...'', and the unattended allowlist denies sudo (settings.native.json deny Bash(sudo:*)); case 2''s staging hard link into ~/.cache/warden/images is outside the sandbox. Case 1''s pass of 2026-11-07 (host:macos-vz/20261107T124005Z) stands, since the branch has not moved. The attended claim host:macos-vz/20261107T140754Z expired on 2026-11-07T16:07Z with nothing recorded. Needs an attended run with sudo for cases 2-7; blocks f6-open-pr.'
+  - at: 2026-11-11T17:44:38Z
+    by: host:macos-vz/20261111T174419Z
+    event: claimed f6-validate-macos-vz until 2026-11-11T19:44:38Z
+  - at: 2026-11-11T19:31:00Z
+    by: host:macos-vz/20261111T174419Z
+    event: done f6-validate-macos-vz
+  - at: 2026-11-11T19:34:57Z
+    by: cloud/20261111T182144Z
+    event: claimed f6-open-pr until 2026-11-11T21:34:57Z
+  - at: 2026-11-11T19:50:21Z
+    by: cloud/20261111T182144Z
+    event: done f6-open-pr
+  - at: 2026-11-11T19:50:21Z
+    by: cloud/20261111T182144Z
+    event: entered phase 7 (merge)
+  - at: 2026-11-11T19:50:21Z
+    by: cloud/20261111T182144Z
+    event: done f7-merge
+  - at: 2026-11-11T19:50:21Z
+    by: cloud/20261111T182144Z
+    event: entered phase 8 (close)
+  - at: 2026-11-11T19:50:32Z
+    by: cloud/20261111T182144Z
+    event: claimed f8-close until 2026-11-11T21:50:32Z
+  - at: 2026-11-11T19:50:35Z
+    by: cloud/20261111T182144Z
+    event: done f8-close
+  - at: 2026-11-11T19:50:35Z
+    by: cloud/20261111T182144Z
+    event: closed; feature done
+  - at: 2026-11-12T18:43:30Z
+    by: human/jeff
+    event: 'priority 43 -> 44 (renumbered by wf new: componentization queued at 24)'
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: 'priority 44 -> 45 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: priority 45 -> 1045 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1045 -> 1046 (renumbered by wf new: loop-streamline-2 queued at 99)'

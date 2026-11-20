@@ -1,0 +1,283 @@
+feature: http-body-path-drift
+title: Relay writes a path field under http-body, whose schema forbids extra fields
+status: done
+round: feature
+phase: 8
+design: docs/design/http-body-path-drift.md
+branch: feat/http-body-path-drift
+alters_relationships: false
+design_review: required
+source: 'specs-migration review (refuted as pre-existing, 2026-10-31): relay/relay.go recordServed writes {"path": ...} under metadata-http-body/v1, additionalProperties: false; decide schema v2 or producer change'
+pr:
+  number: 93
+  ci: green
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review
+    phase: 2
+    affinity: human
+    status: done
+    needs:
+      - f2-plan
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f3-implement
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f3-implement-r2
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f5-guide
+    phase: 5
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate
+    phase: 6
+    affinity: cloud
+    status: done
+    needs:
+      - f6-merge-main
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr
+    phase: 6
+    affinity: cloud
+    status: done
+    needs:
+      - f6-consolidate
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 9
+  spent:
+    runs: 4
+    steps: 13
+questions:
+  - id: a1
+    kind: assumed
+    status: confirmed
+    question: 'Fix the drift in the producer, with relay-served inputs'' http-body close metadata becoming {"status": 200}, rather than a schema v2 admitting path? (path duplicates the OPEN record''s url; v0.6.0 is the only release that wrote it)'
+    options:
+      - 'producer writes {"status": 200}'
+      - producer writes {} (the v1 doc reserves the empty map for request bodies)
+      - 'schema v2 admitting path: new $id, header index 2 moves to it (alters a versioned seam)'
+      - widen v1 in place (forbidden by RELAY-05)
+    recommended: 'producer writes {"status": 200}'
+    answer: Confirmed as recommended at design review r1 (2026-11-02)
+  - id: a2
+    kind: assumed
+    status: confirmed
+    question: Record the v0.6.0 deviation (an extra path key in served-input http-body closes; readers ignore it) as a note in specs/metadata-http-body/v1.md, committed with a Tier1-Allow RELAY-05 trailer since its schema is unchanged?
+    options:
+      - note in metadata-http-body/v1.md with a Tier1-Allow trailer
+      - note in build-ledger/v1.md (prose-only, no trailer)
+      - no note; release notes only
+    recommended: note in metadata-http-body/v1.md with a Tier1-Allow trailer
+    answer: Confirmed as recommended at design review r1 (2026-11-02)
+  - id: a3
+    kind: assumed
+    status: confirmed
+    question: Guard against future drift with a shallow conformance test over the relay's end-to-end ledger (top-level metadata keys checked against each schema's properties where additionalProperties is false, no new dependency)?
+    options:
+      - shallow key check, no new dependency
+      - full JSON Schema validation with a third-party validator
+      - only a targeted assertion on served-input closes
+    recommended: shallow key check, no new dependency
+    answer: Confirmed as recommended at design review r1 (2026-11-02)
+history:
+  - at: 2026-10-31T22:54:14Z
+    by: human/jeff
+    event: queued at priority 14 (intake)
+  - at: 2026-11-01T10:57:43Z
+    by: cloud/20261101T105730Z
+    event: started (FLOW-05)
+  - at: 2026-11-01T10:57:43Z
+    by: cloud/20261101T105730Z
+    event: claimed f0-branch-setup until 2026-11-01T12:57:43Z
+  - at: 2026-11-01T10:58:25Z
+    by: cloud/20261101T105730Z
+    event: done f0-branch-setup
+  - at: 2026-11-01T10:58:25Z
+    by: cloud/20261101T105730Z
+    event: entered phase 1 (design)
+  - at: 2026-11-01T10:58:28Z
+    by: cloud/20261101T105730Z
+    event: claimed f1-design until 2026-11-01T12:58:28Z
+  - at: 2026-11-01T11:03:27Z
+    by: cloud/20261101T105730Z
+    event: done f1-design
+  - at: 2026-11-01T11:03:27Z
+    by: cloud/20261101T105730Z
+    event: entered phase 2 (plan)
+  - at: 2026-11-01T11:03:39Z
+    by: cloud/20261101T105730Z
+    event: claimed f2-plan until 2026-11-01T13:03:39Z
+  - at: 2026-11-01T11:07:37Z
+    by: cloud/20261101T105730Z
+    event: done f2-plan
+  - at: 2026-11-03T00:31:12Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: Confirmed as recommended at design review r1 (2026-11-02)'
+  - at: 2026-11-03T00:31:12Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: Confirmed as recommended at design review r1 (2026-11-02)'
+  - at: 2026-11-03T00:31:13Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: Confirmed as recommended at design review r1 (2026-11-02)'
+  - at: 2026-11-03T00:31:13Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-03T02:31:13Z
+  - at: 2026-11-03T00:31:13Z
+    by: human/jeff
+    event: done f2-design-review
+  - at: 2026-11-03T00:31:13Z
+    by: human/jeff
+    event: entered phase 3 (implement)
+  - at: 2026-11-03T11:04:51Z
+    by: cloud/20261103T105654Z
+    event: claimed f3-implement until 2026-11-03T13:04:51Z
+  - at: 2026-11-03T11:08:55Z
+    by: cloud/20261103T105654Z
+    event: done f3-implement
+  - at: 2026-11-03T11:08:55Z
+    by: cloud/20261103T105654Z
+    event: entered phase 4 (review)
+  - at: 2026-11-03T11:09:16Z
+    by: cloud/20261103T105654Z
+    event: claimed f4-review until 2026-11-03T13:09:16Z
+  - at: 2026-11-03T11:14:07Z
+    by: cloud/20261103T105654Z
+    event: 'back to implement: f4-review ad39ceb99938: 1 MUST (RELAY-05) - the spec note says only v0.6.0 wrote path, but v0.2.0-v0.5.0 wrote it on context-file closes too; correct specs/metadata-http-body/v1.md:31 (new commit, fresh Tier1-Allow trailer) and the design''s factual premise (:39-42, :128, :300-301). Decision a1 unchanged. 2 SHOULD optional (TEST-05 coverage, TEST-07 scenario runs twice)'
+  - at: 2026-11-03T11:14:22Z
+    by: cloud/20261103T105654Z
+    event: claimed f3-implement-r2 until 2026-11-03T13:14:22Z
+  - at: 2026-11-03T11:16:57Z
+    by: cloud/20261103T105654Z
+    event: done f3-implement-r2
+  - at: 2026-11-03T11:16:57Z
+    by: cloud/20261103T105654Z
+    event: entered phase 4 (review)
+  - at: 2026-11-03T11:17:07Z
+    by: cloud/20261103T105654Z
+    event: claimed f4-review until 2026-11-03T13:17:07Z
+  - at: 2026-11-03T11:20:51Z
+    by: cloud/20261103T105654Z
+    event: done f4-review
+  - at: 2026-11-03T11:20:51Z
+    by: cloud/20261103T105654Z
+    event: entered phase 5 (guide)
+  - at: 2026-11-03T11:21:03Z
+    by: cloud/20261103T105654Z
+    event: claimed f5-guide until 2026-11-03T13:21:03Z
+  - at: 2026-11-03T11:21:42Z
+    by: cloud/20261103T105654Z
+    event: done f5-guide
+  - at: 2026-11-03T11:21:42Z
+    by: cloud/20261103T105654Z
+    event: entered phase 6 (publish)
+  - at: 2026-11-04T10:58:32Z
+    by: cloud/20261104T105656Z
+    event: claimed f6-merge-main until 2026-11-04T12:58:32Z
+  - at: 2026-11-04T11:01:54Z
+    by: cloud/20261104T105656Z
+    event: done f6-merge-main
+  - at: 2026-11-04T11:02:04Z
+    by: cloud/20261104T105656Z
+    event: claimed f6-consolidate until 2026-11-04T13:02:04Z
+  - at: 2026-11-04T11:05:53Z
+    by: cloud/20261104T105656Z
+    event: done f6-consolidate
+  - at: 2026-11-04T11:06:06Z
+    by: cloud/20261104T105656Z
+    event: claimed f6-open-pr until 2026-11-04T13:06:06Z
+  - at: 2026-11-04T11:18:48Z
+    by: cloud/20261104T105656Z
+    event: done f6-open-pr
+  - at: 2026-11-04T11:18:48Z
+    by: cloud/20261104T105656Z
+    event: entered phase 7 (merge)
+  - at: 2026-11-04T23:48:29Z
+    by: cloud/20261104T214530Z-attended
+    event: done f7-merge
+  - at: 2026-11-04T23:48:29Z
+    by: cloud/20261104T214530Z-attended
+    event: entered phase 8 (close)
+  - at: 2026-11-05T00:28:23Z
+    by: cloud/20261104T214530Z-attended
+    event: claimed f8-close until 2026-11-05T02:28:23Z
+  - at: 2026-11-05T00:28:23Z
+    by: cloud/20261104T214530Z-attended
+    event: done f8-close
+  - at: 2026-11-05T00:28:23Z
+    by: cloud/20261104T214530Z-attended
+    event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: priority 15 -> 1015 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1015 -> 1016 (renumbered by wf new: loop-streamline-2 queued at 99)'

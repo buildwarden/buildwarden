@@ -24,7 +24,7 @@ steps:
   - id: x4-state
     phase: 4
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -58,7 +58,7 @@ budget:
     steps: 5
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions: []
 history:
   - at: 2026-11-17T20:47:40Z
@@ -97,3 +97,9 @@ history:
   - at: 2026-11-18T18:21:48Z
     by: cloud/20261118T182148Z
     event: entered phase 4 (close)
+  - at: 2026-11-20T19:18:47Z
+    by: human/jeff
+    event: claimed x4-state until 2026-11-20T21:18:47Z
+  - at: 2026-11-20T19:18:57Z
+    by: human/jeff
+    event: done x4-state

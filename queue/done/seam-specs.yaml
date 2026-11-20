@@ -1,0 +1,702 @@
+feature: seam-specs
+title: 'Specs repository and conformance suites: write seams 1, 2, 3, 5 and 6, build the harness against any relay and any collector, link the book and the specs, fill tier 1''s seams list (componentization S1)'
+status: done
+round: feature
+phase: 8
+design: docs/design/seam-specs.md
+branch: feat/seam-specs
+repos:
+  - buildwarden/buildwarden
+  - buildwarden/buildwarden-specs
+seams:
+  - relay-claim
+  - collector
+  - relay-guest-api
+  - executor-initialize
+  - bootstrap-config
+rules_changed:
+  - TEST-05
+  - TEST-02
+  - GLOBAL-08
+  - EXEC-04
+  - PROFILE-01
+declared: 9be9c8c
+alters_relationships: true
+design_review: required
+source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase S1, wave 1. Done when the suites pass against the Go relay and the disk collector. The repository buildwarden/buildwarden-specs (a10) is confirmed with Jeff right before it is created (a11). Jeff, attended session 2026-11-12: go ahead.'
+pr:
+  number: 125
+  ci: green
+  head: 244199b864e15305d73fff3a3508d4c8e757af11
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-release-specs
+    phase: 6
+    affinity: human
+    status: done
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Not before Review (phase 4) is done: wf offers this step once the design review is done, and cannot hold a human step back until its phase (design: Decision 12, How the loop treats the second repository; a15, a4, a8). It exists as an exception to FLOW-04''s list and to FLOW-08''s "no sign-off step in the queue" that the design review grants by confirming a15; if the review does not, Design removes it. It signs nothing off: the merge does (FLOW-08), and this step records it where wf cannot see it. First list the tier-2 report''s MUST findings that are in the specs repository in the specs pull request''s body, read them, and check that the latest conformance run on this branch is green and that each of the six pin modules (tools/conformance/<directory>/go.mod, a20) names the specs pull request''s head. Then, in buildwarden/buildwarden-specs: Jeff merges the pull request from feat/seam-specs into main (FLOW-08; no session merges it), preferably as a merge commit. The seven tags are then pushed on the merge commit, each tag in a push of its own (GitHub starts no workflow run for a push of more than three tags): conformance/v0.1.0 first, its release run green before the next, and then v0.1.0 of each specification (bootstrap-config, collector-inputs, collector-outputs, executor-initialize, relay-claim, relay-guest-api; a8, design: Decision 4). A release run that was missed or failed is started again by hand for the existing tag (workflow_dispatch); no tag is moved. Then on this branch: make pin-specs SPECS=latest, which writes each of the six pin modules again at its tag and drops its replace line (design: Decision 7), then make test, make lint, commit, push. If the module proxy does not list a tag yet, name the six instead of latest: make pin-specs SPECS="<directory>@v0.1.0 ..." with all six (plan: task 36). This is the first time a real tag is resolved through the proxy: if a pin cannot be resolved or built, no tag is moved, and the fault is fixed by a pull request in the specs repository and the next patch versions (design: Releases and how they are consumed). An attended session may push the tags and move the pins on Jeff''s word. Confirm that the specs branch was deleted on merge (FLOW-16) and name the specs pull request and the seven tags in this step''s evidence. If the specs pull request changed after Review, record the difference between the reviewed commit and the tagged commit there too. The step is done when the seven release runs are green, the six specifications'' with their binaries attached and the harness''s with none, and this branch''s conformance run on the six tags is green. After the releases, start the specs repository''s implementations workflow once by hand and name what it reported in the evidence; it does not gate this step (plan: tasks 33 and 36). The PR''s pin job fails a module whose pin is not a release tag or that carries a replace line, so f6-open-pr cannot go green without this step.'
+  - id: f2-design-review
+    phase: 2
+    affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: done
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design-r2
+    phase: 1
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review-r2
+    phase: 2
+    affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan-r2
+    phase: 2
+    affinity: cloud
+    status: done
+    needs:
+      - f2-design-review-r2
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f3-implement
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f5-guide
+    phase: 5
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate
+    phase: 6
+    affinity: cloud
+    status: done
+    needs:
+      - f6-merge-main
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr
+    phase: 6
+    affinity: cloud
+    status: done
+    needs:
+      - f6-consolidate
+      - f6-release-specs
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 5
+    steps: 30
+  spent:
+    runs: 2
+    steps: 18
+questions:
+  - id: a1
+    kind: assumed
+    status: confirmed
+    question: Whether seam 4 (the ledger format and schemas, today in specs/) moves to the specs repository in this item. The umbrella says it moves and names no phase.
+    options:
+      - a later item of phase S1, filed once this item's release and pin have run once; RELAY-05 is not changed here
+      - in this item (rewrites RELAY-05, tier 1's schema-doc root, the book's specs mirror and redirects, specs/specs_test.go and the $id policy)
+      - at M6, with RELAY-01 to RELAY-08
+    recommended: a later item of phase S1, filed once this item's release and pin have run once; RELAY-05 is not changed here
+    answer: (C) Seam 4 (the ledger format) moves at M6, with RELAY-01 to RELAY-08. Departs from the recommendation (a later S1 item); the design is revised. Jeff, design review, 2026-11-15.
+  - id: a2
+    kind: assumed
+    status: confirmed
+    question: 'When buildwarden/buildwarden-specs is created and by whom (umbrella a11), and what has to exist before f3-implement starts (design: What Jeff creates).'
+    options:
+      - in or right after the design review, by Jeff or by that attended session on his word; Implement stops with a blocking question if it is missing
+      - now, before the review
+      - at Publish, after incubating the content on this repository's branch
+    recommended: in or right after the design review, by Jeff or by that attended session on his word; Implement stops with a blocking question if it is missing
+    answer: (B) The repository is created now, before the review's approval. Departs from the recommendation (in or right after the review). The name and what it carries are confirmed with Jeff right before it is created (umbrella a11). Jeff, design review, 2026-11-15.
+  - id: a3
+    kind: assumed
+    status: confirmed
+    question: The specs repository's visibility.
+    options:
+      - public from creation (the Go module proxy and checksum database serve only public modules; the book links to it)
+      - private until buildwarden-relay goes public at M1 (needs credentials in both repositories' CI)
+    recommended: public from creation (the Go module proxy and checksum database serve only public modules; the book links to it)
+    answer: (A) Public from creation. Jeff, design review, 2026-11-15.
+  - id: a4
+    kind: assumed
+    status: confirmed
+    question: 'Which invariants apply to work in the specs repository, which has not adopted the Loop Contract (reworded 2026-11-14 for one queue, and again after the independent review: only the list is asked). That the worker is bound there by FLOW-08, FLOW-16, FLOW-17 and FLOW-18, and that the design lists the invariants that apply by rule ID, is LOOP-08''s (Jeff''s answer to loop-contract a17 of 2026-11-14, which also declined "the specs repository adopts first and S1 waits"). The item names buildwarden/buildwarden-specs as a repository it works in, in its design (LOOP-04). Citations brought up to the merged rules on 2026-11-15; the options and the recommended answer are unchanged.'
+    options:
+      - 'GLOBAL-01 to GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04 and TEST-07 for the harness''s Go code, and RELAY-05''s schema-identity rule for the schemas: the rules a reader can judge from the code and the schemas alone; Review''s tier-2 report judges the first group and the specs repository''s ci holds the second'
+      - 'a wider list: the first option, and also GLOBAL-05 for the harness and its release binaries, a GLOBAL-06 note for the sandbox (it runs as root and creates namespaces), and UX-02, UX-04, UX-05 and UX-09 for the bw-conformance command line and its report; tier 2 then reads more where no tier 1 runs, and each added rule is applied to something it was not written for'
+      - only what the specs repository's own CI can enforce (the layout and $id check, go vet, go test, the check that the module does not require the kit); Review then reads nothing there and the harness's code is held to no rule of this project
+    recommended: 'GLOBAL-01 to GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04 and TEST-07 for the harness''s Go code, and RELAY-05''s schema-identity rule for the schemas: the rules a reader can judge from the code and the schemas alone; Review''s tier-2 report judges the first group and the specs repository''s ci holds the second'
+    answer: (A) GLOBAL-01 to GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04 and TEST-07 for the harness's Go code, and RELAY-05's schema-identity rule for the schemas. Jeff, design review, 2026-11-15.
+  - id: a5
+    kind: assumed
+    status: confirmed
+    question: The conformance harness's language, home and form (Decision 5).
+    options:
+      - Go, in the specs repository under conformance/, importing nothing from the kit, released as a module tag plus static bw-conformance binaries with checksums
+      - Rust
+      - a separate harness repository
+      - Go tests in this repository that import the kit (rejected by the umbrella's Decision 3)
+    recommended: Go, in the specs repository under conformance/, importing nothing from the kit, released as a module tag plus static bw-conformance binaries with checksums
+    answer: (A) Go, in the specs repository under conformance/, importing nothing from the kit, released as a module tag plus static bw-conformance binaries with checksums. Jeff, design review, 2026-11-15.
+  - id: a6
+    kind: assumed
+    status: confirmed
+    question: Which launchers the harness gets in this item (how a relay under test is supplied).
+    options:
+      - 'exec (a binary), oci (an image) and external (already running) now; the VM-image launcher is specified by the same attachment points and built by the first item with a VM image to test (the relay''s M2 or M3, or seam 8''s, which no phase writes yet). Narrower than the umbrella''s S1 row ("any relay binary or image"): no suite runs the Go relay VM image or the Hyper-V relay VM when S1 is done'
+      - also build a qemu launcher here and validate it on qemu-any
+    recommended: 'exec (a binary), oci (an image) and external (already running) now; the VM-image launcher is specified by the same attachment points and built by the first item with a VM image to test (the relay''s M2 or M3, or seam 8''s, which no phase writes yet). Narrower than the umbrella''s S1 row ("any relay binary or image"): no suite runs the Go relay VM image or the Hyper-V relay VM when S1 is done'
+    answer: (A) exec, oci and external launchers now; the VM-image launcher is built by the first item with a VM image to test. Jeff, design review, 2026-11-15.
+  - id: a7
+    kind: assumed
+    status: confirmed
+    question: How this repository pins a specs release (Decision 7).
+    options:
+      - tools/conformance/go.mod, a nested module requiring the specs module at one version; a release tag on a pull request and on main, a pseudo-version only on a branch while work is in progress; this file is tier 1's contract path for the five seams
+      - a git submodule
+      - a vendored copy of the documents
+      - a lock file and a download script
+    recommended: tools/conformance/go.mod, a nested module requiring the specs module at one version; a release tag on a pull request and on main, a pseudo-version only on a branch while work is in progress; this file is tier 1's contract path for the five seams
+    answer: '(A) tools/conformance/go.mod names each specification''s module at a version (restated for a tag per specification, a8): released tags on a pull request and on main, an unreleased commit only on a branch in progress. Jeff''s remark when first asked: ''I assumed that a specific release of the specs themselves is coincident with the build of the conformance tools that test them''. Jeff, design review, 2026-11-15.'
+  - id: a8
+    kind: assumed
+    status: confirmed
+    question: The specs repository's versioning and release scheme (Decision 4).
+    options:
+      - 'a major version per document (v<N>.md, edited in place before 1.0) and semver tags v0.x.y for the repository as a whole; minor may break a passing implementation, patch may not; first release v0.1.0 (who cuts it: a15)'
+      - a tag per specification
+      - the harness versioned apart from the documents
+    recommended: 'a major version per document (v<N>.md, edited in place before 1.0) and semver tags v0.x.y for the repository as a whole; minor may break a passing implementation, patch may not; first release v0.1.0 (who cuts it: a15)'
+    answer: '(B) A tag per specification. Departs from the recommendation (one tag for the repository). Read with his remark on a7: ''I assumed that a specific release of the specs themselves is coincident with the build of the conformance tools that test them'', so each specification''s release carries the build of the conformance tooling that tests it. The design is revised. Jeff, design review, 2026-11-15.'
+  - id: a9
+    kind: assumed
+    status: confirmed
+    question: The specification document format (Decision 3).
+    options:
+      - Markdown prose with RFC 2119 words and a stable identifier per requirement that suite cases cite, plus JSON Schema 2020-12 for JSON bodies; CI fails on a requirement with no case and no stated reason
+      - OpenAPI for the HTTP seams
+      - prose without requirement identifiers
+    recommended: Markdown prose with RFC 2119 words and a stable identifier per requirement that suite cases cite, plus JSON Schema 2020-12 for JSON bodies; CI fails on a requirement with no case and no stated reason
+    answer: 'Changed, in Jeff''s words: ''Similar to the Markdown with requirement IDs and CI failing on requirements without test cases or conformance testing, but also with the OpenAPI for the HTTP seams as well''. So option (A) and, for the HTTP seams, an OpenAPI description too. The design is revised. Jeff, design review, 2026-11-15.'
+  - id: a10
+    kind: assumed
+    status: confirmed
+    question: How the collector specification's two parts (umbrella a1) are laid out.
+    options:
+      - one document, collector/v1.md, with Part A (outputs stored) and Part B (inputs and signals served), each with its own requirement prefix and suite
+      - two documents, collector-outputs/ and collector-inputs/
+    recommended: one document, collector/v1.md, with Part A (outputs stored) and Part B (inputs and signals served), each with its own requirement prefix and suite
+    answer: '(B) Two documents: the collector''s outputs and the collector''s inputs and signals are separate specifications. Departs from the recommendation (one document in two parts); the design is revised. Jeff, design review, 2026-11-15.'
+  - id: a11
+    kind: assumed
+    status: confirmed
+    question: Whether this item builds a suite that runs warden-io initialize itself (the executor's side of seams 3, 5 and 6).
+    options:
+      - defer it to S2's item, which changes what initialize does; seams 5 and 6 get specifications here and EXEC-04's conformance stays the tests in cmd/warden-io until then. Seam 5 then has no suite when S1 is done, and S2's intake has to carry it (the umbrella's S2 row does not name it)
+      - build it here for Linux guests in a container, with Windows and macOS guests as tracked gaps
+    recommended: defer it to S2's item, which changes what initialize does; seams 5 and 6 get specifications here and EXEC-04's conformance stays the tests in cmd/warden-io until then. Seam 5 then has no suite when S1 is done, and S2's intake has to carry it (the umbrella's S2 row does not name it)
+    answer: (A) The executor's suite is deferred to S2's item; seam 5 has no suite when S1 is done and S2's intake carries it. Jeff, design review, 2026-11-15.
+  - id: a12
+    kind: assumed
+    status: confirmed
+    question: 'What to do with the nineteen places where the code differs from a rule, its own comment or the rest of the protocol (design: Divergences found, D1 to D19; D5 and D14 are against GLOBAL-10 and D13 against EXEC-02; the design proposes which later item carries each).'
+    options:
+      - record each in its specification as the code behaves and list it under Known divergences; fix none here; the review may turn any into a follow-up item and says what kind of item it is under FLOW-20
+      - fix them in this item (puts relay/, collector/ and cmd/warden-io/ in the diff, with GLOBAL-06 and every driver's native validation)
+    recommended: record each in its specification as the code behaves and list it under Known divergences; fix none here; the review may turn any into a follow-up item and says what kind of item it is under FLOW-20
+    answer: (A) Record each divergence as the code behaves and fix none here; the review may turn any into a follow-up. Jeff, design review, 2026-11-15.
+  - id: a13
+    kind: assumed
+    status: confirmed
+    question: Seam 6's name. The umbrella's seam table gives it none and its front-matter lists bootstrap-model, which is the BOOT-07 model.
+    options:
+      - bootstrap-config, added to GLOBAL-08's executor bullet and to tier 1's seam list
+      - bootstrap-model
+    recommended: bootstrap-config, added to GLOBAL-08's executor bullet and to tier 1's seam list
+    answer: (A) bootstrap-config. Jeff, design review, 2026-11-15.
+  - id: a14
+    kind: assumed
+    status: confirmed
+    question: 'Native validation (FLOW-09). Reworded 2026-11-14: nothing this item builds can run the relay suite on macOS (the relay targets and their sandbox are Linux only), so the macos-vz gap is deferred, not open.'
+    options:
+      - 'nothing blocking; two tracked gaps, both deferred: macos-vz until the exec launcher has a macOS form (the relay suite against the host-mode relay on macOS) and qemu-any until a VM launcher exists (the relay suite against the Go relay VM image)'
+      - build the macOS form of the launcher in this item and keep the macos-vz gap open, to be run once the item has merged
+      - block on macos-vz (needs the macOS launcher built here)
+      - no gaps recorded
+    recommended: 'nothing blocking; two tracked gaps, both deferred: macos-vz until the exec launcher has a macOS form (the relay suite against the host-mode relay on macOS) and qemu-any until a VM launcher exists (the relay suite against the Go relay VM image)'
+    answer: (A) Nothing blocking; two tracked gaps, both deferred (macos-vz and qemu-any). Jeff, design review, 2026-11-15.
+  - id: a15
+    kind: assumed
+    status: confirmed
+    question: 'The release step, and what it rests on (Decision 12; reworded 2026-11-14). After Review, Jeff merges the specs pull request (FLOW-08), a release is tagged and the pin moves to it. wf records one branch and one PR per item, in this repository, so it cannot see that merge. Two sentences of the rules as they stand do not provide for a queue step that waits for it: FLOW-04''s list of what a human step is for (blocking questions, the design review, escalations), and FLOW-08''s "There is no sign-off step in the queue: the loop sees the merge". The merge remains the sign-off; the step is only the queue''s record of a merge wf cannot see. A feature''s design may not declare a change to a loop rule (FLOW-14 as amended, LOOP-09), so neither is declared. LOOP-09, on main since 2026-11-15, gives every change to a loop rule to a process item and provides for no exception granted in a feature''s design review; whether an exception that the owner of the rules grants for one item is within it is his to judge at this review, and the options other than the first ask for none. LOOP-04, merged with it, holds an item that waits on another component''s release with a blocking question that names the release (FLOW-07), which is the second option''s mechanism. It does not bind here: the specs repository has not adopted the contract and is not a component (LOOP-08), and the release is this item''s own product, made by the merge of its own pull request there; what the queue lacks is a way to see that merge. The first option is still recommended, for two reasons neither rule answers: the step is in the queue from the design review, and the release can be made as soon as Review is done, before the item takes the PR slot (the second option raises its question in Publish, when the slot is held). If Jeff judges that the exception is not one to grant in a feature''s review, the second option is what the merged rules already provide for, and Design then removes f6-release-specs. loop-repository (P1) makes the step unnecessary: wf then records the specs PR and confirms its merge. If Jeff wants the rules to provide for such a step meanwhile, the FLOW-04 and FLOW-08 clauses are a process item''s: the design proposes loop-parallel (tracked items), loop-native-lead being the item that is to amend FLOW-04 (loop-parallel''s draft design, read at 486ac8f and not reviewed, proposes both clauses as its a6); holding a human step back until its phase is a wf and FLOW-04 change for the same item. Reworded again after the independent review. Citations brought up to the merged rules on 2026-11-15, with the sentence on LOOP-09; the sentences on LOOP-04 and on loop-parallel''s draft added the same day, on the independent review of that update; the options and the recommended answer are unchanged.'
+    options:
+      - 'a human queue step f6-release-specs in phase 6, as an exception to those two sentences (FLOW-04''s list and FLOW-08''s "no sign-off step in the queue") that this review grants for this item only: Jeff merges the specs pull request (FLOW-08, his alone); the tag is then pushed and the pin moved on this branch (make pin-specs, make test, make lint, push) by him or by the attended session on his word; the step needs f2-design-review, is not to be done before Review is done (wf cannot hold a human step back until its phase), and the PR''s pin job is the backstop'
+      - 'no step now: the Publish step that finds the pin on a pseudo-version stops and raises a blocking question asking for the release, with its answer step (inside FLOW-04''s list, and not a sign-off step); nothing shows in the queue until Publish, and the PR slot is held while Jeff releases'
+      - 'no step: f6-open-pr opens the PR on the pseudo-version, the pin job fails, and FLOW-11''s escalation asks Jeff for the release'
+      - S1 waits for loop-repository
+    recommended: 'a human queue step f6-release-specs in phase 6, as an exception to those two sentences (FLOW-04''s list and FLOW-08''s "no sign-off step in the queue") that this review grants for this item only: Jeff merges the specs pull request (FLOW-08, his alone); the tag is then pushed and the pin moved on this branch (make pin-specs, make test, make lint, push) by him or by the attended session on his word; the step needs f2-design-review, is not to be done before Review is done (wf cannot hold a human step back until its phase), and the PR''s pin job is the backstop'
+    answer: (A) A human step f6-release-specs, as an exception to FLOW-04's list and FLOW-08's sentence, granted by this review for this item only. Jeff, design review, 2026-11-15.
+  - id: a16
+    kind: assumed
+    status: confirmed
+    question: What Part A of the collector specification is normative for (Decision 13). The umbrella's review (its a2) left the collector's storage boundary to the first alternative collector.
+    options:
+      - 'the wire only: the requests a collector accepts, its replies and their order; the disk layout is specified as the disk collector''s, and reading stored bytes back is something a target file may give the harness, not a requirement on a collector'
+      - 'an object model for any collector: each output is an object a reader can fetch by its name with the bytes sent'
+    recommended: 'the wire only: the requests a collector accepts, its replies and their order; the disk layout is specified as the disk collector''s, and reading stored bytes back is something a target file may give the harness, not a requirement on a collector'
+    answer: (A) The collector's outputs specification is normative for the wire only; the disk layout is the disk collector's and read-back is a target-file option. Jeff, design review, 2026-11-15.
+  - id: a17
+    kind: assumed
+    status: confirmed
+    question: 'Which relay files tier 1''s seam list names (design: Tier 1''s seam list; new 2026-11-14). relay/relay.go, relay/proxy.go and cmd/relay/ (all but dhcp.go) hold part of seams 1 and 3 together with most of the rest of the relay. Under either option the check asks only that the pin moved, to any release.'
+    options:
+      - 'leave them off: a change there needs no pin move; the pinned suite fails a change in behaviour a case tests, and an addition no case tests is caught only by Review''s judgment of GLOBAL-08'
+      - list them; every change to the relay's core then needs a pin move or a Tier1-Allow trailer saying why it is not a seam change
+    recommended: 'leave them off: a change there needs no pin move; the pinned suite fails a change in behaviour a case tests, and an addition no case tests is caught only by Review''s judgment of GLOBAL-08'
+    answer: (A) relay/relay.go, relay/proxy.go and cmd/relay/ stay off tier 1's seam list. Jeff, design review, 2026-11-15.
+  - id: a18
+    kind: assumed
+    status: confirmed
+    question: 'What make conformance runs when no target is named (design: Defaults and overrides; new 2026-11-14). The relay targets run only on Linux; the disk collector''s runs on Linux, macOS and Windows.'
+    options:
+      - every target whose file declares the host's OS, printing each target left out and why; a target named in TARGETS that cannot run on the host is an error, and each CI job names its targets
+      - every target in the directory; the default then fails on macOS and Windows, where a developer has to name collector-disk
+    recommended: every target whose file declares the host's OS, printing each target left out and why; a target named in TARGETS that cannot run on the host is an error, and each CI job names its targets
+    answer: (A) make conformance with no TARGETS runs the targets that declare the host's OS and prints each one it leaves out. Jeff, design review, 2026-11-15.
+  - id: a19
+    kind: assumed
+    status: confirmed
+    question: 'Where the code that every suite shares lives, and how it is versioned (design: Decisions 4 and 5; new 2026-11-15, raised by a8''s answer in the design review). With a tag per specification, the launchers, the sandbox, the target-file format, the runner and the test side of each protocol are used by all six suites and belong to no one specification; a relay cannot be tested on one seam without the others, so that code cannot be divided among the six.'
+    options:
+      - '(A) one more module in the specs repository, conformance/, tagged on its own (conformance/v0.x.y); each specification''s module names the harness version it is released with and its binaries are built with exactly that; a change that needs both is one pull request and one merge, the harness''s tag pushed first. Cost: a seventh version number (no implementation pins it), and in such a pull request a specification names a harness version with no tag yet, which Go does not build as it stands once the harness imports anything outside the standard library. Three pieces of machinery make it build, each tried in a model: a replace line in the workspace file that names the harness version in progress, edited each time it rises; a command that tidies each specification''s go.mod through a temporary replace, with a ci check that the result is complete; and a release built with go install <command>@<tag>, because a build in a checkout at the tag fails. An implementation''s branch in progress carries one replace line'
+      - '(B) the same module, tagged, and released ahead: a harness change is merged and tagged in its own pull request before the specification that needs it; nothing names a version that does not exist, so none of (A)''s machinery is needed. Cost: two merges for every change that needs both, two pull requests for the first release, and a harness change is merged before an implementation has run against it'
+      - '(C) the same module, never tagged: each specification''s go.mod names the commit of the harness it was written against; six tags, not seven. Cost: a released specification, and through it this repository''s main, names an unreleased commit (beside LOOP-07 point 5), and the specs repository must merge by merge commit'
+      - '(D) one bw-conformance binary built from a module that requires all six specifications: one command for a user. Cost: its version is a set of six versions, the single tag under another name, and a specification''s release no longer carries the tooling that tests it'
+      - '(E) no shared module: each specification''s module carries its own copy of the shared code. Cost: six copies to keep alike, every fix made six times'
+    recommended: '(A) one more module in the specs repository, conformance/, tagged on its own (conformance/v0.x.y); each specification''s module names the harness version it is released with and its binaries are built with exactly that; a change that needs both is one pull request and one merge, the harness''s tag pushed first. Cost: a seventh version number (no implementation pins it), and in such a pull request a specification names a harness version with no tag yet, which Go does not build as it stands once the harness imports anything outside the standard library. Three pieces of machinery make it build, each tried in a model: a replace line in the workspace file that names the harness version in progress, edited each time it rises; a command that tidies each specification''s go.mod through a temporary replace, with a ci check that the result is complete; and a release built with go install <command>@<tag>, because a build in a checkout at the tag fails. An implementation''s branch in progress carries one replace line'
+    answer: (A) A seventh module conformance/, tagged on its own; harness and specification in one pull request and one merge. As recommended. Answered 2026-11-15.
+  - id: a20
+    kind: assumed
+    status: confirmed
+    question: 'Which build of a specification''s tooling this repository runs (design: Decision 7; new 2026-11-15, raised by a8''s and a7''s answers and by the review of their fold-in; the question and its options are as they were put to Jeff, when the design had one go.mod). A release of a specification carries binaries built with the harness version its go.mod names. tools/conformance/go.mod names all six specifications in one module, and Go builds one module with one version of each dependency, the highest harness version any pin names; so a specification pinned here at a release whose harness is older is tested here with a newer harness than its own binaries have. On a7 Jeff said he assumed that a specific release of the specs is coincident with the build of the conformance tools that test them; on this repository''s path that holds for the cases and not always for the harness under them.'
+    options:
+      - '(A) as the design has it: one go.mod, go tool, one harness for all six commands; one file to read and to move, which is what a7''s answer names, and one release of any specification brings a harness fix to all six suites here. Cost: this repository and an implementation that runs the released binaries can test the same pinned release with different harness versions; a set of pins that is not the newest of each can fail to build; the six versions are independent for an implementation only while the harness stays compatible with every release it pins'
+      - '(B) the released binaries: tools/conformance/go.mod still names the six versions, and make conformance fetches each release''s binary for the host and checks it against a hash kept in this repository; what runs is the release''s own build. Cost: a file of hashes and a download step (the lock file and script a7''s option D was); a pin can move only once the release''s binaries exist; a branch in progress pins a commit with no binaries, so the source build stays as a second path'
+      - '(C) a go.mod for each specification, tools/conformance/<directory>/go.mod, each naming one specification: Go builds each command from exactly the modules its release names, the six versions are independent here as they are for the binaries, a mixed set always builds, and tier 1 can be given each seam''s own pin as its contract path. Cost: six small modules where a7''s answer names one file; a harness fix reaches a suite here only through that specification''s release; a7''s text, Decision 7, tier 1''s seam list, the pin job and the proposed wording of TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01 change where they name tools/conformance/go.mod'
+    recommended: '(C) a go.mod for each specification, tools/conformance/<directory>/go.mod, each naming one specification: Go builds each command from exactly the modules its release names, the six versions are independent here as they are for the binaries, a mixed set always builds, and tier 1 can be given each seam''s own pin as its contract path. Cost: six small modules where a7''s answer names one file; a harness fix reaches a suite here only through that specification''s release; a7''s text, Decision 7, tier 1''s seam list, the pin job and the proposed wording of TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01 change where they name tools/conformance/go.mod'
+    answer: '(C) A go.mod per specification under tools/conformance/<directory>/: each command is built from exactly what its release names. As recommended (the design stood on (A) until answered). Answered 2026-11-15.'
+  - id: a21
+    kind: assumed
+    status: confirmed
+    question: 'Raised in r2 (design: Divergences found, N1, N7, N8, N16). Strict or lenient reading where the documents allow lenient: BOOTCFG-14, CLAIM-18''s MAY paragraph and CLAIM-28''s let a reader accept what a strict reader refuses (names folded in case, duplicates, trailing data, null as absent, a null or tagged CBOR map), and COLLIN-23 leaves such completions unspecified, so the executor, the Go relay and the disk collector conform.'
+    options:
+      - (A) keep the MAY paragraphs in v0.1 as written; the Rust relay reads strictly from the start, S2's item makes bootstrap.Parse strict as its comment says, and a later minor version narrows each MAY to a MUST refuse once no reference relies on it
+      - '(B) narrow now: the documents require a strict reading, the three are recorded as breaking it (class b), and the cases for it wait for their fixes'
+      - (C) make the lenient reading the contract, required of every reader
+    recommended: (A) keep the MAY paragraphs in v0.1 as written; the Rust relay reads strictly from the start, S2's item makes bootstrap.Parse strict as its comment says, and a later minor version narrows each MAY to a MUST refuse once no reference relies on it
+    answer: (A) Keep the MAY paragraphs in v0.1; the Rust relay reads strictly from the start, S2's item makes bootstrap.Parse strict, a later minor version narrows each MAY to a MUST refuse (Jeff, 2026-11-16)
+  - id: a22
+    kind: assumed
+    status: confirmed
+    question: 'Raised in r2 (N6). The tunnel is never released: CLAIM-15 makes one tunnel for a relay''s life the contract, and CLAIM-22 lets a claim that selects a closed tunnel spend the relay.'
+    options:
+      - '(A) as written: a relay serves one build, and a claimant that lost its tunnel before its claim discards the relay'
+      - '(B) a relay MUST notice a closed tunnel: a new tunnel is accepted before a claim, and a claim that selects a closed one is a 400 that leaves it claimable; the Go relay is then class (b)'
+      - (C) A in v0.1, and B as a SHOULD in a later version, for the Rust relay
+    recommended: '(A) as written: a relay serves one build, and a claimant that lost its tunnel before its claim discards the relay'
+    answer: (A) One tunnel per relay, as written (Jeff, 2026-11-16)
+  - id: a23
+    kind: assumed
+    status: confirmed
+    question: Raised in r2 (N28). On macOS and Windows the executor applies exclusive as append (INIT-23, BOOTCFG-8), a fallback no Defaults and overrides names (GLOBAL-10).
+    options:
+      - (A) S2's item makes the executor refuse exclusive there with an error that names it (GLOBAL-10), and INIT-23 and BOOTCFG-8 say so in their next version
+      - (B) keep the replacement and name it as a fallback in the reference docs and in the Defaults and overrides of the item that next changes the executor
+      - (C) implement exclusive trust on macOS and Windows (EXEC-03) in a later item, keeping the replacement until then
+    recommended: (A) S2's item makes the executor refuse exclusive there with an error that names it (GLOBAL-10), and INIT-23 and BOOTCFG-8 say so in their next version
+    answer: (A) S2's item makes exclusive on macOS and Windows an error (Jeff, 2026-11-16)
+  - id: a24
+    kind: assumed
+    status: confirmed
+    question: Raised in r2 (N29). --ip and WARDEN_IP are read on every system and used only on Windows; vz passes --ip and gets neither an effect nor an error (INIT-15, GLOBAL-10).
+    options:
+      - (A) S2's item makes the executor refuse them where it does not use them, INIT-15 says they are Windows-only, and vz stops passing --ip in that item or in K1
+      - (B) INIT-15 states them as accepted and ignored there, named as such
+      - (C) use them on Linux and macOS too, as a static address in place of DHCP
+    recommended: (A) S2's item makes the executor refuse them where it does not use them, INIT-15 says they are Windows-only, and vz stops passing --ip in that item or in K1
+    answer: '(A) Refuse --ip/WARDEN_IP where unused: Windows-only, an error elsewhere, vz stops passing it, in S2''s item or K1 (Jeff, 2026-11-16)'
+  - id: a25
+    kind: assumed
+    status: confirmed
+    question: 'Raised in r2 (N2, N31). warden-io and the reference claimant (relaycfg.Claim) use Go''s default transport, which honours HTTP_PROXY and NO_PROXY: the executor''s requests, or the claim with its tokens, then go to that proxy and not to the relay (INIT-1, CLAIM-1).'
+    options:
+      - '(A) neither honours a proxy variable: INIT-1 and CLAIM-1 stand as written, and the fixes are S2''s item (the executor''s transport with no proxy) and K1 (the claimant, with the claim connection it takes over from S4)'
+      - (B) as A, but now, as a security fix the freeze exempts
+      - (C) honour them, and INIT-1 and CLAIM-1 allow a proxy, so the relay is no longer the build's one network path
+    recommended: '(A) neither honours a proxy variable: INIT-1 and CLAIM-1 stand as written, and the fixes are S2''s item (the executor''s transport with no proxy) and K1 (the claimant, with the claim connection it takes over from S4)'
+    answer: (A) Neither the executor nor the claimant honours proxy variables; INIT-1 and CLAIM-1 stand; fixes in S2's item and K1; N31 moves to class (b) (Jeff, 2026-11-16)
+history:
+  - at: 2026-11-12T23:22:53Z
+    by: human/jeff
+    event: queued at priority 61 (intake)
+  - at: 2026-11-12T23:23:21Z
+    by: cloud/20261112T230554Z
+    event: started (FLOW-05)
+  - at: 2026-11-12T23:23:21Z
+    by: cloud/20261112T230554Z
+    event: claimed f0-branch-setup until 2026-11-13T01:23:21Z
+  - at: 2026-11-12T23:23:34Z
+    by: cloud/20261112T230554Z
+    event: done f0-branch-setup
+  - at: 2026-11-12T23:23:34Z
+    by: cloud/20261112T230554Z
+    event: entered phase 1 (design)
+  - at: 2026-11-12T23:23:34Z
+    by: cloud/20261112T230554Z
+    event: claimed f1-design until 2026-11-13T01:23:34Z
+  - at: 2026-11-13T02:11:21Z
+    by: cloud/20261112T230554Z
+    event: done f1-design
+  - at: 2026-11-13T02:11:21Z
+    by: cloud/20261112T230554Z
+    event: entered phase 2 (plan)
+  - at: 2026-11-14T18:34:56Z
+    by: human/jeff
+    event: 'priority 61 -> 62 (renumbered by wf new: alters-slot queued at 59)'
+  - at: 2026-11-14T20:31:00Z
+    by: cloud/attended-20261114
+    event: 'design revised before its review (not a return to Design; f2-design-review not held): folds in one queue (loop-contract a17, a18) and the redrafted driver contract, and acts on an independent reader''s concerns. Questions: a4, a6, a14 and a15 reworded; a17 (which relay files tier 1''s seam list names) and a18 (what make conformance runs by default) added; none retired. Steps: f6-release-specs now needs f2-design-review and its note is rewritten; no step added or removed. Backlog: seam-specs-relay-suite-macos-host-mode set deferred. design_review required and alters_relationships true, unchanged.'
+  - at: 2026-11-14T20:56:00Z
+    by: cloud/attended-20261114
+    event: 'design revised again before its review, to d04b6ef, on an independent review of the revision (not a return to Design): alters-slot stated as merged (897a4a8); the claimant and per-session wording brought into line with the redrafted driver contract; a15 and the f6-release-specs note name FLOW-08''s "no sign-off step in the queue" beside FLOW-04''s list; a4 asks only the list of invariants (the four loop rules are settled by loop-contract a17); the PROFILE-01 note rewritten for the approved order. Questions: a4 and a15 reworded; none added or retired. Steps: f6-release-specs''s note extended; no step added or removed. design_review required and alters_relationships true, unchanged.'
+  - at: 2026-11-14T20:57:45Z
+    by: human/jeff
+    event: 'priority 62 -> 63 (renumbered by wf new: loop-parallel queued at 61)'
+  - at: 2026-11-14T20:57:45Z
+    by: human/jeff
+    event: 'priority 63 -> 64 (renumbered by wf new: loop-native-lead queued at 62)'
+  - at: 2026-11-14T22:51:20Z
+    by: human/jeff
+    event: 'priority 64 -> 65 (renumbered by wf new: runtime-cli-project-path queued at 64)'
+  - at: 2026-11-15T19:51:00Z
+    by: cloud/attended-20261115
+    event: 'design revised before its review, after loop-contract merged as ad4ea50 (#119) (not a return to Design; f2-design-review not held): the branch merged main; PROFILE-01 declared in rule_changes (the Specifications and Consumables entries and one row of the Checks table), in place of the note that said it was owed; Specification changes filled (LOOP-02) and the second repository named under Design (LOOP-04); loop-contract''s questions replaced by the rules they became (LOOP-04, LOOP-07, LOOP-08, LOOP-09, FLOW-14); driver-contract read at 5808805. Questions: the text of a4 and a15 cites the merged rules and a15 gains a sentence on LOOP-09; no option or recommended answer changed; none added or retired. Steps: none added or removed. design_review required and alters_relationships true, unchanged.'
+  - at: 2026-11-15T20:14:52Z
+    by: human/jeff
+    event: 'priority 65 -> 66 (renumbered by wf new: project-config-trust queued at 65)'
+  - at: 2026-11-15T20:16:39Z
+    by: cloud/attended-20261115
+    event: 'design revised again before its review, on an independent review of the update of 2026-11-15 (to e4801d6; not a return to Design; f2-design-review not held): driver-contract is read at bb4d7c8, where it declares a PROFILE-01 amendment of its own (a280ba9) over five rows of the profile, two of which this design also rewords; the ownership section has a row for each part of the profile, gives the Specifications entry and the tier-1 Specification row of Checks in full as they read with both changes, and counts loop-profile.md among the files the second to merge resolves; this design''s own PROFILE-01 wording is unchanged. a15 and Decision 12 say what LOOP-04 holds for an item that waits on a component''s release (the second option''s mechanism), why it does not bind here and why the first option is still recommended. Prior art says what loop-contract amended in the umbrella; Part B''s requirement prefix is named (COLL-B). Questions: the text of a15 gains those sentences; no option or recommended answer changed; none added or retired. Steps: none added or removed. design_review required and alters_relationships true, unchanged.'
+  - at: 2026-11-15T20:32:23Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-15T22:32:23Z
+  - at: 2026-11-15T20:34:56Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: (C) Seam 4 (the ledger format) moves at M6, with RELAY-01 to RELAY-08. Departs from the recommendation (a later S1 item); the design is revised. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:34:56Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: (B) The repository is created now, before the review''s approval. Departs from the recommendation (in or right after the review). The name and what it carries are confirmed with Jeff right before it is created (umbrella a11). Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:34:56Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: (A) Public from creation. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:34:56Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: (A) GLOBAL-01 to GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04 and TEST-07 for the harness''s Go code, and RELAY-05''s schema-identity rule for the schemas. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:38:42Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: (A) Go, in the specs repository under conformance/, importing nothing from the kit, released as a module tag plus static bw-conformance binaries with checksums. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:38:42Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: (A) exec, oci and external launchers now; the VM-image launcher is built by the first item with a VM image to test. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T21:05:00Z
+    by: human/jeff
+    event: 'repository confirmed for creation (umbrella a11), design review 2026-11-15: the name is buildwarden/buildwarden-specs; public; its first commit carries a README stub and the Apache-2.0 LICENSE only, with no NOTICE file. The session cannot create repositories, so Jeff creates it (main protected with a pull request required, no force-push, no deletion; head branches deleted on merge; Actions enabled; the Claude GitHub App installed) and the session then attaches it.'
+  - at: 2026-11-15T20:51:13Z
+    by: human/jeff
+    event: 'assumed question a8 confirmed: (B) A tag per specification. Departs from the recommendation (one tag for the repository). Read with his remark on a7: ''I assumed that a specific release of the specs themselves is coincident with the build of the conformance tools that test them'', so each specification''s release carries the build of the conformance tooling that tests it. The design is revised. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:51:13Z
+    by: human/jeff
+    event: 'assumed question a9 confirmed: Changed, in Jeff''s words: ''Similar to the Markdown with requirement IDs and CI failing on requirements without test cases or conformance testing, but also with the OpenAPI for the HTTP seams as well''. So option (A) and, for the HTTP seams, an OpenAPI description too. The design is revised. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:51:13Z
+    by: human/jeff
+    event: 'assumed question a10 confirmed: (B) Two documents: the collector''s outputs and the collector''s inputs and signals are separate specifications. Departs from the recommendation (one document in two parts); the design is revised. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:54:38Z
+    by: human/jeff
+    event: 'assumed question a7 confirmed: (A) tools/conformance/go.mod names each specification''s module at a version (restated for a tag per specification, a8): released tags on a pull request and on main, an unreleased commit only on a branch in progress. Jeff''s remark when first asked: ''I assumed that a specific release of the specs themselves is coincident with the build of the conformance tools that test them''. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:54:38Z
+    by: human/jeff
+    event: 'assumed question a11 confirmed: (A) The executor''s suite is deferred to S2''s item; seam 5 has no suite when S1 is done and S2''s intake carries it. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:54:38Z
+    by: human/jeff
+    event: 'assumed question a12 confirmed: (A) Record each divergence as the code behaves and fix none here; the review may turn any into a follow-up. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:54:38Z
+    by: human/jeff
+    event: 'assumed question a13 confirmed: (A) bootstrap-config. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:58:02Z
+    by: human/jeff
+    event: 'assumed question a14 confirmed: (A) Nothing blocking; two tracked gaps, both deferred (macos-vz and qemu-any). Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:58:03Z
+    by: human/jeff
+    event: 'assumed question a15 confirmed: (A) A human step f6-release-specs, as an exception to FLOW-04''s list and FLOW-08''s sentence, granted by this review for this item only. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:58:03Z
+    by: human/jeff
+    event: 'assumed question a16 confirmed: (A) The collector''s outputs specification is normative for the wire only; the disk layout is the disk collector''s and read-back is a target-file option. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:58:03Z
+    by: human/jeff
+    event: 'assumed question a17 confirmed: (A) relay/relay.go, relay/proxy.go and cmd/relay/ stay off tier 1''s seam list. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:58:03Z
+    by: human/jeff
+    event: 'assumed question a18 confirmed: (A) make conformance with no TARGETS runs the targets that declare the host''s OS and prints each one it leaves out. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T21:25:13Z
+    by: cloud/attended-20261115
+    event: 'design revised during its review (first sitting, 2026-11-15; f2-design-review still claimed by human/jeff, no outcome yet; not a return to Design): the five answers that depart from the design are folded in. a1: seam 4 moves at M6, no later S1 item, two sentences of the umbrella listed for amendment. a2: the repository is created during the review, by Jeff. a8 with a7: a tag per specification, each specification a Go module with its cases and its command, the shared harness in conformance/, six pins in tools/conformance/go.mod; the proposed wording of TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01 re-derived. a9: OpenAPI 3.1 files beside the Markdown for the four HTTP specifications. a10: collector-outputs and collector-inputs as two specifications. Questions: a19 added (assumed, open: where the shared conformance code lives); none retired; no recorded answer touched. Steps: the note of f6-release-specs rewritten for seven tags and make pin-specs SPECS=latest; no step added or removed. design_review required and alters_relationships true, unchanged.'
+  - at: 2026-11-15T21:57:17Z
+    by: human/jeff
+    event: 'priority 66 -> 67 (renumbered by wf new: prebuilt-artifacts queued at 66)'
+  - at: 2026-11-15T21:57:17Z
+    by: human/jeff
+    event: 'priority 67 -> 68 (renumbered by wf new: workdir-in-context queued at 67)'
+  - at: 2026-11-15T21:58:00Z
+    by: cloud/attended-20261115
+    event: 'design revised on an independent review of the fold-in (first sitting still open; f2-design-review still claimed by human/jeff, no outcome; not a return to Design). Questions: a20 added (assumed, open: which build of a specification''s tooling this repository runs); a19''s options (A) and (B) restated with the mechanics that were tried again with a harness that imports a third-party module; no recorded answer touched. Steps: the note of f6-release-specs says each tag is pushed in its own push and what done means; no step added or removed.'
+  - at: 2026-11-15T22:06:15Z
+    by: human/jeff
+    event: 'assumed question a20 confirmed: (C) A go.mod per specification under tools/conformance/<directory>/: each command is built from exactly what its release names. As recommended (the design stood on (A) until answered). Answered 2026-11-15.'
+  - at: 2026-11-15T22:06:15Z
+    by: human/jeff
+    event: 'assumed question a19 confirmed: (A) A seventh module conformance/, tagged on its own; harness and specification in one pull request and one merge. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T23:03:00Z
+    by: human/jeff
+    event: done f2-design-review
+  - at: 2026-11-15T23:03:10Z
+    by: cloud/20261112T230554Z
+    event: claimed f2-plan until 2026-11-16T01:03:10Z
+  - at: 2026-11-15T23:22:53Z
+    by: human/jeff
+    event: 'priority 68 -> 69 (renumbered by wf new: vz-nocgo-build queued at 64)'
+  - at: 2026-11-15T23:49:43Z
+    by: cloud/20261112T230554Z
+    event: done f2-plan
+  - at: 2026-11-15T23:49:43Z
+    by: cloud/20261112T230554Z
+    event: entered phase 3 (implement)
+  - at: 2026-11-15T23:49:43Z
+    by: cloud/20261112T230554Z
+    event: claimed f3-implement until 2026-11-16T01:49:43Z
+  - at: 2026-11-16T01:16:03Z
+    by: cloud/20261112T230554Z
+    event: 'priority 69 -> 70 (renumbered by wf new: loop-parallel-rule-wording queued at 62)'
+  - at: 2026-11-16T04:28:42Z
+    by: human/jeff
+    event: 'declared at ee78534: repos +buildwarden/buildwarden-specs; seams +relay-claim +collector +relay-guest-api +executor-initialize +bootstrap-config; rules_changed +TEST-05 +TEST-02 +GLOBAL-08 +EXEC-04 +PROFILE-01'
+  - at: 2026-11-16T04:30:03Z
+    by: cloud/20261112T230554Z
+    event: claimed f3-implement until 2026-11-16T06:30:03Z
+  - at: 2026-11-16T05:27:02Z
+    by: host:windows-hyperv/20261116T051002Z
+    event: 'priority 70 -> 71 (renumbered by wf new: detached-prepare-windows-exe queued at 68)'
+  - at: 2026-11-16T08:15:34Z
+    by: cloud/20261112T230554Z
+    event: claimed f3-implement until 2026-11-16T10:15:34Z
+  - at: 2026-11-16T09:56:47Z
+    by: cloud/20261112T230554Z
+    event: claimed f3-implement until 2026-11-16T11:56:47Z
+  - at: 2026-11-16T11:00:37Z
+    by: human/jeff
+    event: kept f6-release-specs pending for phase 6
+  - at: 2026-11-16T11:00:37Z
+    by: human/jeff
+    event: 'back to design: Jeff, 2026-11-16: divergences the design''s table lacks are recorded as found and reviewed once after the suites. Implement''s tasks 0 to 35 are done (S at 9abf66c, PR buildwarden-specs#1 open and green; K at 9734cbd, hosted conformance run 43851944441 green). The table is now amended with the whole list (34 entries, N-numbered, and the correction of D6) for one approval.'
+  - at: 2026-11-16T11:01:12Z
+    by: cloud/20261112T230554Z
+    event: claimed f1-design-r2 until 2026-11-16T13:01:12Z
+  - at: 2026-11-16T11:11:07Z
+    by: cloud/20261112T230554Z
+    event: 'declared at 9be9c8c: nothing changed'
+  - at: 2026-11-16T11:11:23Z
+    by: cloud/20261112T230554Z
+    event: done f1-design-r2
+  - at: 2026-11-16T11:11:23Z
+    by: cloud/20261112T230554Z
+    event: entered phase 2 (plan)
+  - at: 2026-11-16T17:04:44Z
+    by: human/jeff
+    event: 'assumed question a21 confirmed: (A) Keep the MAY paragraphs in v0.1; the Rust relay reads strictly from the start, S2''s item makes bootstrap.Parse strict, a later minor version narrows each MAY to a MUST refuse (Jeff, 2026-11-16)'
+  - at: 2026-11-16T17:04:44Z
+    by: human/jeff
+    event: 'assumed question a22 confirmed: (A) One tunnel per relay, as written (Jeff, 2026-11-16)'
+  - at: 2026-11-16T17:04:44Z
+    by: human/jeff
+    event: 'assumed question a23 confirmed: (A) S2''s item makes exclusive on macOS and Windows an error (Jeff, 2026-11-16)'
+  - at: 2026-11-16T17:04:44Z
+    by: human/jeff
+    event: 'assumed question a24 confirmed: (A) Refuse --ip/WARDEN_IP where unused: Windows-only, an error elsewhere, vz stops passing it, in S2''s item or K1 (Jeff, 2026-11-16)'
+  - at: 2026-11-16T17:04:44Z
+    by: human/jeff
+    event: 'assumed question a25 confirmed: (A) Neither the executor nor the claimant honours proxy variables; INIT-1 and CLAIM-1 stand; fixes in S2''s item and K1; N31 moves to class (b) (Jeff, 2026-11-16)'
+  - at: 2026-11-16T17:04:44Z
+    by: human/jeff
+    event: done f2-design-review-r2
+  - at: 2026-11-16T17:07:44Z
+    by: cloud/20261112T230554Z
+    event: claimed f2-plan-r2 until 2026-11-16T19:07:44Z
+  - at: 2026-11-16T17:09:06Z
+    by: cloud/20261112T230554Z
+    event: done f2-plan-r2
+  - at: 2026-11-16T17:09:06Z
+    by: cloud/20261112T230554Z
+    event: entered phase 3 (implement)
+  - at: 2026-11-16T17:09:52Z
+    by: cloud/20261112T230554Z
+    event: claimed f3-implement until 2026-11-16T19:09:52Z
+  - at: 2026-11-16T17:31:49Z
+    by: cloud/20261112T230554Z
+    event: done f3-implement
+  - at: 2026-11-16T17:31:49Z
+    by: cloud/20261112T230554Z
+    event: entered phase 4 (review)
+  - at: 2026-11-16T17:34:54Z
+    by: cloud/20261112T230554Z
+    event: claimed f4-review until 2026-11-16T19:34:54Z
+  - at: 2026-11-16T17:40:03Z
+    by: cloud/20261112T230554Z
+    event: done f4-review
+  - at: 2026-11-16T17:40:03Z
+    by: cloud/20261112T230554Z
+    event: entered phase 5 (guide)
+  - at: 2026-11-16T17:40:58Z
+    by: cloud/20261112T230554Z
+    event: claimed f5-guide until 2026-11-16T19:40:58Z
+  - at: 2026-11-16T17:41:06Z
+    by: cloud/20261112T230554Z
+    event: done f5-guide
+  - at: 2026-11-16T17:41:06Z
+    by: cloud/20261112T230554Z
+    event: entered phase 6 (publish)
+  - at: 2026-11-16T18:41:43Z
+    by: cloud/20261116T174717Z
+    event: claimed f6-merge-main until 2026-11-16T20:41:43Z
+  - at: 2026-11-16T19:00:50Z
+    by: cloud/20261116T174717Z
+    event: done f6-merge-main
+  - at: 2026-11-16T19:00:50Z
+    by: cloud/20261116T174717Z
+    event: claimed f6-consolidate until 2026-11-16T21:00:50Z
+  - at: 2026-11-16T19:00:50Z
+    by: cloud/20261116T174717Z
+    event: done f6-consolidate
+  - at: 2026-11-16T22:12:31Z
+    by: human/jeff
+    event: done f6-release-specs
+  - at: 2026-11-16T22:12:58Z
+    by: cloud/20261112T230554Z
+    event: claimed f6-open-pr until 2026-11-17T00:12:58Z
+  - at: 2026-11-16T23:19:55Z
+    by: cloud/20261112T230554Z
+    event: done f6-open-pr
+  - at: 2026-11-16T23:19:55Z
+    by: cloud/20261112T230554Z
+    event: entered phase 7 (merge)
+  - at: 2026-11-16T23:40:13Z
+    by: cloud/20261112T230554Z
+    event: claimed f7-merge until 2026-11-17T01:40:13Z
+  - at: 2026-11-16T23:40:13Z
+    by: cloud/20261112T230554Z
+    event: done f7-merge
+  - at: 2026-11-16T23:40:13Z
+    by: cloud/20261112T230554Z
+    event: entered phase 8 (close)
+  - at: 2026-11-16T23:40:19Z
+    by: cloud/20261112T230554Z
+    event: claimed f8-close until 2026-11-17T01:40:19Z
+  - at: 2026-11-16T23:40:20Z
+    by: cloud/20261112T230554Z
+    event: done f8-close
+  - at: 2026-11-16T23:40:20Z
+    by: cloud/20261112T230554Z
+    event: closed; feature done
+  - at: 2026-11-17T18:41:04Z
+    by: human/jeff
+    event: 'priority 71 -> 72 (renumbered by wf new: vm-from-host-path queued at 71)'
+  - at: 2026-11-17T19:20:47Z
+    by: human/jeff
+    event: 'priority 72 -> 73 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: priority 73 -> 1073 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1073 -> 1074 (renumbered by wf new: loop-streamline-2 queued at 99)'

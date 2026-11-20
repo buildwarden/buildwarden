@@ -1,0 +1,351 @@
+feature: tier1-static-checks
+title: 'Tier-1 static-check extraction (LINT-02, Deep-dive #2)'
+status: done
+round: feature
+phase: 8
+design: docs/design/tier1-static-checks.md
+branch: feat/tier1-static-checks
+alters_relationships: false
+design_review: required
+source: 'docs/development/README.md: Deep-dive #2'
+pr:
+  number: 79
+  ci: green
+steps:
+  - id: p0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p1-design
+    phase: 1
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p2-plan
+    phase: 2
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p3-export-problems
+    phase: 3
+    affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'a3, attended only (FLOW-14): in tools/workflow/check/check.go rename (*Front).problems to Problems with a doc comment, update its one caller in (*checker).design, run go test and golangci-lint in tools/workflow, and commit on feat/tier1-static-checks (plan task 9). Takeable now; no cloud task waits on it except p3-front-matter-check. If you decline a3, mark this done with the decision here and answer a3; p3-front-matter-check then builds the duplicate plus parity test. If you would rather run it as a process item (README: process items change tools/workflow/), say so.'
+  - id: p3-front-matter-check
+    phase: 3
+    affinity: cloud
+    status: done
+    needs:
+      - p3-export-problems
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Plan task 10: the FLOW-02 half of design-front-matter and tier1 designs [-all] on check.Front.Problems (or the a3 fallback). Needs tasks 1 and 4 on the branch; if absent, do them first under this claim. Run make lint and make test before wf done: wf runs the phase-3 gate check only when p3-implement is done, and the phase advances when this step finishes.'
+  - id: f3-implement
+    phase: 3
+    affinity: cloud
+    status: done
+    needs:
+      - f3-design-review
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Jeff, 2026-10-31, and design review r1: merge origin/main into the branch (it carries the tools/workflow lll fix, workflow-streamline, and #76 once merged) and resolve conflicts; then map FLOW-19 in tools/tier1/rules.yaml to owner wf and update the coupling front-matter fixtures for design_review; make lint must pass with tier 1 over this diff. The design already carries design_review (8e0eed8).'
+  - id: f3-design-review
+    phase: 3
+    affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+    note: Design review (FLOW-19) for a design that predates it; the human may waive it by completing this step with a recorded reason.
+  - id: f4-review
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f5-guide
+    phase: 5
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate
+    phase: 6
+    affinity: cloud
+    status: done
+    needs:
+      - f6-merge-main
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr
+    phase: 6
+    affinity: cloud
+    status: done
+    needs:
+      - f6-consolidate
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 6
+    steps: 30
+  spent:
+    runs: 3
+    steps: 14
+questions:
+  - id: a1
+    kind: assumed
+    status: confirmed
+    question: Put tier 1 in its own Go module at tools/tier1/ (Decision 1)?
+    options:
+      - tools/tier1/ as its own module
+      - a package inside tools/workflow/ (needs Jeff's attended edits, FLOW-14; ties tier 1 to the queue tool)
+      - internal/tier1 in the product module (adds x/tools and YAML to the module third parties embed)
+    recommended: tools/tier1/ as its own module
+    answer: tools/tier1/ as its own module
+  - id: a2
+    kind: assumed
+    status: confirmed
+    question: 'Accept design-front-matter-retrofit a8 in diff-scoped form: tier 1 validates the FLOW-02 front-matter of every design the diff touches, and "tier1 designs -all" checks the whole archive in the release job and on demand, never per PR (LINT-04)?'
+    options:
+      - diff-scoped check plus -all at release
+      - archive-wide check on every PR (contradicts LINT-04; needs a rule change)
+      - decline the handoff; leave it to wf's phase-1 gate, which covers only the feature's own design
+    recommended: diff-scoped check plus -all at release (if a8 ends as "no permanent check", drop -all and keep the diff-scoped check)
+    answer: diff-scoped check plus -all at release
+  - id: a3
+    kind: assumed
+    status: confirmed
+    question: 'Share one front-matter validator (FLOW-15): tier1 imports tools/workflow/check through a replace directive, and an attended human-affinity task (p3-export-problems) exports Front.problems as Problems in tools/workflow? Until it is done, the front-matter check is not built and the other checks proceed.'
+    options:
+      - attended export, then share the validator
+      - duplicate the ~30 lines of key and enum rules in tier1, with a fixture parity test
+      - move the parser into a third shared module (more churn, and a tools/workflow edit anyway)
+    recommended: attended export; if Jeff declines, the duplicate with a parity test
+    answer: attended export, then share the validator (done in p3-export-problems, 47f80c3)
+  - id: a4
+    kind: assumed
+    status: confirmed
+    question: Wire tier 1 into make lint (so the phase-3 and phase-4 gates run it with no tools/workflow edit), into a main.yml job on PRs and pushes to main, and into a release.yml job against the previous tag that the release jobs need (the LINT-03 release-gate home)? Once merged, in-flight branches whose diffs break a MUST check fail make lint until their merge round fixes them.
+    options:
+      - inside make lint, plus CI and the release job
+      - a separate make tier1 target that wf runs (needs a tools/workflow edit)
+      - CI only (the loop's Review gate never sees it)
+    recommended: inside make lint, plus CI and the release job
+    answer: inside make lint, plus CI and the release job
+  - id: a5
+    kind: assumed
+    status: confirmed
+    question: 'Suppress findings with "Tier1-Allow: <RULE> <path-glob>: <reason>" commit trailers in the diff range, each printed in the output so the tier-2 report and sign-off see it (LINT-05, FLOW-08)?'
+    options:
+      - commit trailers
+      - a checked-in suppressions file
+      - inline comments, for line findings only
+      - no suppressions in tier 1 (contradicts LINT-05)
+    recommended: commit trailers
+    answer: commit trailers
+  - id: a6
+    kind: assumed
+    status: confirmed
+    question: Emit GLOBAL-04's mechanical half ("non-test code changed, no test changed in that package") as a non-failing hint for tier 2 rather than a hard tier-1 failure?
+    options:
+      - a hint
+      - a MUST failure that a suppression can clear
+      - leave GLOBAL-04 entirely to tier 2
+    recommended: a hint
+    answer: a hint
+  - id: a7
+    kind: assumed
+    status: confirmed
+    question: 'Scope: ship the first slice in the design''s "Checks in this feature" table. Every other automated rule gets a rules.yaml entry, either owned elsewhere (wf, flow18, make test, CI, branch protection, security suite) or follow-up with a reason, and sign-off queues one follow-up item?'
+    options:
+      - this slice
+      - every automated rule in this feature (well over the 6-run, 30-step budget; some have no mechanical form yet)
+      - the coupling checks only
+    recommended: this slice
+    answer: this slice
+history:
+  - at: 2026-10-28T23:18:38Z
+    by: attended-setup
+    event: queued at priority 3 (intake)
+  - at: 2026-10-29T00:12:09Z
+    by: human/jeff
+    event: 'priority 3 -> 4 (Jeff reordered: retrofit early)'
+  - at: 2026-10-30T10:17:14Z
+    by: cloud/20261030T095602Z
+    event: started (FLOW-05)
+  - at: 2026-10-30T10:17:14Z
+    by: cloud/20261030T095602Z
+    event: claimed p0-branch-setup until 2026-10-30T12:17:14Z
+  - at: 2026-10-30T10:17:46Z
+    by: cloud/20261030T095602Z
+    event: done p0-branch-setup
+  - at: 2026-10-30T10:17:46Z
+    by: cloud/20261030T095602Z
+    event: entered phase 1 (design)
+  - at: 2026-10-30T10:17:48Z
+    by: cloud/20261030T095602Z
+    event: claimed p1-design until 2026-10-30T12:17:48Z
+  - at: 2026-10-30T10:23:47Z
+    by: cloud/20261030T095602Z
+    event: done p1-design
+  - at: 2026-10-30T10:23:47Z
+    by: cloud/20261030T095602Z
+    event: entered phase 2 (plan)
+  - at: 2026-10-30T10:23:53Z
+    by: cloud/20261030T095602Z
+    event: claimed p2-plan until 2026-10-30T12:23:53Z
+  - at: 2026-10-30T10:29:53Z
+    by: cloud/20261030T095602Z
+    event: 'plan: 13 tasks in the design''s Implementation plan; added p3-export-problems (human, a3, attended tools/workflow export) and p3-front-matter-check (cloud, needs p3-export-problems); other tasks do not wait on the human step. Budget: about 20-22 of the 27 remaining steps; runs tight (6-8). Planning finding for Design/Review, not a return: ledger-single-writer must allow (*Ledger).writeHeader, which NewLedger calls before go l.loop(); tier1 designs -all lists pre-standard designs (FLOW-12) without failing until design-front-matter-retrofit merges.'
+  - at: 2026-10-30T10:30:31Z
+    by: cloud/20261030T095602Z
+    event: done p2-plan
+  - at: 2026-10-30T10:30:31Z
+    by: cloud/20261030T095602Z
+    event: entered phase 3 (implement)
+  - at: 2026-10-30T10:30:37Z
+    by: cloud/20261030T095602Z
+    event: claimed p3-implement until 2026-10-30T12:30:37Z
+  - at: 2026-10-30T10:52:26Z
+    by: cloud/20261030T095602Z
+    event: 'released p3-implement: make lint fails on pre-existing tools/workflow lll issues (8, from PR #64, reproduce on origin/main 137feae); feature work green at b53b93d (make test ok, root and tools/tier1 lint 0 issues, make tier1 exit 0). tools/workflow fix is attended (FLOW-14)'
+  - at: 2026-10-31T04:04:16Z
+    by: human/jeff
+    event: claimed p3-export-problems until 2026-10-31T06:04:16Z
+  - at: 2026-10-31T04:04:16Z
+    by: human/jeff
+    event: done p3-export-problems
+  - at: 2026-10-31T04:11:21Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: tools/tier1/ as its own module'
+  - at: 2026-10-31T04:11:21Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: diff-scoped check plus -all at release'
+  - at: 2026-10-31T04:11:21Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: attended export, then share the validator (done in p3-export-problems, 47f80c3)'
+  - at: 2026-10-31T04:11:21Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: inside make lint, plus CI and the release job'
+  - at: 2026-10-31T04:11:21Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: commit trailers'
+  - at: 2026-10-31T04:11:21Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: a hint'
+  - at: 2026-10-31T04:11:21Z
+    by: human/jeff
+    event: 'assumed question a7 confirmed: this slice'
+  - at: 2026-10-31T10:29:56Z
+    by: cloud/20261031T095649Z
+    event: claimed p3-front-matter-check until 2026-10-31T12:29:56Z
+  - at: 2026-10-31T10:38:10Z
+    by: cloud/20261031T095649Z
+    event: done p3-front-matter-check
+  - at: 2026-10-31T20:44:50Z
+    by: human/jeff
+    event: migrated to the feature round at phase 3 (workflow-streamline)
+  - at: 2026-10-31T20:45:38Z
+    by: human/jeff
+    event: claimed f3-design-review until 2026-10-31T22:45:38Z
+  - at: 2026-10-31T20:52:23Z
+    by: human/jeff
+    event: done f3-design-review
+  - at: 2026-10-31T21:09:25Z
+    by: cloud/20261031T205751Z
+    event: claimed f3-implement until 2026-10-31T23:09:25Z
+  - at: 2026-10-31T21:11:21Z
+    by: cloud/20261031T205751Z
+    event: done f3-implement
+  - at: 2026-10-31T21:11:21Z
+    by: cloud/20261031T205751Z
+    event: entered phase 4 (review)
+  - at: 2026-10-31T21:11:46Z
+    by: cloud/20261031T205751Z
+    event: claimed f4-review until 2026-10-31T23:11:46Z
+  - at: 2026-10-31T21:32:06Z
+    by: cloud/20261031T205751Z
+    event: done f4-review
+  - at: 2026-10-31T21:32:06Z
+    by: cloud/20261031T205751Z
+    event: entered phase 5 (guide)
+  - at: 2026-10-31T21:32:25Z
+    by: cloud/20261031T205751Z
+    event: claimed f5-guide until 2026-10-31T23:32:25Z
+  - at: 2026-10-31T21:32:25Z
+    by: cloud/20261031T205751Z
+    event: done f5-guide
+  - at: 2026-10-31T21:32:25Z
+    by: cloud/20261031T205751Z
+    event: entered phase 6 (publish)
+  - at: 2026-10-31T21:32:34Z
+    by: cloud/20261031T205751Z
+    event: claimed f6-merge-main until 2026-10-31T23:32:34Z
+  - at: 2026-10-31T21:32:47Z
+    by: cloud/20261031T205751Z
+    event: done f6-merge-main
+  - at: 2026-10-31T21:33:11Z
+    by: cloud/20261031T205751Z
+    event: claimed f6-consolidate until 2026-10-31T23:33:11Z
+  - at: 2026-10-31T21:38:23Z
+    by: cloud/20261031T205751Z
+    event: done f6-consolidate
+  - at: 2026-10-31T21:38:23Z
+    by: cloud/20261031T205751Z
+    event: claimed f6-open-pr until 2026-10-31T23:38:23Z
+  - at: 2026-10-31T21:48:58Z
+    by: cloud/20261031T205751Z
+    event: 'done f6-open-pr and f7-merge by hand: PR #79 went green on f73ee18 (all 14 checks) and Jeff merged it (d266143) before f6-open-pr was recorded; the "current main merged" check then fails because main now contains the branch. Same gap as wf-merged-counts-as-pushed, which now covers it.'
+  - at: 2026-10-31T21:48:58Z
+    by: cloud/20261031T205751Z
+    event: claimed f8-close until 2026-10-31T23:48:58Z
+  - at: 2026-10-31T21:48:58Z
+    by: cloud/20261031T205751Z
+    event: done f8-close
+  - at: 2026-10-31T21:48:58Z
+    by: cloud/20261031T205751Z
+    event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: priority 8 -> 1008 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1008 -> 1009 (renumbered by wf new: loop-streamline-2 queued at 99)'

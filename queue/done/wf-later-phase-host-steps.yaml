@@ -1,0 +1,108 @@
+feature: wf-later-phase-host-steps
+title: 'wf keeps and holds later-phase host steps: wf back preserves them, wf next/gate skip them until their phase'
+kind: process
+status: done
+round: process
+phase: 4
+design: docs/design/wf-later-phase-host-steps.md
+branch: feat/wf-later-phase-host-steps
+alters_relationships: null
+source: 'workflow-human 2026-11-05 (Jeff): wf back -to 3 on build-link-subnet deleted its four pending f6-validate host steps (restored by hand, workflow ab54c55); and since 2026-11-01 wf next/gate offer a pending later-phase host step whose needs are met (ready() ignores the feature''s phase; windows-desktop digest 2026-11-01), so Design/Plan add needs by hand.'
+pr:
+  number: 99
+  ci: green
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 5
+  spent:
+    runs: 1
+    steps: 3
+questions: []
+history:
+  - at: 2026-11-05T00:48:41Z
+    by: human/jeff
+    event: queued at priority 27 (intake)
+  - at: 2026-11-06T17:23:55Z
+    by: human/jeff
+    event: started (FLOW-05)
+  - at: 2026-11-06T17:23:55Z
+    by: human/jeff
+    event: claimed x1-design until 2026-11-06T19:23:55Z
+  - at: 2026-11-06T17:23:55Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-11-06T17:23:55Z
+    by: human/jeff
+    event: entered phase 2 (implement)
+  - at: 2026-11-06T17:24:05Z
+    by: cloud/20261106T172405Z-attended
+    event: claimed x2-implement until 2026-11-06T19:24:05Z
+  - at: 2026-11-06T17:50:00Z
+    by: human/jeff
+    event: 'priority 29 -> 39 (Jeff, 2026-11-06 order: in implementation, then process, then fixes for implemented items, then new functionality; this item: 1. in implementation)'
+  - at: 2026-11-06T18:10:00Z
+    by: cloud/20261106T172405Z-attended
+    event: 'PR #99 open with CI green at 6107e20 (flow18, ci, PR runs success); recorded by the attended session, the publish agent having stopped before the queue write'
+  - at: 2026-11-06T17:52:09Z
+    by: cloud/20261106T172405Z-attended
+    event: done x2-implement
+  - at: 2026-11-06T17:52:09Z
+    by: cloud/20261106T172405Z-attended
+    event: entered phase 3 (merge)
+  - at: 2026-11-06T18:53:26Z
+    by: cloud/20261106T172405Z-attended
+    event: done x3-merge
+  - at: 2026-11-06T18:53:26Z
+    by: cloud/20261106T172405Z-attended
+    event: entered phase 4 (close)
+  - at: 2026-11-06T18:53:26Z
+    by: cloud/20261106T172405Z-attended
+    event: claimed x4-close until 2026-11-06T20:53:26Z
+  - at: 2026-11-06T18:53:27Z
+    by: cloud/20261106T172405Z-attended
+    event: done x4-close
+  - at: 2026-11-06T18:53:27Z
+    by: cloud/20261106T172405Z-attended
+    event: closed; feature done
+  - at: 2026-11-12T18:43:30Z
+    by: human/jeff
+    event: 'priority 39 -> 40 (renumbered by wf new: componentization queued at 24)'
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: 'priority 40 -> 41 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: priority 41 -> 1041 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1041 -> 1042 (renumbered by wf new: loop-streamline-2 queued at 99)'

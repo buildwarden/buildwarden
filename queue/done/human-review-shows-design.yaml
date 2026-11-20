@@ -1,0 +1,96 @@
+feature: human-review-shows-design
+title: workflow-human design review puts the design and its assumptions in front of Jeff
+kind: process
+status: done
+round: process
+phase: 4
+design: docs/design/human-review-shows-design.md
+branch: feat/human-review-shows-design
+alters_relationships: null
+source: 'workflow-human 2026-11-03, build-link-subnet r1 (Jeff): when going over a design, include the document that names the assumptions in the communication instead of assuming Jeff has it locally. Change .claude/skills/workflow-human step 3: publish the design (artifact page or full Questions section inline) and quote each assumption with its options when asking.'
+pr:
+  number: 95
+  ci: green
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 4
+  spent:
+    runs: 2
+    steps: 3
+questions: []
+history:
+  - at: 2026-11-03T20:30:51Z
+    by: human/jeff
+    event: queued at priority 22 (intake)
+  - at: 2026-11-04T15:58:22Z
+    by: human/jeff
+    event: started (FLOW-05)
+  - at: 2026-11-04T15:58:22Z
+    by: human/jeff
+    event: claimed x1-design until 2026-11-04T17:58:22Z
+  - at: 2026-11-04T15:58:22Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-11-04T15:58:22Z
+    by: human/jeff
+    event: entered phase 2 (implement)
+  - at: 2026-11-04T23:47:50Z
+    by: cloud/20261104T214530Z-attended
+    event: claimed x2-implement until 2026-11-05T01:47:50Z
+  - at: 2026-11-04T23:55:27Z
+    by: cloud/20261104T214530Z-attended
+    event: done x2-implement
+  - at: 2026-11-04T23:55:27Z
+    by: cloud/20261104T214530Z-attended
+    event: entered phase 3 (merge)
+  - at: 2026-11-04T23:56:29Z
+    by: cloud/20261104T214530Z-attended
+    event: done x3-merge
+  - at: 2026-11-04T23:56:29Z
+    by: cloud/20261104T214530Z-attended
+    event: entered phase 4 (close)
+  - at: 2026-11-04T23:56:37Z
+    by: cloud/20261104T214530Z-attended
+    event: claimed x4-close until 2026-11-05T01:56:37Z
+  - at: 2026-11-04T23:56:38Z
+    by: cloud/20261104T214530Z-attended
+    event: done x4-close
+  - at: 2026-11-04T23:56:38Z
+    by: cloud/20261104T214530Z-attended
+    event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: priority 22 -> 1022 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1022 -> 1023 (renumbered by wf new: loop-streamline-2 queued at 99)'

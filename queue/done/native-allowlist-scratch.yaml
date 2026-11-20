@@ -1,0 +1,101 @@
+feature: native-allowlist-scratch
+title: 'Native allowlist: run branch binaries under .scratch/ and the FLOW-18 recheck'
+kind: process
+holds:
+  - host:*
+status: done
+round: process
+phase: 4
+design: docs/design/native-allowlist-scratch.md
+branch: feat/native-allowlist-scratch
+alters_relationships: null
+source: 'host:macbook digests 2026-10-30 and 2026-10-31: Bash(.scratch/:*) does not match .scratch/<name>/dist/warden; flow18-check.sh needs approval. Proposed: Bash(.scratch/*/dist/warden:*), Bash(tools/workflow/flow18-check.sh)'
+pr:
+  number: 89
+  ci: green
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 4
+  spent:
+    runs: 2
+    steps: 3
+questions: []
+history:
+  - at: 2026-10-31T14:51:23Z
+    by: human/jeff
+    event: queued at priority 10 (intake)
+  - at: 2026-11-03T00:27:00Z
+    by: human/jeff
+    event: started (FLOW-05)
+  - at: 2026-11-03T00:27:00Z
+    by: human/jeff
+    event: claimed x1-design until 2026-11-03T02:27:00Z
+  - at: 2026-11-03T00:27:00Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-11-03T00:27:00Z
+    by: human/jeff
+    event: entered phase 2 (implement)
+  - at: 2026-11-03T00:37:46Z
+    by: cloud/20261103T003746Z
+    event: claimed x2-implement until 2026-11-03T02:37:46Z
+  - at: 2026-11-03T00:49:19Z
+    by: cloud/20261103T003746Z
+    event: done x2-implement
+  - at: 2026-11-03T00:49:19Z
+    by: cloud/20261103T003746Z
+    event: entered phase 3 (merge)
+  - at: 2026-11-03T00:51:26Z
+    by: cloud/20261103T003746Z
+    event: done x3-merge
+  - at: 2026-11-03T00:51:26Z
+    by: cloud/20261103T003746Z
+    event: entered phase 4 (close)
+  - at: 2026-11-03T00:51:37Z
+    by: cloud/20261103T003746Z
+    event: claimed x4-close until 2026-11-03T02:51:37Z
+  - at: 2026-11-03T00:51:37Z
+    by: cloud/20261103T003746Z
+    event: done x4-close
+  - at: 2026-11-03T00:51:37Z
+    by: cloud/20261103T003746Z
+    event: closed; feature done
+  - at: 2026-11-03T01:30:28Z
+    by: human/jeff
+    event: renumbered one lower so build-link-subnet goes in at 18, before security-suite (Jeff, 2026-11-02)
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: priority 20 -> 1020 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1020 -> 1021 (renumbered by wf new: loop-streamline-2 queued at 99)'

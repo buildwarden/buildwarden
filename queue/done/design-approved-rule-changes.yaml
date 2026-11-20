@@ -1,0 +1,99 @@
+feature: design-approved-rule-changes
+title: Rule and enforcement changes a feature's design needs are approved in its design review and made in its Implement
+kind: process
+status: done
+round: process
+phase: 4
+design: docs/design/design-approved-rule-changes.md
+branch: feat/design-approved-rule-changes
+alters_relationships: null
+source: 'workflow-human 2026-11-04 (Jeff), from build-link-subnet task 49: Implement could not apply the BOOT-03 wording the design proposed (FLOW-14). If a feature''s design intentionally requires altering development rules and/or their enforcement, those changes are explicitly reviewed in the design review and, if approved, are cleared to be made as part of the feature''s implementation.'
+pr:
+  number: 96
+  ci: green
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 5
+  spent:
+    runs: 1
+    steps: 3
+questions: []
+history:
+  - at: 2026-11-04T23:39:59Z
+    by: human/jeff
+    event: queued at priority 23 (intake)
+  - at: 2026-11-04T23:46:12Z
+    by: human/jeff
+    event: started (FLOW-05)
+  - at: 2026-11-04T23:46:12Z
+    by: human/jeff
+    event: claimed x1-design until 2026-11-05T01:46:12Z
+  - at: 2026-11-04T23:46:12Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-11-04T23:46:12Z
+    by: human/jeff
+    event: entered phase 2 (implement)
+  - at: 2026-11-04T23:47:50Z
+    by: cloud/20261104T214530Z-attended
+    event: claimed x2-implement until 2026-11-05T01:47:50Z
+  - at: 2026-11-05T00:01:00Z
+    by: human/jeff
+    event: 'x2-implement found Decision 6 refused its own PR (tier1 embeds rules.yaml, so the merge-base build reported the newly mapped FLOW-14 as a LINT-02 drop). Jeff settled it in-session as Design review r2, approved at 2aa1cbf: main''s tier1 code with the branch''s config. Not sent back through wf back; x2-implement continues'
+  - at: 2026-11-05T00:09:11Z
+    by: cloud/20261104T214530Z-attended
+    event: done x2-implement
+  - at: 2026-11-05T00:09:11Z
+    by: cloud/20261104T214530Z-attended
+    event: entered phase 3 (merge)
+  - at: 2026-11-05T00:10:00Z
+    by: cloud/20261104T214530Z-attended
+    event: done x3-merge
+  - at: 2026-11-05T00:10:00Z
+    by: cloud/20261104T214530Z-attended
+    event: entered phase 4 (close)
+  - at: 2026-11-05T00:10:00Z
+    by: cloud/20261104T214530Z-attended
+    event: claimed x4-close until 2026-11-05T02:10:00Z
+  - at: 2026-11-05T00:10:08Z
+    by: cloud/20261104T214530Z-attended
+    event: done x4-close
+  - at: 2026-11-05T00:10:08Z
+    by: cloud/20261104T214530Z-attended
+    event: closed; feature done
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: priority 23 -> 1023 (done items set aside from the open numbering (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:22Z
+    by: human/jeff
+    event: 'priority 1023 -> 1024 (renumbered by wf new: loop-streamline-2 queued at 99)'

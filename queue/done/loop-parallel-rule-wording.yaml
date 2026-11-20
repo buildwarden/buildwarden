@@ -1,0 +1,113 @@
+feature: loop-parallel-rule-wording
+title: 'Rule wording loop-parallel left: areas: [] is declared-empty, the PR slot paragraph, FLOW-03''s area check at phases 7-8 and before wf declare, and FLOW-16''s merge proof'
+kind: process
+follows: loop-parallel
+status: done
+round: process
+phase: 4
+design: docs/design/loop-parallel-rule-wording.md
+branch: feat/loop-parallel-rule-wording
+alters_relationships: null
+source: 'Jeff''s decisions of 2026-11-16 on the review of loop-parallel''s implementation: F4, F6 and F5''s wording for phases 7-8 go to one follow-up rule-change item, not changed on loop-parallel''s branch. A program item (FLOW-20): it amends rules loop-parallel changes; its design lists componentization.md in related. Scope: (F4) FLOW-02/FLOW-05''s approved wording reads as if areas: [] were undeclared, while wf treats it as declared-empty (relation.go''s ''declares no areas'' text and its tests move with it); (F6) process.md''s ''one feature at a time through the PR slot'' (line 27) predates the limits; (F5) FLOW-03 ''from Implement on'' overclaims for phases 7-8 and does not name the exemption before wf declare; (review F-P2 / design-code 2) FLOW-16 (process.md 648-656) still names the patch-id proof (''the equal tree or change''), while wf now proves a squash by merge-tree onto the squash''s parent (loop-parallel a14 (d), Decision 23). Holds no worker: rule text only.'
+pr:
+  number: 128
+  ci: green
+  head: fe7199354d99b53cb7d9ea5eb6e61b87ce0bac92
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 9
+  spent:
+    runs: 2
+    steps: 4
+questions: []
+history:
+  - at: 2026-11-16T01:16:03Z
+    by: cloud/20261112T230554Z
+    event: queued at priority 62 (intake)
+  - at: 2026-11-17T19:19:42Z
+    by: human/jeff
+    event: started (FLOW-05)
+  - at: 2026-11-17T19:19:42Z
+    by: human/jeff
+    event: claimed x1-design until 2026-11-17T21:19:42Z
+  - at: 2026-11-17T19:19:42Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-11-17T19:19:42Z
+    by: human/jeff
+    event: entered phase 2 (implement)
+  - at: 2026-11-17T20:47:40Z
+    by: human/jeff
+    event: priority 62 -> 2 (renumbered to the item's 1-indexed queue position (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-17T21:06:37Z
+    by: human/jeff
+    event: 'priority 2 -> 3 (renumbered to queue order, Jeff, 2026-11-17: loop-streamline-2 placed after queue-positions; skill-areas-yaml-lines closed)'
+  - at: 2026-11-18T11:41:15Z
+    by: cloud/20261118T105745Z
+    event: claimed x2-implement until 2026-11-18T13:41:15Z
+  - at: 2026-11-18T11:52:04Z
+    by: cloud/20261118T105745Z
+    event: done x2-implement
+  - at: 2026-11-18T11:52:04Z
+    by: cloud/20261118T105745Z
+    event: entered phase 3 (merge)
+  - at: 2026-11-18T18:22:27Z
+    by: cloud/20261118T182148Z
+    event: 'seeded x2-refresh: main at a094f4d: 1 commit since the branch merged it; both change .claude/skills/workflow-human/SKILL.md, .claude/skills/workflow-intake/SKILL.md, docs/development/process.md'
+  - at: 2026-11-18T18:23:01Z
+    by: cloud/20261118T182148Z
+    event: claimed x2-refresh until 2026-11-18T20:23:01Z
+  - at: 2026-11-18T18:23:19Z
+    by: cloud/20261118T182148Z
+    event: 'released x2-refresh: refreshed in merge order instead (Jeff, 2026-11-18): each merge puts the others behind main again'
+  - at: 2026-11-18T18:40:08Z
+    by: cloud/20261118T182148Z
+    event: claimed x2-refresh until 2026-11-18T20:40:08Z
+  - at: 2026-11-18T19:05:08Z
+    by: cloud/20261118T182148Z
+    event: done x3-merge
+  - at: 2026-11-18T19:05:08Z
+    by: cloud/20261118T182148Z
+    event: 'dropped x2-refresh: the PR merged first (FLOW-10)'
+  - at: 2026-11-18T19:05:08Z
+    by: cloud/20261118T182148Z
+    event: entered phase 4 (close)
+  - at: 2026-11-18T19:05:23Z
+    by: cloud/20261118T182148Z
+    event: claimed x4-close until 2026-11-18T21:05:23Z
+  - at: 2026-11-18T19:05:23Z
+    by: cloud/20261118T182148Z
+    event: done x4-close
+  - at: 2026-11-18T19:05:23Z
+    by: cloud/20261118T182148Z
+    event: closed; feature done
