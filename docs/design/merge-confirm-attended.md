@@ -16,9 +16,8 @@ native_validation: []    # pure functions of the queue state, the design text an
 tier2_gaps: []
 rules: [FLOW-03, FLOW-04, FLOW-05, FLOW-06, FLOW-07, FLOW-08, FLOW-10, FLOW-13, FLOW-14,
         FLOW-19, LOOP-09, GLOBAL-09, GLOBAL-10, GLOBAL-11, TEST-01, TEST-02]
-rule_changes:            # the enforcement (cmd/wf/main.go, queue/phases.go, queue/queue.go,
-                         # check/review.go, check/declared.go) is the loop's machinery or its
-                         # checks, changed on the process route (FLOW-14). Paths list docs files
+rule_changes:            # the enforcement (cmd/wf/main.go, queue/next.go, queue/phases.go,
+                         # queue/queue.go) is the loop's machinery, changed on the process route (FLOW-14). Paths list docs files
                          # only: tier 1's front-matter check refuses machinery paths under
                          # tools/workflow/ (the 2026-11-18 deviation in loop-parallel-rule-wording),
                          # so the enforcement files are named under Rule changes instead
@@ -64,7 +63,7 @@ the Design review section and returns every remaining `approved at <sha>`
 match (`approvedRe`, `review.go:15`) in document order. Its callers assume
 one match per review:
 
-- `reviewed()` (`review.go:46-67`) passes when `len(approvals(d)) >= want`,
+- `reviewed()` (`review.go:46-68`) passes when `len(approvals(d)) >= want`,
   so a re-review entry with no approval still passes if its prose cites an
   older one.
 - `approvalDelta()` (`review.go:91`), `skipValid()` (`review.go:191`) and
@@ -149,7 +148,7 @@ words stop it being done before the merge.
 
 ## Decisions
 
-1. **An approval is the first design approval in a review entry (a1).** A
+1. **An approval is the first design approval in a review entry (a1, a2).** A
    review entry is a top-level bullet of the Design review section whose
    head is the entry's ID: `r<N>`, bold or not, optionally after
    `Re-review`. Its approval is the first `approved at <sha>` in the whole
@@ -158,9 +157,11 @@ words stop it being done before the merge.
    approval is the last entry's, in document order. `reviewed()` counts
    entries, not mentions. Rule-change approvals keep their current reading:
    `cleared` and `ownApproval` pass only when the cited commit really has
-   the entry unchanged, so a mention cannot make them wrong.
-   - *Rejected: any bullet whose head says "approved" (F).* It matches all
-     46 archived designs, but a bullet such as "- Unchanged and still
+   the entry unchanged, so a mention cannot make them wrong. The head format
+   is stated in `TEMPLATE.md`'s Design review guidance and `workflow-human`
+   step 3.5, not in FLOW-19's wording.
+   - *Rejected: any bullet whose head says "approved" (F).* It gives today's
+     latest approval on all 43 archived designs that record one, but a bullet such as "- Unchanged and still
      approved: ... approved at `<old>`" would still count.
    - *Rejected: a strict regex for the canonical head (S).* It breaks the
      test fixtures (`- r1: approved at`) and the legacy forms.
@@ -228,14 +229,15 @@ a1 to a9 are the cross-check's Q2 to Q10.
   Recommended: (a). It fixes detached-prepare-windows-exe, gives the
   current answer on every other open branch (driver-contract `33a3563`,
   prebuilt-artifacts `7a85a33`, workdir-in-context `26f6066`), and needs no
-  fixture change. Two archived designs with no `r<N>` head
-  (hyperv-relay-per-build-channel, human-review-shows-design) stop
-  matching; no check reads an archived design again (`check.go:62-72`,
+  fixture change. One archived design whose head does not lead with `r<N>`
+  (human-review-shows-design) stops matching, and
+  hyperv-relay-per-build-channel's latest becomes r3's `cbb2cda` instead of
+  its unheaded `71df1d1` entry; no check reads an archived design again (`check.go:62-72`,
   `:222-230` load only the active item's).
 - **a2. Where the review-entry head format is stated** (cross-check Q3).
   Flagged: option (b) changes FLOW-19's wording. Proceeding with (a);
   confirm.
-  - (a) `TEMPLATE.md` (Design review comment, `:120-124`) and
+  - (a) `TEMPLATE.md` (Design review guidance, `:120-124`) and
     `workflow-human` step 3.5 only.
   - (b) Also one sentence in FLOW-19, as a third `rule_changes` entry
     (wording under Rule changes).
@@ -269,8 +271,8 @@ a1 to a9 are the cross-check's Q2 to Q10.
   machine gains nothing: its scheduled run is no more frequent than the
   tick, an attended native sitting has Jeff, who can run as `human/jeff`,
   and a native checkout may lag `origin`.
-- **a5. A second confirmation** (cross-check Q6). Proceeding with (a);
-  confirm.
+- **a5. A second confirmation** (cross-check Q6). Flagged: sets a clause
+  of the new FLOW-04 paragraph. Proceeding with (a); confirm.
   - (a) `wf done` refuses a step that is already done.
   - (b) Leave as is: the check re-runs and a duplicate `done` line is
     logged.
@@ -299,12 +301,13 @@ a1 to a9 are the cross-check's Q2 to Q10.
   - (b) `Seed` adds `needs: [x4-state]` to `x4-close` when it seeds
     `x4-state`; `waiter` keeps meaning Publish only.
 
-  Recommended: (a), with the comment fix and a test that `Back` on a
-  process item queues no re-runs. It also covers any other phase-4 step a
+  Recommended: (a), with the comment fix, `rerunPublishHostSteps` kept to
+  the feature round, and a test that `Back` on a process item with a done
+  host step in Close queues no re-run. It also covers any other phase-4 step a
   design adds. Choose (b) if `waiter` should keep meaning Publish only.
 - **a8. How much of wf-state-migration-step's filed source this item
-  takes** (cross-check Q9). Proceeding with (a), Jeff's word of
-  2026-11-20; confirm.
+  takes** (cross-check Q9). Flagged: option (c) changes FLOW-19's wording.
+  Proceeding with (a), Jeff's word of 2026-11-20; confirm.
   - (a) Only the seeded step (C(1)). The migration stays a human checklist
     (C(2)); the FLOW-19 mechanical-rebase exemption (C(3)) is split off to
     `wf-state-migration-step`; the lease-precondition check is deferred.
@@ -350,7 +353,7 @@ a1 to a9 are the cross-check's Q2 to Q10.
 entry records no approval but cites an older one now fails, as it should.
 None of the five open branches is affected.
 
-`TEMPLATE.md`'s Design review comment and `workflow-human` step 3.5 state
+`TEMPLATE.md`'s Design review guidance and `workflow-human` step 3.5 state
 the head: "each review is one top-level bullet led by `r<N>, <date>:
 <outcome>`; for an approval, the head reads `approved at <sha>`, and an
 earlier approval cited in the entry comes after it". `wf-plan.md:11`,
@@ -401,7 +404,11 @@ or enables auto-merge. The human's merge is still the sign-off.
   item, an empty note, and a done item. It writes one history line ("state
   step recorded: ..."). While the item is before Close it only records the
   field. In Close with `x4-close` still pending, it also adds `x4-state` at
-  once and adds it to `x4-close`'s needs. It follows `wf urgent` and `wf
+  once and adds it to `x4-close`'s needs. When `x4-state<suffix>` already
+  exists (seeded, or added by hand), it adds no step: a pending one takes
+  the new note, and a done one makes the command refuse. `-clear` in Close
+  removes a pending seeded `x4-state` and `x4-close`'s need on it, and
+  refuses when that step is done. It follows `wf urgent` and `wf
   move`.
 - **Seed.** For a process item entering phase 4 with `StateStep` set and no
   step `x4-state<suffix>`, `Seed` appends `x4-state<suffix>` (phase 4,
@@ -434,8 +441,12 @@ is done in an attended native session or tracked as gaps,
 `workflow-intake/SKILL.md:96-98`), so nothing is re-run. But the comments at
 `:168` ("Publish's gate") and `:588-592` become wrong, and a future host
 step in a process item's Close would be re-run on `Back`. The change
-rewrites both comments ("the phase whose gate waits for added steps") and
-adds a test that `Back` on a process item queues no re-runs. Under a7 (b)
+rewrites both comments ("the phase whose gate waits for added steps"),
+makes `rerunPublishHostSteps` return nothing for a round other than the
+feature round (a process item has no Publish), and adds a test: a process
+item with a done `host:` step added to phase 4, sent `Back`, gets no copy
+queued. Without the round guard that copy would be queued, so the test
+detects the coupling. Under a7 (b)
 instead, `waiter` keeps its meaning and `Seed` writes the need directly.
 
 ### What this item cannot do for itself
@@ -502,6 +513,11 @@ None. No driver code is reached.
 Severity and check are unchanged for both: FLOW-03 MUST, `automated`;
 FLOW-04 MUST, `automated`.
 
+Part A changes FLOW-19's enforcement (`check/review.go`,
+`check/declared.go`) and not its wording (a2 (a)); a process item's branch
+is exempt from the clearance check (FLOW-14), and the review approves that
+edit through a1.
+
 ### FLOW-03 (amend), `docs/development/process.md`
 
 **Why:** the phase tables say who confirms a merge and what Close waits
@@ -524,7 +540,7 @@ for (Decisions 2 and 4). One entry covers the three rows.
 **Proposed:**
 
 > | 3 | Merge | A human merged it into `main` (FLOW-08), confirmed as phase 7's merge is. Its PR is ready and is refreshed as a feature's is (FLOW-08, FLOW-10). |
-> | 4 | Close | As phase 8, and its state step done when its design review recorded one: a `human` step that brings the `workflow` branch in line with the merged change. Only the human records it; the queue's tooling adds it when Close is entered, and Close's own step waits for it. |
+> | 4 | Close | As phase 8, and its state step done when the human recorded one: a `human` step that brings the `workflow` branch in line with the merged change. Only the human records it, at the design review or later; the queue's tooling adds it when Close is entered, or at once when it is recorded during Close, and Close's own step waits for it. |
 
 **Enforcement:** `Seed` and the process `close` template (`phases.go`),
 `StateStep` and `Validate` (`queue.go`), `wf state-step` and `stepCmd`
@@ -551,7 +567,8 @@ and the new paragraph follows it):
 only steps whose affinity it satisfies":
 
 > A merge step, and a step confirming that a pull request its design names
-> to merge first has merged (FLOW-08), stays `cloud` and is never claimed.
+> to merge first has merged (FLOW-08), stays `cloud` and is never offered
+> to a worker (FLOW-05).
 > A `human` worker may also complete one, which is the one exception to
 > taking only steps whose affinity a worker satisfies: the same done-when
 > check runs, so the step completes only once the merge has happened, and a
@@ -565,8 +582,9 @@ only steps whose affinity it satisfies":
 
 Not in `rule_changes` under the recommendation. If a2 (b) is chosen, a third
 entry `{rule: FLOW-19, change: amend, paths: [docs/development/process.md]}`
-is added before the approval, and the sentence after "(`approved at
-<sha>`)." in the paragraph at `process.md:871-877` is:
+is added before the approval, and a new sentence is inserted after
+"(`approved at <sha>`)." in the paragraph at `process.md:870-877`, before
+"Each approved rule change gets its own line":
 
 > Each review is one top-level entry led by its number (`r<N>`); its
 > approval is the first `approved at <sha>` in that entry, and an earlier
@@ -596,8 +614,9 @@ is added before the approval, and the sentence after "(`approved at
     and `x4-close` needs it; without it, no `x4-state` and no need; with a
     hand-added `x4-state` already present, no duplicate and the need is
     added; `Landed` with `state_step` gives a linked `x4-state` and an
-    unlinked `x4-escalate-returned`. `Back` on a process item queues no
-    re-runs (the waiter coupling). `Validate` refuses `state_step` on a
+    unlinked `x4-escalate-returned`. A process item with a done `host:`
+    step added to phase 4, sent `Back`: no copy queued (the waiter
+    coupling). `Validate` refuses `state_step` on a
     feature.
   - `cmd/wf` (modelled on `TestDoneRunsTheRefreshCheck`,
     `stale_test.go:394`, and `TestTrackedDone`, `main_test.go:387`): `wf
@@ -606,7 +625,9 @@ is added before the approval, and the sentence after "(`approved at
     a human is still refused; a second `done` is refused; after a human
     confirmation with `state_step` set, `wf next -worker human/jeff` offers
     `x4-state`. `wf state-step`: human only, process only, empty note
-    refused, `-clear`, done item refused, the immediate add in Close. `wf
+    refused, `-clear`, done item refused, the immediate add in Close; in
+    Close with `x4-state` already present: no duplicate, note updated;
+    `-clear` in Close removes the pending step and the need. `wf
     stale` prints the confirm command.
 - **Text checks:** `grep` finds no "the next tick does" or "cannot complete
   a `cloud` merge step" in `.claude/`, and no "the last `approved at`" in
@@ -622,40 +643,41 @@ is added before the approval, and the sentence after "(`approved at
 ## Implementation plan
 
 A process item has no Plan phase; this is the work of `x2-implement`.
+Each step writes its tests first, sees them fail on the code before it
+(TEST-01, TEST-02), and ends with `make test` green.
 
-1. Tests first (Validation plan); they fail on the current code (TEST-01,
-   TEST-02).
-2. `check/review.go`: entry-aware `approvals`, `lastApproval`, and its use
+1. `check/review.go`: entry-aware `approvals`, `lastApproval`, and its use
    at `review.go:91` and `:191`; `check/declared.go:79` (FLOW-19, Decision
    1, a1). Tests: the `approvals` table test, the `reviewed`,
    `approvalDelta` and declaration cases.
-3. `queue/next.go`: `MayComplete` beside `Satisfies`, and the comments at
+2. `queue/next.go`: `MayComplete` beside `Satisfies`, and the comments at
    `:88-90` and `:175-176` (FLOW-04, Decision 2, a3, a4). Test: the
    `MayComplete` table.
-4. `cmd/wf/main.go`: `stepCmd` uses `MayComplete` for `done` and refuses a
+3. `cmd/wf/main.go`: `stepCmd` uses `MayComplete` for `done` and refuses a
    done step (Decisions 2 and 3, a5); `staleMerged`'s line and comment
    (Decision 7). Tests: the `cmd/wf` confirmation cases and the `wf stale`
    line.
-5. `queue/queue.go`: `StateStep` and `Validate` (FLOW-03, Decision 4, a6).
+4. `queue/queue.go`: `StateStep` and `Validate` (FLOW-03, Decision 4, a6).
    `queue/phases.go`: `Seed` adds `x4-state` before `linkAdded`; the
    process `close` template takes `waitsAdded`; the comments on
    `waitsAdded`, `waiter`, `rerunPublishHostSteps`, `IsMerge` and the
-   template (`:41-43`, `:67`, `:168`, `:226-227`, `:588-592`) (a7). Tests:
-   the `Seed`, `Landed`, `Back` and `Validate` cases.
-6. `cmd/wf/main.go`: `wf state-step` and its usage line (Decision 4, a6).
+   template (`:41-43`, `:67`, `:168`, `:226-227`, `:588-592`), and
+   `rerunPublishHostSteps` kept to the feature round (a7). Tests: the
+   `Seed`, `Landed`, `Back` and `Validate` cases.
+5. `cmd/wf/main.go`: `wf state-step` and its usage line (Decision 4, a6).
    Tests: the `wf state-step` cases and `wf next` offering `x4-state` after a
    human confirmation.
-7. `docs/development/process.md`: FLOW-03's three rows and FLOW-04's
+6. `docs/development/process.md`: FLOW-03's three rows and FLOW-04's
    paragraph as approved (FLOW-14).
-8. `docs/design/TEMPLATE.md` Design review comment; `.claude/agents/wf-plan.md:11`,
-   `.claude/agents/wf-design.md:59`; `.claude/skills/workflow-human/SKILL.md`
-   (Set up, `:63`, step 3.5's entry head and `wf state-step`, step 5's
-   confirmation); `.claude/skills/workflow-tick/SKILL.md` step 2's note
+7. `docs/design/TEMPLATE.md` Design review section's guidance;
+   `.claude/agents/wf-plan.md:11`, `.claude/agents/wf-design.md:59`;
+   `.claude/skills/workflow-human/SKILL.md` (Set up, `:63`, step 3.5's entry
+   head and `wf state-step`, step 5's confirmation); `.claude/skills/workflow-tick/SKILL.md` step 2's note
    (Design, A, B and C).
-9. `make test`, `make lint`, `flow18-check.sh`, `make enforcement`, the
+8. `make test`, `make lint`, `flow18-check.sh`, `make enforcement`, the
    text checks.
-10. Merge current `main`, archive this design with its summary, and open the
-    PR with CI green (FLOW-03 process phase 2, FLOW-12).
+9. Merge current `main`, archive this design with its summary, and open the
+   PR with CI green (FLOW-03 process phase 2, FLOW-12).
 
 After the merge, `x4-state` as under "What this item cannot do for itself".
 The review adds it to the queue by hand when it records the outcome; it is
