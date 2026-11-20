@@ -31,7 +31,16 @@ const draft202012 = "https://json-schema.org/draft/2020-12/schema"
 
 // repo is the repository root as an fs.FS. io/fs paths always use forward
 // slashes, so every check below is the same on Windows.
-func repo() fs.FS { return os.DirFS("..") }
+func repo() fs.FS { return lfFS{os.DirFS("..")} }
+
+// lfFS reads every file with CRLF line ends as LF, so that a checkout with
+// core.autocrlf on Windows reads the specifications as CI and Git hold them.
+type lfFS struct{ fs.FS }
+
+func (f lfFS) ReadFile(name string) ([]byte, error) {
+	data, err := fs.ReadFile(f.FS, name)
+	return bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n")), err
+}
 
 // schemaIDs maps each specs/*/v*.schema.json file's $id to the files that
 // declare it, after checking that each parses and declares the 2020-12 draft.
