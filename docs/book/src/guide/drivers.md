@@ -459,8 +459,9 @@ starts a background re-prepare (`warden image prepare --driver hyperv` with no
 source does the same by hand), and a build refuses to start with less than a
 day of grace left. A re-prepare that cannot start is reported on the build's
 output with its error and that command to run by hand, and the build goes on
-on the current base. Both ages are set in `[vm]` (`image_refresh_after`,
-`image_min_grace`). Only one prepare runs at a time; superseded layers are
+on the current base. Both ages are set in `[driver]` (`image_refresh_after`,
+`image_min_grace`), or in `[driver.hyperv]` for this driver alone; their old
+names in `[vm]` are read until 1.0. Only one prepare runs at a time; superseded layers are
 deleted by a later prepare once no VM uses them.
 
 Optionally install the privileged helper service so builds run without

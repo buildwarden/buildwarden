@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
@@ -585,9 +584,9 @@ func teardownDriver() *Driver {
 			_ = host.ClaimRelay(ctx, driver.RelayStarted{GuestOS: "linux",
 				Claim: driver.ClaimEndpoint{Network: "tcp",
 					Address: "127.0.0.1:1"}})
+			// Wait returns when stdin ends, which the test closes only
+			// after stdout and stderr, so both are closed by now.
 			host.Wait(ctx)
-			// Let the orchestrator's ends of stdout and stderr close.
-			time.Sleep(200 * time.Millisecond)
 			for range 100 {
 				fmt.Fprintln(os.Stderr, "tearing down")
 				host.Exited(driver.ExitedBuild, "tearing down")
@@ -623,9 +622,11 @@ func TestRunTeardownWithClosedOutput(t *testing.T) {
 	if got := readType(t, bufio.NewReader(stdout)); got != "relay-started" {
 		t.Fatalf("first message %s", got)
 	}
-	_ = stdin.Close()
+	// Close the driver's output first and its input last, so the
+	// teardown it starts when stdin ends always writes to closed pipes.
 	_ = stdout.Close()
 	_ = stderr.Close()
+	_ = stdin.Close()
 	_ = cmd.Wait()
 	if data, err := os.ReadFile(mark); err != nil || string(data) != "done" {
 		t.Errorf("teardown did not complete: %q, %v", data, err)
