@@ -692,8 +692,10 @@ gaps:
     what: >-
       A qemu Windows build (warden build --driver qemu --guest-os windows) on a warden whose build
       runs through warden's own build sequence: warden stages build.ps1, starts the collector with
-      the Windows bootstrap and claims the relay the qemu driver started; the freshness ages
-      ([vm] image_refresh_after, image_min_grace) reach the driver as its declared options.
+      the Windows bootstrap and claims the relay the qemu driver started; the freshness ages reach
+      the qemu driver through the kit, read as the common keys [driver] image_refresh_after and
+      image_min_grace (or their [driver.qemu] overrides), or by their old names [vm]
+      image_refresh_after and image_min_grace (driver-contract task 37, a21 and a25).
     design: docs/design/driver-contract.md
     note: >-
       Tracked, not blocking (design Validation plan, a7). Reworded 2026-11-14 for the design's
