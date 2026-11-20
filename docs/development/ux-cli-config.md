@@ -148,11 +148,10 @@ mechanically. The check judges, for each setting a change adds or touches, that
 the component that uses it validates it at that point, and that nothing
 validates a file or environment setting the run does not use.
 
-Four checks predate this wording and are made whatever the run uses. As a
-config file loads: the TOML type of every key, `[vm] build_link`, and
-`[vm] dns`. On every `build` and `shell`: `[vm] image_refresh_after` and
-`image_min_grace`. Each stays until the change that moves it to its consumer,
-which takes it off this list. Nothing is added to the list.
+Three checks predate this wording and are made whatever the run uses, as a
+config file loads: the TOML type of `warden`'s own keys, `[vm] build_link`, and
+`[vm] dns`. Each stays until the change that moves it to its consumer, which
+takes it off this list. Nothing is added to the list.
 
 ---
 
