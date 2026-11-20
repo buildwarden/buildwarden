@@ -127,8 +127,8 @@ steps:
       - f6-validate-windows-hyperv
       - f6-refresh
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261120T203034Z
+      expires: 2026-11-20T22:35:40.599552771Z
   - id: f6-refresh
     phase: 6
     affinity: cloud
@@ -143,7 +143,7 @@ budget:
     steps: 10
   spent:
     runs: 5
-    steps: 14
+    steps: 15
 questions:
   - id: a1
     kind: assumed
@@ -357,3 +357,6 @@ history:
   - at: 2026-11-20T20:35:33Z
     by: cloud/20261120T203034Z
     event: done f6-refresh
+  - at: 2026-11-20T20:35:40Z
+    by: cloud/20261120T203034Z
+    event: claimed f6-open-pr until 2026-11-20T22:35:40Z
