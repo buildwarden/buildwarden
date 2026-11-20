@@ -45,9 +45,11 @@ to a Containerfile; it covers any input form. If the orchestrator alters an inpu
 both the original and the edited form are recorded to the output directory under
 `inputs/`.
 
-A driver that alters an input records it when it stages the input, before the
-build starts, through the shared `driver.RecordInputs`. A failed build therefore
-keeps its inputs, and a failure to record fails the build before anything runs.
+`warden` stages the build script and records an altered input
+(`driver.RecordInputs`) before it starts the driver. A driver alters no input:
+it is given the staged script and the build context and changes neither. A
+failed build therefore keeps its inputs, and a failure to record fails the
+build before anything runs.
 
 The `inputs/` namespace must not collide with the ledger filename or the relay's
 recorded-artifact layout in the output directory (currently `ledger.zst`,
