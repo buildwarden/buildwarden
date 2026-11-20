@@ -1,6 +1,6 @@
 ---
 feature: detached-prepare-windows-exe
-status: draft
+status: archived
 drivers: [container, qemu, vz, hyperv, firecracker]  # conservatively (FLOW-02, the TEST-02
                          # caveat): driver/detach.go is shared (rules.yaml drivers.shared), so
                          # every driver is declared, as project-config-trust did for the same file.
@@ -651,3 +651,51 @@ merge commit, no conflicts).
 ## Rollback notes
 
 ## Archive summary
+
+**Built.** `driver.StartDetached` starts the background image prepare with
+`os.StartProcess` on exactly the file `os.Executable()` names (`argv[0]` that
+path, the log as stdout and stderr, the null device as stdin, the inherited
+environment, `detachedAttr()`), then releases it. `os/exec`'s `PATHEXT` lookup
+is gone, so on Windows an extension-less `dist/warden` (what `make build`
+writes) starts itself, and a `warden.exe` beside it is never run in its place.
+A start that fails is written to the log ("could not start <exe>: <err>") and
+returned. The two callers, the hyperv base refresh (`ensureFreshBase`) and the
+qemu Windows layer refresh (`ensureFreshWindowsLayer`), now print one line when
+a due refresh does not start, naming the error and the `warden image prepare`
+command that refreshes by hand, and the build goes on with the current base;
+qemu's `TryHostLock` error, dropped before, gets the same line. `detachedArgs`
+(the `--config` the child is given, `project-config-trust`), `detachedAttr` and
+`ConfigFile` are unchanged. `drivers.md` and the `"hyperv-prepare"` line of
+`overview.md` say a refresh that cannot start is reported. Validated on the
+Windows desktop with Hyper-V at `b4f86e2` (2026-11-19): the extension-less file
+refreshes, a planted `warden.exe` is not run, a held log gives the new line and
+a SUCCEEDED build, and a `dist/warden.exe` build refreshes from itself.
+
+**Decisions taken.** One code path for every OS, no build tags (GLOBAL-07,
+ORCH-05). A failed start warns and the build goes on (a2): the base is still
+within grace, and `image_min_grace` is the stop. `make build` keeps writing
+`dist/warden` on every OS (a1). No new Windows CI job; the Windows tests run in
+the blocking native step. Every driver is declared because `driver/detach.go`
+is shared (a5, r2); container, vz and firecracker are asserted unaffected (they
+do not call `StartDetached`). Each driver keeps its own `startDetached` test
+seam and its own wording of the line.
+
+**Rejected.** Keeping `exec.Command` and setting `Cmd.Path` (Windows re-runs the
+extension lookup); `exec.Command(exe + ".exe")` or `exec.LookPath` first (both
+can run another file); copying or linking to `<exe>.exe` (a second file that
+can go stale); failing the build on a failed start; staying silent;
+`dist/warden.exe` on Windows, or both names, from `make build`; declaring
+`[interface]` or carrying a `Tier1-Allow: ORCH-01` trailer instead of
+declaring every driver.
+
+**For a future design touching these concepts.** Anything that re-executes
+warden must start the `os.Executable()` path itself, never through `os/exec`'s
+lookup, which on Windows silently substitutes `<path>.exe` for a path with no
+extension (GLOBAL-10, GLOBAL-11). A background chore that fails to start is
+reported on the build's progress stream with the command that does it by hand,
+never dropped. The native permission allowlist in `.claude/` matches
+`dist/warden`, not `dist/warden.exe`, so renaming the dev build is a process
+item. Open: the qemu Windows layer refresh is not validated end to end (tracked
+gap `detached-prepare-windows-exe-qemu`, blocked on `qemu-windows-guest-package`);
+on Windows the error text ends in a period, so the hyperv line reads
+"…process.; run `warden image prepare …`" (cosmetic, seen in native case 4).
