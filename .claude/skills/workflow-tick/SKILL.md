@@ -93,7 +93,10 @@ in each repository the item has one in, each against its own trunk
 (FLOW-08); an `f6-merged-<n>` confirms only its work entry's, and the merge
 step every one. It records each work entry's merge as its `merged`, and the
 merge step moves the item to Close; otherwise leave it pending. `wf next`
-never offers these steps (FLOW-05); this is where they complete.
+never offers these steps (FLOW-05); this is where they complete, unless an
+attended session already confirmed one (`workflow-human` item 5, FLOW-04):
+only pending steps are confirmed, and `wf done` refuses a step already
+done.
 
 Then record each trunk (FLOW-08, FLOW-09): this repository's, and that of
 each repository an in-progress item names in `repos`. For each, read the

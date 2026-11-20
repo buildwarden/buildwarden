@@ -12,8 +12,10 @@ skill is the procedure (FLOW-14). The human decides; you present and record.
 ## Set up
 
 Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
-`.dev/workflow`). Worker: `W=human/jeff`; it cannot complete a `cloud`
-merge step, so this session does not confirm merges: the next tick does.
+`.dev/workflow`). Worker: `W=human/jeff`. A merge step stays `cloud` and is
+never claimed, but this session confirms a merge with `dist/wf done` (FLOW-04):
+one Jeff makes in the sitting, and any `merged:` line `dist/wf stale` prints
+(item 5).
 Read the latest file in `.dev/workflow/digest/`.
 
 ## Never
@@ -60,7 +62,7 @@ Read the latest file in `.dev/workflow/digest/`.
    process item) only at the outcome, together with its done: a claim of a
    queued process item starts it, which would hold its `holds` and its
    areas through a review that may end in changes. Check out the feature branch and read the design, and, for a
-   re-review, the design at the last `approved at <sha>` and the finding that
+   re-review, the design at the newest review entry's `approved at <sha>` and the finding that
    sent it back, with the Implementation plan only when a later phase's
    finding caused the re-review. Put the design
    in front of Jeff before the walkthrough (FLOW-19). If it has more than 4
@@ -115,12 +117,19 @@ Read the latest file in `.dev/workflow/digest/`.
    5. **Outcome.** Approved: first fold the small changes Jeff makes while
       approving into the design text and commit them, with no second review;
       Plan follows the design literally. Then add an entry to the design's
-      Design review section (date, outcome, decisions, `approved at <sha>` of
+      Design review section, one top-level bullet led by `r<N>, <date>:
+      <outcome>`, whose head for an approval reads `approved at <sha>`; an
+      earlier approval it cites comes after that (date, outcome, decisions, `approved at <sha>` of
       the design as approved, changes folded in, `read at <sha>` of the
       design as read when it differs, what was folded in, and for a re-review
       what changed, and one line `sitting: <start>-<end> UTC, asks: <n>
       (<m> in batches)`, where an ask is one entry Jeff answered). A rule
-      change "approved with a change" names the same fold-in commit. Commit and push the branch, then `dist/wf done` the
+      change "approved with a change" names the same fold-in commit. When
+      the design says a process item needs work on the `workflow` branch
+      after its merge, record that checklist as its state step:
+      `dist/wf state-step -state .dev/workflow -worker $W -feature F -note
+      "<the checklist>"`; `wf` adds it as `x4-state` when the item enters
+      Close, and `x4-close` waits for it (FLOW-03). Commit and push the branch, then `dist/wf done` the
       step, which checks the approval. Changes: record his notes in the
       entry, then `dist/wf back -worker $W -feature F -why "<his notes>"`.
 4. **Escalations** (`escalate` steps, `f8-escalate-returned` (a PR Jeff
@@ -138,8 +147,14 @@ Read the latest file in `.dev/workflow/digest/`.
    those that wait for a refresh (FLOW-08, FLOW-10), each with the tier-2
    MUST findings it lists, and offer only the ready ones for merging. Jeff
    merges them himself; you never do (FLOW-08, LINT-03). After each merge he
-   makes in the session, run `dist/wf main` and `dist/wf stale` again, tell
-   him the next tick confirms the merge, and ask which PR he wants next;
+   makes in the session, run `dist/wf main` and `dist/wf stale` again, then
+   confirm it: `dist/wf done -state .dev/workflow -repo . -checkouts
+   .dev/checkouts -worker $W -feature F -step <x3-merge|f7-merge|f6-merged-n>`,
+   and `dist/wf commit -state .dev/workflow -worker $W -m "F: merge confirmed"
+   queue/F.yaml`. Confirm each `merged:` line `wf stale` prints the
+   same way. A failed check leaves the step pending; say so and go on. Then
+   take the human steps the merge unblocked (a seeded `x4-state`); `x4-close`
+   stays the cloud's, for the tick. Ask which PR he wants next;
    refresh that one with `/workflow-tick attended <item>`, wait for CI on the
    new head, and list it as ready. A finding he dismisses is recorded as a
    PR comment with his reason.

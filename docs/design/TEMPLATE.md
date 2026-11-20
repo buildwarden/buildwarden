@@ -121,7 +121,10 @@ One entry per review (FLOW-19): the date, the outcome (approved, or changes),
 the decisions taken, and for an approval, `approved at <sha>`, the commit the
 approved design was read at, and one `rule change <ID> approved at <sha>` line
 per approved rule change (FLOW-14). A re-review also says what changed since the
-last approval.
+last approval. Each review is one top-level bullet led by `r<N>, <date>:
+<outcome>`; for an approval, the head reads `approved at <sha>`, and an
+earlier approval cited in the entry comes after it: `wf` reads an entry's
+first `approved at <sha>` as its approval.
 
 ## Consolidation
 

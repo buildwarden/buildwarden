@@ -22,6 +22,7 @@
 //	            [-adopts CONSUMABLE@VERSION] [-urgent] [-lead host:NAME]
 //	wf move     -state DIR -worker human/NAME -feature F -to N [-why TEXT]
 //	wf urgent   -state DIR -worker human/NAME -feature F [-clear]
+//	wf state-step -state DIR -worker human/NAME -feature F (-note TEXT | -clear)
 //	wf lead     -state DIR -worker W -feature F (-host NAME | -clear)
 //	wf declare  -state DIR -repo DIR -worker W -feature F
 //	wf relate   -state DIR -worker human/NAME -feature A -with B [-clear]
@@ -101,6 +102,14 @@
 // claim and commit -claimed count a run on the first claim of the item by the
 // worker's run, worked out from the worker and the item's history. -new-run
 // is accepted and ignored, for callers that still pass it.
+//
+// done completes a step whose affinity the worker satisfies, and a human or
+// host worker may also complete a merge step or an f6-merged-<n>, which stay
+// cloud and are never claimed: the step's own check is the proof of the
+// human's merge (FLOW-04). done refuses a step already done. state-step,
+// a human's only, records a process item's state step, which Seed adds as
+// x4-state when the item enters Close, or adds at once in Close; -clear
+// removes it (FLOW-03).
 //
 // next and claim apply FLOW-05's limits to every worker: no step is offered
 // or claimed whose claim would put an item's set over the in-progress limit,
@@ -239,7 +248,7 @@ import (
 
 const usage = "usage: wf " +
 	"validate|status|next|claim|renew|release|check|done|answer|back|new|move|urgent|lead|" +
-	"declare|" +
+	"state-step|declare|" +
 	"relate|relations|stale|commit|main|digest|areas|gate|budget|migrate|drops [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
@@ -247,7 +256,7 @@ var errIdle = errors.New("idle")
 
 type opts struct {
 	state, repo, checkouts, worker, feature, step, why        string
-	question, answer                                          string
+	question, answer, note                                    string
 	title, source, machine, stamp, kind, holds, follows, hold string
 	lead, host, session, current, renewed                     string
 	repos, areas, seams, adopts, with, message, claimed       string
@@ -339,7 +348,10 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.BoolVar(&o.urgent, "urgent", false,
 		"new: mark the feature urgent, a human worker only (FLOW-05)")
 	fs.BoolVar(&o.clear, "clear", false,
-		"urgent: remove the mark; relate: remove the collision; lead: remove the lead")
+		"urgent: remove the mark; relate: remove the collision; lead: remove the lead; "+
+			"state-step: remove the state step")
+	fs.StringVar(&o.note, "note", "",
+		"state-step: the checklist of the process item's work on the workflow branch")
 	fs.StringVar(&o.lead, "lead", "", "new: host:<name>, the feature's lead (FLOW-04)")
 	fs.StringVar(&o.host, "host", "", "lead: the host name that leads the feature")
 	fs.StringVar(&o.message, "m", "", "commit: the commit message")
@@ -389,7 +401,7 @@ func run(cmd string, args []string, now time.Time) error {
 	cmds := map[string]func(*queue.State, opts) error{
 		"validate": validate, "status": status, "next": next, "check": checkPhase,
 		"answer": answer, "back": back, "new": newFeature, "move": move, "urgent": urgent,
-		"lead": lead,
+		"lead": lead, "state-step": stateStep,
 		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
 		"declare": declareItem, "relate": relate, "relations": relations,
 		"digest": digest, "areas": areasCmd, "native": native,
@@ -583,7 +595,13 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 	if err != nil {
 		return err
 	}
-	if o.worker == "" || !queue.Satisfies(o.worker, st.Affinity) {
+	// A human or host worker may complete a merge step with done, and never
+	// claims one: claim, release and renew stay affinity-exact (FLOW-04).
+	may := queue.Satisfies(o.worker, st.Affinity)
+	if cmd == "done" {
+		may = queue.MayComplete(o.worker, st)
+	}
+	if o.worker == "" || !may {
 		return fmt.Errorf("worker %q may not take %s step %s (FLOW-04)", o.worker,
 			st.Affinity, st.ID)
 	}
@@ -602,6 +620,11 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 			return err
 		}
 	case "done":
+		// The tick and an attended session may both confirm a merge: the
+		// second is refused, not logged twice (FLOW-04).
+		if st.Status == "done" {
+			return fmt.Errorf("%s is already done; nothing to confirm", st.ID)
+		}
 		if err := finish(s, f, st, o); err != nil {
 			return err
 		}
@@ -948,6 +971,19 @@ func urgent(s *queue.State, o opts) error {
 	return s.Save(f)
 }
 
+// stateStep is wf state-step: a human records a process item's state step,
+// the x4-state Seed adds at Close, or with -clear removes it (FLOW-03).
+func stateStep(s *queue.State, o opts) error {
+	f, err := s.Find(o.feature)
+	if err != nil {
+		return err
+	}
+	if err := queue.SetStateStep(f, o.note, o.clear, o.worker, o.now); err != nil {
+		return err
+	}
+	return s.Save(f)
+}
+
 // lead sets the feature's lead, or with -clear removes it, for any worker
 // (FLOW-04, FLOW-09).
 func lead(s *queue.State, o opts) error {
@@ -1191,14 +1227,21 @@ func staleSeed(s *queue.State, f *queue.Feature, head string, o opts) (string, b
 
 // staleMerged is wf stale for an item whose PR the human has merged: no
 // refresh is seeded, since a push would bring the deleted branch back
-// (FLOW-16). At its merge step the item is only named: that step is the
-// cloud's, which the tick's merge confirmation completes and an attended
-// session cannot. In Publish nothing is done: its gate passes on the merge.
+// (FLOW-16). At its merge step the item is named with the wf done that
+// confirms it, which the tick or an attended session runs (FLOW-04); wf stale
+// does not run it, so the merge's own check stays the proof. In Publish
+// nothing is done: its gate passes on the merge.
 // Before Publish, the item was sent back with its PR open, and the merge
 // supersedes its phases (FLOW-08).
 func staleMerged(f *queue.Feature, o opts) (line string, changed bool) {
 	switch {
 	case f.AtMerge():
+		const confirm = "merged: %[1]s (confirm: wf done -feature %[1]s -step %[2]s)"
+		for _, st := range f.Steps {
+			if st.Status == "pending" && queue.IsMerge(&st) {
+				return fmt.Sprintf(confirm, f.Feature, st.ID), false
+			}
+		}
 		return "merged: " + f.Feature, false
 	case f.Phase < f.PublishPhase():
 		queue.Landed(f, o.worker, o.now)
