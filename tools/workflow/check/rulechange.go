@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -69,11 +70,11 @@ var ruleApprovedRe = regexp.MustCompile(
 	"(?i:rule\\s+change)\\s+`?([A-Z]+-\\d{2})`?\\s+(?i:approved\\s+at)\\s+`?([0-9a-f]{7,40})")
 
 // cleared returns the files each approved rule change may edit, keyed by
-// path, with the rule that clears it. An approval clears an entry only when
+// path, with every rule that clears it, sorted. An approval clears an entry only when
 // the entry was in the front-matter at the approved commit and still is;
 // the paths are those approved. why lists the approvals that clear nothing.
-func (c *checker) cleared(d *Design) (paths map[string]string, why []string) {
-	paths = map[string]string{}
+func (c *checker) cleared(d *Design) (paths map[string][]string, why []string) {
+	paths = map[string][]string{}
 	now := map[string]bool{}
 	for _, rc := range d.Front.RuleChanges {
 		now[rc.Rule] = true
@@ -95,7 +96,9 @@ func (c *checker) cleared(d *Design) (paths map[string]string, why []string) {
 			if rc.Rule == rule {
 				found = true
 				for _, p := range rc.Paths {
-					paths[p] = rule
+					if !slices.Contains(paths[p], rule) {
+						paths[p] = append(paths[p], rule)
+					}
 				}
 			}
 		}
@@ -103,6 +106,9 @@ func (c *checker) cleared(d *Design) (paths map[string]string, why []string) {
 			why = append(why, fmt.Sprintf(
 				"%s approved at %s was not in rule_changes there", rule, sha))
 		}
+	}
+	for _, rules := range paths {
+		sort.Strings(rules)
 	}
 	return paths, why
 }
@@ -208,7 +214,7 @@ func (c *checker) ruleClearance() {
 	at := c.at
 	c.at = c.home
 	d, err := c.loadDesign(c.f.Branch)
-	var ok map[string]string
+	var ok map[string][]string
 	var why []string
 	if err == nil {
 		ok, why = c.cleared(d)
@@ -227,10 +233,10 @@ func (c *checker) ruleClearance() {
 		switch {
 		case files[p] == machinery:
 			c.add(name, false, "%s changes only through a process item", p)
-		case ok[prefix+p] == "":
+		case len(ok[prefix+p]) == 0:
 			c.add(name, false, "%s is in no approved rule change%s", p, because(why))
 		default:
-			good = append(good, p+" ("+ok[prefix+p]+")")
+			good = append(good, p+" ("+strings.Join(ok[prefix+p], ", ")+")")
 		}
 	}
 	if len(good) > 0 {
@@ -349,8 +355,10 @@ func (c *checker) approvedRules(base, head string) (map[string]bool, []string, e
 		}
 		paths, w := c.cleared(d)
 		why = append(why, w...)
-		for _, rule := range paths {
-			out[rule] = true
+		for _, rules := range paths {
+			for _, rule := range rules {
+				out[rule] = true
+			}
 		}
 	}
 	return out, why, nil

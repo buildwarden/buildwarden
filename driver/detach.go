@@ -1,8 +1,8 @@
 package driver
 
 import (
+	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 )
 
@@ -11,12 +11,17 @@ import (
 // records WardenVersion.
 var ConfigFile string
 
+// executable is os.Executable; tests replace it.
+var executable = os.Executable
+
 // StartDetached starts this warden binary with args as a background process
 // that outlives the caller (a periodic image refresh), with its output in
-// logPath (truncated). It returns once the process has started. The child
-// reads the config file its parent read (detachedArgs).
+// logPath (truncated). It returns once the process has started. The file run
+// is exactly the one os.Executable names, with no search and no extension
+// lookup. The child reads the config file its parent read (detachedArgs). A
+// start that fails is also written to the log.
 func StartDetached(logPath string, args ...string) error {
-	exe, err := os.Executable()
+	exe, err := executable()
 	if err != nil {
 		return err
 	}
@@ -28,13 +33,32 @@ func StartDetached(logPath string, args ...string) error {
 		return err
 	}
 	defer log.Close()
-	cmd := exec.Command(exe, detachedArgs(args)...)
-	cmd.Stdout, cmd.Stderr = log, log
-	cmd.SysProcAttr = detachedAttr()
-	if err := cmd.Start(); err != nil {
+	if err := startDetached(exe, log, detachedArgs(args)); err != nil {
+		fmt.Fprintf(log, "[warden] could not start %s: %v\n", exe, err)
 		return err
 	}
-	return cmd.Process.Release()
+	return nil
+}
+
+// startDetached runs exe with args, its stdout and stderr on log, and
+// releases it. It uses os.StartProcess rather than os/exec because os/exec,
+// on Windows, resolves every path through PATHEXT, absolute ones included:
+// an extension-less exe would be run as <exe>.exe, or not at all.
+func startDetached(exe string, log *os.File, args []string) error {
+	null, err := os.Open(os.DevNull)
+	if err != nil {
+		return err
+	}
+	defer null.Close()
+	p, err := os.StartProcess(exe, append([]string{exe}, args...), &os.ProcAttr{
+		Files: []*os.File{null, log, log},
+		Env:   os.Environ(),
+		Sys:   detachedAttr(),
+	})
+	if err != nil {
+		return err
+	}
+	return p.Release()
 }
 
 // detachedArgs puts --config <ConfigFile> in front of args when a file was

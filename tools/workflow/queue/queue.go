@@ -138,6 +138,11 @@ type Feature struct {
 	// Holds lists the affinity patterns (cloud, host:*, host:macos-vz) whose
 	// workers take no new step while this process item is in progress.
 	Holds []string `yaml:"holds,omitempty"`
+	// StateStep is a process item's state step: the checklist of the work
+	// on the workflow branch that its merged change needs. Only a human
+	// records it (wf state-step); Seed adds it as x4-state when the item
+	// enters Close, and x4-close waits for it (FLOW-03).
+	StateStep string `yaml:"state_step,omitempty"`
 	// Lead is the host name, host:<name>, whose machines take a feature's
 	// cloud steps of phases 0 to 5 (FLOW-04, FLOW-09). Empty, the item is
 	// not led. Any worker may set or clear it (SetLead); each change is a
@@ -1345,6 +1350,9 @@ func (f *Feature) validateKind(bad func(string, ...any), tracked, homedHere bool
 		}
 		if len(f.Holds) > 0 {
 			bad("only a process item holds workers")
+		}
+		if f.StateStep != "" {
+			bad("state_step is for a process item (FLOW-03)")
 		}
 	}
 }

@@ -155,7 +155,7 @@ branch, the repositories it works in and what its design declares
 | 4 | Review | Behavioral-linter tier 1 green; tier-2 report produced for the diff (LINT-04); the rule-change clearance still passes (FLOW-14). |
 | 5 | Guide | User-facing narrative docs (guides, examples) written or updated. |
 | 6 | Publish | Once the PR slot is free (FLOW-05): current `main` merged; consolidation section filled (FLOW-10, FLOW-15); the rule-change clearance still passes (FLOW-14); design archived with its summary on the branch (FLOW-12); PR opened (no confirmation needed, FLOW-08) with CI green (FLOW-11); blocking native validation done (FLOW-09); each pull request its design names to merge first merged, and the loop has seen it (FLOW-08). |
-| 7 | Merge | The human merged the PR (FLOW-08). The loop confirms it; there is no step for the human to claim. The PR is ready for the merge only while its branch contains `main` (FLOW-08); when `main` moves past it, a refresh step brings it up to date (FLOW-10). |
+| 7 | Merge | The human merged the PR (FLOW-08). The loop confirms it, in an unattended run or in an attended session (FLOW-04); there is no step for the human to claim. The PR is ready for the merge only while its branch contains `main` (FLOW-08); when `main` moves past it, a refresh step brings it up to date (FLOW-10). |
 | 8 | Close | Merged branches and validation leftovers cleaned up (FLOW-16); the design is archived on `main`. |
 
 A transition happens only when the phase's done-when checks pass mechanically
@@ -201,8 +201,8 @@ rest of `tools/workflow/` change only through a process item:
 |---|-------|-----------|
 | 1 | Design | The design document exists on the branch and its design review is recorded as approved. |
 | 2 | Implement | The branch is pushed (FLOW-17), the design archived on it with its summary, and its PR open with CI green. |
-| 3 | Merge | A human merged it into `main` (FLOW-08). Its PR is ready and is refreshed as a feature's is (FLOW-08, FLOW-10). |
-| 4 | Close | As phase 8. |
+| 3 | Merge | A human merged it into `main` (FLOW-08), confirmed as phase 7's merge is. Its PR is ready and is refreshed as a feature's is (FLOW-08, FLOW-10). |
+| 4 | Close | As phase 8, and its state step done when the human recorded one: a `human` step that brings the `workflow` branch in line with the merged change. Only the human records it, at the design review or later; the queue's tooling adds it when Close is entered, or at once when it is recorded during Close, and Close's own step waits for it. |
 
 A feature whose home has adopted the contract has the phases above,
 whichever repository that is. A feature whose home has not adopted it is
@@ -244,6 +244,15 @@ change, each change recorded in the item's history and the run's digest
 carry that `host:<name>` instead; its design review stays `human`, and its
 Publish, Merge and Close stay `cloud`. A claim by a worker that serves the
 lead starts a queued led feature, and no other claim does.
+
+A merge step, and a step confirming that a pull request its design names
+to merge first has merged (FLOW-08), stays `cloud` and is never offered
+to a worker (FLOW-05).
+A `human` or `host:<name>` worker may also complete one, which is the one exception to
+taking only steps whose affinity a worker satisfies: the same done-when
+check runs, so the step completes only once the merge has happened, and a
+step already done is not completed again. Completing it records the
+human's merge; it never makes one (FLOW-08).
 
 A worker takes only steps whose affinity it satisfies: a machine satisfies
 each host name the table lists for it, for a step in a repository the

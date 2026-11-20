@@ -18,7 +18,8 @@ func (pb PreparedBase) freshness() winguest.Freshness {
 
 // ensureFreshBase runs the freshness rules (winguest.CheckFreshness) for the
 // active prepared base and, when a refresh is due, starts one in the
-// background; the build continues on the current base either way.
+// background, or reports on progress that it did not start; the build
+// continues on the current base either way.
 func ensureFreshBase(req *driver.BuildRequest, progress io.Writer) error {
 	pb, _, ok := activePrepared()
 	if !ok {
@@ -32,15 +33,22 @@ func ensureFreshBase(req *driver.BuildRequest, progress io.Writer) error {
 	}
 	if !prepareRunning() {
 		logPath := filepath.Join(hypervCacheDir(), "prepare.log")
-		if err := driver.StartDetached(logPath,
-			"image", "prepare", "--driver", "hyperv"); err == nil {
+		age := winguest.RoundAge(pb.freshness().Age(now))
+		if err := startDetached(logPath,
+			"image", "prepare", "--driver", "hyperv"); err != nil {
+			fmt.Fprintf(progress, "[warden] prepared base is %s old, and its "+
+				"background refresh did not start: %v; run `%s` to refresh it\n",
+				age, err, prepareFix)
+		} else {
 			fmt.Fprintf(progress, "[warden] prepared base is %s old; refreshing it "+
-				"in the background (log: %s)\n",
-				winguest.RoundAge(pb.freshness().Age(now)), logPath)
+				"in the background (log: %s)\n", age, logPath)
 		}
 	}
 	return nil
 }
+
+// startDetached is driver.StartDetached; tests replace it.
+var startDetached = driver.StartDetached
 
 // prepareRunning reports whether a prepare holds the prepare lock.
 func prepareRunning() bool {

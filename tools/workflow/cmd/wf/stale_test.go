@@ -284,7 +284,7 @@ func staleAfterMerge(t *testing.T) {
 	mergePR(t, work, "pub", 22)
 	gitT(t, work, "push", "-q", "origin", ":feat/closed")
 	gitT(t, work, "fetch", "-q", "--prune", "origin")
-	want := []string{"merged: atmerge",
+	want := []string{"merged: atmerge (confirm: wf done -feature atmerge -step f7-merge)",
 		"gone\tclosed\tPR #23 is not merged and origin/feat/closed is gone: no refresh"}
 	if got := runStale(t, dir, work); !slices.Equal(got, want) {
 		t.Fatalf("wf stale = %q, want %q", got, want)
@@ -295,7 +295,7 @@ func staleAfterMerge(t *testing.T) {
 			t.Fatalf("%s: pending %q, pr %+v", name, pending(t, dir, name), f.PR)
 		}
 	}
-	// A human cannot complete the cloud's merge step: the tick confirms it.
+	// wf stale names the confirmation and does not run it.
 	if got := item(t, dir, "atmerge").Phase; got != 7 {
 		t.Fatalf("wf stale moved the merged item to phase %d", got)
 	}

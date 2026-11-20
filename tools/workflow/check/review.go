@@ -14,16 +14,90 @@ import (
 // The phrase may wrap across lines.
 var approvedRe = regexp.MustCompile("(?i)approved\\s+at\\s+`?([0-9a-f]{7,40})")
 
+// entryHeadRe matches the head of a Design review entry: its ID, r<N>,
+// optionally after "Re-review".
+var entryHeadRe = regexp.MustCompile(`^(?:Re-review\s+)?r\d+\b`)
+
 // approvals returns the commits of the design's recorded approvals, oldest
-// first. A rule change's own approval (`rule change <ID> approved at <sha>`)
-// is not one.
+// first, one per review entry (FLOW-19). An entry is a top-level bullet of the
+// Design review section whose head is its ID; its approval is the first
+// `approved at <sha>` in the whole bullet whose sha no earlier entry recorded,
+// so a citation of an older approval, in the entry or in a bullet that is not
+// an entry, neither moves the baseline nor counts as an approval. A rule
+// change's own approval (`rule change <ID> approved at <sha>`) is not one.
 func approvals(d *Design) []string {
 	var out []string
-	text := ruleApprovedRe.ReplaceAllString(d.Sections["Design review"], "")
-	for _, m := range approvedRe.FindAllStringSubmatch(text, -1) {
-		out = append(out, m[1])
+	for _, b := range reviewBullets(d.Sections["Design review"]) {
+		b = ruleApprovedRe.ReplaceAllString(b, "")
+		if !entryHeadRe.MatchString(bulletHead(b)) {
+			continue
+		}
+		for _, m := range approvedRe.FindAllStringSubmatch(b, -1) {
+			if !citedEarlier(out, m[1]) {
+				out = append(out, m[1])
+				break
+			}
+		}
 	}
 	return out
+}
+
+// citedEarlier reports whether an earlier entry recorded sha, a citation and not
+// this entry's approval; two abbreviations of one commit match by prefix.
+func citedEarlier(earlier []string, sha string) bool {
+	for _, e := range earlier {
+		if strings.HasPrefix(e, sha) || strings.HasPrefix(sha, e) {
+			return true
+		}
+	}
+	return false
+}
+
+// lastApproval returns the newest review entry's approval.
+func lastApproval(d *Design) (string, bool) {
+	a := approvals(d)
+	if len(a) == 0 {
+		return "", false
+	}
+	return a[len(a)-1], true
+}
+
+// reviewBullets splits a Design review section into its top-level bullets,
+// each without its "- ". A bullet runs to the next one, a heading, or an
+// unindented line that is not a bullet; indented lines, nested bullets
+// included, belong to it.
+func reviewBullets(section string) []string {
+	var out []string
+	var cur *strings.Builder
+	for _, line := range strings.Split(section, "\n") {
+		switch {
+		case strings.HasPrefix(line, "- "):
+			out = append(out, "")
+			cur = &strings.Builder{}
+			cur.WriteString(line[2:])
+		case strings.HasPrefix(line, "#"),
+			line != "" && line[0] != ' ' && line[0] != '\t':
+			cur = nil
+		case cur != nil:
+			cur.WriteString("\n" + line)
+		}
+		if cur != nil {
+			out[len(out)-1] = cur.String()
+		}
+	}
+	return out
+}
+
+// bulletHead returns a bullet's head: its leading **...** span, else its
+// first line.
+func bulletHead(b string) string {
+	if rest, ok := strings.CutPrefix(b, "**"); ok {
+		if head, _, found := strings.Cut(rest, "**"); found {
+			return head
+		}
+	}
+	head, _, _ := strings.Cut(b, "\n")
+	return head
 }
 
 // reviewDecision is Design's part of FLOW-19: the design records
@@ -84,11 +158,10 @@ func (c *checker) approvalDelta() {
 		c.add(name, false, "%v", err)
 		return
 	}
-	a := approvals(d)
-	if len(a) == 0 {
+	base, ok := lastApproval(d)
+	if !ok {
 		return
 	}
-	base := a[len(a)-1]
 	prev, err := c.loadDesign(base)
 	if err != nil {
 		c.add(name, false, "approved design at %s: %v", base, err)
@@ -187,8 +260,8 @@ func (c *checker) skipValid(d *Design) {
 		}
 	}
 	base := c.trunk()
-	if a := approvals(d); len(a) > 0 {
-		base = a[len(a)-1]
+	if last, ok := lastApproval(d); ok {
+		base = last
 		prev, err := c.loadDesign(base)
 		if err != nil {
 			c.add(name, false, "approved design at %s: %v", base, err)

@@ -3,6 +3,7 @@ package qemu
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -301,15 +302,18 @@ func resolveWindowsBaseImage(
 				"prepared Windows layer is incomplete (%s: %v)", p, err)
 		}
 	}
-	if err := ensureFreshWindowsLayer(l, ga, req); err != nil {
+	if err := ensureFreshWindowsLayer(l, ga, req, os.Stderr); err != nil {
 		return nil, "", err
 	}
 	return []string{base, l.Path}, l.VarsFD, nil
 }
 
 // ensureFreshWindowsLayer applies winguest.CheckFreshness and starts a
-// detached re-prepare when one is due; the build continues on l either way.
-func ensureFreshWindowsLayer(l PreparedLayer, ga string, req *driver.BuildRequest) error {
+// detached re-prepare when one is due, or reports on progress that it did not
+// start; the build continues on l either way.
+func ensureFreshWindowsLayer(
+	l PreparedLayer, ga string, req *driver.BuildRequest, progress io.Writer,
+) error {
 	now := time.Now()
 	f := winguest.Freshness{PreparedAt: l.PreparedAt, GraceEnd: l.GraceEnd}
 	refresh, err := winguest.CheckFreshness(
@@ -317,19 +321,38 @@ func ensureFreshWindowsLayer(l PreparedLayer, ga string, req *driver.BuildReques
 	if err != nil || !refresh {
 		return err
 	}
-	unlock, free, lerr := driver.TryHostLock(prepareLockName(ga))
-	if lerr != nil || !free {
+	age := winguest.RoundAge(f.Age(now))
+	unlock, free, err := tryHostLock(prepareLockName(ga))
+	if err != nil {
+		reportRefreshNotStarted(progress, age, err, ga)
+		return nil
+	}
+	if !free {
 		return nil
 	}
 	unlock()
 	logPath := filepath.Join(driver.CacheDir(), "images", "prepare-windows-"+ga+".log")
-	if err := driver.StartDetached(logPath, "image", "prepare", "--driver", "qemu",
-		"--os", "windows", "--arch", ga); err == nil {
-		fmt.Fprintf(os.Stderr, "[warden] prepared Windows layer is %s old; refreshing "+
-			"it in the background (log: %s)\n", winguest.RoundAge(f.Age(now)), logPath)
+	if err := startDetached(logPath, "image", "prepare", "--driver", "qemu",
+		"--os", "windows", "--arch", ga); err != nil {
+		reportRefreshNotStarted(progress, age, err, ga)
+		return nil
 	}
+	fmt.Fprintf(progress, "[warden] prepared Windows layer is %s old; refreshing "+
+		"it in the background (log: %s)\n", age, logPath)
 	return nil
 }
+
+func reportRefreshNotStarted(progress io.Writer, age string, err error, ga string) {
+	fmt.Fprintf(progress, "[warden] prepared Windows layer is %s old, and its "+
+		"background refresh did not start: %v; run `%s` to refresh it\n",
+		age, err, prepareFix(ga))
+}
+
+// startDetached and tryHostLock are driver's; tests replace them.
+var (
+	startDetached = driver.StartDetached
+	tryHostLock   = driver.TryHostLock
+)
 
 // configureWindowsBuildVM copies the writable UEFI vars and builds the Windows
 // provisioning seed (FAT image) for the build VM, filling cfg.VarsFD and
