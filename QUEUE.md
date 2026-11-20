@@ -34,15 +34,14 @@ None.
 
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | queue-positions | process | - | buildwarden/buildwarden | - | 4 close | x4-close (cloud, leased to cloud/20261120T203034Z) | - | [#126](https://github.com/buildwarden/buildwarden/pull/126) | 4 / 5 |
-| 2 | loop-native-lead | process | - | buildwarden/buildwarden | - | 4 close | x4-close (cloud) | - | [#129](https://github.com/buildwarden/buildwarden/pull/129) | 4 / 12 |
-| 3 | detached-prepare-windows-exe | fix (follows project-config-trust) | - | buildwarden/buildwarden | driver-core, driver/hyperv, driver/qemu, book, designs | 6 publish | f6-refresh (cloud) | - | - | 14 / 10 |
-| 4 | merge-confirm-attended | process | - | buildwarden/buildwarden | - | 2 implement | x4-state (human), x2-implement (cloud) | - | - | 1 / 5 |
-| 5 | loop-repository | process | - | buildwarden/buildwarden | - | 4 close | x4-close (cloud) | - | [#130](https://github.com/buildwarden/buildwarden/pull/130) | 4 / 10 |
-| 7 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
-| 8 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
-| 9 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-plan-r2 (cloud) | - | - | 11 / 30 |
-| 10 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 9 |
+| 1 | loop-native-lead | process | - | buildwarden/buildwarden | - | 4 close | x4-close (cloud) | - | [#129](https://github.com/buildwarden/buildwarden/pull/129) | 4 / 12 |
+| 2 | detached-prepare-windows-exe | fix (follows project-config-trust) | - | buildwarden/buildwarden | driver-core, driver/hyperv, driver/qemu, book, designs | 6 publish | f6-refresh (cloud) | - | - | 14 / 10 |
+| 3 | merge-confirm-attended | process | - | buildwarden/buildwarden | - | 2 implement | x4-state (human), x2-implement (cloud) | - | - | 1 / 5 |
+| 4 | loop-repository | process | - | buildwarden/buildwarden | - | 4 close | x4-close (cloud) | - | [#130](https://github.com/buildwarden/buildwarden/pull/130) | 4 / 10 |
+| 6 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
+| 7 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
+| 8 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-plan-r2 (cloud) | - | - | 11 / 30 |
+| 9 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 9 |
 
 ## Workers
 
@@ -119,9 +118,9 @@ Open features that are not disjoint. Process items are outside the relations (FL
 
 | Pri | Item | Kind | Repositories | Areas | Est. steps |
 |---|---|---|---|---|---|
-| 6 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
-| 11 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
-| 12 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
-| 13 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
-| 14 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
-| 15 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |
+| 5 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
+| 10 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
+| 11 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
+| 12 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
+| 13 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
+| 14 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |

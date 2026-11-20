@@ -1,8 +1,7 @@
 feature: queue-positions
 title: 'Priorities are always the open items'' 1-indexed queue positions: wf renumbers them on every change that moves an item, and done items leave the numbering and the queue folder'
-priority: 1
 kind: process
-status: in_progress
+status: done
 round: process
 phase: 4
 design: docs/design/queue-positions.md
@@ -46,12 +45,12 @@ steps:
   - id: x4-close
     phase: 4
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - x4-state
     lease:
-      claimed_by: cloud/20261120T203034Z
-      expires: 2026-11-20T22:31:14.013082838Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -106,3 +105,9 @@ history:
   - at: 2026-11-20T20:31:14Z
     by: cloud/20261120T203034Z
     event: claimed x4-close until 2026-11-20T22:31:14Z
+  - at: 2026-11-20T20:31:20Z
+    by: cloud/20261120T203034Z
+    event: done x4-close
+  - at: 2026-11-20T20:31:20Z
+    by: cloud/20261120T203034Z
+    event: closed; feature done
