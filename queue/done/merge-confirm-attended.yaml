@@ -1,8 +1,7 @@
 feature: merge-confirm-attended
 title: Attended merge confirmation, a seeded state step, and entry-scoped design approvals
-priority: 2
 kind: process
-status: in_progress
+status: done
 round: process
 phase: 4
 design: docs/design/merge-confirm-attended.md
@@ -46,12 +45,12 @@ steps:
   - id: x4-close
     phase: 4
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - x4-state
     lease:
-      claimed_by: cloud/20261120T203034Z
-      expires: 2026-11-20T23:36:26.04605043Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -106,3 +105,9 @@ history:
   - at: 2026-11-20T21:36:26Z
     by: cloud/20261120T203034Z
     event: claimed x4-close until 2026-11-20T23:36:26Z
+  - at: 2026-11-20T21:36:33Z
+    by: cloud/20261120T203034Z
+    event: done x4-close
+  - at: 2026-11-20T21:36:33Z
+    by: cloud/20261120T203034Z
+    event: closed; feature done
