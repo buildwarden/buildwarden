@@ -1,0 +1,34 @@
+feature: config-lookup-test-symlinked-tmp
+title: 'TestConfigFileLookupOrder fails on macOS: it expects the unresolved t.TempDir path, and LoadConfig returns the working directory os.Getwd resolves (/var -> /private/var)'
+priority: 3
+follows: project-config-trust
+status: queued
+round: feature
+phase: 0
+design: docs/design/config-lookup-test-symlinked-tmp.md
+branch: feat/config-lookup-test-symlinked-tmp
+alters_relationships: null
+source: 'host:qemu-any/macbook.20261120T125213Z (unattended) found it; that run''s push failed (session left uncommitted workflow changes) so the filing was lost; refiled attended from the saved leftover on Jeff''s word, 2026-11-20. go test -count=1 -run TestConfigFileLookupOrder ./cmd/warden FAILS on darwin/arm64 on main e9315c2 and again on be13847: subtests ''./warden.toml when nothing names a file'' and ''an empty variable is not set'' get config file /private/var/folders/.../warden.toml, want /var/folders/.../warden.toml (cmd/warden/configfile_test.go:125, added by project-config-trust). Log: native/qemu-any/2026-11-20/cmd-warden-go-test.log.'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 7
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-20T22:54:19Z
+    by: host:qemu-any/macbook.attended-20261120T225419Z
+    event: queued at position 3
+  - at: 2026-11-20T22:54:19Z
+    by: host:qemu-any/macbook.attended-20261120T225419Z
+    event: 'repos and areas taken from project-config-trust: it has none'

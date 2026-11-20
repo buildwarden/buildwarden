@@ -1,6 +1,6 @@
 feature: relay-exit-code-unreadable
 title: 'Relay: an exit code it cannot read is recorded as 0, success'
-priority: 11
+priority: 12
 status: queued
 round: feature
 phase: 0

@@ -255,6 +255,11 @@ gaps:
       2026-11-20 (host:qemu-any/macbook.20261120T224036Z, unattended, main be13847): not rerun. Since e9315c2
       driver/qemu changed only in the Windows prepared-layer refresh start (#131), which a Linux build does
       not reach, so the 2026-11-17 Linux pass stands; Windows half still waits on qemu-windows-guest-package.
+      2026-11-20 (host:qemu-any/macbook.20261120T125213Z, unattended, main e9315c2; recorded from its saved
+      leftover by host:qemu-any/macbook.attended-20261120T225419Z, since that run's push failed): not rerun, the 2026-11-17 Linux pass stood. Side
+      finding: `go test ./cmd/warden` fails on darwin/arm64 on main (TestConfigFileLookupOrder, /var vs
+      /private/var), refiled as config-lookup-test-symlinked-tmp (follows project-config-trust); still fails
+      on be13847. Logs: native/qemu-any/2026-11-20/.
     status: open
   - id: hyperv-eval-image-verify-disks
     host: windows-hyperv
@@ -1069,6 +1074,15 @@ gaps:
       then timed out at 4m (silent guest), so "still builds" is not shown. The active layer prepared at
       16:09Z today came from an earlier run whose results were not recorded (the 12:52Z macbook run, status
       failed). Logs: native/macos-qemu/2026-11-20/.
+      2026-11-20 (host:macos-qemu/macbook.20261120T125213Z, unattended, feat/detached-prepare-windows-exe
+      b4f86e2; recorded from its saved leftover by host:qemu-any/macbook.attended-20261120T225419Z, since that run's push failed): with [vm]
+      image_refresh_after = "1m", a qemu Windows build on the active prepared layer (no --image) printed
+      "prepared Windows layer is 19.9d old; refreshing it in the background" and then timed out at 4m (silent
+      guest, as on main). The same build with --image failed before any VM: "generating windows seed FAT:
+      hdiutil convert to raw: … hdiutil: convert failed - Resource temporarily unavailable" (seen once, not
+      retried; the later run on main be13847 did not hit it). The session then waited on the detached
+      prepare past Claude Code's 600 s background-wait ceiling and exited uncommitted. Logs:
+      native/macos-qemu/2026-11-20/dpwe-b4f86e2-*.
   - id: workdir-in-context-windows
     host: container-any
     status: open

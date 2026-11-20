@@ -1,0 +1,10 @@
+[warden] config: /Users/jeff/src/buildwarden-native/.scratch/dpwe-case/warden.toml (--config)
+[warden] preparing build environment...
+warden: build FAILED
+[warden] ERROR: generating windows seed FAT: hdiutil convert to raw: hdiutil: WARNING: 'hdiutil convert -format ...' is deprecated. Please use 'diskutil image create from --format ...' instead.
+hdiutil: convert failed - Resource temporarily unavailable
+: exit status 1
+
+  If this is unexpected, please file a bug:
+  https://github.com/buildwarden/buildwarden/issues/new?title=Bug%3A+generating+windows+seed+FAT%3A+hdiutil+convert+to+raw%3A+hdiutil%3A+WARNING%3A+%27hdiutil+convert+-format+...%27+is+deprecated.+Please+use+%27diskutil+image+create+from+--format+...%27+instead.%0Ahdiutil%3A+convert+failed+-+Resource+temporarily+unavailable%0A%3A+exit+status+1&body=%23%23+Environment%0A-+OS%3A+darwin%2Farm64%0A-+Version%3A+dev%0A%0A%23%23+Error%0A%60%60%60%0Agenerating+windows+seed+FAT%3A+hdiutil+convert+to+raw%3A+hdiutil%3A+WARNING%3A+%27hdiutil+convert+-format+...%27+is+deprecated.+Please+use+%27diskutil+image+create+from+--format+...%27+instead.%0Ahdiutil%3A+convert+failed+-+Resource+temporarily+unavailable%0A%3A+exit+status+1%0A%60%60%60%0A%0A%23%23+Steps+to+reproduce%0A1.+%0A
+
