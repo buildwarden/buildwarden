@@ -199,15 +199,17 @@ the transition happens only if the check passes.
 | 4 | `f4-review` |
 | 5 | `f5-guide` |
 | 6 | `f6-merge-main` (waits for the PR slot, FLOW-05), `f6-consolidate`, `f6-open-pr` (archives the design on the branch and opens the PR; no confirmation, FLOW-08); `f6-refresh` (below) |
-| 7 | `f7-merge` (cloud; passes once the human has merged, takes no claim or budget; never offered by `wf next`, the tick confirms it) |
+| 7 | `f7-merge` (cloud; passes once the human has merged, takes no claim or budget; never offered by `wf next`; confirmed by the tick or by an attended or native session's `wf done`, a human or host worker included (merge-confirm-attended)) |
 | 8 | `f8-close` (cloud, inline in the tick; no PR, FLOW-16) |
 
 A **process item** (`kind: process`, FLOW-03) changes the rules the loops run
 under (`docs/development/`, `.claude/`, `tools/workflow/`). It has its own
 round, `process`: `x1-design` (human: the design on the branch, approved in its
 design review), `x2-implement` (cloud: implemented, archived and its PR green),
-`x3-merge` (merged into `main`) and `x4-close` (branch gone, design archived on
-`main`).
+`x3-merge` (merged into `main`; confirmed as `f7-merge` is), `x4-state` (human,
+only when the human recorded a state step with `wf state-step`: seeded at Close
+from the item's `state_step`, and `x4-close` waits for it) and `x4-close`
+(branch gone, design archived on `main`).
 
 A **tracked** item (round `tracked`, step letter `t`) is homed in another
 repository, where `wf` sees no branch, design or PR: `wf new -repos
@@ -221,8 +223,9 @@ both in `repos`.
 The **refresh**, `f6-refresh` (`x2-refresh` on a process item; `-r2`, ... as
 needed), is a `cloud` step that no phase seeds. `wf stale -state DIR -repo DIR
 -worker W` names an item whose PR the human has merged and seeds no refresh for
-it (the merge step is the cloud's: the tick's merge confirmation completes it,
-and an attended session cannot), then seeds one on each item waiting for the
+it, printing `merged: F (confirm: wf done -feature F -step S)` (the merge step
+is the cloud's, and a human or host worker may also complete it with `wf
+done`), then seeds one on each item waiting for the
 human's merge whose branch does not contain `origin/main`, or whose head is not
 `pr.head`, and sets `pr.ci` to `pending`. It merges `main`, runs the gates and
 the consolidation pass, pushes, and records `pr.ci` and `pr.head` for the new
@@ -376,7 +379,7 @@ Other commands: `wf validate [-areas <candidate> [-repo DIR]]` (with `-areas`,
 what a candidate map does to the open items), `wf status [-all]` (open items;
 `-all` adds done ones), `wf check` (done-when without moving), `wf release`,
 `wf back` (FLOW-06), `wf answer` (human only, FLOW-07), `wf new` (intake),
-`wf urgent`, `wf relate` and `wf move` (human only), `wf lead`, `wf renew`, `wf release -session | -machine -stale`, `wf migrate -done` (once, at queue-positions' `x4-state`; refused once `queue/done/` exists), `wf declare`, `wf relations`,
+`wf urgent`, `wf relate`, `wf move` and `wf state-step -feature F (-note TEXT | -clear)` (human only), `wf lead`, `wf renew`, `wf release -session | -machine -stale`, `wf migrate -done` (once, at queue-positions' `x4-state`; refused once `queue/done/` exists), `wf declare`, `wf relations`,
 `wf stale`, `wf main` (records `main`'s CI and its up-to-date setting in
 `main.yaml`), `wf areas -list | -check [-rev REV] [-edges FILE|-]` (a report,
 never a gate), `wf digest`, `wf commit`, `wf budget [-native]`.
