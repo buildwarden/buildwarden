@@ -272,7 +272,9 @@ link and the resolvers
                              creation
         "hyperv-iso"         IMAPI2 seed ISO creation
         "hyperv-prepare"     image prepare; a build tries it to see whether a
-                             background refresh is already running
+                             background refresh is already running; a
+                             refresh that does not start is reported, the
+                             build goes on
     hyperv PowerShell (runPS): a failed script's error is its stderr, else
         the exit status with the last 10 lines of stdout (psError); every
         script that changes the host (setup's slots, EnsureNetwork,
