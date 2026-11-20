@@ -39,7 +39,9 @@ type template struct {
 	affinity string
 	needs    []string // template names in the same phase
 	// waitsAdded makes this gate need the phase's pending added steps when
-	// the phase is seeded, and their host steps need what the gate needs.
+	// the phase is seeded, and their host steps need what the gate needs:
+	// Publish's open-pr, and a process item's close, which waits for its
+	// state step.
 	waitsAdded bool
 }
 
@@ -47,7 +49,8 @@ type template struct {
 // others (answer-<question>, validate-<host>) as it finds them; a step of a
 // later phase waits for its phase (Offered) and survives Back. Publish's
 // gate waits for the steps added to Publish, so the PR opens only after
-// blocking native validation (FLOW-03, FLOW-09).
+// blocking native validation (FLOW-03, FLOW-09); a process item's Close
+// waits for the steps added to it, its state step among them (FLOW-03).
 var templates = map[string][][]template{
 	"feature": {
 		{{"branch-setup", "cloud", nil, false}},
@@ -64,7 +67,8 @@ var templates = map[string][][]template{
 		{{"merge-main", "cloud", nil, false},
 			{"consolidate", "cloud", []string{"merge-main"}, false},
 			{"open-pr", "cloud", []string{"consolidate"}, true}},
-		// Completes by its check once a human has merged the PR (FLOW-08).
+		// Completes by its check once a human has merged the PR (FLOW-08),
+		// run by the tick or an attended session (MayComplete, FLOW-04).
 		{{"merge", "cloud", nil, false}},
 		{{"close", "cloud", nil, false}},
 	},
@@ -76,7 +80,7 @@ var templates = map[string][][]template{
 		{{"design", "human", nil, false}},
 		{{"implement", "cloud", nil, false}},
 		{{"merge", "cloud", nil, false}},
-		{{"close", "cloud", nil, false}},
+		{{"close", "cloud", nil, true}},
 	},
 	// A tracked item is homed in another repository, where wf sees no
 	// branch, design or PR and runs no gate: the human records its work,
@@ -165,7 +169,8 @@ func isTemplate(st *Step) bool {
 	return ok && r.isTemplate()
 }
 
-// waiter is the phase's template step marked waitsAdded: Publish's gate.
+// waiter is the phase's template step marked waitsAdded: the gate of the
+// phase that waits for added steps (Publish, or a process item's Close).
 func waiter(ts []template) (template, bool) {
 	for _, t := range ts {
 		if t.waitsAdded {
@@ -224,7 +229,8 @@ func IsMergeMain(st *Step) bool {
 
 // IsMerge reports whether the step is its round's merge step, in any of its
 // -r<n> forms: f7-merge or x3-merge, which completes only once the human has
-// merged the PR (FLOW-08). wf next never offers it (FLOW-05).
+// merged the PR (FLOW-08). wf next never offers it (FLOW-05); wf done
+// completes it, run by the tick or an attended session (MayComplete, FLOW-04).
 func IsMerge(st *Step) bool {
 	r, ok := stepTemplates(st.ID)
 	return ok && r.name == "merge" &&
@@ -237,8 +243,8 @@ var mergedFirstRe = regexp.MustCompile(`^merged-([1-9][0-9]*)$`)
 // MergedFirst reports whether the step confirms the merge of a work entry
 // the design names to merge first, f6-merged-<n> in any of its -r<n> forms,
 // and returns n, the entry's position in work counted from 1 (FLOW-08). Like
-// the merge step, wf next never offers it: the tick's merge confirmation
-// completes it.
+// the merge step, wf next never offers it: wf done completes it, run by the
+// tick or an attended session (MayComplete, FLOW-04).
 func MergedFirst(st *Step) (int, bool) {
 	r, ok := stepTemplates(st.ID)
 	if !ok || r.round != "feature" || r.phase != 6 {
@@ -418,11 +424,12 @@ func Landed(f *Feature, by string, now time.Time) {
 
 // Seed adds the template steps for the feature's current round and phase.
 // A template step's need on a step not seeded (a skipped design review) is
-// dropped. When the phase's gate has waitsAdded (Publish), the gate also
-// needs every pending step already added to the phase, and each added host
-// step needs what the gate needs (consolidate), so validation runs on the
-// branch the PR opens on (FLOW-03, FLOW-09). A step added after seeding is
-// not linked. A led feature's cloud template steps of phases 0 to 5 get its
+// dropped. When the phase's gate has waitsAdded (Publish, a process item's
+// Close), the gate also needs every pending step already added to the phase,
+// and each added host step needs what the gate needs (consolidate), so
+// validation runs on the branch the PR opens on (FLOW-03, FLOW-09). A process
+// item entering Close first gets its state step (seedStateStep), so x4-close
+// waits for it. A step added after seeding is not linked. A led feature's cloud template steps of phases 0 to 5 get its
 // lead (FLOW-04).
 func Seed(f *Feature) {
 	ts := templates[f.Round]
@@ -437,6 +444,7 @@ func Seed(f *Feature) {
 	for n := 2; f.anySeeded(ts[f.Phase], suffix); n++ {
 		suffix = fmt.Sprintf("-r%d", n)
 	}
+	seedStateStep(f, suffix)
 	added := linkAdded(f, ts[f.Phase], suffix)
 	in := map[string]bool{}
 	for _, t := range ts[f.Phase] {
@@ -459,6 +467,19 @@ func Seed(f *Feature) {
 		f.Steps = append(f.Steps, st)
 	}
 	seedMergedFirst(f, suffix)
+}
+
+// seedStateStep adds a process item's state step, x4-state, when it enters
+// Close with one recorded and no step of that id: a hand-added one is linked
+// as it is. It is added before linkAdded runs, so x4-close waits for it
+// (FLOW-03).
+func seedStateStep(f *Feature, suffix string) {
+	id := StepID(f.Round, f.Phase, "state") + suffix
+	if f.Round != "process" || f.Phase != 4 || f.StateStep == "" || f.hasStep(id) {
+		return
+	}
+	f.Steps = append(f.Steps, Step{ID: id, Phase: f.Phase, Affinity: "human",
+		Status: "pending", Note: f.StateStep})
 }
 
 // seedMergedFirst adds Publish's f6-merged-<n> for each work entry marked
@@ -587,10 +608,15 @@ func Back(f *Feature, by string, now time.Time, finding string, to int) {
 
 // rerunPublishHostSteps returns a fresh pending copy of each Publish host
 // step that is done with no pending retry, so a validation of the branch
-// before the return cannot satisfy the next round's gate. Steps are grouped
-// by id without its -r<n> suffix; the copy takes the next suffix and the
-// latest step's affinity and note.
+// before the return cannot satisfy the next round's gate. Publish is the
+// feature round's phase whose gate waits for added steps; a process item's
+// Close waits for them too but is no Publish, so a process item gets none.
+// Steps are grouped by id without its -r<n> suffix; the copy takes the next
+// suffix and the latest step's affinity and note.
 func rerunPublishHostSteps(f *Feature, steps []Step, now time.Time, by string) []Step {
+	if f.Round != "feature" {
+		return nil
+	}
 	publish := -1
 	for phase, ts := range templates[f.Round] {
 		if _, ok := waiter(ts); ok {
