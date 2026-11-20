@@ -29,6 +29,20 @@ type Blocked struct {
 // followed by /<session> to tell its leases apart.
 func Satisfies(worker, affinity string) bool { return Kind(worker) == affinity }
 
+// MayComplete reports whether a worker may complete a step with wf done: one
+// whose affinity it satisfies, or, for a human or host worker, a merge step
+// or a merged-first confirmation. Those stay cloud and are never offered or
+// claimed; their done-when check is the proof of the merge, so whoever runs
+// it records the human's merge and never makes one (FLOW-04, FLOW-08).
+func MayComplete(worker string, st *Step) bool {
+	if Satisfies(worker, st.Affinity) {
+		return true
+	}
+	k := Kind(worker)
+	return (k == "human" || strings.HasPrefix(k, "host:")) &&
+		(IsMerge(st) || isMergedFirst(st))
+}
+
 // Kind strips the /<session> suffix from a worker.
 func Kind(worker string) string { return strings.SplitN(worker, "/", 2)[0] }
 
@@ -87,7 +101,8 @@ func leasedTo(f *Feature, worker string, now time.Time) *Step {
 // it is a process item. A worker an in-progress process item holds gets only
 // the steps it already has leased. No worker is offered a merge step
 // (IsMerge): an item waiting on the human's merge is blocked like one waiting
-// on a human step, and the walk goes on (FLOW-05, FLOW-08). No worker is
+// on a human step, and the walk goes on (FLOW-05, FLOW-08); wf done completes
+// it, run by the tick or an attended session (MayComplete). No worker is
 // offered a step whose claim a limit refuses; only a claim that takes a limit
 // the item does not hold is asked, so a holder is never stopped by one. It
 // also returns why each item it passed over is blocked, for the digest: an
@@ -173,7 +188,8 @@ func (s *State) waitsForParent(f *Feature) bool {
 // there is none. A step of a later phase is skipped without adding to the
 // reasons: the current phase's steps already say why the feature waits. A
 // merge step is skipped for every worker, whatever its affinity: only wf done
-// in the tick's merge confirmation completes it (FLOW-08). A step whose claim
+// completes it, in the tick's merge confirmation or an attended session's
+// (MayComplete, FLOW-08). A step whose claim
 // a limit refuses is skipped for every worker (Guard). For a queued feature
 // that refusal is the whole reason, since every step of it waits on the
 // start; reported says it is the waiting limit's, the one such refusal wf
