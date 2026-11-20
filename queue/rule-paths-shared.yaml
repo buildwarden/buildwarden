@@ -1,0 +1,31 @@
+feature: rule-paths-shared
+title: wf check clears a path for every approved rule change that lists it, not only the last
+priority: 2
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/rule-paths-shared.md
+branch: feat/rule-paths-shared
+alters_relationships: null
+source: 'Filed on Jeff''s word, 2026-11-20, from driver-contract''s f4-review at dd370cb (report reports/driver-contract/dd370cbbf4f4.md): cleared() in tools/workflow/check/rulechange.go keeps one rule per path (paths[p] = rule), so when several approved rule changes list the same file only the last counts; driver-contract''s UX-01, UX-03 and ORCH-03 all list tools/tier1/surface/surface.go, only ORCH-03 is named, and make enforcement (wf drops) refuses UX-03''s approved surface drop. Fix: a set of rules per path, wherever cleared()''s map is read. Blocks driver-contract''s Review until merged (enforcement-check.sh builds wf drops from the merge base). Estimate from the process size row: 4 steps, no state step.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 4
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-20T22:08:02Z
+    by: human/jeff
+    event: queued at position 2 (asked 1)
