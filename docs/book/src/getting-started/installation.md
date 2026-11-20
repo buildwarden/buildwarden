@@ -274,11 +274,42 @@ Two kinds of value have a replacement:
 [A path, or another runtime](../guide/configuration.md#a-path-or-another-runtime)
 lists every value that stopped working and the message each one gets.
 
+## Upgrading: Driver Programs and Renamed Keys
+
+The container driver is now a program of its own, `warden-driver-container`,
+which warden runs from beside itself. The one-liner and the release archives
+install it; if you copy `warden` by hand, copy `warden-driver-container` into
+the same directory. `warden driver list` shows which file each driver name
+runs and where it was found, and a build records the same in its output's
+[`driver.json`](../guide/output.md#driverjson).
+
+A driver's settings moved into `[driver]` and `[driver.<name>]`. An existing
+`warden.toml` keeps working: the old names are read until BuildWarden 1.0,
+and each one prints a warning naming its new key:
+
+```
+[warden] warning: /src/repo/warden.toml: [runtime] cli is deprecated; use [driver.container] cli
+```
+
+Rename them when you next edit the file. `[runtime] cli = "podman"` becomes:
+
+```toml
+[driver.container]
+cli = "podman"
+```
+
+[Renamed keys](../guide/configuration.md#renamed-keys) lists all seven. A file
+that sets both names of one key is refused. A driver's keys are now
+case-sensitive: `[Runtime] CLI` is refused with the spelling to write, see
+[Keys are case-sensitive](../guide/configuration.md#keys-are-case-sensitive).
+`[runtime] driver` is warden's own key and does not change.
+
 ## Verify Installation
 
 ```sh
 warden --version
 warden --help
+warden driver list   # the drivers warden finds, and the file each one runs
 ```
 
 BuildWarden auto-detects your container runtime for the container driver (trying finch, docker, podman in order). Override with `--runtime` or the `WARDEN_CTR_CLI` environment variable; see [The container runtime](../guide/configuration.md#the-container-runtime).

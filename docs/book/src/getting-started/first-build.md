@@ -72,6 +72,7 @@ After the build completes (same structure for all drivers):
 warden-output/
 ├── ledger.zst              # Cryptographic ledger (ledger if --no-compress)
 ├── ca.cert.pem.zst         # Ephemeral CA cert (ca.cert.pem if --no-compress)
+├── driver.json             # Which driver ran the build, and where it was found
 ├── build-output.log        # Captured build console output
 ├── artifacts/              # Build outputs posted via warden-io post
 │   └── myapp.whl

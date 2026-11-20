@@ -59,6 +59,14 @@ ones it skips. Each build records the same in its output's `driver.json`
 asked to stop; after that, or on a second Ctrl-C, warden kills it and runs its
 `reap` for the build, bounded by the same wait.
 
+To write a driver, implement the commands of the driver contract
+(`specs/driver-contract/v1.md`) in a program named `warden-driver-<name>`,
+and check it from a source tree with `make driver-conformance
+DRIVER=<path>`, which runs the contract's suite against it, real builds
+included ([CONTRIBUTING.md](https://github.com/buildwarden/buildwarden/blob/main/CONTRIBUTING.md)
+lists its options). Put the program on `PATH` and `--driver <name>` runs it;
+`[driver.<name>]` in `warden.toml` holds its settings.
+
 ---
 
 ## Container Driver
