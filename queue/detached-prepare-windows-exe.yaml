@@ -125,9 +125,18 @@ steps:
     needs:
       - f6-consolidate
       - f6-validate-windows-hyperv
+      - f6-refresh
     lease:
       claimed_by: ""
       expires: null
+  - id: f6-refresh
+    phase: 6
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'main at 480e205: 1 commit since the branch merged it; no file changed by both'
 budget:
   estimate:
     runs: 5
@@ -339,3 +348,6 @@ history:
   - at: 2026-11-20T19:20:00Z
     by: human/jeff
     event: 'estimate raised from 7 steps, 1 run to 10 steps, 5 runs on Jeff''s word (runaway, FLOW-13): the extra came from the 11-18 return to Design for the drivers claim and the re-plan; only f6-open-pr, the merge and Close remain'
+  - at: 2026-11-20T19:42:36Z
+    by: human/jeff
+    event: 'seeded f6-refresh: main at 480e205: 1 commit since the branch merged it; no file changed by both'

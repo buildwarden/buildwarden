@@ -2,6 +2,8 @@ sha: e9315c2e7b1db9180fa4c66ad42d30ff0dd2c471
 ci: green
 up_to_date: required
 areas:
-  sha: e9315c2e7b1db9180fa4c66ad42d30ff0dd2c471
-  differences: 0
-  lines: []
+  sha: 480e205c969fbc678128b80af17b25328834cd9d
+  differences: 2
+  lines:
+    - 'reaches: core lacks collector (conformance/driver depends on collector)'
+    - 'reaches: core lacks relaycfg (conformance/driver depends on relaycfg)'
