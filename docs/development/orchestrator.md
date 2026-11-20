@@ -14,19 +14,24 @@ See [`README.md`](./README.md) for the rule format.
 **Severity:** MUST
 **Check:** automated + agent-judgment
 
-A build-lifecycle change is expressed at the `driver.Driver` interface level, or it
-explicitly names which driver(s) it touches (container / qemu / vz, plus planned
-hyperv / firecracker) and asserts the others are unaffected. This is the standing,
-permanent form of the cross-contamination check: a change made for one driver must
-not silently alter the behavior of another.
+A build-lifecycle change is expressed in the driver contract (GLOBAL-08) and
+held by its conformance suite (TEST-05), or it explicitly names which
+driver(s) it touches and asserts the others are unaffected. This is the
+standing, permanent form of the cross-contamination check: a change made for
+one driver must not silently alter the behavior of another.
 
-Lifecycle that every driver shares lives in `driver.Session` and the other
-`driver/` helpers; a driver re-implements it only where its platform genuinely
-differs, and the design says why.
+Lifecycle that every driver shares lives in `warden`: staging, the session
+(`driver.Session`) with its collector and claim, the wait, and reporting. A
+driver holds what its platform needs: starting the relay, the build
+environment, and their teardown. Helpers that drivers built on the kit share
+live under `driver/`; such a driver re-implements one only where its platform
+genuinely differs, and the design says why.
 
 The claim is the design's `drivers` front-matter (FLOW-02). The automated part
-compares which `driver/*` trees the diff actually reaches against that claim; the
-agent part judges whether shared code was altered in a driver-specific way.
+compares which `driver/*` trees the diff actually reaches against that claim,
+and runs the driver suite against each driver binary this repository builds
+(TEST-05); the agent part judges whether shared code was altered in a
+driver-specific way.
 
 ---
 
