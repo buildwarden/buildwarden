@@ -1,0 +1,156 @@
+{
+  "feature": "driver-contract",
+  "branch": "feat/driver-contract",
+  "head": "dd370cbbf4f4",
+  "heads": {
+    "buildwarden/buildwarden": "dd370cbbf4f4"
+  },
+  "base": "480e205c969f",
+  "base_note": "merge base with origin/main; origin/main is now 85317906854d, which Publish merges (FLOW-10)",
+  "round": "feature",
+  "step": "f4-review",
+  "worker": "cloud/20261120T203034Z",
+  "previous_report": null,
+  "scope": "git diff origin/main...feat/driver-contract: 191 files, +35512/-2901, 94 commits (LINT-04). One repository.",
+  "design": "docs/design/driver-contract.md, approved at 33a3563 (r3; rule changes approved at a6c8f0b)",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": {
+    "source": "docs/development/*.md at dd370cbbf4f4 (LINT-01)",
+    "rules": 100,
+    "agent_judgment": 44,
+    "hybrid": 42,
+    "automated": 14
+  },
+  "tier1": {
+    "result": "red",
+    "make_lint": "pass (golangci-lint 0 issues x3; tier1 0 MUST, 0 MUST-review, 0 SHOULD, 5 hints)",
+    "make_test": "pass",
+    "goos_windows_make_lint": "pass",
+    "goos_darwin_make_lint": "pass",
+    "make_enforcement": "FAIL (exit 2): main's tier 1 findings kept (FLOW-14): 4 UX-03 surface-removed findings on cmd/warden/config.go (keys cli, relay_image, windows_image, windows_image_update) dropped, 'and no approved rule change names UX-03'",
+    "make_enforcement_cause": "Not the branch. UX-03 is approved (design Design review: 'rule change UX-03 approved at a6c8f0b', enforcement only, paths tools/tier1/surface/*), and the drop is exactly that approved change: the surface reader now reads a driver Setting's Aliases as keys, so the seven renamed keys are found with their old names. wf drops loses the approval because tools/workflow/check/rulechange.go cleared() returns a map keyed by path (path -> one rule) and approvedRules() (rulechange.go:331-356) collects that map's values: when several approved rule changes list the same path, only the last one survives. UX-01, UX-03 and ORCH-03 all list tools/tier1/surface/surface.go, so only ORCH-03 is 'named'; orchestrator.md likewise leaves only ORCH-03 of ORCH-01/02/03/04, and rules.yaml only TEST-05 of GLOBAL-08/ORCH-01/TEST-05. main has this code; the branch does not touch tools/workflow/.",
+    "dist_wf_check": "phase 4 done-when not met before this report (lint/test skipped without -run; report missing). ok: clean branch head; ok: rule changes cleared (FLOW-14); ok: queue records what the design declares (FLOW-03), as declared at 028ffe2; ok: diff inside the declared areas (undeclared item, collides with every item, no path outside)",
+    "wf_check_from_merge_base": "wf built from 480e205 (git worktree of the merge base), run with -repo on the branch checkout: same lines as dist/wf check (the same ok lines; FAIL only for skipped lint/test and the then-missing report)",
+    "area_edges": "tools/tier1/area-edges.sh | dist/wf areas -state .dev/workflow -check -rev HEAD -edges -: 25 differences at dd370cb (0 at the merge base 480e205): 19 catch-all lines, every file of conformance/driver/ and cmd/warden-driver-container/main.go 'is in no area's paths (it falls to core)'; 6 reaches lines, 'core lacks collector, driver-core, driver/container, executor, ledger, relaycfg (cmd/warden-driver-container depends on ...)'",
+    "trial_merge_flow10": "dist/wf check -run at phase 4 (after this report was written) exits 0 and prints no trial-merge line: ok for clean head, make lint, make test, report .md/.json, report heads (LINT-04), rule changes cleared, queue matches design, diff inside declared areas. It does not run make enforcement, so the FLOW-14 failure above is not in its result.",
+    "dist_wf_check_run": "exit 0 (phase 4 done-when met once the report exists)"
+  },
+  "findings": [
+    {
+      "id": 1,
+      "rule": "FLOW-06",
+      "related_rules": [
+        "UX-09",
+        "UX-04"
+      ],
+      "severity": "MUST",
+      "check": "agent-judgment",
+      "file": "cmd/warden/host.go",
+      "line": 417,
+      "also": [
+        "cmd/warden/host.go:419",
+        "driver/container/command.go:136",
+        "cmd/warden/upstreamca_test.go:281",
+        "cmd/warden/upstreamca_test.go:294"
+      ],
+      "finding": "A blocked doctor now prints the driver's 'ok' and then exits 1. warden's upstream-CA check blocks, doctorBinary still runs the container driver's doctor, whose doctor() prints 'container runtime: <rt>' and 'ok' (command.go:136) straight to stdout, and only then does warden os.Exit(1). The same happens for a driver binary that lists no doctor (host.go:419-423 prints 'ok' before exiting 1 when blocked). main printed no 'ok' when blocked. The approved design lists this under what does not change ('Exit codes (UX-09): ... and 1 for a blocked doctor with no extra line', Behaviour, design line 4392), and it is not among the nineteen accepted changes. Implement kept it and changed TestUpstreamCALinesOfDoctor's two blocked cases to expect 'ok', so the test now holds the deviation. An 'ok' line followed by exit 1 is also a contradictory report for a user and a script.",
+      "fix": "No design change is needed: DRV-25 only says doctor reports on stdout and returns blocked, and does not say who prints 'ok'. Make 'ok' warden's: drop the Fprintln(out, \"ok\") from the container driver's doctor (driver/container/command.go:136), have doctorBinary print 'ok' only when neither warden's part nor the driver's result is blocked (and not at host.go:419 when blocked), and restore TestUpstreamCALinesOfDoctor's blocked cases to main's expectation. The unblocked output stays 'container runtime: <rt>' then 'ok', which is what the macos-finch validation note expects. If Implement prefers to keep the line, it goes back to Design (FLOW-06) to add it to Behaviour."
+    },
+    {
+      "id": 2,
+      "rule": "TEST-04",
+      "related_rules": [],
+      "severity": "MUST",
+      "check": "agent-judgment",
+      "file": "cmd/warden/buildseq_test.go",
+      "line": 316,
+      "finding": "TestBuildSequenceSignalBeforeTheRelay orders its two events with time.Sleep(10ms). It sends os.Interrupt into a buffered signals channel (cap 1, line 179), sleeps 10 ms, then opens the gate, which makes the driver send relay-started. If the sequence's loop has not yet received the signal when the gate opens (a loaded or -race CI runner), its select sees both the signal and relay-started ready and picks either. When it picks relay-started first, the claim goes ahead and the trace and the 'no claim' assertion fail. A timing-dependent test is a defect under TEST-04.",
+      "fix": "Wait for the signal to be handled instead of sleeping. For example, have the test's stopSignals close a channel (or set a flag the test polls, like waitFor) and wait on it before close(gate). Or make the test's signals channel unbuffered for this case, so the send returns only once the loop has taken the signal; onSignal then runs before the loop's next select."
+    },
+    {
+      "id": 3,
+      "rule": "GLOBAL-06",
+      "related_rules": [
+        "TEST-08",
+        "FLOW-08"
+      ],
+      "severity": "MUST-review",
+      "check": "agent-judgment",
+      "file": "cmd/warden/driverlookup.go",
+      "line": 17,
+      "also": [
+        "cmd/warden/buildseq.go:362",
+        "docs/design/driver-contract.md:6407"
+      ],
+      "finding": "The change alters two security boundaries, as the design declares (security_boundary: host-env, and env-relay). (1) host-env: the code that builds the isolation is now chosen at run time by a lookup (PATH first, then beside warden, then linked), with no ownership or mode check (a16 as Jeff answered it). The one guard is that a config file may name a driver, not a file (driverlookup.go findByPath, sourceConfig). (2) env-relay: warden now makes the claim token and claims every driver's relay. The design's Security note covers both. In the code read, the guard is implemented as the note says: a relative or empty PATH entry is an error, on Windows only .exe is a candidate, and a non-executable file is skipped and listed. MUST-review: this needs the human's sign-off at merge, not a fix.",
+      "fix": "None required. The human acknowledges it at merge (FLOW-08) against the design's Security note. Whether this change trips TEST-08's security suite is that rule's call at release."
+    }
+  ],
+  "counts": {
+    "MUST": 2,
+    "MUST-review": 1,
+    "SHOULD": 0
+  },
+  "suppressions": [],
+  "suppressions_note": "First report for this item; nothing to carry over.",
+  "follow_ups": [
+    {
+      "proposed": "wf-drops-shared-rule-paths",
+      "status": "not filed",
+      "why_not_filed": "This is main's machinery (tools/workflow/check, the enforcement of FLOW-14), so LOOP-09 makes the fix a process item, which needs Jeff's agreement on kind and FLOW-20's hold (workflow-intake step 3). It is not a feature follow-up that waits for this item. A follow-up with -follows would start only after driver-contract is done, and make enforcement stays red until the fix is on main, because enforcement-check.sh builds wf drops from the merge base when the base has it. That would deadlock. Jeff decides: a process item ahead of this one, or a recorded dismissal at merge.",
+      "evidence": "make enforcement on feat/driver-contract at dd370cb: 4 UX-03 drops not named although 'rule change UX-03 approved at a6c8f0b' is in the design; dist/wf check prints 'cleared: ... tools/tier1/surface/surface.go (ORCH-03)' (one rule per path). Code: tools/workflow/check/rulechange.go cleared() (map[path]rule, line 75-108) and approvedRules() (line 331-356).",
+      "suggested_fix": "approvedRules should collect every approved rule whose approval clears (the rules found in rule_changes at the approving sha), not the values of the path-keyed map; or cleared should return path -> set of rules."
+    }
+  ],
+  "informational": [
+    {
+      "rule": "FLOW-05",
+      "file": "conformance/driver/",
+      "line": 0,
+      "note": "The area map: the Design review of r3 recorded that 'core gains reaches: [collector, relaycfg]', to be saved when the PR merges. wf areas -check at dd370cb also reports cmd/warden-driver-container/ in no area (falls to core) and core lacking driver-core, driver/container, executor and ledger through it. Before saving the map, Jeff should place cmd/warden-driver-container/ (for example with driver/container) or widen core's reaches. The item is undeclared, so nothing is outside its declared areas and nothing is widened here (FLOW-03)."
+    },
+    {
+      "rule": "FLOW-14",
+      "file": "docs/development/",
+      "line": 0,
+      "note": "Rule-change wording judged against the design as approved: every added sentence in bootstrap.md, global.md, orchestrator.md, testing.md, ux-cli-config.md and loop-profile.md is verbatim in the approved design. The exception is loop-profile.md's Specifications row, which keeps main's later sentences on the specs repository unchanged. The rules.yaml edits match the GLOBAL-08, ORCH-01 and TEST-05 enforcement text (the seams entry, drivers.shared and TEST-05's owner). The surface/ edits are the approved UX-01, UX-03 and ORCH-03 enforcement (Setting literals and Aliases as keys)."
+    },
+    {
+      "rule": "FLOW-06",
+      "file": "docs/design/driver-contract.md",
+      "line": 0,
+      "note": "Implement's other recorded deviations were judged and none needs Design: DRV-C5's exception placed after the ignoring clause; hyperv's windows-image keys listing run; container's relay_image listing run and doctor (main's doctor checked the relay image); linked drivers listing reap; help titles; image list's end-to-end case in-process; signal and shell cases Unix-only (covered natively); WARDEN_FAKE_TEARDOWN (the fake only, a test double); the drivercmd exit-code order fix (DRV-21); make build of warden-driver-container moved to task 22; integration skipping shell and exited for the container (macos-finch case 9 runs both tiers); DRV-33 and DRV-55 named by the probe and clean cases; the fake writing its relay PID. The doctor deviation is finding 1."
+    },
+    {
+      "rule": "TEST-05",
+      "file": "conformance/driver/lifecycle.go",
+      "line": 0,
+      "note": "The Inputs case has not been run against a real relay on this branch here. The integration workflow runs make driver-conformance against warden-driver-container with the real relay, and the macos-finch and container-any validations run both tiers. Confirm the integration run is green on the PR."
+    },
+    {
+      "rule": "FLOW-15",
+      "file": "cmd/warden/drivercall.go",
+      "line": 294,
+      "note": "The contract's old-name table and common keys are written twice: in warden's check of a describe (cmd/warden/drivercall.go:290-303) and in the kit (driver/drivercmd/settings.go:157-180). cmd/warden does not import drivercmd outside linked.go, so this looks deliberate: warden checks a driver against the specification, not against the kit. It belongs in Publish's duplication sweep, and a test that the two tables agree would keep them in step."
+    },
+    {
+      "rule": "GLOBAL-04",
+      "file": "conformance/driver/fake/",
+      "line": 0,
+      "note": "tier1's 5 tests-with-change hints: cmd/warden-driver-container (a one-line main), conformance/driver/cmd/driver-conformance, conformance/driver/fake, conformance/driver/stubrelay (test doubles and the suite's CLI, exercised by cmd/warden's e2e tests and the lifecycle tier's self-test under make test), and driver/linuxguest. A hint, not a finding."
+    },
+    {
+      "rule": "ORCH-04",
+      "file": "driver/drivercmd/pipe.go",
+      "line": 92,
+      "note": "warden closes the driver's input straight after writing stop (drivercall.go dialogue), so the kit's reader sees stop and then end of input. pipeHost.Wait can then return 'interrupted' in place of the stop's reason when both are ready. The container driver ignores Wait's value, and its teardown takes no context, so nothing changes today. A driver that branches on the reason could see the wrong one."
+    }
+  ],
+  "judged_clean": [
+    "GLOBAL-09, GLOBAL-10, GLOBAL-11 against Defaults and overrides: teardown wait (60s default, [build] teardown_timeout refused at load, no fallback), driver lookup order, relay source (beside the binary else the source tree, no fallback after a failure), default_image_os (in v1.md), no other default, merge or fallback found in the non-test diff",
+    "RELAY-08: no new relay setting on a flag, variable, seed or kernel command line; the claim token moves from driver to warden and still reaches the relay pre-claim on its boot channel (WARDEN_CLAIM_TOKEN / relaycfg.TokenEnv as before), as the design's RELAY-08 table says",
+    "ORCH-04: driver binary teardown on stop or end of input; kill and reap after the teardown wait; a reap that fails leaves the record and lock for warden clean",
+    "UX-08: the drivers' keys are read by the owning driver in its probe; warden's own keys at load",
+    "PROFILE-01: the four rows match the change (driver-contract specification and suite, the driver-contract CI job, the surface including driver declarations)"
+  ]
+}
