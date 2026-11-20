@@ -106,7 +106,7 @@ The build produces the following binaries in `dist/`:
 | Binary | Description |
 |--------|-------------|
 | `dist/warden` | Host binary (codesigned on macOS for VZ entitlement) |
-| `dist/warden-driver-container` | The container driver, which warden runs from beside itself |
+| `dist/warden-driver-container` | The container driver, which warden runs from beside itself (`warden-driver-container.exe` on Windows) |
 | `dist/warden-relay-linux-arm64` | Relay binary for VM/container use |
 | `dist/warden-io-linux-arm64` | Agent binary for Linux build environments |
 | `dist/warden-io-darwin-arm64` | Agent binary for macOS VZ builds |

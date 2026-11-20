@@ -36,6 +36,8 @@ func TestMain(m *testing.M) {
 		Main(strayDriver())
 	case "teardown":
 		Main(teardownDriver())
+	case "collected":
+		os.Exit(writeAfterCollect())
 	}
 	os.Exit(99)
 }

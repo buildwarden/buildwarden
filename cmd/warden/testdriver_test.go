@@ -46,6 +46,9 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
+	if err := isolateCache(filepath.Join(dir, "cache")); err != nil {
+		panic(err)
+	}
 	code := m.Run()
 	_ = os.RemoveAll(dir)
 	if built {
@@ -271,4 +274,27 @@ func testRun(variant string) int {
 	}
 	say(`{"type": "stopped"}`)
 	return 0
+}
+
+// isolateCache points the per-user cache, where warden keeps its build
+// records, locks and images, at dir for every test and the processes they
+// start, so that no test reads or cleans the host's own (warden clean acts
+// on every build record it finds). XDG_CACHE_HOME is that cache on Linux and
+// LOCALAPPDATA on Windows; macOS reads HOME, which a test that needs it sets.
+// GOCACHE is pinned first, since go's own default lives in the same place.
+func isolateCache(dir string) error {
+	if os.Getenv("GOCACHE") == "" {
+		if c, err := os.UserCacheDir(); err == nil {
+			if err := os.Setenv("GOCACHE", filepath.Join(c, "go-build")); err != nil {
+				return err
+			}
+		}
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if err := os.Setenv("XDG_CACHE_HOME", dir); err != nil {
+		return err
+	}
+	return os.Setenv("LOCALAPPDATA", dir)
 }

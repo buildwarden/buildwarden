@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -57,6 +58,7 @@ func golden(t *testing.T, name, got string) {
 	if env := hostLookupEnv(); env.selfDir != "" {
 		got = strings.ReplaceAll(got, env.selfDir, "$WARDEN_DIR")
 	}
+	got = hostNeutral(got)
 	path := filepath.Join(goldenDir, name+".golden")
 	if *update {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -248,6 +250,26 @@ func describeErr(err error, dir string) string {
 		fmt.Fprintf(&b, "  fix:   %s\n", placeholders(fix, dir))
 	}
 	return b.String()
+}
+
+// placeholderPath matches a path under a placeholder directory, up to the
+// first space, quote or end of line.
+var placeholderPath = regexp.MustCompile(`\$(CTX|WARDEN_DIR)\\[^\s"'` + "`" + `]*`)
+
+// driverExe matches a driver binary's Windows file name.
+var driverExe = regexp.MustCompile(`(warden-driver-[a-z0-9-]+)\.exe\b`)
+
+// hostNeutral writes what differs on a Windows host the way the goldens
+// hold it: a path under $CTX or $WARDEN_DIR with forward slashes, and a
+// driver's file name without .exe. Elsewhere it returns s unchanged.
+func hostNeutral(s string) string {
+	if runtime.GOOS != "windows" {
+		return s
+	}
+	s = placeholderPath.ReplaceAllStringFunc(s, func(p string) string {
+		return strings.ReplaceAll(p, `\`, "/")
+	})
+	return driverExe.ReplaceAllString(s, "$1")
 }
 
 // placeholders shows the per-test directory as $CTX, the same on every run.

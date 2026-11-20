@@ -411,6 +411,11 @@ func TestE2EImageList(t *testing.T) {
 	t.Setenv("TMPDIR", e.tmp)
 	t.Setenv("TMP", e.tmp)
 	t.Setenv("TEMP", e.tmp)
+	// warden runs in this process, so the linked drivers read these: keep
+	// them off the host's own image caches (hyperv's under LOCALAPPDATA).
+	t.Setenv("HOME", filepath.Join(e.root, "home"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(e.root, "cache"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(e.root, "cache"))
 	saved := bundledDrivers
 	bundledDrivers = []string{"fake"}
 	t.Cleanup(func() { bundledDrivers = saved })
