@@ -60,7 +60,7 @@ func buildRunner(set driver.Settings) (*runner, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &runner{runtime: rt}, nil
+	return &runner{runtime: rt, relayOrigin: set.Source("relay-image")}, nil
 }
 
 // run is the build: the runtime resolved once more, as after a probe, and

@@ -30,6 +30,7 @@ import (
 	"github.com/lesiw/ctrctl"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/relaysource"
 	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
@@ -45,6 +46,8 @@ var Version = "dev"
 // isolation enforced by iptables.
 type runner struct {
 	runtime string // "finch", "docker" or "podman", supportedRuntime's own
+	// relayOrigin is where the relay-image setting came from, for messages.
+	relayOrigin string
 }
 
 // build holds the mutable state for a single build invocation.
@@ -620,25 +623,65 @@ func isPortConflict(stderr string) bool {
 	return false
 }
 
-func (b *build) resolveRelayImage() error {
+// relaySource is the build's relay (driver/relaysource): the image the
+// relay-image setting names, pulled as given; a build from the source tree
+// for "dev", and by default in a dev build; else the release's tag.
+func (b *build) relaySource() relaysource.RelaySource {
 	img := b.req.RelayImage
-	ver := Version
 	switch {
-	case img == "dev" || (img == "" && ver == "dev"):
-		logInfo(b.req, "Building relay from source...")
-		b.relayBuiltLocal = true
-		return b.buildRelayFromSource()
+	case img == "dev" || (img == "" && Version == "dev"):
+		return sourceRelay{b}
 	case img != "":
-		logInfo(b.req,
-			fmt.Sprintf("Using relay image: %s", img))
-		b.relayImage = img
-		return b.pullImage(img)
-	default:
-		b.relayImage = relayImageRepo + ":latest"
-		logInfo(b.req, fmt.Sprintf(
-			"Pulling relay image: %s", b.relayImage))
-		return b.pullImage(b.relayImage)
+		return relaysource.Image(img, b.d.relayOrigin)
 	}
+	return releaseRelay{}
+}
+
+// resolveRelayImage resolves the relay source, verifies the relay, and pulls
+// or builds its image.
+func (b *build) resolveRelayImage() error {
+	r, err := b.relaySource().Relay(context.Background())
+	if err != nil {
+		return err
+	}
+	if err := r.Verify(); err != nil {
+		return err
+	}
+	b.relayImage = r.Image
+	if r.Version == "dev" {
+		b.relayBuiltLocal = true
+		return nil
+	}
+	if r.Origin == releaseOrigin {
+		logInfo(b.req, fmt.Sprintf("Pulling relay image: %s", r.Image))
+	} else {
+		logInfo(b.req, fmt.Sprintf("Using relay image: %s", r.Image))
+	}
+	return b.pullImage(r.Image)
+}
+
+// releaseOrigin is the origin of the release's relay image.
+const releaseOrigin = "release"
+
+// releaseRelay is the release's relay image, by its moving tag.
+type releaseRelay struct{}
+
+func (releaseRelay) Relay(context.Context) (*relaysource.Relay, error) {
+	return &relaysource.Relay{Form: relaysource.RelayOCIImage, Version: Version,
+		Origin: releaseOrigin, Image: relayImageRepo + ":latest"}, nil
+}
+
+// sourceRelay is a relay image built from the source tree for one build,
+// warden-relay:<build id>, removed at its teardown.
+type sourceRelay struct{ b *build }
+
+func (s sourceRelay) Relay(context.Context) (*relaysource.Relay, error) {
+	logInfo(s.b.req, "Building relay from source...")
+	if err := s.b.buildRelayFromSource(); err != nil {
+		return nil, err
+	}
+	return &relaysource.Relay{Form: relaysource.RelayOCIImage, Version: "dev",
+		Origin: "source tree", Image: s.b.relayImage}, nil
 }
 
 func (b *build) pullImage(image string) error {
