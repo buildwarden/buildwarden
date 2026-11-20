@@ -104,6 +104,16 @@ pflash/vars, downloaded install media, mounts, and partial or aborted image buil
 Anything the orchestrator allocates in this class has a matching teardown reachable
 from the clean path.
 
+A driver run as a separate binary tears down what it created for a build
+when `warden` tells it to stop or when its `run` input ends, whichever
+comes first, and finishes that teardown even when it can no longer write
+its output, so a killed `warden` alone leaves nothing running. What a
+killed driver leaves is reachable from the build ID and the record `warden`
+kept for that build: `reap <build-id>` removes it, reports success only
+when nothing is left, and is run by `warden` after a driver that died and
+by `warden clean` for every build no running `warden` holds. What `warden`
+itself staged for a build is removed the same way.
+
 It explicitly does **not** touch **durable outputs** that are the deliberate product
 of an operation: a finalized cached base image, or a completed ledger/output
 directory. Those are removed only via explicit commands (`warden image` management,
