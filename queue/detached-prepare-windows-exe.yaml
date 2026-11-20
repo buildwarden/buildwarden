@@ -1,10 +1,10 @@
 feature: detached-prepare-windows-exe
 title: On Windows a warden whose file has no .exe ending (make build's dist/warden) cannot start the background image prepare, and says nothing; with a warden.exe beside it, that file is run instead
-priority: 4
+priority: 3
 follows: project-config-trust
 status: in_progress
 round: feature
-phase: 7
+phase: 8
 design: docs/design/detached-prepare-windows-exe.md
 branch: feat/detached-prepare-windows-exe
 areas:
@@ -143,6 +143,13 @@ steps:
     note: 'main at 480e205: 1 commit since the branch merged it; no file changed by both'
   - id: f7-merge
     phase: 7
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
     affinity: cloud
     status: pending
     lease:
@@ -377,3 +384,9 @@ history:
   - at: 2026-11-20T20:53:55Z
     by: cloud/20261120T203034Z
     event: entered phase 7 (merge)
+  - at: 2026-11-20T21:08:50Z
+    by: cloud/20261120T203034Z
+    event: done f7-merge
+  - at: 2026-11-20T21:08:50Z
+    by: cloud/20261120T203034Z
+    event: entered phase 8 (close)
