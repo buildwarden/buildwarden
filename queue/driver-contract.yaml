@@ -3,7 +3,7 @@ title: 'The driver command contract, its suite and the kit: warden runs a driver
 priority: 1
 status: in_progress
 round: feature
-phase: 5
+phase: 6
 design: docs/design/driver-contract.md
 branch: feat/driver-contract
 seams:
@@ -46,6 +46,8 @@ steps:
     phase: 6
     affinity: host:macos-vz
     status: pending
+    needs:
+      - f6-consolidate
     lease:
       claimed_by: ""
       expires: null
@@ -54,6 +56,8 @@ steps:
     phase: 6
     affinity: host:windows-hyperv
     status: pending
+    needs:
+      - f6-consolidate
     lease:
       claimed_by: ""
       expires: null
@@ -62,6 +66,8 @@ steps:
     phase: 6
     affinity: host:qemu-any
     status: pending
+    needs:
+      - f6-consolidate
     lease:
       claimed_by: ""
       expires: null
@@ -70,6 +76,8 @@ steps:
     phase: 6
     affinity: host:macos-finch
     status: pending
+    needs:
+      - f6-consolidate
     lease:
       claimed_by: ""
       expires: null
@@ -78,6 +86,8 @@ steps:
     phase: 6
     affinity: host:container-any
     status: pending
+    needs:
+      - f6-consolidate
     lease:
       claimed_by: ""
       expires: null
@@ -162,10 +172,40 @@ steps:
   - id: f5-guide
     phase: 5
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261120T223522Z
-      expires: 2026-11-21T00:35:22.538628911Z
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-merge-main
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate
+      - f6-validate-macos-vz
+      - f6-validate-windows-hyperv
+      - f6-validate-qemu-any
+      - f6-validate-macos-finch
+      - f6-validate-container-any
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -732,3 +772,9 @@ history:
   - at: 2026-11-20T22:35:22Z
     by: cloud/20261120T223522Z
     event: claimed f5-guide until 2026-11-21T00:35:22Z
+  - at: 2026-11-20T22:38:57Z
+    by: cloud/20261120T223522Z
+    event: done f5-guide
+  - at: 2026-11-20T22:38:57Z
+    by: cloud/20261120T223522Z
+    event: entered phase 6 (publish)
