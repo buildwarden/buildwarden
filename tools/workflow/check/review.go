@@ -21,10 +21,10 @@ var entryHeadRe = regexp.MustCompile(`^(?:Re-review\s+)?r\d+\b`)
 // approvals returns the commits of the design's recorded approvals, oldest
 // first, one per review entry (FLOW-19). An entry is a top-level bullet of the
 // Design review section whose head is its ID; its approval is the first
-// `approved at <sha>` in the whole bullet, so a later citation of an older
-// approval, in the entry or in a bullet that is not an entry, does not move
-// the baseline. A rule change's own approval (`rule change <ID> approved at
-// <sha>`) is not one.
+// `approved at <sha>` in the whole bullet whose sha no earlier entry recorded,
+// so a citation of an older approval, in the entry or in a bullet that is not
+// an entry, neither moves the baseline nor counts as an approval. A rule
+// change's own approval (`rule change <ID> approved at <sha>`) is not one.
 func approvals(d *Design) []string {
 	var out []string
 	for _, b := range reviewBullets(d.Sections["Design review"]) {
@@ -32,11 +32,25 @@ func approvals(d *Design) []string {
 		if !entryHeadRe.MatchString(bulletHead(b)) {
 			continue
 		}
-		if m := approvedRe.FindStringSubmatch(b); m != nil {
-			out = append(out, m[1])
+		for _, m := range approvedRe.FindAllStringSubmatch(b, -1) {
+			if !citedEarlier(out, m[1]) {
+				out = append(out, m[1])
+				break
+			}
 		}
 	}
 	return out
+}
+
+// citedEarlier reports whether an earlier entry recorded sha, a citation and not
+// this entry's approval; two abbreviations of one commit match by prefix.
+func citedEarlier(earlier []string, sha string) bool {
+	for _, e := range earlier {
+		if strings.HasPrefix(e, sha) || strings.HasPrefix(sha, e) {
+			return true
+		}
+	}
+	return false
 }
 
 // lastApproval returns the newest review entry's approval.

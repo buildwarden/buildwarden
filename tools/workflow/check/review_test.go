@@ -46,6 +46,16 @@ func TestApprovalsAreEntryScoped(t *testing.T) {
 		{"a re-review",
 			"- r1: approved at `aaa1111`.\n- Re-review r2: approved at `bbb2222`.\n",
 			[]string{"aaa1111", "bbb2222"}},
+		{"an entry with no approval citing an earlier one",
+			"- **r1, 2026-11-17: approved at `b7619b5`**\n" +
+				"- **r2, 2026-11-18: changes**; the design approved at\n" +
+				"  `b7619b5` is kept until the redraft.\n",
+			[]string{"b7619b5"}},
+		{"a citation before the entry's own approval",
+			"- r1: approved at `aaa1111`.\n" +
+				"- r2: the design approved at `aaa1111`, changed, is\n" +
+				"  approved at `bbb2222`.\n",
+			[]string{"aaa1111", "bbb2222"}},
 	} {
 		d, err := ParseDesign(design+"\n## Design review\n\n"+tc.review, tmpl)
 		if err != nil {

@@ -718,6 +718,16 @@ the state step of the 5-step estimate (4 steps + 1, one run).
   "A `human` worker may also complete one" (a4 (b)), folded in at
   `89f753b`.
 
+- **r2, 2026-11-20: approved at `afc6158`** (Jeff, attended tick, FLOW-19,
+  a delta review). x2-implement found the rule r1 confirmed for a1 ("the
+  first `approved at` in the entry") let an entry that records no approval
+  count an older sha it cites, which the Validation plan said should fail.
+  Jeff chose to close it: an entry's approval is its first `approved at`
+  whose sha no earlier entry recorded. Folded into Decision 1, a1, Design A
+  step 4 and the Validation plan; no rule change, impact field or other
+  decision changed. Implemented with two table cases.
+  - sitting: within the attended tick of 2026-11-20, asks: 1
+
 ## Consolidation
 
 A process item has no Publish phase and no consolidation pass (FLOW-03). The
