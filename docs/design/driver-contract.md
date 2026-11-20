@@ -6855,6 +6855,16 @@ after `main` at `0cd3c02` was merged into the branch (`661886d`), with
 `main` reads one config file, so the hold of **What K1 takes from the
 two configuration items** is lifted.
 
+Re-planned on 2026-11-20 from the design as approved at `33a3563`
+(r3, the delta from `a6c8f0b`, with D1 and D2 folded in). Tasks 1 to
+19 are done at `7c6110a` and are not renumbered. The approved design's
+tasks 19a to 19c and its amendments to tasks 20, 21, 22, 25 and 35 are
+confirmed as they stand, with the D1 case named in 19b; no other task
+changes. Implement runs 19a, 19b, 19c, then 20 to 38 in order. `main`
+has moved since the branch last merged it; merging it is Implement's
+and Publish's, not Plan's, and a merge that changes what a task here
+assumes goes back to Design (FLOW-06).
+
 The tasks follow **Order of the work**; its step is named in brackets.
 Each task leaves `make test` and `make lint` green, and `GOOS=<os> make
 lint` for each platform whose build-tagged files it touches (FLOW-17).
@@ -7050,9 +7060,9 @@ driver's keys, and `q2` was answered (b) (Decision 24, a27; **Design**,
 **A driver's key in another letter case**, **The answer**). The rework
 of tasks 2, 13 and 14 is three explicit tasks, numbered 19a to 19c so
 that the numbers other sections and other items cite (task 20, task 22)
-stay as they are (FLOW-06). They run after the review of r3's delta has
-approved it (FLOW-19), in this order, the specification first
-(LOOP-02).
+stay as they are (FLOW-06). The review of r3's delta approved it at
+`33a3563` on 2026-11-20 (FLOW-19); they run next, in this order, the
+specification first (LOOP-02).
 
 19a. Rework of task 2: `specs/driver-contract/v1.md` gains DRV-C12 as
      **The answer** words it, DRV-C5 ends "except as DRV-C12 says",
@@ -7066,8 +7076,11 @@ approved it (FLOW-19), in this order, the specification first
      refuses a declaration with two places equal when folded; tier 0 in
      `settings_test.go`: the kit's DRV-C12 cases of the **Validation
      plan** (Configuration, the kit's side), each naming DRV-C12, run
-     through `Main`, `Call` and `Resolve` (GLOBAL-10, GLOBAL-11, UX-04,
-     UX-08, TEST-01).
+     through `Main`, `Call` and `Resolve`, among them none of it in
+     `reap` or `attach` with a state file and the refusal in `reap` and
+     `attach` with none, where the recorded file is read (DRV-C10, D1),
+     and a declaration with two places equal when folded refused (D2)
+     (GLOBAL-10, GLOBAL-11, UX-04, UX-08, TEST-01).
 19c. Rework of task 14: `conformance/driver/`: the static tier's DRV-C12
      cases, the fake's by-hand refusal and its fault switch that skips
      it, and the self-test against that switch; the DRV-C5 case gains an
