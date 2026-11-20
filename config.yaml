@@ -8,6 +8,17 @@ priority_confirmed: true
 # (FLOW-05, PROFILE-01).
 repository: buildwarden/buildwarden
 
+# Every repository an item may name, with its trunk; wf reads a trunk here
+# only (LOOP-01, PROFILE-01, loop-repository Decisions 2-3). An entry gains its
+# profile only once the pull request that adopts the repository has merged, on
+# Jeff's word. Written by loop-repository's tasks 14a and 14b (Jeff, 2026-11-20).
+repositories:
+  - name: buildwarden/buildwarden
+    trunk: main
+    profile: docs/development/loop-profile.yaml
+  - name: buildwarden/buildwarden-specs  # not adopted: no profile
+    trunk: main
+
 # Steps one daily run may take; calibrate against /usage. Doubled from 12 on
 # 2026-11-12 (Jeff): weekly usage was very low.
 run_budget:
