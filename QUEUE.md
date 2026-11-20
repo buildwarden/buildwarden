@@ -36,7 +36,7 @@ None.
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | detached-prepare-windows-exe | fix (follows project-config-trust) | - | buildwarden/buildwarden | driver-core, driver/hyperv, driver/qemu, book, designs | 6 publish | f6-open-pr (cloud, leased to cloud/20261120T203034Z) | - | - | 15 / 10 |
 | 2 | merge-confirm-attended | process | - | buildwarden/buildwarden | - | 2 implement | x4-state (human), x2-implement (cloud, leased to cloud/20261120T203034Z) | - | - | 2 / 5 |
-| 3 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 3 implement | f3-implement (cloud) | - | - | 12 / 30 |
+| 3 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 3 implement | f3-implement (cloud, leased to cloud/20261120T203034Z) | - | - | 13 / 30 |
 | 5 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 6 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
 | 7 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 9 |
