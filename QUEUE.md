@@ -36,10 +36,9 @@ None.
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | merge-confirm-attended | process | - | buildwarden/buildwarden | - | 2 implement | x4-state (human), x2-implement (cloud, leased to cloud/20261120T203034Z) | - | - | 3 / 5 |
 | 2 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 3 implement | f3-implement (cloud, leased to cloud/20261120T203034Z) | - | - | 14 / 30 |
-| 3 | detached-prepare-windows-exe | fix (follows project-config-trust) | - | buildwarden/buildwarden | driver-core, driver/hyperv, driver/qemu, book, designs | 8 close | f8-close (cloud, leased to cloud/20261120T203034Z) | - | [#131](https://github.com/buildwarden/buildwarden/pull/131) | 16 / 10 |
-| 5 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
-| 6 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
-| 7 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 9 |
+| 4 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
+| 5 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
+| 6 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 9 |
 
 ## Workers
 
@@ -54,7 +53,6 @@ Open features that are not disjoint. Process items are outside the relations (FL
 
 | Items | Relation | Why |
 |---|---|---|
-| driver-contract, detached-prepare-windows-exe | colliding | driver-contract is undeclared |
 | driver-contract, prebuilt-artifacts | colliding | driver-contract is undeclared |
 | driver-contract, workdir-in-context | colliding | driver-contract is undeclared |
 | driver-contract, relay-collector-failure-fails-open | colliding | driver-contract is undeclared |
@@ -63,14 +61,6 @@ Open features that are not disjoint. Process items are outside the relations (FL
 | driver-contract, runtime-former-values-removal | colliding | driver-contract is undeclared |
 | driver-contract, auto-tidy-pull-request | colliding | auto-tidy-pull-request is undeclared |
 | driver-contract, relay-exit-code-unreadable | colliding | driver-contract is undeclared |
-| detached-prepare-windows-exe, prebuilt-artifacts | colliding | prebuilt-artifacts is undeclared |
-| detached-prepare-windows-exe, workdir-in-context | colliding | area driver-core |
-| detached-prepare-windows-exe, relay-collector-failure-fails-open | near | driver-core reaches executor |
-| detached-prepare-windows-exe, vm-from-host-path | colliding | vm-from-host-path is undeclared |
-| detached-prepare-windows-exe, configuration-bugfixes | colliding | configuration-bugfixes is undeclared |
-| detached-prepare-windows-exe, runtime-former-values-removal | colliding | runtime-former-values-removal is undeclared |
-| detached-prepare-windows-exe, auto-tidy-pull-request | colliding | auto-tidy-pull-request is undeclared |
-| detached-prepare-windows-exe, relay-exit-code-unreadable | near | driver-core reaches relay |
 | prebuilt-artifacts, workdir-in-context | colliding | prebuilt-artifacts is undeclared |
 | prebuilt-artifacts, relay-collector-failure-fails-open | colliding | prebuilt-artifacts is undeclared |
 | prebuilt-artifacts, vm-from-host-path | colliding | prebuilt-artifacts is undeclared |
@@ -116,9 +106,9 @@ Open features that are not disjoint. Process items are outside the relations (FL
 
 | Pri | Item | Kind | Repositories | Areas | Est. steps |
 |---|---|---|---|---|---|
-| 4 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
-| 8 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
-| 9 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
-| 10 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
-| 11 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
-| 12 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |
+| 3 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
+| 7 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
+| 8 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
+| 9 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
+| 10 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
+| 11 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |
