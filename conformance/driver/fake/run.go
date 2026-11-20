@@ -174,6 +174,9 @@ func teardown(st *start, relay *exec.Cmd, dir string) int {
 		return 0
 	}
 	_ = relay.Process.Kill()
+	if d, err := time.ParseDuration(os.Getenv("WARDEN_FAKE_TEARDOWN")); err == nil {
+		time.Sleep(d)
+	}
 	for i := range 20 {
 		if _, err := fmt.Fprintf(os.Stderr, "fake: tearing down (%d)\n", i); err != nil &&
 			fault == faultDieClosedStderr {

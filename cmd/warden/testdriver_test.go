@@ -25,6 +25,10 @@ import (
 //	WARDEN_TEST_LOG       a file each request is appended to, as one line
 
 func TestMain(m *testing.M) {
+	if os.Getenv(envTestAsWarden) != "" {
+		main()
+		os.Exit(0)
+	}
 	if os.Getenv("WARDEN_TEST_DRIVER") != "" {
 		os.Exit(testDriver(os.Args[1:]))
 	}
@@ -32,6 +36,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
+	testBinDir = dir
 	testDriverPath = filepath.Join(dir, driverFileName("tst", isWindows))
 	if err := copyFile(os.Args[0], testDriverPath, 0o755); err != nil {
 		panic(err)
@@ -43,6 +48,14 @@ func TestMain(m *testing.M) {
 
 // testDriverPath is the test binary's copy as warden-driver-tst.
 var testDriverPath string
+
+// testBinDir is the directory of the test binary's copies, removed when the
+// tests end.
+var testBinDir string
+
+// envTestAsWarden makes the test binary run warden's main: the end-to-end
+// tests run its copy as warden (e2e_test.go).
+const envTestAsWarden = "WARDEN_TEST_AS_WARDEN"
 
 func copyFile(from, to string, mode os.FileMode) error {
 	data, err := os.ReadFile(from)

@@ -10,6 +10,9 @@
 // value on stderr with the place it came from.
 //
 // WARDEN_FAKE_FAULT names one fault for the suite's self-test (faults.go).
+// WARDEN_FAKE_TEARDOWN, a Go duration, makes run's teardown take that long
+// after it has stopped the relay, so that a test can signal warden again
+// while the driver tears down.
 package main
 
 import (
