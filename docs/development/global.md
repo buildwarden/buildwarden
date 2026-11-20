@@ -143,12 +143,26 @@ intentional.
 - Executor public interface: the `initialize` invocation contract, the
   bootstrap config it reads (`bootstrap/`), plus its side of the relay
   protocol.
+- Driver contract: how `warden` finds a driver binary (`warden-driver-<name>`),
+  the commands it runs on it, and the messages of a build, as specified in
+  [`specs/driver-contract/`](../../specs/driver-contract/v1.md) and checked by
+  the driver conformance suite (`conformance/driver/`, TEST-05). A driver the
+  project did not write is a supported consumer of this contract. What such
+  a driver must do to the relay and the executor is theirs to state, in the
+  two seams above, and not this contract's. The Go packages under `driver/`
+  are a kit for writing a driver and are not part of the seam.
 
 Pre-1.0 these seams may still move. Post-1.0 they are stable and change rarely and
-deliberately, with explicit interface versioning. The `driver.Driver` interface
-and other orchestrator internals are **not** covered by this obligation; the
-orchestrator may treat them as internal extension points and stay rigid about its
-expected components.
+deliberately, with explicit interface versioning. The driver contract is
+supported but **unstable before 1.0**: it may change in any release with no
+deprecation window, and a change to it updates its specification and its suite
+in the same change. The orchestrator's other internals (`cmd/warden`, and the
+Go API of the kit under `driver/`) are **not** covered by this obligation.
+Opening the driver contract does not make the orchestrator composable the
+other way: a conforming driver starts BuildWarden's relay and delivers
+BuildWarden's executor, and substitutes neither. `warden` cannot verify that
+of a driver it did not ship; it records which driver binary ran, in the
+build's output directory.
 
 The claim protocol, the collector protocol, the relay guest API, the
 `initialize` contract and the bootstrap config are written as
