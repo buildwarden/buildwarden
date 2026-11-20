@@ -48,8 +48,7 @@ func (l *Logger) ErrorWithIssueLink(err error) {
 		runtime.GOOS, runtime.GOARCH, version, err.Error(),
 	))
 	link := fmt.Sprintf(
-		"https://github.com/buildwarden/buildwarden/issues/new"+
-			"?title=%s&body=%s", title, body)
+		bugURL+"?title=%s&body=%s", title, body)
 
 	fmt.Fprintf(l.out,
 		"\n  If this is unexpected, please file a bug:\n  %s\n\n", link)
@@ -68,3 +67,5 @@ func setColorMode(mode string) {
 	}
 }
 
+// bugURL is where a bug of warden, or of a driver linked into it, is filed.
+const bugURL = "https://github.com/buildwarden/buildwarden/issues/new"

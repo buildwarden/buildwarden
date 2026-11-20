@@ -7,6 +7,7 @@ import (
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/container"
+	"github.com/buildwarden/buildwarden/driver/drivercmd"
 	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
 	"github.com/buildwarden/buildwarden/driver/qemu"
@@ -52,6 +53,13 @@ const (
 // Step 6): its flags and keys, and the streams it prints to.
 type linkedDriver struct {
 	Capabilities capabilities
+	// Commands are the contract's commands warden serves for the driver, as
+	// its describe lists them; ImageOS the image prepare's guests, the first
+	// the default, for a driver that lists image-prepare.
+	Commands []string
+	ImageOS  []string
+	// Settings are the driver's flags and keys, its package's declarations.
+	Settings []drivercmd.Setting
 	// Preflight is what a probe of run calls: the checks the driver makes
 	// before anything is created. It creates nothing. Nil makes no checks.
 	Preflight func(ctx context.Context, cfg *Config, req *driver.BuildRequest,
@@ -69,13 +77,43 @@ type linkedDriver struct {
 		buildID string) (code int, err error)
 }
 
+// The commands warden serves for the linked drivers: the container driver's,
+// and the VM drivers', whose doctor, setup, image and clean code stays in
+// warden in K1.
+var (
+	containerCommands = []string{drivercmd.CmdRun, drivercmd.CmdReap, drivercmd.CmdDoctor,
+		drivercmd.CmdClean, drivercmd.CmdAttach}
+	vmCommands = []string{drivercmd.CmdRun, drivercmd.CmdReap, drivercmd.CmdDoctor,
+		drivercmd.CmdSetup, drivercmd.CmdImagePrepare, drivercmd.CmdImageList,
+		drivercmd.CmdImageVerify, drivercmd.CmdClean}
+)
+
+// description is the describe of the linked driver called name, built by
+// the kit from its declarations as a driver binary's is.
+func (l *linkedDriver) description(name string) (*drivercmd.Description, error) {
+	c := l.Capabilities
+	caps := drivercmd.Capabilities{VM: c.VM, Shell: c.Shell, Keep: c.Keep,
+		Exited: c.Exited, Containerfile: c.Containerfile, GuestOS: c.GuestOS,
+		ImageOS: l.ImageOS}
+	if len(l.ImageOS) > 0 {
+		caps.DefaultImageOS = l.ImageOS[0]
+	}
+	d := &drivercmd.Driver{Describe: drivercmd.Describe{Name: name, Version: version,
+		Vendor: "buildwarden", BugURL: bugURL, Capabilities: caps,
+		Settings: l.Settings, Commands: l.Commands}}
+	return d.Description()
+}
+
 // linkedDrivers are the drivers linked into warden, by name.
 var linkedDrivers = map[string]*linkedDriver{
 	"container": {Capabilities: capabilities{Shell: true, Keep: keepNone, Exited: true,
 		Containerfile: containerfileTranslate, GuestOS: []string{"linux"}},
+		Commands: containerCommands, Settings: container.Settings,
 		Preflight: containerPreflight, Run: containerRun, Attach: containerAttach},
 	"qemu": {Capabilities: capabilities{VM: true, Keep: keepStopped,
 		Containerfile: containerfileTranslate, GuestOS: []string{"linux", "windows"}},
+		Commands: vmCommands, ImageOS: []string{"linux", "windows"},
+		Settings: qemu.Settings,
 		Preflight: func(_ context.Context, _ *Config, req *driver.BuildRequest,
 			_ *driver.Start) error {
 			return qemu.New().Preflight(req)
@@ -88,6 +126,7 @@ var linkedDrivers = map[string]*linkedDriver{
 		}},
 	"vz": {Capabilities: capabilities{VM: true, Keep: keepStopped,
 		Containerfile: containerfileIgnore, GuestOS: []string{"linux"}},
+		Commands: vmCommands, ImageOS: []string{"macos"}, Settings: vz.Settings,
 		Preflight: func(_ context.Context, _ *Config, req *driver.BuildRequest,
 			_ *driver.Start) error {
 			return vz.New().Preflight(req)
@@ -100,6 +139,7 @@ var linkedDrivers = map[string]*linkedDriver{
 		}},
 	"hyperv": {Capabilities: capabilities{VM: true, Keep: keepRunning, Exited: true,
 		Containerfile: containerfileTranslate, GuestOS: []string{"linux", "windows"}},
+		Commands: vmCommands, ImageOS: []string{"windows"}, Settings: hyperv.Settings,
 		Preflight: func(_ context.Context, _ *Config, req *driver.BuildRequest,
 			_ *driver.Start) error {
 			return hyperv.New().Preflight(req)
@@ -112,6 +152,7 @@ var linkedDrivers = map[string]*linkedDriver{
 		}},
 	"firecracker": {Capabilities: capabilities{VM: true, Keep: keepRunning, Exited: true,
 		Containerfile: containerfileTranslate, GuestOS: []string{"linux"}},
+		Commands: vmCommands, ImageOS: []string{"linux"}, Settings: firecracker.Settings,
 		Preflight: func(_ context.Context, _ *Config, req *driver.BuildRequest,
 			_ *driver.Start) error {
 			return firecracker.New().Preflight(req)
