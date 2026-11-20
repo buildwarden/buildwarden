@@ -130,8 +130,8 @@ steps:
       expires: null
 budget:
   estimate:
-    runs: 1
-    steps: 7
+    runs: 5
+    steps: 10
   spent:
     runs: 4
     steps: 14
@@ -336,3 +336,6 @@ history:
   - at: 2026-11-19T17:29:55Z
     by: host:windows-hyperv/windows-desktop.20261119T171002Z
     event: done f6-validate-windows-hyperv
+  - at: 2026-11-20T19:20:00Z
+    by: human/jeff
+    event: 'estimate raised from 7 steps, 1 run to 10 steps, 5 runs on Jeff''s word (runaway, FLOW-13): the extra came from the 11-18 return to Design for the drivers claim and the re-plan; only f6-open-pr, the merge and Close remain'
