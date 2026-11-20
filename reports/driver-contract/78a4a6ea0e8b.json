@@ -1,0 +1,171 @@
+{
+  "feature": "driver-contract",
+  "branch": "feat/driver-contract",
+  "head": "78a4a6ea0e8b",
+  "heads": {
+    "buildwarden/buildwarden": "78a4a6ea0e8b"
+  },
+  "base": "be138478cd83",
+  "base_note": "merge base with origin/main, which is be138478cd83 (the branch merged main at 78a4a6e), so there is no trial-merge difference (FLOW-10)",
+  "round": "feature",
+  "step": "f4-review",
+  "worker": "cloud/20261120T203034Z",
+  "previous_report": "reports/driver-contract/dd370cbbf4f4.json",
+  "scope": "git diff origin/main...feat/driver-contract: 191 files, +35566/-2899, 97 commits (LINT-04). One repository.",
+  "design": "docs/design/driver-contract.md, approved at 33a3563 (r3; rule changes approved at a6c8f0b)",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": {
+    "source": "docs/development/*.md at 78a4a6ea0e8b (LINT-01)",
+    "rules": 100,
+    "agent_judgment": 44,
+    "hybrid": 42,
+    "automated": 14
+  },
+  "since_previous": {
+    "commits": [
+      "321017c A blocked doctor prints no ok line (finding 1)",
+      "274a988 Order the signal-before-relay test without a sleep (finding 2)",
+      "78a4a6e Merge main be13847 (#131, #132, #133)"
+    ],
+    "resolved": [
+      "1 FLOW-06 (MUST) cmd/warden/host.go:417: resolved at 321017c. doctorBinary prints ok only when neither warden's part nor the driver's result is blocked, and returns the verdict for the command to exit on (host.go:91-97, 419-442); the container driver (driver/container/command.go:136) and the conformance fake no longer print ok; TestUpstreamCALinesOfDoctor's blocked cases are main's again; TestDoctorBinaryOk covers the six combinations. The driver writes straight to warden's stdout fd (drivercall.go d.out() is os.Stdout), so its lines are written before warden's ok.",
+      "2 TEST-04 (MUST) cmd/warden/buildseq_test.go:316: resolved at 274a988. The test opens the driver's gate only once stopSignals has closed signalsStopped; onSignal (buildseq.go:352-370) calls stopSignals and decide in the same loop step, so relay-started is always handled after the stop. stopSignals runs once (guarded by st.stopped), so the close cannot panic."
+    ],
+    "merge": "78a4a6e: one conflict, docs/book/src/guide/drivers.md:252, resolved keeping K1's [driver] image_refresh_after and #131's clause on a re-prepare that cannot start: correct. #131's code (driver/detach.go, driver/qemu/driver.go ensureFreshWindowsLayer, driver/hyperv/freshness.go) applied unchanged to K1's files; the detached child runs 'image prepare --driver qemu|hyperv', which K1 keeps for linked drivers. #132 and #133 touch only tools/workflow/ and are main's."
+  },
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass (golangci-lint 0 issues x3; tier1 0 MUST, 0 MUST-review, 0 SHOULD, 5 hints, 0 suppressed)",
+    "make_test": "pass",
+    "goos_windows_make_lint": "pass (same lines)",
+    "goos_darwin_make_lint": "pass (same lines)",
+    "make_enforcement": "pass (exit 0): 4 ok lines, main's tier 1 findings kept (FLOW-14): UX-03 surface-removed cmd/warden/config.go:0 for keys cli, relay_image, windows_image, windows_image_update, each 'dropped by approved rule change UX-03'. The previous report's red was main's wf drops bug, fixed by process item rule-paths-shared (#133, be13847), which this branch merged.",
+    "dist_wf_check": "before this report (no -run): ok clean branch head 78a4a6e; FAIL make lint/make test skipped (run with -run); FAIL report .md/.json missing (written by this report); ok rule changes cleared (FLOW-14): docs/development/bootstrap.md (BOOT-02), global.md (GLOBAL-08), loop-profile.md (PROFILE-01), orchestrator.md (ORCH-01, ORCH-02, ORCH-03, ORCH-04), testing.md (TEST-05), ux-cli-config.md (UX-08), tools/tier1/rules.yaml (GLOBAL-08, ORCH-01, TEST-05), tools/tier1/surface/surface.go, surface_test.go, testdata/driver.go.txt (ORCH-03, UX-01, UX-03); ok queue records what the design declares (FLOW-03) as declared at 028ffe2; ok diff inside the declared areas: undeclared, collides with every item, no path outside (FLOW-05); 'phase 4 done-when not met' (exit 1) only for the skipped gates and the then-missing report",
+    "wf_check_from_merge_base": "wf built from be13847 (git worktree of the merge base, tools/workflow built to a scratch wf), run with -repo on the branch checkout: the same lines as dist/wf check",
+    "area_edges": "tools/tier1/area-edges.sh | dist/wf areas -state .dev/workflow -check -rev HEAD -edges -: 25 differences from HEAD at 78a4a6e, exit 0, the same as at dd370cb: 19 catch-all (every file of conformance/driver/ and cmd/warden-driver-container/main.go 'is in no area's paths (it falls to core)'), 6 reaches (core lacks collector, driver-core, driver/container, executor, ledger, relaycfg, through cmd/warden-driver-container). The item is undeclared, so nothing is outside its areas and nothing is widened (FLOW-03); see informational FLOW-05.",
+    "trial_merge_flow10": "origin/main is the merge base (be13847), so the trial merge is the head itself; dist/wf check prints no trial-merge line"
+  },
+  "findings": [
+    {
+      "id": 1,
+      "rule": "UX-01",
+      "related_rules": [
+        "FLOW-06"
+      ],
+      "severity": "MUST",
+      "check": "automated + agent-judgment",
+      "file": "docs/book/src/guide/drivers.md",
+      "line": 462,
+      "also": [
+        "docs/design/driver-contract.md:3434"
+      ],
+      "finding": "The Hyper-V section still tells users 'Both ages are set in `[vm]` (`image_refresh_after`, `image_min_grace`)'. K1 renames those keys to [driver] image_refresh_after and image_min_grace (with [driver.hyperv] overriding), and [vm] is now the deprecated old name that warns on use (driver/drivercmd/settings.go:166-171, configuration.md:227-234). The design requires 'guide/drivers.md names the new keys in each driver's section' (design:3434); the qemu section (drivers.md:252) was updated and the Hyper-V section was not. Present since before dd370cb (the previous report missed it); not caused by the merge (#131 added the two lines above it).",
+      "fix": "Name the new keys: e.g. 'Both ages are set in `[driver]` (`image_refresh_after`, `image_min_grace`), or in `[driver.hyperv]` for hyperv only; `[vm]` is their old name.'"
+    },
+    {
+      "id": 2,
+      "rule": "TEST-04",
+      "related_rules": [],
+      "severity": "MUST",
+      "check": "agent-judgment",
+      "file": "driver/drivercmd/drivercmd_test.go",
+      "line": 590,
+      "also": [
+        "driver/drivercmd/drivercmd_test.go:626-628"
+      ],
+      "finding": "TestRunTeardownWithClosedOutput (DRV-51) orders its events with a sleep. teardownDriver waits for the end of its input, then sleeps 200 ms to 'let the orchestrator's ends of stdout and stderr close' before writing to them. The test closes stdin first and stdout/stderr after it. On a loaded or -race runner, the driver's writes can land while the pipes are still open. They then succeed (the pipes hold far more than 100 short lines), and the test passes without exercising closed output. It cannot go red this way, but its result depends on wall-clock timing, not on the behavior it names.",
+      "fix": "Close stdout and stderr before stdin in the test (the driver notices only the end of its input), and drop the sleep: the order is then fixed."
+    },
+    {
+      "id": 3,
+      "rule": "GLOBAL-06",
+      "related_rules": [
+        "TEST-08",
+        "FLOW-08"
+      ],
+      "severity": "MUST-review",
+      "check": "agent-judgment",
+      "file": "cmd/warden/driverlookup.go",
+      "line": 17,
+      "also": [
+        "cmd/warden/buildseq.go:381",
+        "docs/design/driver-contract.md:6407"
+      ],
+      "finding": "The change alters two security boundaries, as the design declares (security_boundary: host-env, and env-relay). (1) host-env: the code that builds the isolation is now chosen at run time by a lookup (PATH first, then beside warden, then linked), with no ownership or mode check (a16 as Jeff answered it). The one guard is that a config file may name a driver, not a file (driverlookup.go findByPath, sourceConfig). (2) env-relay: warden now makes the claim token and claims every driver's relay. The design's Security note covers both. In the code read, the guard is implemented as the note says: a relative or empty PATH entry is an error, on Windows only .exe is a candidate, and a non-executable file is skipped and listed. Carried from the previous report, unchanged by 321017c, 274a988 and the merge. MUST-review: this needs the human's sign-off at merge, not a fix.",
+      "fix": "None required. The human acknowledges it at merge (FLOW-08) against the design's Security note. Whether this change trips TEST-08's security suite is that rule's call at release."
+    }
+  ],
+  "counts": {
+    "MUST": 2,
+    "MUST-review": 1,
+    "SHOULD": 0
+  },
+  "suppressions": [],
+  "suppressions_note": "The previous report had none; nothing to carry over.",
+  "follow_ups": [
+    {
+      "proposed": "wf-drops-shared-rule-paths",
+      "status": "superseded",
+      "note": "Filed and fixed as process item rule-paths-shared, merged as #133 (be13847); make enforcement is green at 78a4a6e."
+    }
+  ],
+  "informational": [
+    {
+      "rule": "FLOW-06",
+      "file": "docs/design/driver-contract.md",
+      "line": 3716,
+      "note": "Implement asked about this: the design still says the container driver's doctor 'Prints `container runtime: <rt>`, then `ok`'. Line 3698 ('The operations, per driver') describes main and stays true. Line 3716 is K1's plan note for the container driver's doctor, and the code now prints ok from warden (321017c). Judged not a finding. The users see the same output when nothing blocks. DRV-25 (specs/driver-contract/v1.md:297) does not say who prints ok. The design's Behaviour section ('1 for a blocked doctor with no extra line', UX-09) is normative and the code now meets it; the old note contradicted it in the blocked case. No design change is needed (FLOW-06). Publish's consolidation may correct the note to 'Prints `container runtime: <rt>`; warden prints ok when nothing blocks'. The validation cases (design:6829-6830, 'warden doctor prints ... ok') hold as written."
+    },
+    {
+      "rule": "FLOW-05",
+      "file": "conformance/driver/",
+      "line": 0,
+      "note": "The area map: the Design review of r3 recorded that 'core gains reaches: [collector, relaycfg]', to be saved when the PR merges. wf areas -check at 78a4a6e (unchanged from dd370cb) also reports cmd/warden-driver-container/ in no area (falls to core) and core lacking driver-core, driver/container, executor and ledger through it. Before saving the map, Jeff should place cmd/warden-driver-container/ (for example with driver/container) or widen core's reaches. The item is undeclared, so nothing is outside its declared areas and nothing is widened here (FLOW-03)."
+    },
+    {
+      "rule": "FLOW-14",
+      "file": "docs/development/",
+      "line": 0,
+      "note": "Rule-change wording judged against the design as approved: every added sentence in bootstrap.md, global.md, orchestrator.md, testing.md, ux-cli-config.md and loop-profile.md is verbatim in the approved design. The exception is loop-profile.md's Specifications row, which keeps main's later sentences on the specs repository unchanged. The rules.yaml edits match the GLOBAL-08, ORCH-01 and TEST-05 enforcement text (the seams entry, drivers.shared and TEST-05's owner). The surface/ edits are the approved UX-01, UX-03 and ORCH-03 enforcement (Setting literals and Aliases as keys)."
+    },
+    {
+      "rule": "TEST-05",
+      "file": "conformance/driver/lifecycle.go",
+      "line": 0,
+      "note": "The Inputs case has not been run against a real relay on this branch here. The integration workflow runs make driver-conformance against warden-driver-container with the real relay, and the macos-finch and container-any validations run both tiers. Confirm the integration run is green on the PR."
+    },
+    {
+      "rule": "FLOW-15",
+      "file": "cmd/warden/drivercall.go",
+      "line": 294,
+      "note": "The contract's old-name table and common keys are written twice: in warden's check of a describe (cmd/warden/drivercall.go:290-303) and in the kit (driver/drivercmd/settings.go:157-180). cmd/warden does not import drivercmd outside linked.go, so this looks deliberate: warden checks a driver against the specification, not against the kit. It belongs in Publish's duplication sweep, and a test that the two tables agree would keep them in step."
+    },
+    {
+      "rule": "GLOBAL-04",
+      "file": "conformance/driver/fake/",
+      "line": 0,
+      "note": "tier1's 5 tests-with-change hints: cmd/warden-driver-container (a one-line main), conformance/driver/cmd/driver-conformance, conformance/driver/fake, conformance/driver/stubrelay (test doubles and the suite's CLI, exercised by cmd/warden's e2e tests and the lifecycle tier's self-test under make test), and driver/linuxguest. A hint, not a finding."
+    },
+    {
+      "rule": "ORCH-04",
+      "file": "driver/drivercmd/pipe.go",
+      "line": 92,
+      "note": "warden closes the driver's input straight after writing stop (drivercall.go dialogue), so the kit's reader sees stop and then end of input. pipeHost.Wait can then return 'interrupted' in place of the stop's reason when both are ready. The container driver ignores Wait's value, and its teardown takes no context, so nothing changes today. A driver that branches on the reason could see the wrong one."
+    },
+    {
+      "rule": "FLOW-06",
+      "file": "docs/design/driver-contract.md",
+      "line": 0,
+      "note": "Implement's other recorded deviations were judged and none needs Design: DRV-C5's exception placed after the ignoring clause; hyperv's windows-image keys listing run; container's relay_image listing run and doctor (main's doctor checked the relay image); linked drivers listing reap; help titles; image list's end-to-end case in-process; signal and shell cases Unix-only (covered natively); WARDEN_FAKE_TEARDOWN (the fake only, a test double); the drivercmd exit-code order fix (DRV-21); make build of warden-driver-container moved to task 22; integration skipping shell and exited for the container (macos-finch case 9 runs both tiers); DRV-33 and DRV-55 named by the probe and clean cases; the fake writing its relay PID. The doctor deviation was the previous report's finding 1, resolved at 321017c."
+    }
+  ],
+  "judged_clean": [
+    "GLOBAL-09, GLOBAL-10, GLOBAL-11 against Defaults and overrides: teardown wait (60s default, [build] teardown_timeout refused at load, no fallback), driver lookup order, relay source (beside the binary else the source tree, no fallback after a failure), default_image_os (in v1.md), no other default, merge or fallback found in the non-test diff",
+    "RELAY-08: no new relay setting on a flag, variable, seed or kernel command line; the claim token moves from driver to warden and still reaches the relay pre-claim on its boot channel (WARDEN_CLAIM_TOKEN / relaycfg.TokenEnv as before), as the design's RELAY-08 table says",
+    "ORCH-04: driver binary teardown on stop or end of input; kill and reap after the teardown wait; a reap that fails leaves the record and lock for warden clean",
+    "UX-08: the drivers' keys are read by the owning driver in its probe; warden's own keys at load",
+    "PROFILE-01: the four rows match the change (driver-contract specification and suite, the driver-contract CI job, the surface including driver declarations)",
+    "TEST-04 sweep: the other added sleeps in tests are polls toward a deadline (e2e_test.go noLeftovers, e2e_unix_test.go gone, buildseq_test.go waitFor, conformance/driver/lifecycle.go marker wait) or hang stand-ins in test doubles (time.Sleep(time.Hour)); not findings",
+    "Merge 78a4a6e: drivers.md conflict resolved correctly; #131's code applies unchanged to K1's qemu/hyperv files and its detached 'image prepare --driver <name>' still selects the linked driver"
+  ]
+}
