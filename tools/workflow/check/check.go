@@ -4,12 +4,14 @@ package check
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -19,8 +21,12 @@ import (
 
 // Env is where the checks look.
 type Env struct {
-	Repo     string // a checkout of buildwarden/buildwarden with origin fetched
+	Repo     string // a checkout of the queue's own repository with origin fetched
 	Workflow string // a checkout of the workflow branch
+	// Checkouts holds a clone of each other repository an item works in,
+	// at Checkouts/<owner>/<name>, origin fetched (-checkouts). Empty, wf
+	// reads no second repository, and a check that needs one fails.
+	Checkouts string
 	// Run enables the checks that run make targets; off, they are reported
 	// as skipped and fail.
 	Run bool
@@ -38,11 +44,7 @@ type Result struct {
 
 // Phase runs the done-when checks for the feature's current phase.
 func Phase(env Env, f *queue.Feature) []Result {
-	c := &checker{env: env, f: f}
-	if f.Round == "process" {
-		c.process()
-		return c.out
-	}
+	c := newChecker(env, f)
 	if f.Round == "tracked" {
 		// The item's branch, design and PR are in its home repository,
 		// where wf sees none of them.
@@ -50,9 +52,16 @@ func Phase(env Env, f *queue.Feature) []Result {
 			strings.Join(f.Repos[:min(1, len(f.Repos))], ""))
 		return c.out
 	}
+	if !c.ready() {
+		return c.out
+	}
+	if f.Round == "process" {
+		c.process()
+		return c.out
+	}
 	switch f.Phase {
 	case 0:
-		c.branchOnRemote()
+		c.each(c.branchOnRemote)
 	case 1:
 		c.design()
 	case 2:
@@ -61,43 +70,41 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.approvalDelta()
 		c.declaredStill()
 	case 3:
-		c.onBranchHead()
-		c.make("lint")
-		c.make("test")
-		c.docsTouched("UX-01 reference docs updated", "docs/")
-		c.ruleClearance()
+		c.each(c.onBranchHead)
+		c.each(c.fastGate)
+		c.each(func() { c.referenceDocs("UX-01 reference docs updated", false) })
+		c.each(c.ruleClearance)
 		c.declaredStill()
-		c.insideAreas()
+		c.each(c.insideAreas)
 	case 4:
-		c.onBranchHead()
-		c.make("lint")
-		c.make("test")
+		c.each(c.onBranchHead)
+		c.each(c.fastGate)
 		c.tier2Report()
-		c.ruleClearance()
+		c.each(c.ruleClearance)
 		c.declaredStill()
-		c.insideAreas()
-		c.trialMerge()
+		c.each(c.insideAreas)
+		c.each(c.trialMerge)
 	case 5:
-		c.docsTouched("guides or examples updated", "docs/book/src/guide/",
-			"docs/book/src/getting-started/", "examples/", "README.md")
+		c.each(func() { c.referenceDocs("guides or examples updated", true) })
 		c.declaredStill()
-		c.insideAreas()
+		c.each(c.insideAreas)
 	case 6:
 		if c.mergedEarly() {
 			break
 		}
-		c.mainMerged()
+		c.each(c.mainMerged)
 		if d, err := c.loadDesign(c.f.Branch); err == nil {
 			c.section(d, "Consolidation")
 		}
-		c.ruleClearance()
+		c.eachOther(c.consolidationNamesMain)
+		c.each(c.ruleClearance)
 		c.declaredStill()
-		c.insideAreas()
-		c.trialMerge()
+		c.each(c.insideAreas)
+		c.each(c.trialMerge)
 		c.archivedOn(c.f.Branch)
-		c.prGreen()
+		c.each(c.prGreen)
 	case 7:
-		c.merged()
+		c.each(c.merged)
 	case 8:
 		c.closed()
 	}
@@ -108,7 +115,10 @@ func Phase(env Env, f *queue.Feature) []Result {
 // (FLOW-19): every review seeded so far, this one included, has its approval
 // recorded. The review is not its phase's gate, so Phase does not run it.
 func Review(env Env, f *queue.Feature) []Result {
-	c := &checker{env: env, f: f}
+	c := newChecker(env, f)
+	if !c.ready() {
+		return c.out
+	}
 	c.reviewed()
 	return c.out
 }
@@ -118,9 +128,34 @@ func Review(env Env, f *queue.Feature) []Result {
 // refresh: the human may have merged since the last confirmation, and a
 // refresh pushed after that would bring a deleted branch back (FLOW-16).
 func Merged(env Env, f *queue.Feature) bool {
-	c := &checker{env: env, f: f}
+	c := newChecker(env, f)
+	if !c.ready() {
+		return false
+	}
 	c.merged()
 	return OK(c.out)
+}
+
+// MergedFirst runs the done-when check of an f6-merged-<n>: the pull
+// request of the item's n-th work entry, counted from 1, is merged into that
+// repository's trunk, by the merge step's proofs (FLOW-08).
+func MergedFirst(env Env, f *queue.Feature, n int) []Result {
+	c := newChecker(env, f)
+	if !c.ready() {
+		return c.out
+	}
+	if n < 1 || n > len(f.Work) {
+		c.add("merged by a human (FLOW-08)", false, "work has no entry %d", n)
+		return c.out
+	}
+	c.repos()
+	c.at = c.others[n-1]
+	if c.at.err != nil {
+		c.add("repository (LOOP-01)", false, "%v", c.at.err)
+		return c.out
+	}
+	c.merged()
+	return c.out
 }
 
 // Refresh runs the done-when check of a refresh step (FLOW-10): the branch
@@ -133,19 +168,22 @@ func Merged(env Env, f *queue.Feature) bool {
 // to record. It does not pass on a merge the human made meanwhile: the
 // refresh then pushes nothing, and the merge confirmation drops the step.
 func Refresh(env Env, f *queue.Feature) []Result {
-	c := &checker{env: env, f: f}
-	c.mainMerged()
-	c.pushed()
+	c := newChecker(env, f)
+	if !c.ready() {
+		return c.out
+	}
+	c.each(c.mainMerged)
+	c.each(c.pushed)
 	hasPR := f.PR != nil && f.PR.Number > 0
 	if f.Round != "process" {
-		c.consolidationNamesMain()
-		c.ruleClearance()
+		c.each(c.consolidationNamesMain)
+		c.each(c.ruleClearance)
 		c.declaredStill()
-		c.insideAreas()
+		c.each(c.insideAreas)
 	}
 	if hasPR || f.Round == "process" {
 		c.archivedOn(f.Branch)
-		c.prGreen()
+		c.each(c.prGreen)
 	}
 	return c.out
 }
@@ -153,28 +191,32 @@ func Refresh(env Env, f *queue.Feature) []Result {
 var commitIDRe = regexp.MustCompile(`\b[0-9a-f]{7,40}\b`)
 
 // consolidationNamesMain checks that the design's Consolidation section
-// names the commit of main the branch merged: the refresh's pass over what
-// landed is recorded against that commit (FLOW-10).
+// names the commit of the trunk the branch merged: the refresh's pass over
+// what landed is recorded against that commit (FLOW-10). The design is the
+// home's, whichever repository's trunk is checked.
 func (c *checker) consolidationNamesMain() {
 	const name = "consolidation names the main commit merged (FLOW-10)"
+	at := c.at
+	c.at = c.home
 	d, err := c.loadDesign(c.f.Branch)
+	c.at = at
 	if err != nil {
 		c.add(name, false, "%v", err)
 		return
 	}
-	main, err := c.git("rev-parse", "origin/main")
+	main, err := c.git("rev-parse", c.trunk())
 	if err != nil {
 		c.add(name, false, "%v", err)
 		return
 	}
 	for _, id := range commitIDRe.FindAllString(d.Sections["Consolidation"], -1) {
 		if strings.HasPrefix(main, id) {
-			c.add(name, true, "origin/main %s", short(main))
+			c.add(name, true, "%s %s", c.trunk(), short(main))
 			return
 		}
 	}
-	c.add(name, false, "the Consolidation section on %s does not name origin/main %s",
-		c.f.Branch, short(main))
+	c.add(name, false, "the Consolidation section on %s does not name %s %s",
+		c.f.Branch, c.trunk(), short(main))
 }
 
 // process runs a process item's done-when checks: x1 design written and
@@ -191,7 +233,7 @@ func (c *checker) process() {
 			break
 		}
 		c.pushed()
-		c.ruleClearance()
+		c.each(c.ruleClearance)
 		c.archivedOn(c.f.Branch)
 		c.prGreen()
 	case 3:
@@ -215,15 +257,33 @@ type checker struct {
 	env Env
 	f   *queue.Feature
 	out []Result
+	// home is the item's home repository, others its work entries' (repos);
+	// at is the one the check being run concerns.
+	home, at *repoAt
+	others   []*repoAt
 }
 
+// add records a result. One about a repository other than the home names
+// it.
 func (c *checker) add(name string, ok bool, format string, a ...any) {
+	if c.at != nil && c.at != c.home {
+		name += " in " + c.at.name
+	}
 	c.out = append(c.out, Result{name, ok, fmt.Sprintf(format, a...)})
+}
+
+// eachOther is each without the home.
+func (c *checker) eachOther(check func()) {
+	c.each(func() {
+		if c.at != c.home {
+			check()
+		}
+	})
 }
 
 func (c *checker) git(args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
-	cmd.Dir = c.env.Repo
+	cmd.Dir = c.dir()
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -232,6 +292,54 @@ func (c *checker) git(args ...string) (string, error) {
 			strings.TrimSpace(stderr.String()))
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// clone returns the checkout of repo: Env.Repo for the queue's own
+// repository (or for an item that names none), else its clone under
+// Env.Checkouts. A clone that is not there is an error naming -checkouts and
+// the path it was looked for at (GLOBAL-11).
+func (c *checker) clone(repo string) (string, error) {
+	if repo == "" || repo == c.state().Config.Repository {
+		return c.env.Repo, nil
+	}
+	if c.env.Checkouts == "" {
+		return "", fmt.Errorf("%s is not the queue's own repository, and no -checkouts "+
+			"is given: wf reads it in DIR/%s, given -checkouts DIR", repo, repo)
+	}
+	dir := filepath.Join(c.env.Checkouts, filepath.FromSlash(repo))
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
+		return "", fmt.Errorf("no clone of %s at %s (-checkouts %s): clone it there",
+			repo, dir, c.env.Checkouts)
+	}
+	return dir, nil
+}
+
+// gitIn runs git in repo's checkout.
+func (c *checker) gitIn(repo string, args ...string) (string, error) {
+	dir, err := c.clone(repo)
+	if err != nil {
+		return "", err
+	}
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git %s in %s: %v: %s", strings.Join(args, " "), repo, err,
+			strings.TrimSpace(stderr.String()))
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// remoteHeadIn returns the commit of branch on repo's remote, "" when the
+// branch is not there.
+func (c *checker) remoteHeadIn(repo, branch string) (string, error) {
+	out, err := c.gitIn(repo, "ls-remote", "--heads", "origin", "refs/heads/"+branch)
+	if err != nil || out == "" {
+		return "", err
+	}
+	return strings.Fields(out)[0], nil
 }
 
 func (c *checker) remoteHead(branch string) string {
@@ -248,8 +356,9 @@ func (c *checker) branchOnRemote() {
 }
 
 func (c *checker) mainMerged() {
-	_, err := c.git("merge-base", "--is-ancestor", "origin/main", c.f.Branch)
-	c.add("current main merged", err == nil, "origin/main is an ancestor of %s", c.f.Branch)
+	_, err := c.git("merge-base", "--is-ancestor", c.trunk(), c.f.Branch)
+	c.add("current main merged", err == nil, "%s is an ancestor of %s", c.trunk(),
+		c.f.Branch)
 }
 
 func (c *checker) pushed() {
@@ -267,26 +376,13 @@ func (c *checker) onBranchHead() {
 		"HEAD %s, %s %s", head, c.f.Branch, branch)
 }
 
-func (c *checker) make(target string) {
-	name := "make " + target
-	if !c.env.Run {
-		c.add(name, false, "skipped (run with -run)")
-		return
-	}
-	cmd := exec.Command("make", target)
-	cmd.Dir = c.env.Repo
-	out, err := cmd.CombinedOutput()
-	tail := string(out)
-	if len(tail) > 2000 {
-		tail = tail[len(tail)-2000:]
-	}
-	c.add(name, err == nil, "%s", strings.TrimSpace(tail))
-}
-
 // docsTouched passes when the design declares no surfaces, or the branch
 // changes a file under one of the prefixes.
 func (c *checker) docsTouched(name string, prefixes ...string) {
+	at := c.at
+	c.at = c.home
 	d, err := c.loadDesign(c.f.Branch)
+	c.at = at
 	if err != nil {
 		c.add(name, false, "%v", err)
 		return
@@ -295,7 +391,7 @@ func (c *checker) docsTouched(name string, prefixes ...string) {
 		c.add(name, true, "design declares no surfaces")
 		return
 	}
-	files, err := c.git("diff", "--name-only", "origin/main..."+c.f.Branch)
+	files, err := c.git("diff", "--name-only", c.trunk()+"..."+c.f.Branch)
 	if err != nil {
 		c.add(name, false, "%v", err)
 		return
@@ -311,17 +407,64 @@ func (c *checker) docsTouched(name string, prefixes ...string) {
 	c.add(name, false, "surfaces %v but nothing under %v changed", d.Front.Surfaces, prefixes)
 }
 
+// tier2Report checks that the tier-2 report for the home's branch head is
+// written, and that the heads its JSON records are the item's current
+// branch heads in every repository it has a branch in: one report covers
+// one state of all the item's branches (LINT-04). An item with no work entry
+// may have a report without heads, as every report before them.
 func (c *checker) tier2Report() {
 	sha, err := c.git("rev-parse", "--short=12", "refs/heads/"+c.f.Branch)
 	if err != nil {
 		c.add("tier-2 report (LINT-04)", false, "%v", err)
 		return
 	}
+	var jsonPath string
 	for _, ext := range []string{".md", ".json"} {
 		p := filepath.Join(c.env.Workflow, "reports", c.f.Feature, sha+ext)
 		_, err := os.Stat(p)
 		c.add("tier-2 report "+ext+" (LINT-04, LINT-05)", err == nil, "%s", p)
+		if err == nil && ext == ".json" {
+			jsonPath = p
+		}
 	}
+	if jsonPath != "" {
+		c.reportHeads(jsonPath)
+	}
+}
+
+// reportHeads compares the report's heads with each repository's branch
+// head.
+func (c *checker) reportHeads(path string) {
+	const name = "tier-2 report heads (LINT-04)"
+	var rep struct {
+		Heads map[string]string `json:"heads"`
+	}
+	data, err := os.ReadFile(path)
+	if err == nil {
+		err = json.Unmarshal(data, &rep)
+	}
+	if err != nil {
+		c.add(name, false, "%s: %v", path, err)
+		return
+	}
+	if rep.Heads == nil && len(c.f.Work) == 0 {
+		return
+	}
+	var stale []string
+	c.each(func() {
+		head, err := c.git("rev-parse", "refs/heads/"+c.f.Branch)
+		got := rep.Heads[c.at.name]
+		if err != nil || len(got) < 7 || !strings.HasPrefix(head, got) {
+			stale = append(stale, fmt.Sprintf("%s: report %s, branch %s", c.at.name,
+				orNone(got), orNone(short(head))))
+		}
+	})
+	if len(stale) > 0 {
+		c.add(name, false, "the report's heads are not the item's branch heads: %s",
+			strings.Join(stale, "; "))
+		return
+	}
+	c.add(name, true, "every branch head is the one the report read")
 }
 
 // prGreen checks that the PR is open with its checks green on the branch's
@@ -329,7 +472,16 @@ func (c *checker) tier2Report() {
 // nothing about another (FLOW-08).
 func (c *checker) prGreen() {
 	const name = "PR open with CI green (FLOW-11)"
-	pr := c.f.PR
+	pr := c.pr()
+	if c.at != c.home && pr == nil {
+		// A repository whose branch adds nothing to its trunk gets no pull
+		// request; its entry closes with the home's.
+		if n, err := c.git("rev-list", "--count", c.trunk()+".."+c.f.Branch); err == nil &&
+			n == "0" {
+			c.add(name, true, "%s adds no commit to %s: no PR", c.f.Branch, c.trunk())
+			return
+		}
+	}
 	if pr == nil || pr.Number == 0 || pr.CI != "green" {
 		c.add(name, false, "pr %+v", pr)
 		return
@@ -340,16 +492,26 @@ func (c *checker) prGreen() {
 }
 
 // merged confirms the human's merge (FLOW-08). Each branch head still
-// around, local or remote, must be contained in origin/main, or, for a
-// squash merge, origin/main must carry a commit naming the PR whose tree is
+// around, local or remote, must be contained in the trunk, or, for a
+// squash merge, the trunk must carry a commit naming the PR whose tree is
 // the head's tree, or which merging the head onto its parent writes
 // (FLOW-16; see refMerged). Once GitHub has deleted the branch, the PR's
-// commit on origin/main alone is the proof.
+// commit on the trunk alone is the proof. Each repository the item has a
+// branch in is checked against its own trunk (FLOW-08).
 func (c *checker) merged() {
 	const name = "merged by a human (FLOW-08)"
 	var prCommits []string
-	if pr := c.f.PR; pr != nil && pr.Number > 0 {
-		out, _ := c.git("log", "origin/main", "--format=%h %s", "-E",
+	pr := c.pr()
+	if c.at != c.home && pr == nil {
+		// A repository whose branch added nothing got no pull request.
+		if n, err := c.git("rev-list", "--count", c.trunk()+".."+c.f.Branch); err == nil &&
+			n == "0" {
+			c.add(name, true, "%s adds no commit to %s: no PR", c.f.Branch, c.trunk())
+			return
+		}
+	}
+	if pr != nil && pr.Number > 0 {
+		out, _ := c.git("log", c.trunk(), "--format=%h %s", "-E",
 			fmt.Sprintf("--grep=(Merge pull request |\\()#%d([^0-9]|$)", pr.Number))
 		if out != "" {
 			prCommits = strings.Split(out, "\n")
@@ -370,17 +532,53 @@ func (c *checker) merged() {
 	}
 	if len(infos) > 0 {
 		c.add(name, true, "%s", strings.Join(infos, "; "))
+		c.at.merge = c.mergeCommit(prCommits)
 		return
 	}
-	if c.f.PR == nil || c.f.PR.Number == 0 {
+	if pr == nil || pr.Number == 0 {
 		c.add(name, false, "no %s branch and no PR recorded", c.f.Branch)
 		return
 	}
-	c.add(name, len(prCommits) > 0, "PR #%d on origin/main: %s", c.f.PR.Number,
+	c.add(name, len(prCommits) > 0, "PR #%d on %s: %s", pr.Number, c.trunk(),
 		firstLine(strings.Join(prCommits, "\n")))
+	if len(prCommits) > 0 {
+		c.at.merge = c.mergeCommit(prCommits)
+	}
 }
 
-// refMerged reports whether ref is on origin/main, by the first of three
+// mergeCommit is the commit a confirmed merge is recorded by: the PR's
+// commit on the trunk, or else the trunk's head, which contains the branch.
+func (c *checker) mergeCommit(prCommits []string) string {
+	rev := c.trunk()
+	if len(prCommits) > 0 {
+		rev = strings.Fields(prCommits[0])[0]
+	}
+	sha, _ := c.git("rev-parse", rev+"^{commit}")
+	return sha
+}
+
+// WorkMerges returns, for each of the item's work entries in order, the
+// merge commit the merge step's proofs confirm in that repository, or ""
+// where they do not hold: what the merge confirmation records as the
+// entry's merged (FLOW-08).
+func WorkMerges(env Env, f *queue.Feature) []string {
+	c := newChecker(env, f)
+	out := make([]string, len(f.Work))
+	if !c.ready() {
+		return out
+	}
+	for i, r := range c.repos()[1:] {
+		if r.err != nil {
+			continue
+		}
+		c.at = r
+		c.merged()
+		out[i] = r.merge
+	}
+	return out
+}
+
+// refMerged reports whether ref is on the trunk, by the first of three
 // proofs that holds: ref is an ancestor of it; a commit in prCommits has
 // ref's tree; or merging ref onto the parent of a one-parent commit C in
 // prCommits writes C's tree (mergeTreeProof). The last proof covers a squash
@@ -391,11 +589,12 @@ func (c *checker) merged() {
 // branch safe: a head pushed past the squash, or a ref that puts a line
 // elsewhere, writes a different tree.
 func (c *checker) refMerged(ref string, prCommits []string) (string, bool) {
-	if _, err := c.git("merge-base", "--is-ancestor", ref, "origin/main"); err == nil {
-		return ref + " is contained in origin/main", true
+	if _, err := c.git("merge-base", "--is-ancestor", ref, c.trunk()); err == nil {
+		return ref + " is contained in " + c.trunk(), true
 	}
 	if len(prCommits) == 0 {
-		return ref + " is not contained in origin/main and no PR commit is on it", false
+		return ref + " is not contained in " + c.trunk() + " and no PR commit is on it",
+			false
 	}
 	tree, _ := c.git("rev-parse", ref+"^{tree}")
 	for _, line := range prCommits {
@@ -420,9 +619,9 @@ func (c *checker) refMerged(ref string, prCommits []string) (string, bool) {
 	if c.remoteHead(c.f.Branch) == "" {
 		drop += "; git update-ref -d refs/remotes/origin/" + c.f.Branch
 	}
-	return fmt.Sprintf("%s (tree %s) is not contained in origin/main, and no PR commit "+
+	return fmt.Sprintf("%s (tree %s) is not contained in %s, and no PR commit "+
 		"has its tree or is its merge: %s; after comparing, a human may delete: %s",
-		ref, short(tree), strings.Join(seen, ", "), drop), false
+		ref, short(tree), c.trunk(), strings.Join(seen, ", "), drop), false
 }
 
 // mergeTreeProof reports whether PR commit sha has one parent and merging ref
@@ -457,7 +656,7 @@ func (c *checker) mergeTreeProof(ref, sha string) (string, bool) {
 	args := append(c.textMergeOnly(), "merge-tree", "--write-tree", "--no-messages",
 		"--merge-base="+base, sha+"^", ref)
 	cmd := exec.Command("git", args...)
-	cmd.Dir = c.env.Repo
+	cmd.Dir = c.dir()
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -531,13 +730,13 @@ func short(sha string) string {
 // them (FLOW-08); what remains is that the design landed archived (FLOW-12).
 // It reports nothing and returns false while the PR is not merged.
 func (c *checker) mergedEarly() bool {
-	probe := &checker{env: c.env, f: c.f}
+	probe := &checker{env: c.env, f: c.f, home: c.home, at: c.home, others: c.others}
 	probe.merged()
 	if !OK(probe.out) {
 		return false
 	}
 	c.out = append(c.out, probe.out...)
-	c.archivedOn("origin/main")
+	c.archivedOn(c.trunk())
 	return true
 }
 
@@ -555,12 +754,18 @@ func (c *checker) archivedOn(rev string) {
 	c.section(d, "Archive summary")
 }
 
-// closed is Close's done-when: merged, archived on main, and the branch gone
-// from the remote (GitHub deletes it on merge) and from this checkout
-// (FLOW-16).
+// closed is Close's done-when: merged, archived on the home's trunk, and the
+// branch gone from the remote (the host deletes it on merge) and from the
+// checkout, in each repository the item has a branch in (FLOW-16).
 func (c *checker) closed() {
 	c.merged()
-	c.archivedOn("origin/main")
+	c.archivedOn(c.trunk())
+	c.each(c.branchGone)
+}
+
+// branchGone checks that the item's branch is deleted on the remote and in
+// the checkout (FLOW-16).
+func (c *checker) branchGone() {
 	c.add("remote branch deleted (FLOW-16)", c.remoteHead(c.f.Branch) == "",
 		"origin/%s", c.f.Branch)
 	_, err := c.git("rev-parse", "--verify", "--quiet", "refs/heads/"+c.f.Branch)
@@ -574,7 +779,11 @@ func (c *checker) design() {
 		return
 	}
 	c.add("design present (FLOW-01)", true, "%s on %s", c.f.Design, c.f.Branch)
-	for _, e := range d.Front.Problems(c.f.Feature) {
+	p, err := c.profile()
+	if err != nil {
+		c.add("front-matter (FLOW-02)", false, "%v", err)
+	}
+	for _, e := range d.Front.Problems(c.f.Feature, p) {
 		c.add("front-matter (FLOW-02)", false, "%s", e)
 	}
 	if d.Front.Alters == nil || c.f.AltersRelationships == nil ||
@@ -641,6 +850,9 @@ type Front struct {
 	// Repos are the repositories the item works in, its home first; empty
 	// or absent, only the one that holds the design (LOOP-04).
 	Repos []string `yaml:"repos"`
+	// MergeFirst are the repositories in Repos, not the home, whose pull
+	// request merges before the home's is listed ready (FLOW-08).
+	MergeFirst []string `yaml:"merge_first"`
 	// Areas are the areas of the area map the change edits (FLOW-02). Nil,
 	// the key absent, the design is undeclared, which an empty list is not.
 	Areas            *[]string `yaml:"areas"`
@@ -661,31 +873,48 @@ type Front struct {
 	RuleChanges []RuleChange `yaml:"rule_changes"`
 	Concepts    []string     `yaml:"concepts"`
 	present     map[string]bool
+	// raw is the front-matter as parsed, for the values a profile checks.
+	raw map[string]any
 }
 
+// loopKeys are the front-matter keys every design carries, whatever its
+// component (FLOW-02, LOOP-08).
+var loopKeys = []string{"feature", "status", "seams", "alters_relationships",
+	"design_review", "native_validation", "rules", "concepts"}
+
+// keyOrder is the order Problems reports missing keys in, so that a
+// component's added keys fall where they always have here.
+var keyOrder = []string{"feature", "status", "drivers", "seams", "surfaces",
+	"security_boundary", "alters_relationships", "design_review", "native_validation",
+	"tier2_gaps", "rules", "concepts"}
+
 // Problems lists the ways the front-matter breaks FLOW-02 for the named
-// feature: a missing key, or a value outside the allowed set. It is empty when
-// the front-matter is valid.
-func (fm *Front) Problems(feature string) []string {
-	var out []string
-	for _, k := range []string{"feature", "status", "drivers", "seams", "surfaces",
-		"security_boundary", "alters_relationships", "design_review", "native_validation",
-		"tier2_gaps", "rules", "concepts"} {
-		// design_review decides a gate before implementation (FLOW-19); an
-		// archived design is past it, and designs archived before FLOW-19
-		// never had the key.
-		if !fm.present[k] && (k != "design_review" || fm.Status != "archived") {
-			out = append(out, "missing "+k)
-		}
+// feature: a missing key, or a value outside the allowed set. The keys are
+// the loop's and those the home's profile file adds, with the values it
+// gives (a17 of docs/design/loop-repository.md); a nil profile adds none. It
+// is empty when the front-matter is valid.
+func (fm *Front) Problems(feature string, p *Profile) []string {
+	var impact []string
+	var values map[string][]string
+	var k classifier
+	if p != nil {
+		impact, values = p.Impact.Keys, p.Impact.Values
+		k = classifier{paths: p.Rules.Paths, machinery: p.Rules.Machinery}
 	}
+	required := func(k string) bool {
+		return slices.Contains(loopKeys, k) || slices.Contains(impact, k)
+	}
+	out := fm.missing(required, impact)
 	if fm.Feature != feature {
 		out = append(out, fmt.Sprintf("feature %q, queue says %q", fm.Feature, feature))
 	}
 	if !oneOf(fm.Status, "draft", "active", "archived") {
 		out = append(out, fmt.Sprintf("status %q", fm.Status))
 	}
-	if !oneOf(fm.SecurityBoundary, "none", "host-env", "env-relay", "env-beyond") {
-		out = append(out, fmt.Sprintf("security_boundary %q", fm.SecurityBoundary))
+	for _, k := range sortedKeys(values) {
+		if v := fm.scalar(k); required(k) && !slices.Contains(values[k], v) {
+			out = append(out, fmt.Sprintf("%s %q", k, v))
+		}
 	}
 	if len(fm.Rules) == 0 {
 		out = append(out, "rules is empty")
@@ -699,7 +928,62 @@ func (fm *Front) Problems(feature string) []string {
 				"native_validation %+v needs host, blocking and reason", nv))
 		}
 	}
-	return append(out, ruleChangeProblems(fm.RuleChanges)...)
+	out = append(out, fm.repoProblems()...)
+	return append(out, ruleChangeProblems(fm.RuleChanges, k)...)
+}
+
+// missing lists the required keys the front-matter lacks, in keyOrder and
+// then the order the profile adds them.
+func (fm *Front) missing(required func(string) bool, impact []string) []string {
+	keys := slices.DeleteFunc(slices.Clone(keyOrder), func(k string) bool {
+		return !required(k)
+	})
+	for _, k := range impact {
+		if !slices.Contains(keys, k) {
+			keys = append(keys, k)
+		}
+	}
+	var out []string
+	for _, k := range keys {
+		// design_review decides a gate before implementation (FLOW-19); an
+		// archived design is past it, and designs archived before FLOW-19
+		// never had the key.
+		if !fm.present[k] && (k != "design_review" || fm.Status != "archived") {
+			out = append(out, "missing "+k)
+		}
+	}
+	return out
+}
+
+// scalar is the front-matter value of key as text, "" when it is absent.
+func (fm *Front) scalar(key string) string {
+	if v, ok := fm.raw[key]; ok && v != nil {
+		return fmt.Sprint(v)
+	}
+	return ""
+}
+
+// repoProblems checks merge_first and the prefixed areas against repos: each
+// names a repository the item works in other than its home (FLOW-02).
+func (fm *Front) repoProblems() []string {
+	var out []string
+	others := fm.Repos[min(1, len(fm.Repos)):]
+	for _, r := range fm.MergeFirst {
+		if !slices.Contains(others, r) {
+			out = append(out, fmt.Sprintf(
+				"merge_first %s is not in repos after the home", r))
+		}
+	}
+	if fm.Areas == nil {
+		return out
+	}
+	for _, a := range *fm.Areas {
+		if repo, _, ok := strings.Cut(a, ":"); ok && !slices.Contains(others, repo) {
+			out = append(out, fmt.Sprintf(
+				"area %s names %s, which is not in repos after the home", a, repo))
+		}
+	}
+	return out
 }
 
 func (c *checker) loadDesign(rev string) (*Design, error) {
@@ -729,7 +1013,7 @@ func ParseDesign(text, tmpl string) (*Design, error) {
 	}
 	keys := map[string]any{}
 	_ = yaml.Unmarshal([]byte(front), &keys)
-	d.Front.present = map[string]bool{}
+	d.Front.present, d.Front.raw = map[string]bool{}, keys
 	for k := range keys {
 		d.Front.present[k] = true
 	}

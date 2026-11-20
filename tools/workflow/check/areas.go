@@ -16,41 +16,70 @@ import (
 // let items run side by side are computed from those areas. An undeclared
 // item collides with every item in its repositories, so any path is its own.
 // The diff has no rename detection: a renamed file is a change to the area
-// it left and to the area it entered.
+// it left and to the area it entered. In each repository the item has a
+// branch in, the paths are read against that repository's map with the
+// areas declared for it: bare names in the home, <owner>/<name>:<area>
+// elsewhere (FLOW-02). A repository with no map is one exclusive area.
 func (c *checker) insideAreas() {
 	const name = "diff inside the declared areas (FLOW-03)"
-	s := c.state()
-	if s.Undeclared(c.f) {
+	v, err := c.state().ForRepository(c.at.name)
+	if err != nil {
+		c.add(name, false, "%v", err)
+		return
+	}
+	areas := c.areasHere()
+	m := v.Areas
+	if areas == nil || m == nil || m.Repository != c.at.name ||
+		slices.ContainsFunc(areas, func(a string) bool { return !m.Has(a) }) {
 		c.add(name, true, "undeclared: the item collides with every item in its "+
 			"repositories, and no path is outside it (FLOW-05)")
 		return
 	}
-	files, err := c.git("diff", "--name-only", "--no-renames", "origin/main..."+c.f.Branch)
+	files, err := c.git("diff", "--name-only", "--no-renames", c.trunk()+"..."+c.f.Branch)
 	if err != nil {
 		c.add(name, false, "%v", err)
 		return
 	}
 	var outside []string
 	for _, p := range strings.Fields(files) {
-		if p == c.f.Design {
+		if p == c.f.Design && c.at == c.home {
 			continue
 		}
-		area, err := s.Areas.AreaOf(p)
+		area, err := m.AreaOf(p)
 		if err != nil {
 			c.add(name, false, "%v", err)
 			return
 		}
-		if !slices.Contains(*c.f.Areas, area) {
+		if !slices.Contains(areas, area) {
 			outside = append(outside, fmt.Sprintf("%s (area %s)", p, area))
 		}
 	}
 	if len(outside) > 0 {
 		c.add(name, false, "outside the declared areas %v: %s: widen with wf "+
 			"declare when the approved design covers the area, otherwise back to "+
-			"Design (FLOW-06)", *c.f.Areas, strings.Join(outside, ", "))
+			"Design (FLOW-06)", areas, strings.Join(outside, ", "))
 		return
 	}
-	c.add(name, true, "every changed path is in %v", *c.f.Areas)
+	c.add(name, true, "every changed path is in %v", areas)
+}
+
+// areasHere are the areas the item declares in the repository being
+// checked, without their prefix; nil when it declares none at all.
+func (c *checker) areasHere() []string {
+	if c.f.Areas == nil {
+		return nil
+	}
+	areas := []string{}
+	for _, a := range *c.f.Areas {
+		repo, area, prefixed := strings.Cut(a, ":")
+		switch {
+		case !prefixed && c.at == c.home:
+			areas = append(areas, a)
+		case prefixed && repo == c.at.name && c.at != c.home:
+			areas = append(areas, area)
+		}
+	}
+	return areas
 }
 
 // trialMerge tries a merge of the branch with the remote branch of each
@@ -65,6 +94,7 @@ func (c *checker) trialMerge() {
 	for _, o := range s.Ordered() {
 		if o == c.f || o.Feature == c.f.Feature || o.Status != "in_progress" ||
 			o.IsProcess() || s.Tracked(o) || o.Branch == "" ||
+			!c.worksIn(s, o, c.at.name) ||
 			s.Relation(c.f, o).Kind != queue.Disjoint {
 			continue
 		}
@@ -81,7 +111,7 @@ func (c *checker) tryMerge(o *queue.Feature) string {
 	}
 	cmd := exec.Command("git", "merge-tree", "--write-tree", "--name-only", "--no-messages",
 		"refs/heads/"+c.f.Branch, ref)
-	cmd.Dir = c.env.Repo
+	cmd.Dir = c.dir()
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()

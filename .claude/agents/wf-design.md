@@ -51,7 +51,10 @@ LOOP-04, LOOP-09; from `origin/main` when the branch predates it),
    design's Questions section and in the queue file's `questions`. A blocking
    question also gets a `human` step `f1-answer-<qid>` that `f1-design` needs.
    Settle what you can as an assumption; assumptions are confirmed in the
-   design review.
+   design review. Mark an assumed question `Flagged: <reason>` when it
+   touches a security boundary or a seam, or departs from prior art or an
+   earlier decision of Jeff's; a flagged question is always answered on its
+   own (FLOW-19).
 5. Decide `design_review` (FLOW-19): `skip` only when its criteria hold, judged
    on the delta from the last `approved at <sha>` when the design was approved
    before; otherwise `required`. A `required` review is seeded at the start
@@ -83,3 +86,11 @@ Commit on the feature branch. Return: what you wrote, the questions raised, the
 `design_review` decision with its reason, and which phase-1 done-when items you
 expect `wf done` to find met. Do not mark the step done yourself; the tick runs
 the check (FLOW-03).
+
+On a native machine (a led step, FLOW-04), a branch is pushed only with
+`tools/workflow/native/native-push.sh <name>`, or `native-push.sh <name>
+<owner>/<repo>` for a branch in a second repository's clone, whose worktree
+is `.scratch/<owner>/<repo>/<name>`, made with `git -C
+.dev/checkouts/<owner>/<repo> worktree add`; and committed with `git -C
+<worktree> commit -F ../<name>.msg`, the message written beside the
+worktree, never `-m` (FLOW-17).

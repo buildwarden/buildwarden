@@ -160,12 +160,12 @@ func TestStale(t *testing.T) {
 	t.Run("merged", staleAfterMerge)
 	t.Run("landed", staleLanded)
 	t.Run("needs a worker", func(t *testing.T) {
-		refused(t, stateDir(t, ""), "-worker", "stale", "-repo", codeRepo(t))
+		refused(t, stateDir(t, here), "-worker", "stale", "-repo", codeRepo(t))
 	})
 }
 
 func staleMainMoved(t *testing.T) {
-	work, dir := codeRepo(t, "a", "x"), stateDir(t, "")
+	work, dir := codeRepo(t, "a", "x"), stateDir(t, here)
 	reach(t, dir, work, "a", "1", 7, 7)
 	must(t, dir, "new", "-worker", "human/jeff", "-feature", "x", "-title", "X", "-priority",
 		"2", "-estimate-steps", "9", "-kind", "process")
@@ -210,16 +210,18 @@ func staleMainMoved(t *testing.T) {
 		t.Fatalf("a's pending steps %q", got)
 	}
 	must(t, dir, "validate")
+	// Both are in class 1 with a refresh pending; x, queued as a process item
+	// ahead of the class-4 a, holds the earlier position.
 	if got := must(t, dir, "next", "-worker", "cloud/run"); !strings.HasPrefix(got,
-		"next\ta\tf6-refresh\tcloud") {
-		t.Fatalf("wf next = %q, want a's refresh first", got)
+		"next\tx\tx2-refresh\tcloud") {
+		t.Fatalf("wf next = %q, want x's refresh first", got)
 	}
 }
 
 // staleInPublish is case 38, and what gets no refresh.
 func staleInPublish(t *testing.T) {
 	work := codeRepo(t, "pub", "pubpr", "early", "back")
-	dir := stateDir(t, "")
+	dir := stateDir(t, here)
 	reach(t, dir, work, "pub", "1", 6, 0, "f6-merge-main", "f6-consolidate")
 	reach(t, dir, work, "pubpr", "2", 6, 12, "f6-merge-main")
 	reach(t, dir, work, "early", "3", 6, 0)
@@ -274,7 +276,7 @@ func staleInPublish(t *testing.T) {
 
 func staleAfterMerge(t *testing.T) {
 	work := codeRepo(t, "atmerge", "pub", "closed")
-	dir := stateDir(t, "")
+	dir := stateDir(t, here)
 	reach(t, dir, work, "atmerge", "1", 7, 21)
 	reach(t, dir, work, "pub", "2", 6, 22, "f6-merge-main")
 	reach(t, dir, work, "closed", "3", 7, 23)
@@ -300,7 +302,7 @@ func staleAfterMerge(t *testing.T) {
 }
 
 func staleLanded(t *testing.T) {
-	work, dir := codeRepo(t, "back"), stateDir(t, "")
+	work, dir := codeRepo(t, "back"), stateDir(t, here)
 	reach(t, dir, work, "back", "1", 7, 31)
 	must(t, dir, "back", "-worker", "cloud/run", "-feature", "back", "-to", "3", "-why",
 		"a merged check fails")
@@ -330,7 +332,7 @@ func staleLanded(t *testing.T) {
 // PR records none, though the branch contains main; a passed refresh makes
 // the PR ready again (FLOW-08; cases 36 and 37 of the loop-parallel design).
 func TestStaleChecksTheHead(t *testing.T) {
-	work, dir := codeRepo(t, "a", "old", "same"), stateDir(t, "")
+	work, dir := codeRepo(t, "a", "old", "same"), stateDir(t, here)
 	for i, name := range []string{"a", "old", "same"} {
 		reach(t, dir, work, name, strconv.Itoa(i+1), 7, 40+i)
 	}
@@ -390,7 +392,7 @@ func TestStaleChecksTheHead(t *testing.T) {
 // TestDoneRunsTheRefreshCheck: wf done on a refresh step runs the refresh's
 // done-when, and the step stays pending when it fails (FLOW-03, FLOW-10).
 func TestDoneRunsTheRefreshCheck(t *testing.T) {
-	work, dir := codeRepo(t, "a"), stateDir(t, "")
+	work, dir := codeRepo(t, "a"), stateDir(t, here)
 	reach(t, dir, work, "a", "1", 7, 7)
 	moveMain(t, work, "another item (#8)", "other.txt")
 	runStale(t, dir, work)

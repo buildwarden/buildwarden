@@ -92,8 +92,9 @@ func leasedTo(f *Feature, worker string, now time.Time) *Step {
 // the item does not hold is asked, so a holder is never stopped by one. It
 // also returns why each item it passed over is blocked, for the digest: an
 // in-progress item, a fix waiting on its parent, and a queued feature the
-// waiting limit refuses. A queued feature the in-progress limit refuses is
-// passed over without a line, as it always was. An item with a pending
+// waiting limit refuses, and, for the cloud, a queued led feature, which only
+// its lead's machines start (FLOW-04). A queued feature the in-progress limit
+// refuses is passed over without a line, as it always was. An item with a pending
 // refresh step is in class 1, so open PRs are refreshed before anything new
 // starts; while main.yaml records main red its line is that, and the walk
 // goes on to the fix (FLOW-10).
@@ -112,7 +113,11 @@ func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 			why = "follows " + f.Follows + ", not yet done (FLOW-05)"
 		default:
 			var reported bool
-			if st, why, reported = s.offer(f, worker, now); st == nil && !reported {
+			st, why, reported = s.offer(f, worker, now)
+			// The cloud reports a queued led item, which it cannot start, so
+			// the digest lists it as waiting on a host.
+			reported = reported || f.Lead != "" && Kind(worker) == "cloud"
+			if st == nil && !reported {
 				continue
 			}
 		}
@@ -125,11 +130,19 @@ func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 }
 
 // Starts reports whether the worker's claim of a step of the item sets it in
-// progress: a cloud claim on a queued feature, and any claim on a queued
-// process item or tracked item, whose steps are all human.
+// progress: on a queued feature, a claim by a worker that serves its lead
+// when it is led and a cloud claim when it is not; and any claim on a queued
+// process item or tracked item, whose steps are all human (FLOW-04).
 func (s *State) Starts(f *Feature, worker string) bool {
-	return f.Status == "queued" &&
-		(Kind(worker) == "cloud" || f.IsProcess() || s.Tracked(f))
+	switch {
+	case f.Status != "queued":
+		return false
+	case f.IsProcess() || s.Tracked(f):
+		return true
+	case f.Lead != "":
+		return Kind(worker) == f.Lead
+	}
+	return Kind(worker) == "cloud"
 }
 
 // inProgressStep is the in-progress item's step for the worker, or why there
@@ -210,13 +223,18 @@ func (s *State) wait(f *Feature, st *Step, worker string, now time.Time) (string
 	switch {
 	case IsMerge(st):
 		return mergeWait(f), refusal{}
+	case isMergedFirst(st):
+		return mergedFirstWait(f, st), refusal{}
 	case !Satisfies(worker, st.Affinity):
 		return fmt.Sprintf("%s step %s", st.Affinity, st.ID), refusal{}
 	case st.Lease.Held(now) && st.Lease.ClaimedBy != worker:
 		return fmt.Sprintf("step %s leased to %s", st.ID, st.Lease.ClaimedBy), refusal{}
 	}
-	if Kind(worker) == "cloud" {
-		if why, red := s.cloudHold(f, st); why != "" {
+	if why := s.machineRefuses(f, st, worker); why != "" {
+		return why, refusal{}
+	}
+	if Kind(worker) != "human" {
+		if why, red := s.unattendedHold(f, st); why != "" {
 			return why, refusal{red: red}
 		}
 	}
@@ -225,6 +243,27 @@ func (s *State) wait(f *Feature, st *Step, worker string, now time.Time) (string
 }
 
 // mergeWait is the reason an item at its merge step waits.
+// isMergedFirst reports whether the step is an f6-merged-<n>.
+func isMergedFirst(st *Step) bool {
+	_, ok := MergedFirst(st)
+	return ok
+}
+
+// mergedFirstWait is what an f6-merged-<n> waits on: the human's merge of
+// that work entry's pull request.
+func mergedFirstWait(f *Feature, st *Step) string {
+	n, _ := MergedFirst(st)
+	if n > len(f.Work) {
+		return fmt.Sprintf("the human's merge (%s names no work entry %d, FLOW-08)",
+			st.ID, n)
+	}
+	w := f.Work[n-1]
+	if w.PR != nil && w.PR.Number > 0 {
+		return fmt.Sprintf("the human's merge of %s PR #%d (FLOW-08)", w.Repo, w.PR.Number)
+	}
+	return fmt.Sprintf("the human's merge in %s (no PR recorded, FLOW-08)", w.Repo)
+}
+
 func mergeWait(f *Feature) string {
 	if f.PR != nil && f.PR.Number > 0 {
 		return fmt.Sprintf("the human's merge of PR #%d (FLOW-08)", f.PR.Number)
@@ -232,11 +271,12 @@ func mergeWait(f *Feature) string {
 	return "the human's merge (no PR recorded, FLOW-08)"
 }
 
-// cloudHold returns why the unattended loop must not take the item's step
-// yet: an open blocking question (FLOW-07), a spent runaway budget (FLOW-13),
-// or, for a refresh step, a main that main.yaml records red (FLOW-10), which
-// red reports. These are the cloud's alone and are not limits; the limits are
-// Guard's, for every worker.
+// unattendedHold returns why an unattended worker, any but a human, must not
+// take the item's step yet: an open blocking question (FLOW-07), a spent
+// runaway budget (FLOW-13), or, for a refresh step, a main that main.yaml
+// records red (FLOW-10), which red reports; a refresh is cloud, so only the
+// cloud meets the last. These are not limits; the limits are Guard's, for
+// every worker.
 //
 // A refresh onto a red main fails on main's failure and is released, and a
 // released step is the first one wf next offers again, ahead of the fix: so
@@ -244,7 +284,7 @@ func mergeWait(f *Feature) string {
 // result is not red. The refresh of the item main.yaml names as the fix is
 // exempt: its PR, too, must contain main before it can merge, and it is the
 // PR that makes main green.
-func (s *State) cloudHold(f *Feature, st *Step) (why string, red bool) {
+func (s *State) unattendedHold(f *Feature, st *Step) (why string, red bool) {
 	if q := f.OpenBlocking(); len(q) > 0 {
 		return fmt.Sprintf("blocking question %s", q[0].ID), false
 	}
@@ -253,9 +293,20 @@ func (s *State) cloudHold(f *Feature, st *Step) (why string, red bool) {
 			"escalate to human, FLOW-13)",
 			f.Budget.Spent.Steps, f.Budget.Estimate.Steps), false
 	}
-	if IsRefresh(st) && s.Main != nil && s.Main.CI == "red" && !s.fixesMain(f) {
-		return fmt.Sprintf("main is red at %s: no refresh until it is green (FLOW-10)",
-			s.Main.SHA), true
+	if !IsRefresh(st) {
+		return "", false
+	}
+	for _, repo := range s.ReposOf(f) {
+		m := s.MainOf(repo)
+		if m == nil || m.CI != "red" || m.Followup == f.Feature {
+			continue
+		}
+		if repo == s.Config.Repository || repo == "" {
+			return fmt.Sprintf("main is red at %s: no refresh until it is green "+
+				"(FLOW-10)", m.SHA), true
+		}
+		return fmt.Sprintf("the trunk of %s is red at %s: no refresh until it is green "+
+			"(FLOW-10)", repo, m.SHA), true
 	}
 	return "", false
 }
@@ -291,24 +342,34 @@ func allDone(ids []string, done map[string]bool) bool {
 	return true
 }
 
-// Claim leases the step to worker for the configured lease time and counts it
-// against the feature's budget. newRun counts a run too, the first time a run
-// touches the feature. The first claim of a refresh step is not counted
-// against the item: other items' merges cause it, and the run that takes it
-// counts it in its own budget. A refresh that is released and claimed again
+// leaseLength is how long the worker's claim or renewal holds a step: a
+// machine's host_lease_minutes, 1200 when unset, and lease_minutes, 120 when
+// unset, for every other worker (FLOW-04).
+func (s *State) leaseLength(worker string) time.Duration {
+	mins, fallback := s.Config.LeaseMinutes, 120
+	if strings.HasPrefix(Kind(worker), "host:") {
+		mins, fallback = s.Config.HostLeaseMinutes, 1200
+	}
+	if mins <= 0 {
+		mins = fallback
+	}
+	return time.Duration(mins) * time.Minute
+}
+
+// Claim leases the step to worker for its lease length (leaseLength) and counts it
+// against the feature's budget. It counts a run too when the claim is the
+// first of its run on the feature (newRun). The first claim of a refresh step
+// is not counted against the item: other items' merges cause it, and the run
+// that takes it counts it in its own budget. A refresh that is released and claimed again
 // counts like any retried step, so one that keeps failing still ends at the
 // runaway check (FLOW-13). A claim that starts the item (Starts) sets it in
 // progress and logs the start. When that start is a marked feature's past the
 // waiting limit, the history line says so, and Claim returns it for wf claim
 // to print; otherwise it returns "".
 func (s *State) Claim(
-	f *Feature, st *Step, worker string, now time.Time, newRun bool,
+	f *Feature, st *Step, worker string, now time.Time,
 ) string {
-	mins := s.Config.LeaseMinutes
-	if mins == 0 {
-		mins = 120
-	}
-	exp := now.Add(time.Duration(mins) * time.Minute).UTC()
+	exp := now.Add(s.leaseLength(worker)).UTC()
 	st.Lease = Lease{ClaimedBy: worker, Expires: &exp}
 	past := ""
 	if s.Starts(f, worker) {
@@ -324,11 +385,37 @@ func (s *State) Claim(
 	if !IsRefresh(st) || f.claimedBefore(st) {
 		f.Budget.Spent.Steps++
 	}
-	if newRun {
+	if f.newRun(worker) {
 		f.Budget.Spent.Runs++
 	}
 	f.Log(now, worker, "claimed %s until %s", st.ID, exp.Format(time.RFC3339))
 	return past
+}
+
+// newRun reports whether a claim by worker is the first of its run on the
+// item. A human's claim is never a run. Otherwise the run is the worker's
+// kind and the text after its first "/", so one native session's claims of
+// two host steps (host:macos-vz/S, host:macos-qemu/S) are one run, while
+// cloud/S and host:x/S are two.
+func (f *Feature) newRun(worker string) bool {
+	if strings.HasPrefix(worker, "human/") {
+		return false
+	}
+	run := runOf(worker)
+	return !slices.ContainsFunc(f.History, func(e Event) bool {
+		return strings.HasPrefix(e.Event, "claimed ") && runOf(e.By) == run
+	})
+}
+
+// runOf names a worker's run: its kind, up to the first ":" or "/", and the
+// text after its first "/".
+func runOf(worker string) [2]string {
+	kind := worker
+	if i := strings.IndexAny(worker, ":/"); i >= 0 {
+		kind = worker[:i]
+	}
+	_, id, _ := strings.Cut(worker, "/")
+	return [2]string{kind, id}
 }
 
 // claimedBefore reports whether the item's history has a claim of the step.

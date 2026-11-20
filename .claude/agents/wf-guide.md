@@ -14,3 +14,11 @@ user reads to learn the change. Follow the UX rules the design cites
    in line with the new behavior.
 2. A design with no surfaces needs no guide change; return `no-surfaces`.
 3. Commit and push the branch (FLOW-17). Return the pages changed.
+
+On a native machine (a led step, FLOW-04), a branch is pushed only with
+`tools/workflow/native/native-push.sh <name>`, or `native-push.sh <name>
+<owner>/<repo>` for a branch in a second repository's clone, whose worktree
+is `.scratch/<owner>/<repo>/<name>`, made with `git -C
+.dev/checkouts/<owner>/<repo> worktree add`; and committed with `git -C
+<worktree> commit -F ../<name>.msg`, the message written beside the
+worktree, never `-m` (FLOW-17).

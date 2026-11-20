@@ -8,7 +8,13 @@
 The table below is `buildwarden/buildwarden`'s profile under the Loop
 Contract (LOOP-01). Where an entry names a file, that file holds the
 fact. An entry that no longer matches the repository is a finding, and
-the change that makes it stale changes the entry.
+the change that makes it stale changes the entry. The profile file is
+`docs/development/loop-profile.yaml` (LOOP-01): it holds the entries the
+loop's tools read, other than the trunk, which they read from the loop's
+configuration, and a change to an entry it holds changes both in the
+same change. Its `trunk` repeats the Trunk entry and must equal the
+loop's configuration (LOOP-01). The file holds the fast gate's
+host-platform commands; the per-platform lint is the entry's alone.
 
 The agent part: Review judges that the diff leaves no entry stale; the
 design review of a change to this rule judges that every term is filled
@@ -26,7 +32,7 @@ or `none` (LOOP-01).
 | Fast gate | `make lint` and `make test` (TEST-01). `make lint` is also run as `GOOS=<os> make lint` for each platform whose build-tagged files the change touches (FLOW-17). |
 | Checks | The table below. |
 | Test tiers | TEST-02, which says where each tier runs. |
-| Native hosts | The host names in the loop's `hosts.yaml`. All of them serve this repository's drivers today. |
+| Native hosts | The host names in the loop's `hosts.yaml`. All of them serve this repository's drivers or its platform builds today. Before a session on a machine that serves `windows-hyperv`, the native wrapper runs `tools/relay-vm/hyperv/refresh-cache.sh` (the profile file's `native.prepare`), and the install script runs it with `--check` (its `native.check`). |
 | Reference documents | The surface and its documents are the `surface` entry of `tools/tier1/rules.yaml` (UX-01, ORCH-03). Guides: `docs/book/src/guide/`, `docs/book/src/getting-started/`, `examples/`, `README.md`. |
 | Sweep | `make deadcode`, on Linux, macOS and Windows. Kept with a stated reason: the exported API of `relay/`, `collector/`, `ledger/`, `relaycfg/` and `bootstrap/`, and the cgo-only code of `driver/vz`. The overview is `docs/book/src/concepts/overview.md`. |
 | Boundary rule | GLOBAL-06. |

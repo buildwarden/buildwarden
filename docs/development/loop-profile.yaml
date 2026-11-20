@@ -1,0 +1,36 @@
+# The entries of PROFILE-01 that the loop's tools read (LOOP-01). Schema:
+# the workflow branch's README.md. A change here is a change to PROFILE-01.
+version: 1
+component: buildwarden
+trunk: main                   # must equal config.yaml's entry, which is what wf reads (Decision 2)
+branch: feat/{item}
+designs:
+  dir: docs/design
+  template: docs/design/TEMPLATE.md
+# Run in the checkout on the host platform, each must exit 0 (FLOW-03, FLOW-17).
+# wf runs these on the host platform; the per-platform GOOS=<os> make lint of
+# PROFILE-01 stays the agent's (FLOW-17) and is not in the file.
+fast_gate:
+  - [make, lint]
+  - [make, test]
+impact:                       # keys this component adds to the loop's, and their values
+  keys: [drivers, surfaces, security_boundary, tier2_gaps]
+  values:
+    security_boundary: [none, host-env, env-relay, env-beyond]
+reference_docs:
+  implement: [docs/]          # Implement: changed when the design declares surfaces (UX-01)
+  guides: [docs/book/src/guide/, docs/book/src/getting-started/, examples/, README.md]
+rules:
+  dir: docs/development       # LINT-01's files; the prefixes are its README's ID table
+  paths: [docs/development/, tools/tier1/, tools/workflow/check/, docs/design/TEMPLATE.md]
+  machinery: [.claude/, tools/workflow/]
+  rule_jobs: 'tier1|golangci-lint|tools/workflow|\bmake\s+(lint|enforcement)\b'
+  index: tools/tier1/rules.yaml  # LINT-01's rule-to-check map and design_tolerate
+areas:
+  edges: [tools/tier1/area-edges.sh]
+toolchain_check: [go, version]
+native:
+  prepare:
+    windows-hyperv: [[tools/relay-vm/hyperv/refresh-cache.sh]]
+  check:                        # run by the install script (LOOP-05)
+    windows-hyperv: [[tools/relay-vm/hyperv/refresh-cache.sh, --check]]

@@ -1,5 +1,6 @@
 // Package native holds only tests: the files it checks are the scheduled
-// native session's permissions and its native-run.sh launcher.
+// native session's permissions, its native-run.sh launcher and its
+// native-push.sh push script.
 package native
 
 import (
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -53,7 +55,16 @@ func TestNativeSettingsRules(t *testing.T) {
 			t.Errorf("allow rule %q admits a branch's scripts unchecked", r)
 		}
 	}
+	for _, r := range s.Permissions.Allow {
+		// Every push goes through wf commit or native-push.sh (FLOW-17).
+		if strings.HasPrefix(r, "Bash(git push") || strings.Contains(r, " push ") ||
+			strings.HasSuffix(r, " push)") {
+			t.Errorf("allow rule %q allows a push", r)
+		}
+	}
 	for _, rule := range []string{
+		"Bash(git push*)",
+		"Bash(git -C * push*)",
 		"Bash(git -C * push origin main*)",
 		"Bash(git -C * push origin HEAD:main*)",
 		"Bash(git -C * push --force*)",
@@ -64,6 +75,59 @@ func TestNativeSettingsRules(t *testing.T) {
 	} {
 		if !has(s.Permissions.Deny, rule) {
 			t.Errorf("deny lacks %s", rule)
+		}
+	}
+}
+
+// matches is the reading of the Claude Code matcher these tests hold the
+// settings to: a trailing ":*" matches the prefix alone or followed by a space
+// and anything, and every other "*" matches any text, spaces, slashes and
+// colons included (docs/design/native-allowlist-scratch.md). Nothing recorded
+// of the matcher says a "*" stops at a colon.
+func matches(rule, command string) bool {
+	p := strings.TrimSuffix(strings.TrimPrefix(rule, "Bash("), ")")
+	if prefix, ok := strings.CutSuffix(p, ":*"); ok {
+		return command == prefix || strings.HasPrefix(command, prefix+" ")
+	}
+	parts := strings.Split(p, "*")
+	re := "^"
+	for i, part := range parts {
+		if i > 0 {
+			re += ".*"
+		}
+		re += regexp.QuoteMeta(part)
+	}
+	return regexp.MustCompile(re + "$").MatchString(command)
+}
+
+// TestNativePushRules records, under matches, why the push allows went: the
+// old allow admitted a push to another branch and a remote delete, which the
+// new denies refuse; and the cost of the second deny, a commit message that
+// contains " push", which the -F form avoids (FLOW-17).
+func TestNativePushRules(t *testing.T) {
+	const oldAllow = "Bash(git push origin feat/*)"
+	for _, c := range []struct {
+		rule, command string
+		want          bool
+	}{
+		{oldAllow, "git push origin feat/x:workflow", true},
+		{oldAllow, "git push origin feat/x :feat/other", true},
+		{oldAllow, "git push origin feat/x --force", true},
+		{"Bash(git push*)", "git push origin feat/x:workflow", true},
+		{"Bash(git push*)", "git push origin feat/x :feat/other", true},
+		{"Bash(git -C * push*)", "git -C .scratch/x push origin feat/x:workflow", true},
+		{"Bash(git -C * push*)", "git -C .scratch/x push origin feat/x :feat/other", true},
+		{"Bash(git -C * push*)", "git -C .dev/workflow push origin workflow", true},
+		// The false positive, and the form that avoids it.
+		{"Bash(git -C * push*)", `git -C .scratch/x commit -m "a push fix"`, true},
+		{"Bash(git -C * push*)", "git -C .scratch/x commit -F ../x.msg", false},
+		{"Bash(git push*)", "tools/workflow/native/native-push.sh x", false},
+		{"Bash(git -C * push*)", "tools/workflow/native/native-push.sh x", false},
+		{"Bash(git status:*)", "git status --short", true},
+		{"Bash(git status:*)", "git statusx", false},
+	} {
+		if got := matches(c.rule, c.command); got != c.want {
+			t.Errorf("%s on %q: %v, want %v", c.rule, c.command, got, c.want)
 		}
 	}
 }
@@ -285,4 +349,54 @@ func runLauncher(t *testing.T, launcher, dir string, args []string) (string, str
 		t.Fatal(err)
 	}
 	return stdout.String(), stderr.String(), 0
+}
+
+// TestNativeClonesRules: a session makes a worktree of a second
+// repository's clone with the two narrow allows, and runs no other git
+// command in the clone; every push from a clone stays denied, so
+// native-push.sh is the only route (docs/design/loop-repository.md).
+func TestNativeClonesRules(t *testing.T) {
+	raw, err := os.ReadFile("settings.native.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s struct {
+		Permissions struct {
+			Allow []string `json:"allow"`
+			Deny  []string `json:"deny"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(raw, &s); err != nil {
+		t.Fatal(err)
+	}
+	any := func(rules []string, command string) bool {
+		for _, r := range rules {
+			if matches(r, command) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, c := range []struct {
+		command       string
+		allow, denied bool
+	}{
+		{"git -C .dev/checkouts/o/r fetch origin", true, false},
+		{"git -C .dev/checkouts/o/r worktree add ../../../../.scratch/o/r/x feat/x", true,
+			false},
+		{"git -C .dev/checkouts/o/r commit -m x", false, false},
+		{"git -C .dev/checkouts/o/r checkout main", false, false},
+		{"git -C .dev/checkouts/o/r reset --hard", false, false},
+		{"git -C .dev/checkouts/o/r config user.name x", false, false},
+		{"git -C .dev/checkouts/o/r push origin feat/x", false, true},
+		{"git -C .dev/checkouts/o/r push --force origin feat/x", false, true},
+		{"git -C .dev/checkouts/o/r push origin main", false, true},
+	} {
+		if got := any(s.Permissions.Allow, c.command); got != c.allow {
+			t.Errorf("%q allowed %v, want %v", c.command, got, c.allow)
+		}
+		if got := any(s.Permissions.Deny, c.command); got != c.denied {
+			t.Errorf("%q denied %v, want %v", c.command, got, c.denied)
+		}
+	}
 }

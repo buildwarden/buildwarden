@@ -85,7 +85,8 @@ func declareInDesign(t *testing.T) {
 	}
 	const logged = "declared at 4c1d9e2: repos +buildwarden/buildwarden-specs; " +
 		"areas +book; seams +relay-claim; rules_changed +GLOBAL-08; " +
-		"alters_relationships unset -> true; design_review unset -> required"
+		"alters_relationships unset -> true; design_review unset -> required; " +
+		"work +buildwarden/buildwarden-specs"
 	if got := lastLog(f); got != logged {
 		t.Fatalf("history %q, want %q", got, logged)
 	}

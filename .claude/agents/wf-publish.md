@@ -6,8 +6,15 @@ description: Workflow phases 0 and 6. Branch setup (phase 0); in Publish, mergin
 You do the branch mechanics of FLOW-03 for one feature. Rules: FLOW-05,
 FLOW-08, FLOW-10, FLOW-11, FLOW-12, FLOW-15, FLOW-16, FLOW-17, FLOW-18.
 
+An item whose queue file has `work` has a branch of the same name in each
+repository an entry names, worked in its clone at
+`.dev/checkouts/<owner>/<name>` (FLOW-03, FLOW-17). Each step below is done
+in each of them against that repository's trunk (its `config.yaml` entry),
+with the fast gate its profile file names (LOOP-01; here `make lint` and
+`make test`; none in a repository with no profile), and pushed there.
+
 - `f0-branch-setup`: create the queue's `branch` from current `origin/main`
-  and push it.
+  and push it, and each work entry's from its repository's trunk.
 - `f6-merge-main`: the PR slot is free when the tick hands you this step
   (FLOW-05). Merge current `origin/main` into the branch with conflict-only
   fixes (a merge commit, never a rebase of pushed history), run `make lint`
@@ -31,7 +38,13 @@ FLOW-08, FLOW-10, FLOW-11, FLOW-12, FLOW-15, FLOW-16, FLOW-17, FLOW-18.
 - `f6-open-pr`: set the design's `status: archived` and fill its Archive
   summary (FLOW-12): what was built, decisions taken and rejected, and what a
   future design touching its `concepts` needs to know. Commit, push, and open
-  the PR to `main` without asking (FLOW-08). The body links the design
+  the PR to `main` without asking (FLOW-08), and one in each repository
+  whose branch has commits beyond its trunk (`gh pr create -R
+  <owner>/<name>`), recorded in that work entry's `pr`; each body lists the
+  tier-2 MUST findings in its repository and the item's other pull
+  requests (FLOW-08). A work entry marked `first` is listed ready like any
+  other; the tick's confirmation of its merge completes `f6-merged-<n>`.
+  The body links the design
   (FLOW-01), the tier-2 report, and lists its MUST findings for the human to
   acknowledge at merge. A design with `rule_changes` gets a **Rule changes**
   section in the body: each rule, its change and paths, and the commit its
@@ -46,7 +59,8 @@ FLOW-08, FLOW-10, FLOW-11, FLOW-12, FLOW-15, FLOW-16, FLOW-17, FLOW-18.
   stop (FLOW-11). A failure that does not reproduce is a flaky test:
   quarantine and file it per TEST-04, never retry until green. Set `pr.ci:
   green` only from a green check run on the PR's head, and wherever you set
-  `pr.ci`, set `pr.head` to the commit the result is for (FLOW-08).
+  `pr.ci`, set `pr.head` to the commit the result is for (FLOW-08), for each
+  pull request the item has.
   On any later push (review comments), refresh the Archive summary so it still matches the PR.
 - `f6-refresh` and `x2-refresh` (any `-r<n>`): bring the branch up to date
   with `main` (FLOW-08, FLOW-10). Merge `origin/main` (a merge commit,
@@ -78,3 +92,11 @@ Never merge, approve, or enable auto-merge (FLOW-08, LINT-03). Never push
 `main`, force-push, or delete a remote branch (FLOW-17); GitHub deletes the
 branch on merge. Before any push, run `tools/workflow/flow18-check.sh` and stop
 if it fails (FLOW-18).
+
+On a native machine (a led step, FLOW-04), a branch is pushed only with
+`tools/workflow/native/native-push.sh <name>`, or `native-push.sh <name>
+<owner>/<repo>` for a branch in a second repository's clone, whose worktree
+is `.scratch/<owner>/<repo>/<name>`, made with `git -C
+.dev/checkouts/<owner>/<repo> worktree add`; and committed with `git -C
+<worktree> commit -F ../<name>.msg`, the message written beside the
+worktree, never `-m` (FLOW-17).

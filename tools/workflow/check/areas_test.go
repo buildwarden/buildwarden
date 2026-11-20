@@ -84,7 +84,7 @@ func insideUndeclared(t *testing.T, env Env, f *queue.Feature) {
 	for name, change := range map[string]func(){
 		"no areas":           func() { f.Areas = nil },
 		"an area not mapped": func() { queueAreas(f, "book", "telemetry") },
-		"no map":             func() { env.State = nil },
+		"no map":             func() { env.State.Areas = nil },
 	} {
 		change()
 		if r := check(); !r.OK || !strings.Contains(r.Info, "undeclared") {

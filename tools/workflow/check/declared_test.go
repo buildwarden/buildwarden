@@ -20,6 +20,8 @@ func mapped(t *testing.T, fs ...*queue.Feature) *queue.State {
 	}
 	s := &queue.State{Areas: m, Features: fs}
 	s.Config.Repository = m.Repository
+	s.Config.Repositories = []queue.RepositoryEntry{{Name: m.Repository, Trunk: "main",
+		Profile: profilePath}}
 	return s
 }
 
@@ -78,9 +80,11 @@ func TestDeclaredAtDesign(t *testing.T) {
 	}
 	f.Declared = "0a1b2c3"
 	for name, change := range map[string]func(f *queue.Feature){
-		"areas differ":   func(f *queue.Feature) { queueAreas(f, "book") },
-		"undeclared":     func(f *queue.Feature) { f.Areas = nil },
-		"a repository":   func(f *queue.Feature) { f.Repos = []string{"o/elsewhere"} },
+		"areas differ": func(f *queue.Feature) { queueAreas(f, "book") },
+		"undeclared":   func(f *queue.Feature) { f.Areas = nil },
+		"a repository": func(f *queue.Feature) {
+			f.Repos = []string{"buildwarden/buildwarden", "o/elsewhere"}
+		},
 		"a seam":         func(f *queue.Feature) { f.Seams = []string{"relay-claim"} },
 		"a rule changed": func(f *queue.Feature) { f.RulesChanged = []string{"TEST-09"} },
 	} {
@@ -182,7 +186,7 @@ func TestQueueMatchesDesignLater(t *testing.T) {
 		f.Steps = []queue.Step{{ID: "f2-design-review", Phase: 2, Status: "done"}}
 		return f
 	}
-	env := Env{Repo: work}
+	env := here(work)
 	for _, phase := range []int{2, 3, 4, 5, 6} {
 		rs := Phase(env, old(phase))
 		if r := result(t, rs, matches); !r.OK ||
@@ -302,7 +306,7 @@ func TestDeclarations(t *testing.T) {
 		"concepts: [inputs]\nrepos: [o/here, o/specs]\nrule_changes:\n"+
 			"  - {rule: TEST-09, change: add, paths: [docs/development/testing.md]}")
 	work := repo(t, ruled)
-	env, f := Env{Repo: work}, demo(1)
+	env, f := here(work), demo(1)
 	d, err := Declarations(env, f)
 	if err != nil {
 		t.Fatal(err)
@@ -332,7 +336,7 @@ func TestDeclarations(t *testing.T) {
 // the approved design, which does not have it.
 func declarationsApproved(t *testing.T, work, ruled string) {
 	t.Helper()
-	env, f := Env{Repo: work}, demo(1)
+	env, f := here(work), demo(1)
 	req := front(ruled, "design_review: skip", "design_review: required")
 	approved := commit(t, work, req)
 	review := "\n## Design review\n\n- r1: approved at `" + approved + "`.\n"

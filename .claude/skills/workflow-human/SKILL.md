@@ -29,17 +29,18 @@ Read the latest file in `.dev/workflow/digest/`.
 0. **Process items** (`kind: process`, FLOW-03) before anything else. Their
    design is Jeff's: hold its design review (item 3 below) on the branch the
    queue names, and record the design step with `dist/wf claim` and
-   `dist/wf done` as `human/jeff`. After that the loop implements the item on
+   `dist/wf done` as `human/jeff`, both at the outcome (3.5). After that the loop implements the item on
    its branch; while one is in progress it holds the workers its `holds` name
    (FLOW-05). A process design fills **Defaults and overrides** like a
    feature's (GLOBAL-09 to GLOBAL-11); `wf check` does not check it. Show each
    with its phase, holds and branch.
 1. **Priority order.** If `config.yaml` has `priority_confirmed: false`, show
    `dist/wf status` and the proposed order with its reasons, ask Jeff to
-   confirm or reorder, renumber the `priority` fields as he says, and set
+   confirm or reorder, move each item he places with `dist/wf move
+   -feature F -to N -why "<his reason>"` (wf renumbers the rest), and set
    `priority_confirmed: true`. `wf status` lists FLOW-05's class order: in
    implementation, process items, fixes (`follows: <item>`), new
-   functionality. `priority` reorders items within a class only; an item
+   functionality. A position moves an item within its class only; an item
    moves across classes only by Jeff's word on its `follows` or `kind`,
    recorded in its history.
 2. **Blocking questions**, in FLOW-05's order (`dist/wf status`). Ask each with
@@ -47,8 +48,18 @@ Read the latest file in `.dev/workflow/digest/`.
    with `dist/wf answer -worker $W -feature F -question Q -answer "..."`,
    which also completes the matching `-answer-<Q>` step.
 3. **Design reviews** (`*-design-review` steps, FLOW-19), in FLOW-05's
-   order, one feature per sitting. The review comes after Design and before
-   Plan. Check out the feature branch and read the design, and, for a
+   order, capped by load. An *ask* is one AskUserQuestion entry Jeff
+   answers; the cap counts asks, not calls. Start the next review only while
+   it would keep the sitting at or under 30 asks. A large design (more than
+   4 assumed questions, or more than 4 `rule_changes` entries) is reviewed
+   alone. At 30 asks, say so ("30 asks: stop here?") and stop unless Jeff
+   says go on; his word to go on also holds a second review after a large
+   one. An intake Jeff asks for mid-review is noted and done after that
+   review's outcome. The review comes after Design and before Plan. Note the
+   walkthrough's start time (UTC). Claim the review step (`x1-design` for a
+   process item) only at the outcome, together with its done: a claim of a
+   queued process item starts it, which would hold its `holds` and its
+   areas through a review that may end in changes. Check out the feature branch and read the design, and, for a
    re-review, the design at the last `approved at <sha>` and the finding that
    sent it back, with the Implementation plan only when a later phase's
    finding caused the re-review. Put the design
@@ -69,7 +80,7 @@ Read the latest file in `.dev/workflow/digest/`.
       areas it declares, the open items it is near or collides with and why
       (`dist/wf relations -state .dev/workflow -feature F`), and the lines of
       `tools/tier1/area-edges.sh | dist/wf areas -state .dev/workflow -check -edges -`
-      (FLOW-05, FLOW-19); `wf areas -list` and `wf areas -check` exit 1 while the queue state has no `areas.yaml`, which is expected until `loop-parallel`'s `x4-state` writes it: say so and go on. Jeff may narrow or widen the areas, name a
+      (FLOW-05, FLOW-19). Jeff may narrow or widen the areas, name a
       collision the map does not show, or have the map changed (below).
       Where the design has
       **Specification changes**, go over it: each seam's specification and
@@ -83,24 +94,33 @@ Read the latest file in `.dev/workflow/digest/`.
       changed, a Bootstrap comparison or Security note to accept, and the
       **Defaults and overrides** section, each named fallback in particular
       (GLOBAL-09 to GLOBAL-11).
-      Ask each `rule_changes` entry on its own (FLOW-14), with its current
-      and proposed wording: approve, approve with a change, or reject. Record
+      Ask the `rule_changes` entries (FLOW-14), each its own
+      AskUserQuestion entry with its current and proposed wording, up to 4
+      entries per call: approve, approve with a change, or reject. Record
       each approval in the Outcome entry as `rule change <ID> approved at
       <sha>`; a rejection is a change unless the design drops it. Refuse a
       feature's entry that names a LOOP, FLOW or LINT rule, whatever its
       paths: a loop rule changes only through a process item (LOOP-09).
-   4. **Assumptions**, one per AskUserQuestion entry (FLOW-07): the question
-      in full, each option with its consequence, the recommendation first,
-      and the decision it rests on. Record each answer with `dist/wf answer`,
-      or turn it into a change.
+   4. **Assumptions** (FLOW-07, FLOW-19). First show a table of every
+      assumed question with its recommendation, marking the flagged ones
+      (`Flagged: <reason>` in the design; you may add a flag, never remove
+      one). Then ask one entry: "All unflagged as recommended", "Name
+      exceptions" (free text), or "One by one". Each exception and each
+      flagged question is then its own entry, up to 4 per call; under "One
+      by one", every assumed question is, up to 4 per call. Each entry gives
+      the question in full, each option with its consequence, the
+      recommendation first, and the decision it rests on. Record each answer
+      with `dist/wf answer`, one per question (an answer from the batch as
+      `as recommended (batch), Jeff, <date>`), or turn it into a change.
    5. **Outcome.** Approved: first fold the small changes Jeff makes while
       approving into the design text and commit them, with no second review;
       Plan follows the design literally. Then add an entry to the design's
       Design review section (date, outcome, decisions, `approved at <sha>` of
       the design as approved, changes folded in, `read at <sha>` of the
       design as read when it differs, what was folded in, and for a re-review
-      what changed). A rule change "approved with a change" names the same
-      fold-in commit. Commit and push the branch, then `dist/wf done` the
+      what changed, and one line `sitting: <start>-<end> UTC, asks: <n>
+      (<m> in batches)`, where an ask is one entry Jeff answered). A rule
+      change "approved with a change" names the same fold-in commit. Commit and push the branch, then `dist/wf done` the
       step, which checks the approval. Changes: record his notes in the
       entry, then `dist/wf back -worker $W -feature F -why "<his notes>"`.
 4. **Escalations** (`escalate` steps, `f8-escalate-returned` (a PR Jeff
@@ -113,7 +133,7 @@ Read the latest file in `.dev/workflow/digest/`.
    history; raise an estimate only on Jeff's word.
 5. **Open PRs**: record `main`'s CI and its ruleset as `workflow-tick`
    step 2 does (`dist/wf main`), then run
-   `dist/wf stale -state .dev/workflow -repo . -worker $W`, which skips a PR
+   `dist/wf stale -state .dev/workflow -repo . -checkouts .dev/checkouts -worker $W`, which skips a PR
    Jeff has already merged. List the PRs that are ready to merge apart from
    those that wait for a refresh (FLOW-08, FLOW-10), each with the tier-2
    MUST findings it lists, and offer only the ready ones for merging. Jeff
@@ -142,6 +162,12 @@ Read the latest file in `.dev/workflow/digest/`.
   only for a security fix, judged as `workflow-intake` judges it, and
   declined for anything else, saying that the mark is for a security fix and
   that the limit is his to raise.
+
+A lead is routing, not placement: any worker may set or clear one, and Jeff
+may change one back with
+`dist/wf lead -state .dev/workflow -worker human/<name> -feature F -host <name>`
+(`-clear` to remove it, FLOW-04, FLOW-09). Each change is a history line,
+and the run that made it lists it under **Moved**.
 
 Push the workflow branch after each decision with
 `dist/wf commit -state .dev/workflow -worker $W -m "<what was decided>" <paths>`

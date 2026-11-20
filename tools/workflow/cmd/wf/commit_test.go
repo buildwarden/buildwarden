@@ -171,6 +171,8 @@ func commitClaimStands(t *testing.T) {
 	claimStep(t, b, "cloud/b", "y", "f0-branch-setup")
 	pushed(t, b, "cloud/b", "y: claim", "-claimed", "y/f0-branch-setup")
 	claimStep(t, a, "cloud/a", "x", "f0-branch-setup")
+	// -new-run is accepted and ignored: the replayed claim counts its run
+	// once, from the worker.
 	pushed(t, a, "cloud/a", "x: claim", "-claimed", "x/f0-branch-setup", "-new-run")
 	x := item(t, a, "x")
 	if x.Budget.Spent.Steps != 1 || x.Budget.Spent.Runs != 1 {
@@ -251,7 +253,7 @@ func commitQueueConflict(t *testing.T) {
 }
 
 func commitMainAndAreas(t *testing.T) {
-	a, b := stateRepos(t, "repository: o/here\n", "x")
+	a, b := stateRepos(t, here, "x")
 	write(t, b, "main.yaml", "sha: bbbbbbb\nci: green\n")
 	pushed(t, b, "cloud/b", "main: green", "main.yaml")
 	write(t, a, "main.yaml", "sha: aaaaaaa\nci: red\n")
@@ -283,15 +285,17 @@ func areasYAML(repo, path string) string {
 }
 
 func commitReplayInvalid(t *testing.T) {
-	a, b := stateRepos(t, "")
-	queued(t, b, "two", "3")
-	pushed(t, b, "human/jeff", "queue: two", "queue/two.yaml")
-	queued(t, a, "one", "3")
-	out, code := commit(t, a, "human/jeff", "queue: one", "queue/one.yaml")
-	if code != 5 || !strings.Contains(out, "priority 3 also held by") {
+	a, b := stateRepos(t, "", "x", "y")
+	if err := os.Remove(filepath.Join(b, "queue", "y.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	pushed(t, b, "human/jeff", "queue: y gone", "queue/y.yaml")
+	edit(t, a, "x", func(f *queue.Feature) { f.CollidesWith = []string{"y"} })
+	out, code := commit(t, a, "human/jeff", "x: collides with y", "queue/x.yaml")
+	if code != 5 || !strings.Contains(out, `collides_with "y"`) {
 		t.Fatalf("exit %d, want 5 with Validate's line:\n%s", code, out)
 	}
-	if got := gitT(t, a, "log", "-1", "--format=%s"); got != "queue: one" {
+	if got := gitT(t, a, "log", "-1", "--format=%s"); got != "x: collides with y" {
 		t.Fatalf("the session's commit was not restored: HEAD is %q", got)
 	}
 }
@@ -341,7 +345,7 @@ func commitNothing(t *testing.T) {
 // TestCommitAreasHumanOnly: a change to areas.yaml is the human's word, and
 // wf commit makes it only for a human worker (FLOW-05).
 func TestCommitAreasHumanOnly(t *testing.T) {
-	a, _ := stateRepos(t, "repository: o/here\n")
+	a, _ := stateRepos(t, here)
 	write(t, a, "areas.yaml", areasYAML("o/here", "a/"))
 	for _, w := range []string{"cloud/run", "host:macbook/s"} {
 		out, code := commit(t, a, w, "areas: a", "areas.yaml")
@@ -361,7 +365,7 @@ func TestCommitAreasHumanOnly(t *testing.T) {
 // TestCommitAreasUnpushedCommit: a worker that is not human does not push an
 // earlier unpushed commit that changed areas.yaml under its own (FLOW-05).
 func TestCommitAreasUnpushedCommit(t *testing.T) {
-	a, _ := stateRepos(t, "repository: o/here\n", "x")
+	a, _ := stateRepos(t, here, "x")
 	write(t, a, "areas.yaml", areasYAML("o/here", "a/"))
 	gitT(t, a, "add", "areas.yaml")
 	gitT(t, a, "commit", "-q", "-m", "hand areas")

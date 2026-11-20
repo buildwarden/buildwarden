@@ -2,6 +2,7 @@ package queue
 
 import (
 	"slices"
+	"strings"
 )
 
 // The ways two items relate (FLOW-05).
@@ -88,26 +89,82 @@ func (s *State) ReposOf(f *Feature) []string {
 	if len(f.Repos) > 0 {
 		return f.Repos
 	}
-	return []string{s.Config.Repository}
+	return []string{s.queueRepository()}
 }
 
-// Undeclared reports whether the item declares no areas the map can be read
-// with: its areas are absent, or name an area the map lacks, or there is no
-// map of its home repository, whose areas they name. An undeclared item
-// collides with every item it shares a repository with. An empty list is a
-// declaration.
+// queueRepository is the queue's own repository, also in a view of another
+// repository's state (ForRepository).
+func (s *State) queueRepository() string {
+	if s.queueRepo != "" {
+		return s.queueRepo
+	}
+	return s.Config.Repository
+}
+
+// Undeclared reports whether the item has no areas its home's map can read
+// (UndeclaredIn).
 func (s *State) Undeclared(f *Feature) bool {
-	m := s.Areas
-	if f.Areas == nil || !s.hasMap(s.ReposOf(f)[0]) {
+	return s.UndeclaredIn(f, s.ReposOf(f)[0])
+}
+
+// UndeclaredIn reports whether the item has no areas the repository's map
+// can read: its areas are absent, or name an area of that repository the
+// map lacks, or there is no map of the repository. An undeclared item
+// collides with every item it shares that repository with. An empty list is
+// a declaration, and so is a list that names no area of that repository: the
+// item edits nothing there.
+func (s *State) UndeclaredIn(f *Feature, repo string) bool {
+	m := s.mapOf(repo)
+	if f.Areas == nil || m == nil {
 		return true
 	}
-	return slices.ContainsFunc(*f.Areas, func(a string) bool { return !m.Has(a) })
+	return slices.ContainsFunc(s.AreasIn(f, repo), func(a string) bool { return !m.Has(a) })
 }
 
-// hasMap reports whether the queue state has the repository's area map. It
-// has at most one, areas.yaml, for the repository that file names.
-func (s *State) hasMap(repo string) bool {
-	return repo != "" && s.Areas != nil && s.Areas.Repository == repo
+// AreasIn are the item's areas in the repository, by the names of its map:
+// the bare names in the item's home, and the names written
+// <owner>/<name>:<area> for another repository, without the prefix
+// (FLOW-02).
+func (s *State) AreasIn(f *Feature, repo string) []string {
+	if f.Areas == nil {
+		return nil
+	}
+	home := s.ReposOf(f)[0] == repo
+	out := []string{}
+	for _, a := range *f.Areas {
+		r, area, prefixed := strings.Cut(a, ":")
+		switch {
+		case !prefixed && home:
+			out = append(out, a)
+		case prefixed && r == repo && !home:
+			out = append(out, area)
+		}
+	}
+	return out
+}
+
+// hasMap reports whether the queue state has the repository's area map:
+// areas.yaml for the queue's own, repos/<owner>/<name>/areas.yaml for
+// another, each for the repository it names.
+func (s *State) hasMap(repo string) bool { return s.mapOf(repo) != nil }
+
+// mapOf is the repository's area map, or nil when the state has none.
+func (s *State) mapOf(repo string) *AreaMap {
+	if repo == "" {
+		return nil
+	}
+	m := s.Areas
+	if repo != s.Config.Repository && s.Config.Repository != "" {
+		v, err := s.ForRepository(repo)
+		if err != nil {
+			return nil
+		}
+		m = v.Areas
+	}
+	if m == nil || m.Repository != repo {
+		return nil
+	}
+	return m
 }
 
 // written reports whether the seam has a specification (the map's
@@ -162,45 +219,65 @@ func (p pair) noMap() (string, bool) {
 	return "", false
 }
 
-// undeclared is row 5: the two have a repository in common and either is
+// undeclared is row 5: in a repository the two have in common, either is
 // undeclared.
 func (p pair) undeclared() (string, bool) {
-	if len(p.repos) == 0 {
-		return "", false
-	}
 	var names []string
-	for _, f := range []*Feature{p.a, p.b} {
-		if p.s.Undeclared(f) {
-			names = append(names, f.Feature)
+	for _, repo := range p.repos {
+		for _, f := range []*Feature{p.a, p.b} {
+			if p.s.UndeclaredIn(f, repo) && !slices.Contains(names, f.Feature) {
+				names = append(names, f.Feature)
+			}
 		}
 	}
 	if len(names) == 0 {
 		return "", false
 	}
-	return slices.Min(names) + " declares no areas", true
+	return slices.Min(names) + " is undeclared", true
 }
 
-// areas returns the two items' areas when the map relates them: they have a
-// repository in common, so by rows 4 and 5 it has the map and both items are
-// declared. ok is false for two items with no repository in common, whose
-// areas name different maps.
-func (p pair) areas() (a, b []string, ok bool) {
-	if len(p.repos) == 0 || p.s.Undeclared(p.a) || p.s.Undeclared(p.b) {
-		return nil, nil, false
+// inCommon is one repository the two have in common, its map, and each
+// item's areas there. By rows 4 and 5 the map is there and both are
+// declared in it.
+type inCommon struct {
+	repo string
+	m    *AreaMap
+	a, b []string
+}
+
+// areas returns, for each repository the two have in common, its map and
+// the two items' areas there: none for two items with no repository in
+// common, whose areas name different maps.
+func (p pair) areas() []inCommon {
+	var out []inCommon
+	for _, repo := range p.repos {
+		m := p.s.mapOf(repo)
+		if m == nil || p.s.UndeclaredIn(p.a, repo) || p.s.UndeclaredIn(p.b, repo) {
+			continue
+		}
+		out = append(out, inCommon{repo: repo, m: m, a: p.s.AreasIn(p.a, repo),
+			b: p.s.AreasIn(p.b, repo)})
 	}
-	return *p.a.Areas, *p.b.Areas, true
+	return out
+}
+
+// name is an area as a reason prints it: bare in the queue's own
+// repository, and prefixed with its repository elsewhere.
+func (c inCommon) name(s *State, area string) string {
+	if c.repo == s.Config.Repository {
+		return area
+	}
+	return c.repo + ":" + area
 }
 
 // sharedArea is row 6: the two share an exclusive area. Sharing an ordered
 // area relates nothing.
 func (p pair) sharedArea() (string, bool) {
-	a, b, ok := p.areas()
-	if !ok {
-		return "", false
-	}
-	for _, area := range common(a, b) {
-		if p.s.Areas.Exclusive(area) {
-			return "area " + area, true
+	for _, c := range p.areas() {
+		for _, area := range common(c.a, c.b) {
+			if c.m.Exclusive(area) {
+				return "area " + c.name(p.s, area), true
+			}
 		}
 	}
 	return "", false
@@ -229,21 +306,19 @@ func (p pair) sameRule() (string, bool) {
 // direction. Only an exclusive area reaches or is reached: an ordered area
 // has no reaches, whatever its code imports.
 func (p pair) reaches() (string, bool) {
-	a, b, ok := p.areas()
-	if !ok {
-		return "", false
-	}
-	m := p.s.Areas
 	var found []string
-	note := func(from, to string) {
-		if m.Exclusive(from) && m.Exclusive(to) && m.Reaches(from, to) {
-			found = append(found, from+" reaches "+to)
+	for _, c := range p.areas() {
+		note := func(from, to string) {
+			if c.m.Exclusive(from) && c.m.Exclusive(to) && c.m.Reaches(from, to) {
+				found = append(found,
+					c.name(p.s, from)+" reaches "+c.name(p.s, to))
+			}
 		}
-	}
-	for _, x := range a {
-		for _, y := range b {
-			note(x, y)
-			note(y, x)
+		for _, x := range c.a {
+			for _, y := range c.b {
+				note(x, y)
+				note(y, x)
+			}
 		}
 	}
 	if len(found) == 0 {

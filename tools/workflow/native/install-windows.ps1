@@ -61,10 +61,8 @@ function Check-HypervHost {
     } else { Bad 'Hyper-V PowerShell module missing (windows-hyperv)' }
     # Builds need the relay boot disk and a prepared base in warden's Hyper-V cache.
     $cache = if ($env:WARDEN_HYPERV_CACHE_DIR) { $env:WARDEN_HYPERV_CACHE_DIR } else { "$env:LOCALAPPDATA\warden\hyperv" }
-    # Each run rebuilds it when the relay source moves; this only reports.
-    if (In-Bash $script:Bash "'$($script:UnixRepo)/tools/relay-vm/hyperv/refresh-cache.sh' --check") {
-        Ok "relay boot VHDX in $cache is built from the current relay (windows-hyperv)"
-    } else { Warn "relay boot VHDX in $cache is missing or stale: each run rebuilds it (tools/relay-vm/hyperv/refresh-cache.sh), which needs WSL" }
+    # Whether the relay boot VHDX in $cache is current is the profile file's
+    # native.check, which Check-Clones runs; each run rebuilds it.
     if (Get-ChildItem (Join-Path $cache 'images\prepared') -Filter *.vhdx -ErrorAction SilentlyContinue) { Ok 'prepared Hyper-V base image (windows-hyperv)' }
     else { Warn 'no prepared Hyper-V base: run warden image prepare --driver hyperv; windows-hyperv builds will fail' }
 }
@@ -85,6 +83,26 @@ function Check-ContainerHost($bash) {
     }
     if ($rt) { Ok "container runtime: $rt (container-any)" }
     else { Warn 'no working docker/podman/finch (podman: podman machine init; podman machine start): container-any work will fail' }
+}
+
+# Check-Clones runs wf native -check, built from this checkout, on the
+# workflow branch as origin has it: each clone of a repository hosts.yaml
+# lists for the machine is at .dev/checkouts/<owner>/<repo>, names that
+# repository and is clean, and each profile file's toolchain_check and the
+# native.check of each host the machine serves (here refresh-cache.sh
+# --check for windows-hyperv) run (LOOP-05). A missing clone is reported
+# with the command for the owner; nothing is cloned.
+function Check-Clones($bash) {
+    $r = $script:UnixRepo
+    # No double quotes inside: Windows PowerShell passes them to bash.exe
+    # unreliably, and mktemp's path has no spaces.
+    $cmd = "t=`$(mktemp -d) && (cd '$r/tools/workflow' && go build -o `$t/wf ./cmd/wf) && " +
+        "mkdir -p `$t/state && git -C '$r' archive origin/workflow | tar -x -C `$t/state && " +
+        "`$t/wf native -check -state `$t/state -repo '$r' -machine '$Machine'; rc=`$?; rm -rf `$t; exit `$rc"
+    $out = & $bash -lc "export PATH=`"`$HOME/.local/bin:`$PATH`"; $cmd" 2>&1
+    $ok = $LASTEXITCODE -eq 0
+    if ($out) { Write-Host ($out -join "`n") }
+    if ($ok) { Ok 'clones and profiles (wf native -check)' } else { Bad 'wf native -check: see above' }
 }
 
 function Check {
@@ -115,6 +133,9 @@ function Check {
     if ($url -match 'buildwarden/buildwarden(\.git)?$') { Ok "origin is $url" } else { Bad "origin is '$url', want buildwarden/buildwarden" }
     if ((In-Bash $bash "git -C '$($script:UnixRepo)' status --porcelain --untracked-files=no") -eq '') { Ok 'checkout is clean' }
     else { Bad 'checkout has local changes; use a dedicated clone' }
+    # The one route by which a session pushes a feature branch (FLOW-17).
+    if (In-Bash $bash "test -x '$($script:UnixRepo)/tools/workflow/native/native-push.sh' && echo yes") { Ok 'native-push.sh is executable' }
+    else { Bad 'tools/workflow/native/native-push.sh is missing or not executable' }
     if ($null -ne (In-Bash $bash "git -C '$($script:UnixRepo)' fetch -q origin workflow")) { Ok 'can fetch origin' } else { Bad 'cannot fetch origin' }
     if ($null -ne (In-Bash $bash "git -C '$($script:UnixRepo)' push --dry-run -q origin refs/remotes/origin/workflow:refs/heads/workflow")) {
         Ok 'can push the workflow branch'
@@ -132,6 +153,8 @@ function Check {
             default { Warn "no check for host $h on Windows" }
         }
     }
+
+    Check-Clones $bash
 
     $drive = (Get-Item $Repo).PSDrive
     $freeGb = [int]($drive.Free / 1GB)

@@ -29,7 +29,7 @@ func mapped(t *testing.T, fs ...*Feature) *State {
 	t.Helper()
 	s := state(fs...)
 	s.Areas = designMap(t)
-	s.Config.Repository = s.Areas.Repository
+	own(s, s.Areas.Repository)
 	return s
 }
 
@@ -63,7 +63,7 @@ func mapFindings(t *testing.T, text string) []string {
 		return []string{err.Error()}
 	}
 	s := state()
-	s.Config.Repository = "o/r"
+	own(s, "o/r")
 	s.Areas = m
 	var out []string
 	for _, e := range s.Validate() {
@@ -236,7 +236,8 @@ func TestLoadReadsAreas(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("config.yaml", "run_budget: {steps: 8}\nrepository: o/r\n")
+	write("config.yaml", "run_budget: {steps: 8}\nrepository: o/r\n"+
+		"repositories:\n  - {name: o/r, trunk: main, profile: p.yaml}\n")
 	s, err := Load(dir)
 	if err != nil || s.Areas != nil {
 		t.Fatalf("no areas.yaml: Areas = %+v, err %v; want none", s.Areas, err)
@@ -395,7 +396,7 @@ func TestAreasCheck(t *testing.T) {
 			got.Lines, got.Differences, want)
 	}
 	// A tracked item's areas are not this map's, and a done item adds no tree.
-	s.Config.Repository = "o/r"
+	own(s, "o/r")
 	ahead.Repos = []string{"o/elsewhere"}
 	if got = check(s, tree[2:], edges, true); got.Differences != 2 {
 		t.Fatalf("declared by a tracked item: %q, %d differences; want 2", got.Lines,

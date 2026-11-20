@@ -231,6 +231,27 @@ func IsMerge(st *Step) bool {
 		((r.round == "feature" && r.phase == 7) || (r.round == "process" && r.phase == 3))
 }
 
+// mergedFirstRe is the name of a confirmation step: merged-<n>.
+var mergedFirstRe = regexp.MustCompile(`^merged-([1-9][0-9]*)$`)
+
+// MergedFirst reports whether the step confirms the merge of a work entry
+// the design names to merge first, f6-merged-<n> in any of its -r<n> forms,
+// and returns n, the entry's position in work counted from 1 (FLOW-08). Like
+// the merge step, wf next never offers it: the tick's merge confirmation
+// completes it.
+func MergedFirst(st *Step) (int, bool) {
+	r, ok := stepTemplates(st.ID)
+	if !ok || r.round != "feature" || r.phase != 6 {
+		return 0, false
+	}
+	m := mergedFirstRe.FindStringSubmatch(r.name)
+	if m == nil {
+		return 0, false
+	}
+	n, err := strconv.Atoi(m[1])
+	return n, err == nil
+}
+
 // IsRefresh reports whether the step is a refresh, in any of its -r<n> forms:
 // f6-refresh or x2-refresh, which merges main into a branch that main has
 // moved past and runs the gates and the consolidation pass again (FLOW-10).
@@ -401,7 +422,8 @@ func Landed(f *Feature, by string, now time.Time) {
 // needs every pending step already added to the phase, and each added host
 // step needs what the gate needs (consolidate), so validation runs on the
 // branch the PR opens on (FLOW-03, FLOW-09). A step added after seeding is
-// not linked.
+// not linked. A led feature's cloud template steps of phases 0 to 5 get its
+// lead (FLOW-04).
 func Seed(f *Feature) {
 	ts := templates[f.Round]
 	if f.Phase >= len(ts) || len(ts[f.Phase]) == 0 {
@@ -425,7 +447,7 @@ func Seed(f *Feature) {
 			continue
 		}
 		st := Step{ID: StepID(f.Round, f.Phase, t.name) + suffix, Phase: f.Phase,
-			Affinity: t.affinity, Status: "pending"}
+			Affinity: f.leads(f.Phase, t.affinity), Status: "pending"}
 		for _, n := range t.needs {
 			if in[n] {
 				st.Needs = append(st.Needs, StepID(f.Round, f.Phase, n)+suffix)
@@ -435,6 +457,24 @@ func Seed(f *Feature) {
 			st.Needs = addNeeds(st.Needs, added...)
 		}
 		f.Steps = append(f.Steps, st)
+	}
+	seedMergedFirst(f, suffix)
+}
+
+// seedMergedFirst adds Publish's f6-merged-<n> for each work entry marked
+// first: Publish ends only once the loop has seen that pull request merge
+// (FLOW-03, FLOW-08). Nothing needs it, since the pull request it waits for
+// is opened in Publish; a step the design adds that needs the merge names it.
+func seedMergedFirst(f *Feature, suffix string) {
+	if f.Round != "feature" || f.Phase != 6 {
+		return
+	}
+	for i, w := range f.Work {
+		if w.First {
+			id := StepID(f.Round, 6, fmt.Sprintf("merged-%d", i+1)) + suffix
+			f.Steps = append(f.Steps, Step{ID: id, Phase: 6, Affinity: "cloud",
+				Status: "pending"})
+		}
 	}
 }
 

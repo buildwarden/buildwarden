@@ -2,6 +2,7 @@ package coupling
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 	"testing"
 
@@ -39,7 +40,9 @@ var base = map[string]string{
 // Checker over the diff from main.
 func checker(t *testing.T, change map[string]string, explicit ...string) *Checker {
 	t.Helper()
-	r := gittest.New(t, base)
+	files := maps.Clone(base)
+	files[profileFile] = hereProfileText(t)
+	r := gittest.New(t, files)
 	r.Commit("change", change)
 	d, err := diff.Load(r.Dir, "origin/main")
 	if err != nil {
