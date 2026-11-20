@@ -34,10 +34,9 @@ None.
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 4 review | f4-review (cloud, leased to cloud/20261120T203034Z) | - | - | 16 / 30 |
-| 2 | rule-paths-shared | process | - | buildwarden/buildwarden | - | 4 close | x4-close (cloud, leased to cloud/20261120T203034Z) | - | [#133](https://github.com/buildwarden/buildwarden/pull/133) | 3 / 4 |
-| 4 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
-| 5 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
-| 6 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 9 |
+| 3 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
+| 4 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
+| 5 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 9 |
 
 ## Workers
 
@@ -105,9 +104,9 @@ Open features that are not disjoint. Process items are outside the relations (FL
 
 | Pri | Item | Kind | Repositories | Areas | Est. steps |
 |---|---|---|---|---|---|
-| 3 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
-| 7 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
-| 8 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
-| 9 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
-| 10 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
-| 11 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |
+| 2 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
+| 6 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
+| 7 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
+| 8 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
+| 9 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
+| 10 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |
