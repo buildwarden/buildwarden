@@ -1,10 +1,10 @@
 feature: detached-prepare-windows-exe
 title: On Windows a warden whose file has no .exe ending (make build's dist/warden) cannot start the background image prepare, and says nothing; with a warden.exe beside it, that file is run instead
-priority: 1
+priority: 4
 follows: project-config-trust
 status: in_progress
 round: feature
-phase: 6
+phase: 7
 design: docs/design/detached-prepare-windows-exe.md
 branch: feat/detached-prepare-windows-exe
 areas:
@@ -19,7 +19,7 @@ design_review: required
 source: 'Found by host:windows-hyperv/20261116T051002Z (unattended, windows-desktop) while validating project-config-trust''s tier-2 gap project-config-trust-hyperv; main 623131a has it too, so it is filed as the item''s follow-up (FLOW-09). driver.StartDetached runs exec.Command(os.Executable(), ...). On Windows os/exec resolves a path with no extension only by adding the PATHEXT endings, so for dist/warden (what make build writes on Windows: go build -o dist/warden) it looks for dist/warden.exe. With no such file Start fails; driver/hyperv/freshness.go (and driver/qemu) drop the error, so the build prints no ''refreshing it in the background'' line, prepare.log is left truncated to 0 bytes and no prepare runs: a prepared base then ages until the build is refused at image_min_grace. With a warden.exe beside it, that other file is started: on this host a stale dist/warden.exe of 2026-11-04 ran the prepare for main''s build of 2026-11-16. Evidence, native/windows-hyperv/2026-11-15/: main-623131a-hyperv-refresh-due.log (stale warden.exe beside: line printed, prepare ran, from the old file), main-623131a-hyperv-refresh-due-no-exe-beside.log (it moved aside: no line, prepare.log 0 bytes, no process), branch-3733c4b-hyperv-build.log (the same on the branch, no warden.exe in its dist), branch-3733c4b-hyperv-refresh-due-exe.log (run as warden.exe: works). A released warden.exe is not affected. To settle in design: start the file os.Executable names without the lookup, report a failed start, and whether make build should write dist/warden.exe on Windows.'
 pr:
   number: 131
-  ci: red
+  ci: green
   head: d8d24138a756a06613b5212fa3a49b3ccbeaeab2
 steps:
   - id: f0-branch-setup
@@ -125,14 +125,14 @@ steps:
   - id: f6-open-pr
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-consolidate
       - f6-validate-windows-hyperv
       - f6-refresh
     lease:
-      claimed_by: cloud/20261120T203034Z
-      expires: 2026-11-20T22:35:40.599552771Z
+      claimed_by: ""
+      expires: null
   - id: f6-refresh
     phase: 6
     affinity: cloud
@@ -141,6 +141,13 @@ steps:
       claimed_by: ""
       expires: null
     note: 'main at 480e205: 1 commit since the branch merged it; no file changed by both'
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -364,3 +371,9 @@ history:
   - at: 2026-11-20T20:35:40Z
     by: cloud/20261120T203034Z
     event: claimed f6-open-pr until 2026-11-20T22:35:40Z
+  - at: 2026-11-20T20:53:55Z
+    by: cloud/20261120T203034Z
+    event: done f6-open-pr
+  - at: 2026-11-20T20:53:55Z
+    by: cloud/20261120T203034Z
+    event: entered phase 7 (merge)

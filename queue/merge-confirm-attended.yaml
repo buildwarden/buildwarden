@@ -1,6 +1,6 @@
 feature: merge-confirm-attended
 title: Attended merge confirmation, a seeded state step, and entry-scoped design approvals
-priority: 2
+priority: 1
 kind: process
 status: in_progress
 round: process
