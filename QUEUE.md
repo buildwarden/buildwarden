@@ -33,7 +33,7 @@ None.
 
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 6 publish | f6-consolidate (cloud) | - | - | 19 / 30 |
+| 1 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 6 publish | f6-consolidate (cloud, leased to cloud/20261120T223522Z) | - | - | 20 / 30 |
 | 3 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 4 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
 | 5 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 9 |
