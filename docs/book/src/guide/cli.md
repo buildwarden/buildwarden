@@ -33,13 +33,19 @@ rejects only the flags it genuinely cannot use.
 - `-q, --quiet` — Do not echo the guest build console (still captured to `build-output.log`)
 
 The container driver refuses the VM-only flags (`--script`, `--image`, `--cpus`,
-`--memory`, `--keep-vms`, `--build-link`); `--network` is only used by `--driver hyperv`
-(firecracker builds take a network slot made by `warden setup`).
+`--memory`, `--keep-vms`, `--build-link`). A driver's own flags, such as the
+container driver's `--runtime` and hyperv's `--network`, are taken only when
+that driver is selected, and `--help` lists the selected driver's under
+`Flags of driver "<name>":`; with another driver each is refused as `unknown
+flag --network for driver "vz"`, with the fix `see 'warden build --driver vz
+--help' for the flags this driver takes` (firecracker builds take a network
+slot made by `warden setup`).
 `--guest-os windows` is supported by `--driver qemu` and `--driver hyperv`;
 `--driver firecracker` runs Linux guests only.
 
-Defaults for `--cpus`, `--memory` and `--network` come from the `[vm]` section
-of `warden.toml`. Per-driver VM defaults: qemu 4 CPU / 4096 MiB, vz 4 / 8192,
+Defaults for `--cpus` and `--memory` come from the `[vm]` section of
+`warden.toml`, and for `--network` from `[driver.hyperv] network` (old name
+`[vm] network`; see [Configuration](configuration.md#driver-settings)). Per-driver VM defaults: qemu 4 CPU / 4096 MiB, vz 4 / 8192,
 hyperv 4 / 4096, firecracker 4 / 4096 (its relay VM: 2 / 256).
 
 With `--driver firecracker`, `--keep-vms` leaves both VMs running and their
@@ -151,7 +157,7 @@ defaults per driver (vz: macos, qemu and firecracker: linux, hyperv: windows). `
 | `qemu` / linux | cloud image ref (`alpine:3.21`, `ubuntu:24.04`, `debian:bookworm`) or qcow2 | Downloads and verifies the cloud image |
 | `firecracker` / linux | cloud image ref (default `ubuntu:24.04`), or a local qcow2 or raw image | Downloads the cloud image if needed (as qemu does), checks it with `qemu-img info` (a backing file, an external data file or another format is refused), and converts it once to the raw image builds copy, in `~/.cache/warden/firecracker/images` |
 | `qemu` / windows | Windows install ISO (required the first time) | Unattended install ending in `sysprep /generalize` (skipped if already installed unless `--force`), then prepares the layer builds boot from. With no source, re-prepares |
-| `hyperv` / windows | Windows Server evaluation VHDX: URL, or a local file registered in place (default: `[vm] windows_image`, else Microsoft's current Server 2025 evaluation download) | Fetches or registers the base, then prepares the layer builds boot from. With no source it is the refresh: re-checks a downloaded base for new media and re-prepares |
+| `hyperv` / windows | Windows Server evaluation VHDX: URL, or a local file registered in place (default: `[driver.hyperv] windows_image`, else Microsoft's current Server 2025 evaluation download) | Fetches or registers the base, then prepares the layer builds boot from. With no source it is the refresh: re-checks a downloaded base for new media and re-prepares |
 
 **Flags:**
 - `--os <os>` — Guest OS: macos, linux or windows (default per driver)
@@ -320,7 +326,7 @@ Other drivers print that no host setup is needed. Replaces the old
 `warden hyperv setup`.
 
 **Flags:**
-- `--network <name>` — Durable network name, the prefix of its build switches `<name>-0` to `<name>-<N-1>` and of its NAT `<name>-nat` (default: `[vm]` network, then `warden-dev`)
+- `--network <name>` — Durable network name, the prefix of its build switches `<name>-0` to `<name>-<N-1>` and of its NAT `<name>-nat` (default: `[driver.hyperv] network`, then `warden-dev`)
 - `--nat-prefix <cidr>` — NAT CIDR for relay egress (default 192.168.240.0/20).
   Every build reads the NAT back from the host and gives its relay its own
   address in this prefix, so a non-default value takes effect on every build.
@@ -456,11 +462,15 @@ error.
 
 ## Global Flags
 
+warden's own; a driver's flags are listed by `--help` with the driver
+selected (the container driver's `--runtime <name>`, on `build`, `shell`,
+`doctor` and `clean`: `finch`, `docker` or `podman`, see
+[Configuration](configuration.md#the-container-runtime)).
+
 | Flag | Description |
 |------|-------------|
 | `--config <path>` | The config file to read, which is then the only one read (default: the file `WARDEN_CONFIG` names, then `./warden.toml` if it exists; see [Configuration](configuration.md#the-config-file)). It has no short form. Given with an empty value it is an error |
 | `--driver <name>` | The driver to run: `container` (default), `qemu`, `vz`, `hyperv` or `firecracker`, or the name or path of another driver binary ([Drivers](drivers.md#where-a-driver-comes-from)) |
-| `--runtime <name>` | Container runtime: `finch`, `docker` or `podman`, the only values it takes (see [Configuration](configuration.md#the-container-runtime)) |
 | `--color <mode>` | Color output (auto, always, never) |
 | `-v, --verbose` | Verbose output; with upstream CA paths, also the list of the files that give a certificate and of the entries not read |
 | `--version` | Print version |

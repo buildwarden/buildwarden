@@ -58,6 +58,9 @@ make tidy                # go mod tidy
 make cover               # Tests with a coverage report
 make deadcode            # Code unreachable on Linux, macOS and Windows
 make integration-test    # Real builds plus ledger checks; needs a container runtime
+make driver-conformance  # The driver suite's both tiers against DRIVER (default:
+                         #   dist/warden-driver-container); the lifecycle tier runs
+                         #   real builds; DRIVER_CONFORMANCE_FLAGS for the host
 make integration-test-vz # VZ end to end; needs macOS/arm64 and a prepared image
 make clean               # Remove built binaries
 ```

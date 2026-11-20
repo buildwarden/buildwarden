@@ -67,7 +67,7 @@ Xcode Command Line Tools (`xcode-select --install`).
 curl -sSfL https://raw.githubusercontent.com/buildwarden/buildwarden/main/install.sh | sh
 ```
 
-This detects your OS and architecture, downloads the latest release, and installs to `/usr/local/bin/`. The released binary is ready for the container driver out of the box. It is built without cgo, so it has no vz driver: for vz, build `warden` from source on the Mac and follow the [first-time VZ setup](#first-time-vz-setup).
+This detects your OS and architecture, downloads the latest release, and installs `warden`, the container driver `warden-driver-container` and `warden-io` to `/usr/local/bin/`. The container driver is a program of its own, which warden finds beside itself; with it, the release is ready for the container driver out of the box. It is built without cgo, so it has no vz driver: for vz, build `warden` from source on the Mac and follow the [first-time VZ setup](#first-time-vz-setup).
 
 ## From Releases
 
@@ -76,12 +76,15 @@ Download the appropriate binary from [GitHub Releases](https://github.com/buildw
 ```sh
 # macOS (Apple Silicon)
 tar xzf buildwarden_*_darwin_arm64.tar.gz
-mv warden /usr/local/bin/
+mv warden warden-driver-container warden-io /usr/local/bin/
 
 # Linux (x86_64)
 tar xzf buildwarden_*_linux_amd64.tar.gz
-mv warden /usr/local/bin/
+mv warden warden-driver-container warden-io /usr/local/bin/
 ```
+
+Keep `warden-driver-container` in the same directory as `warden`: warden
+looks for its drivers on `PATH`, then beside itself ([Drivers](../guide/drivers.md#where-a-driver-comes-from)).
 
 These are the same binaries the one-liner installs, so the macOS one has no vz
 driver either.
@@ -103,6 +106,7 @@ The build produces the following binaries in `dist/`:
 | Binary | Description |
 |--------|-------------|
 | `dist/warden` | Host binary (codesigned on macOS for VZ entitlement) |
+| `dist/warden-driver-container` | The container driver, which warden runs from beside itself |
 | `dist/warden-relay-linux-arm64` | Relay binary for VM/container use |
 | `dist/warden-io-linux-arm64` | Agent binary for Linux build environments |
 | `dist/warden-io-darwin-arm64` | Agent binary for macOS VZ builds |

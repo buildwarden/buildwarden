@@ -29,8 +29,9 @@ driver = "qemu"
 A driver is a program named `warden-driver-<name>` (`warden-driver-<name>.exe`
 on Windows) that warden runs through the driver contract
 (`specs/driver-contract/v1.md`), or a driver linked into warden itself. In
-this release `qemu`, `vz`, `hyperv` and `firecracker` are linked, and so is
-`container` until its binary ships beside warden. A name is looked up once
+this release `container` is a binary, `warden-driver-container`, installed
+beside warden, and `qemu`, `vz`, `hyperv` and `firecracker` are linked. A
+name is looked up once
 per command, and the first match wins:
 
 1. `PATH`, in order;
@@ -89,7 +90,7 @@ datadisk: 150GiB
 
 With no runtime named, `warden` uses the first of `finch`, `docker` and
 `podman` that answers. To name one, use `--runtime`, `WARDEN_CTR_CLI` or
-`[runtime] cli`:
+`[driver.container] cli` (old name `[runtime] cli`, read until 1.0):
 
 ```sh
 warden build --runtime podman .
@@ -248,7 +249,7 @@ once with no network through OOBE and the same tuning as Hyper-V, registers
 the `warden-run` startup task, and powers off; builds boot a throwaway child of
 that layer as SYSTEM. With no `--source`, `image prepare` only re-prepares,
 and builds start that in the background once the layer is
-`[vm] image_refresh_after` old (see the Hyper-V section for the evaluation
+`[driver] image_refresh_after` old (or `[driver.qemu] image_refresh_after`) (see the Hyper-V section for the evaluation
 grace rules, which are the same).
 
 ---
@@ -424,7 +425,7 @@ switch.
 
 Prepare a Windows Server base image. By default warden downloads Microsoft's
 current Windows Server 2025 evaluation VHDX (about 11 GB) from the Evaluation
-Center link; `--source` or `[vm] windows_image` names another URL, or a file
+Center link; `--source` or `[driver.hyperv] windows_image` names another URL, or a file
 you already have (registered in place, not copied):
 
 ```sh
@@ -437,7 +438,7 @@ must resolve to a Microsoft host), and the resolved URL, ETag and the sha256
 computed while downloading are recorded in the image manifest and in every
 build's ledger. `--sha256` adds an expected-digest check. When Microsoft
 publishes new media behind the link, the next refresh downloads it beside the
-current base and prepares from it; `[vm] windows_image_update = "reuse"`
+current base and prepares from it; `[driver.hyperv] windows_image_update = "reuse"`
 keeps the current base instead. A base you supplied as a local file is never
 replaced automatically.
 
