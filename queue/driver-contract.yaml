@@ -49,8 +49,8 @@ steps:
     needs:
       - f6-consolidate
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: host:macos-vz/macbook.attended-20261120T230040Z
+      expires: 2026-11-21T19:00:40.199793Z
     note: Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation; where a case says "as main", capture main's output first. vz stays linked; its build now runs through warden's build sequence, which owns the signals. (1) warden doctor --driver vz and warden image list print what main prints. (2) a vz build succeeds, its ledger verifies, relay.log is written, driver.json says linked; with a Containerfile in the context it is ignored and inputs/ is absent, as on main. (3) a script that exits 3 makes warden exit 3; --timeout 30s on a sleeping script exits 124. (4) Ctrl-C mid-build leaves no relay process and no work directory; SIGTERM mid-build does the same and exits 1, where on main it kills warden. (5) --runtime docker and --network x with --driver vz are each refused as an unknown flag for driver vz; [runtime] cli = 5 in warden.toml does not stop a vz build (design Behaviour 13); warden clean --driver vz reports nothing to clean and needs no container runtime. Evidence under native/macos-vz/<date>/.
   - id: f6-validate-windows-hyperv
     phase: 6
@@ -211,8 +211,8 @@ budget:
     runs: 5
     steps: 30
   spent:
-    runs: 6
-    steps: 22
+    runs: 7
+    steps: 23
 questions:
   - id: a16
     kind: assumed
@@ -796,3 +796,6 @@ history:
   - at: 2026-11-20T22:56:22Z
     by: host:container-any/20261120T225616Z
     event: claimed f6-validate-container-any until 2026-11-21T18:56:22Z
+  - at: 2026-11-20T23:00:40Z
+    by: host:macos-vz/macbook.attended-20261120T230040Z
+    event: claimed f6-validate-macos-vz until 2026-11-21T19:00:40Z
