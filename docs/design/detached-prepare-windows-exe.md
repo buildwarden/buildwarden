@@ -626,6 +626,28 @@ f6-merge-main as a merge commit, no conflicts).
 - Nothing goes back: no finding for the design or the plan, no
   regression found on `main`, no follow-up filed.
 
+**2026-11-20, refresh against `main` 480e205** (f6-refresh; merged as a
+merge commit, no conflicts).
+
+- **What landed since e9315c2.** PR #130 (`loop-repository`): a process
+  item, in `tools/workflow/`, `tools/tier1/`, `.claude/`,
+  `docs/development/` and its design. It touches no file this branch
+  changes, and none of `driver/`, `cmd/` or `docs/book/`. `TEMPLATE.md`
+  gained `merge_first` and the `<owner>/<name>:<area>` form of an area;
+  this item works in one repository, so neither applies. Tier 1's
+  design-front-matter check now calls wf's and reads designs from
+  `docs/development/loop-profile.yaml`; this design passes it unchanged.
+- **FLOW-15 sweep.** `make deadcode`: nothing in this branch's files
+  (the entries it prints are main's). No new duplication; `overview.md`
+  needs no change from #130.
+- **Gates.** `make lint` and `GOOS=windows make lint` (0 MUST, 0 SHOULD),
+  `make test` green.
+- **`dist/wf check`**: `ok   current main merged`; `ok   rule changes
+  cleared (FLOW-14)`; `ok   queue records what the design declares
+  (FLOW-03): as declared at 0c1cad5`; `ok   diff inside the declared
+  areas (FLOW-03)`. Its archive and PR lines are `f6-open-pr`'s.
+- Nothing goes back; no follow-up filed.
+
 ## Rollback notes
 
 ## Archive summary
