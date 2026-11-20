@@ -1,0 +1,2 @@
+[warden] ERROR: parsing /Users/jeff/src/buildwarden-native/.scratch/dcp/cfg5/warden.toml: toml: line 2 (last key "runtime.cli"): incompatible types: TOML value has type int64; destination has type string
+  To fix: fix the TOML syntax in /Users/jeff/src/buildwarden-native/.scratch/dcp/cfg5/warden.toml

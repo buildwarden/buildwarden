@@ -1,0 +1,4 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+
+Interrupted, cleaning up... (press ctrl+c again to force)
+warden: build interrupted

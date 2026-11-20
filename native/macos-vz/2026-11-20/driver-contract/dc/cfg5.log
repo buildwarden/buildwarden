@@ -1,0 +1,2 @@
+[warden] config: /Users/jeff/src/buildwarden-native/.scratch/dcp/cfg5/warden.toml (found in the working directory)
+warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-dc-cfg5)

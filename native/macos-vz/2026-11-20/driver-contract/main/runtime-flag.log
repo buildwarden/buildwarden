@@ -1,0 +1,4 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+27.2.1
+fetch 200
+warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-main-rt)

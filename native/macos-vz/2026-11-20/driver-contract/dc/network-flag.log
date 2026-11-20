@@ -1,0 +1,2 @@
+[warden] ERROR: unknown flag --network for driver "vz"
+  To fix: see 'warden build --driver vz --help' for the flags this driver takes

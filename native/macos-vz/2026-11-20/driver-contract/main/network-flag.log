@@ -1,0 +1,2 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+[warden] ERROR: --network is only used by --driver hyperv

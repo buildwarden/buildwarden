@@ -1,0 +1,9 @@
+{
+  "name": "vz",
+  "version": "dev",
+  "contract": 1,
+  "path": "/Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden",
+  "sha256": "253300d46a97a3a27688ccff8bf23dff9915c92392712e94ee301ccd4788c74f",
+  "found": "linked",
+  "shadowed": []
+}

@@ -1,0 +1,2 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+warden: build FAILED: timed out after 30s (--timeout)
