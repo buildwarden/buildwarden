@@ -34,7 +34,7 @@ None.
 
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | detached-prepare-windows-exe | fix (follows project-config-trust) | - | buildwarden/buildwarden | driver-core, driver/hyperv, driver/qemu, book, designs | 6 publish | f6-open-pr (cloud, leased to cloud/20261120T203034Z) | - | - | 15 / 10 |
+| 1 | detached-prepare-windows-exe | fix (follows project-config-trust) | - | buildwarden/buildwarden | driver-core, driver/hyperv, driver/qemu, book, designs | 6 publish | f6-open-pr (cloud, leased to cloud/20261120T203034Z) | - | [#131](https://github.com/buildwarden/buildwarden/pull/131) | 15 / 10 |
 | 2 | merge-confirm-attended | process | - | buildwarden/buildwarden | - | 2 implement | x4-state (human), x2-implement (cloud, leased to cloud/20261120T203034Z) | - | - | 2 / 5 |
 | 3 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 3 implement | f3-implement (cloud, leased to cloud/20261120T203034Z) | - | - | 13 / 30 |
 | 5 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
