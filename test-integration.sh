@@ -114,6 +114,18 @@ assert_runtime_unchecked() {
     rt_result "$desc" "$ok"
 }
 
+# The command exits 0 and the shipped program was not run: the key is the
+# container driver's, and another driver is selected (Behaviour 13).
+assert_runtime_ignored() {
+    local desc="$1" ok=no
+    if [ -e "$RT_MARKER" ]; then
+        desc="$desc: the program was run"
+    elif [ "$RT_RC" -eq 0 ]; then
+        ok=yes
+    fi
+    rt_result "$desc" "$ok"
+}
+
 bold "  A program the project ships, named by its warden.toml:"
 printf '[runtime]\ncli = "./rt"\n' > "$RT_PROJECT/warden.toml"
 for cmd in build clean doctor; do
@@ -121,7 +133,7 @@ for cmd in build clean doctor; do
     assert_runtime_refused "warden $cmd refuses cli = \"./rt\" and does not run it"
 done
 rt_warden clean --driver vz
-assert_runtime_refused "warden clean --driver vz refuses it and does not run it"
+assert_runtime_ignored "warden clean --driver vz does not read it and does not run it"
 
 printf '[Runtime]\nCLI = "./rt"\n' > "$RT_PROJECT/warden.toml"
 rt_warden clean
@@ -129,7 +141,7 @@ assert_runtime_refused "warden clean refuses [Runtime] CLI = \"./rt\" and does n
 
 printf '[runtime]\ncli = "./rt"\ndriver = "qemu"\n' > "$RT_PROJECT/warden.toml"
 rt_warden clean
-assert_runtime_refused "warden clean refuses it beside driver = \"qemu\" and does not run it"
+assert_runtime_ignored "warden clean beside driver = \"qemu\" does not read it and does not run it"
 
 bold "  A program named by the flag or the variable:"
 rm -f "$RT_PROJECT/warden.toml"
@@ -285,6 +297,8 @@ bold "  F9: a warden outside any source tree runs no go:"
 F9_DIR=$(mktemp -d)
 F9_BIN=$(mktemp -d)
 cp "$WARDEN" "$F9_DIR/warden"
+# The container driver is found beside warden, as an install places it.
+cp "$(dirname "$WARDEN")/warden-driver-container" "$F9_DIR/"
 printf 'module github.com/buildwarden/buildwarden\n\ngo 1.26\n' > "$CFG_PROJECT/go.mod"
 printf '#!/bin/sh\necho ran >> "%s/go-ran"\nexit 1\n' "$F9_BIN" > "$F9_BIN/go"
 chmod +x "$F9_BIN/go"

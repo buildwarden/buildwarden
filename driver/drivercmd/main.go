@@ -263,7 +263,13 @@ func (m *mainRun) run(stdin io.Reader, stdout io.Writer) int {
 	req := &Request{Start: &start.Start, Environ: m.environ,
 		Streams: Streams{Stderr: m.stderr}}
 	res, err := Call(ctx, m.d, CmdRun, req, host)
-	if err != nil {
+	switch {
+	case errors.Is(err, errStoppedBeforeClaim):
+		// Stop or the end of the input came before the claim, and Run has
+		// torn down: that is a stop, answered with stopped (DRV-49).
+		out.send(stoppedMessage{Type: "stopped"})
+		return 0
+	case err != nil:
 		return m.failed(out, err)
 	}
 	out.send(stoppedMessage{Type: "stopped", Kept: res.Kept})

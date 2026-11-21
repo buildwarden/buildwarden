@@ -129,7 +129,11 @@ const (
 func script(code int, sleep bool) string {
 	var b strings.Builder
 	b.WriteString("#!/bin/sh\n# stub: output " + marker + "\necho " + marker + "\n")
-	b.WriteString("cat " + inputFile + " >/dev/null 2>&1 || true\n")
+	// A build reads its context only through the relay (http://cwd/), so
+	// the input is fetched as a translated COPY fetches it, and the ledger
+	// records it (the Inputs case).
+	b.WriteString("warden-io fetch " + inputFile + " -o /tmp/" + inputFile +
+		" >/dev/null 2>&1 || true\n")
 	if sleep {
 		b.WriteString("# stub: sleep 1h\nsleep 3600\n")
 	}

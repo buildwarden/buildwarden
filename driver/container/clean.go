@@ -1,6 +1,7 @@
 package container
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -114,23 +115,35 @@ func removalOrder(names []string) []string {
 	return out
 }
 
-// removeWorkDirs removes the work directories of build id under tmpdir (the
-// system's when empty), printing a Removing line on w for each.
-func removeWorkDirs(w io.Writer, tmpdir, id string) (int, error) {
+// removeWorkDirs removes the work directories under tmpdir (the system's
+// when empty) of every build that dead reports, printing a Removing line on
+// w for each. It goes on past a directory it cannot remove and returns those
+// errors joined.
+func removeWorkDirs(w io.Writer, tmpdir string, dead func(id string) bool) (int, error) {
 	if tmpdir == "" {
 		tmpdir = os.TempDir()
 	}
-	dirs, err := filepath.Glob(filepath.Join(tmpdir, "warden-container-"+id+"-*"))
+	dirs, err := filepath.Glob(filepath.Join(tmpdir, "warden-container-*-*"))
 	if err != nil {
 		return 0, err
 	}
+	removed := 0
+	var errs []error
 	for _, dir := range dirs {
+		// warden-container-<id>-<random>: a build ID holds no dash.
+		rest := strings.TrimPrefix(filepath.Base(dir), "warden-container-")
+		id, _, _ := strings.Cut(rest, "-")
+		if !dead(id) {
+			continue
+		}
 		fmt.Fprintf(w, "Removing %s\n", dir)
 		if err := os.RemoveAll(dir); err != nil {
-			return 0, err
+			errs = append(errs, err)
+			continue
 		}
+		removed++
 	}
-	return len(dirs), nil
+	return removed, errors.Join(errs...)
 }
 
 // liveProcessBuilds are the build IDs of the driver's containers that a

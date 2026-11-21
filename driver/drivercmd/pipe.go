@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -116,6 +117,11 @@ func (h *pipeHost) read(in *bufio.Reader) {
 	}
 }
 
+// errStoppedBeforeClaim is ClaimRelay's error when stop or the end of the
+// input comes before claimed. Run returns it once the driver has torn down,
+// and run answers it with stopped, not failed (DRV-49, DRV-50).
+var errStoppedBeforeClaim = errors.New("stopped before the relay was claimed")
+
 // ClaimRelay implements driver.Host.
 func (h *pipeHost) ClaimRelay(ctx context.Context, r driver.RelayStarted) error {
 	h.out.send(relayStartedMessage{Type: "relay-started", RelayStarted: r})
@@ -123,12 +129,20 @@ func (h *pipeHost) ClaimRelay(ctx context.Context, r driver.RelayStarted) error 
 	case <-h.claimed:
 		return nil
 	case <-h.stopped:
-		return fmt.Errorf("the build was stopped before the relay was claimed (%s): %s",
+		return fmt.Errorf("the build was %w (%s): %s", errStoppedBeforeClaim,
 			h.reason, h.detail)
 	case <-h.ended:
-		return fmt.Errorf("the orchestrator's input ended before the relay was claimed")
+		return fmt.Errorf("the orchestrator's input ended: the build was %w",
+			errStoppedBeforeClaim)
 	case <-ctx.Done():
-		return ctx.Err()
+		// The end of the input cancels ctx too: say which it was.
+		select {
+		case <-h.ended:
+			return fmt.Errorf("the orchestrator's input ended: the build was %w",
+				errStoppedBeforeClaim)
+		default:
+			return ctx.Err()
+		}
 	}
 }
 

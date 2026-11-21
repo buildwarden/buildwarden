@@ -120,7 +120,9 @@ func reap(_ context.Context, req *drivercmd.ReapRequest) (int, error) {
 	if err != nil {
 		return removed, notAnswering(rt, rt)
 	}
-	n, err := removeWorkDirs(w, req.TempDir, req.BuildID)
+	n, err := removeWorkDirs(w, req.TempDir, func(id string) bool {
+		return id == req.BuildID
+	})
 	return removed + n, err
 }
 
@@ -152,12 +154,20 @@ func clean(_ context.Context, req *drivercmd.CleanRequest) (int, error) {
 	for _, id := range req.KeepIDs {
 		live[id] = true
 	}
-	removed, err := removeResources(stderrOf(req.Streams),
-		func(id string) bool { return !live[id] })
+	dead := func(id string) bool { return !live[id] }
+	removed, err := removeResources(stderrOf(req.Streams), dead)
 	if err != nil {
 		return removed, notAnswering(rt, rt)
 	}
-	return removed, nil
+	// And their work directories, as reap removes a build's (DRV-27). One
+	// that cannot be removed, such as another user's in a shared temporary
+	// directory, is reported and passed over.
+	w := stderrOf(req.Streams)
+	n, err := removeWorkDirs(w, req.TempDir, dead)
+	if err != nil {
+		fmt.Fprintf(w, "warning: %v\n", err)
+	}
+	return removed + n, nil
 }
 
 // attach enters the held build of req.BuildID on the runtime its state file
