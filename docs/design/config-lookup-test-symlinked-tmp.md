@@ -187,7 +187,7 @@ None.
   pins the unresolved path on every OS; (b) resolve the path in
   `configFile`, so the line always names the real file, and update the
   tests and the reference; (c) resolve the expected path in the test only.
-  Recommended: (a), Decision 1. Proceeding with (a); confirm.
+  Recommended: (a), Decision 1. **Confirmed (a), Jeff, 2026-11-21.**
 
 ## Design
 
@@ -273,6 +273,12 @@ No product code, reference doc or pseudocode in `overview.md` changes
 (UX-01 and FLOW-15 have nothing to update).
 
 ## Design review
+
+- **r1, 2026-11-21: approved at `8eb333d`** (Jeff, workflow-human, FLOW-19).
+  Repositories: this one only (LOOP-04); areas [cli, designs] confirmed, which
+  narrows the queue's record from undeclared. q1 confirmed (a). No rule change
+  and no specification change. Nothing folded in.
+  - sitting: 19:05-19:08 UTC, asks: 3 (0 in batches)
 
 ## Consolidation
 
