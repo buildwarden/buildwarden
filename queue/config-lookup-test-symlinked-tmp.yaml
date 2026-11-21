@@ -4,7 +4,7 @@ priority: 2
 follows: project-config-trust
 status: in_progress
 round: feature
-phase: 0
+phase: 1
 design: docs/design/config-lookup-test-symlinked-tmp.md
 branch: feat/config-lookup-test-symlinked-tmp
 alters_relationships: null
@@ -13,10 +13,17 @@ steps:
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261121T105719Z
-      expires: 2026-11-21T13:05:45.583754678Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -38,3 +45,9 @@ history:
   - at: 2026-11-21T11:05:45Z
     by: cloud/20261121T105719Z
     event: claimed f0-branch-setup until 2026-11-21T13:05:45Z
+  - at: 2026-11-21T11:06:11Z
+    by: cloud/20261121T105719Z
+    event: done f0-branch-setup
+  - at: 2026-11-21T11:06:11Z
+    by: cloud/20261121T105719Z
+    event: entered phase 1 (design)
