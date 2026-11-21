@@ -1023,6 +1023,9 @@ gaps:
       2026-11-20 (host:container-any/windows-desktop.20261120T231002Z, unattended, main be13847): not run,
       nothing changed. feat/prebuilt-artifacts is still 49b513a (design only), and q1 is still open:
       driver-contract now waits on its native validation steps (f6-validate-*), with no merge.
+      2026-11-20 (host:container-any/windows-desktop.20261121T051002Z, unattended, main be13847): not run,
+      nothing changed. feat/prebuilt-artifacts is still 49b513a (design only), and q1 is still open:
+      driver-contract is back in Implement (cloud step f3-implement-r2) after f6-validate-macos-finch failed.
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: open
@@ -1117,6 +1120,8 @@ gaps:
       main moved (#130 to #133, none in cmd/warden's context checks); feat/workdir-in-context is still
       24376c0 (design only), held on f2-answer-q1.
       2026-11-20 (host:container-any/windows-desktop.20261120T231002Z, unattended, main be13847): not run,
+      nothing changed. feat/workdir-in-context is still 24376c0 (design only), held on f2-answer-q1.
+      2026-11-20 (host:container-any/windows-desktop.20261121T051002Z, unattended, main be13847): not run,
       nothing changed. feat/workdir-in-context is still 24376c0 (design only), held on f2-answer-q1.
   - id: workdir-in-context-macos
     host: macos-finch
