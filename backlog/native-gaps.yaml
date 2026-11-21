@@ -1032,6 +1032,9 @@ gaps:
       2026-11-21 (host:container-any/windows-desktop.20261121T171002Z, unattended, main be13847): not run,
       nothing changed. feat/prebuilt-artifacts is still 49b513a (design only), and q1 is still open:
       driver-contract still waits on human step f1-escalate-3.
+      2026-11-21 (host:container-any/windows-desktop.20261121T231002Z, unattended, main be13847): not run.
+      feat/prebuilt-artifacts is still 49b513a (design only), and q1 is now the FLOW-20 hold (Jeff,
+      2026-11-21): held until the componentization program completes, then back to Design for the delta.
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: open
@@ -1133,6 +1136,9 @@ gaps:
       nothing changed. feat/workdir-in-context is still 24376c0 (design only), held on f2-answer-q1.
       2026-11-21 (host:container-any/windows-desktop.20261121T171002Z, unattended, main be13847): not run,
       nothing changed. feat/workdir-in-context is still 24376c0 (design only), held on f2-answer-q1.
+      2026-11-21 (host:container-any/windows-desktop.20261121T231002Z, unattended, main be13847): not run.
+      feat/workdir-in-context is still 24376c0 (design only), and q1 is now the FLOW-20 hold (Jeff,
+      2026-11-21): held until the componentization program completes, then back to Design for the delta.
   - id: workdir-in-context-macos
     host: macos-finch
     status: open
