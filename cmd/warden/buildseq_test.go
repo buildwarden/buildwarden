@@ -513,6 +513,12 @@ func TestBuildSequenceExitGrace(t *testing.T) {
 			"exited before the build completed: the build VM powered off")):
 			t.Errorf("after the grace: outcome %+v, want the environment's exit", out)
 		}
+		// The guest's exit is not warden's defect: a fix names the log.
+		var fe *driver.FixableError
+		if !inTime && (!errors.As(out.err, &fe) ||
+			!strings.Contains(fe.Fix, "build-output.log")) {
+			t.Errorf("after the grace: %v is not fixable with the build's log", out.err)
+		}
 		want := "stop completed"
 		if !inTime {
 			want = "stop failed"

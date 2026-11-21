@@ -206,8 +206,7 @@ func (s *buildSequence) run() buildOutcome {
 			st.out.shellCode = r.code
 			st.decide(r.err, driver.StopShellExited)
 		case <-st.grace:
-			st.decide(fmt.Errorf("the build environment exited before the build "+
-				"completed: %s", st.graceDetail), driver.StopFailed)
+			st.decide(st.exitedError(), driver.StopFailed)
 		case sig := <-s.signals:
 			st.onSignal(sig)
 		case <-deadline:
@@ -217,6 +216,18 @@ func (s *buildSequence) run() buildOutcome {
 			}
 		}
 	}
+}
+
+// exitedError is the build's failure when the environment exited and no
+// completion came within the grace: the guest's doing, not warden's, so it
+// is fixable and points at what the build printed last.
+func (st *seqState) exitedError() error {
+	log := "build-output.log in the output directory"
+	if st.start != nil && st.start.DiagnosticsDir != "" {
+		log = filepath.Join(st.start.DiagnosticsDir, "build-output.log")
+	}
+	return driver.Fixable("see "+log+" for the last thing the build printed",
+		"the build environment exited before the build completed: %s", st.graceDetail)
 }
 
 // onEvent handles one message of the driver's, and reports whether it was
