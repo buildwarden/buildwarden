@@ -32,7 +32,7 @@ steps:
   - id: f2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -51,17 +51,18 @@ budget:
     steps: 7
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions:
   - id: q1
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Fix the test, not the product: for ./warden.toml the config: line keeps naming the working directory as the process was given it (the shell''s PWD, through os.Getwd), not as links resolve it (/var/... on macOS, not /private/var/...). Proceeding with (a); confirm.'
     options:
       - (a) the tests enter their directory as a shell does (t.Chdir, which sets PWD), and a new test pins the unresolved path on every OS
       - (b) configFile resolves links (EvalSymlinks), so the line always names the real file; tests and reference updated
       - (c) the test resolves its expected path (EvalSymlinks) and nothing else changes
     recommended: (a), the design's Decision 1
+    answer: (a), Jeff, 2026-11-21 (design review r1)
 history:
   - at: 2026-11-20T22:54:19Z
     by: host:qemu-any/macbook.attended-20261120T225419Z
@@ -93,3 +94,12 @@ history:
   - at: 2026-11-21T11:11:01Z
     by: cloud/20261121T105719Z
     event: entered phase 2 (plan)
+  - at: 2026-11-21T19:01:36Z
+    by: human/jeff
+    event: 'assumed question q1 confirmed: (a), Jeff, 2026-11-21 (design review r1)'
+  - at: 2026-11-21T19:01:36Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-21T21:01:36Z
+  - at: 2026-11-21T19:01:36Z
+    by: human/jeff
+    event: done f2-design-review
