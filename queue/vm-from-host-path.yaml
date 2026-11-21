@@ -1,7 +1,6 @@
 feature: vm-from-host-path
 title: A Dockerfile FROM naming a host path boots that host file as the VM disk (qemu, firecracker), and a FROM that does not translate silently boots the default image (security fix)
 priority: 7
-urgent: human/jeff
 status: queued
 round: feature
 phase: 0
@@ -10,10 +9,19 @@ branch: feat/vm-from-host-path
 alters_relationships: null
 source: Filed on Jeff's word, 2026-11-17, in workdir-in-context's design review (a2 (a)). Security fix, exempt from the FLOW-20 freeze. Under qemu and firecracker, FROM /abs/x or FROM ./x is used as the build VM's base disk as it is (linuxguest.ResolveImage), so a build context names a host file to boot; qemu opens it as qcow2 (-F qcow2), whose header can name a backing file of its own anywhere on the host; firecracker's EnsureRaw path not yet traced. And linuxguest.ContainerfileImage returns empty on any translation error, so with --script a FROM that does not parse boots the driver's default image with no message (an unnamed fallback, GLOBAL-11). Both are older than workdir-in-context and change documented VM behaviour. Needs its own trace of the qcow2 backing chain and of EnsureRaw, and native validation on qemu-any. See docs/design/workdir-in-context.md, Questions a2.
 steps:
+  - id: f0-answer-q1
+    phase: 0
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
     status: pending
+    needs:
+      - f0-answer-q1
     lease:
       claimed_by: ""
       expires: null
@@ -24,7 +32,15 @@ budget:
   spent:
     runs: 0
     steps: 0
-questions: []
+questions:
+  - id: q1
+    kind: blocking
+    status: open
+    question: 'Hold (Jeff, 2026-11-21): until the componentization program (FLOW-20) completes, though a security fix. The componentization program (FLOW-20) is the north star until it completes (Jeff, 2026-11-21): work not part of the component split waits; there is no release before the program ends and usage is low, so this item is cheaper done on the post-split structure. On resume, the design is written against the post-split qemu and firecracker drivers.'
+    options:
+      - 'resume: the componentization program has completed (name the process item that retired FLOW-20)'
+      - 'resume earlier on Jeffs word, naming why'
+    recommended: 'resume: the componentization program has completed (name the process item that retired FLOW-20)'
 history:
   - at: 2026-11-17T18:41:04Z
     by: human/jeff
@@ -38,3 +54,9 @@ history:
   - at: 2026-11-21T19:00:08Z
     by: human/jeff
     event: marked urgent (FLOW-05)
+  - at: 2026-11-21T19:25:24Z
+    by: human/jeff
+    event: urgent cleared
+  - at: 2026-11-21T19:20:00Z
+    by: human/jeff
+    event: 'held on Jeff''s word (2026-11-21): q1, until the componentization program completes; the urgent mark is cleared'

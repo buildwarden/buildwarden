@@ -65,11 +65,11 @@ questions:
   - id: q1
     kind: blocking
     status: open
-    question: 'Hold (design a1 (b), Jeff, 2026-11-17): K1 first. This item''s Plan starts only after driver-contract''s PR has merged to main. When it has, the item returns to Design once for the delta K1''s structure brings (newRequest''s refusal before start, NewWorkDir''s backstop in the kit on start''s context_dir and tmpdir, the FROM check under K1''s baseImage and K1''s specification of base_image), and that delta is reviewed (FLOW-06, FLOW-19). Design: Order with driver-contract.'
+    question: 'Hold (Jeff, 2026-11-21), replacing the K1 hold: until the componentization program (FLOW-20) completes. The componentization program (FLOW-20) is the north star until it completes (Jeff, 2026-11-21): work not part of the component split waits; there is no release before the program ends and usage is low, so this item is cheaper done on the post-split structure. On resume the item returns to Design once for the delta the program''s structure brings (K1''s and later phases'': newRequest''s refusal, the kit''s work-directory backstop, the FROM check under the base image, start.base_image), and that delta is reviewed (FLOW-06, FLOW-19).'
     options:
-      - 'resume: driver-contract''s PR has merged (name the PR and the merge commit); the item goes back to Design for the K1 delta'
-      - 'driver-contract was withdrawn or reordered: resume on main as it is, and say so'
-    recommended: 'resume: driver-contract''s PR has merged (name the PR and the merge commit); the item goes back to Design for the K1 delta'
+      - 'resume: the componentization program has completed (name the process item that retired FLOW-20); the item goes back to Design for the delta'
+      - 'resume earlier on Jeffs word, naming why'
+    recommended: 'resume: the componentization program has completed (name the process item that retired FLOW-20); the item goes back to Design for the delta'
   - id: a1
     kind: assumed
     status: confirmed
@@ -158,3 +158,6 @@ history:
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
     event: 'priority 71 -> 8 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'
+  - at: 2026-11-21T19:20:00Z
+    by: human/jeff
+    event: 'hold widened on Jeff''s word (2026-11-21): q1 now holds the item until the componentization program completes, not only until K1 merges'

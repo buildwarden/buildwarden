@@ -23,6 +23,13 @@ alters_relationships: false
 design_review: required
 source: 'seam-specs r2, divergence N24 (docs/design/seam-specs.md, table ''Found during Implement: N1 to N33 (r2)'', branch feat/seam-specs at c6078b7; relay-guest-api GUEST-25, GUEST-34 and the paragraph after GUEST-26; bootstrap-config BOOTCFG-3, BOOTCFG-10). relay/relay.go:719-738 (comment :728-731) and :751-752 serve any collector failure (error or non-200) on build-script, bootstrap and cwd to the build as 404; the executor reads a bootstrap 404 as the empty config, so a bootstrap config the collector failed to serve reads as ''no config'' and a producer''s trust mode exclusive becomes append (GLOBAL-10: the default tried when the provided value fails). Run in seam-specs stage 8e against relay-host, relay-vm and relay-container (a collector''s 500 gives the build 404). Jeff, 2026-11-16, seam-specs r2 design review: filed now as a security fix, exempt from the FLOW-20 freeze; not marked urgent (wf urgent is Jeff''s).'
 steps:
+  - id: f2-answer-q1
+    phase: 2
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
@@ -41,6 +48,8 @@ steps:
     phase: 2
     affinity: human
     status: pending
+    needs:
+      - f2-answer-q1
     lease:
       claimed_by: ""
       expires: null
@@ -61,6 +70,14 @@ budget:
     runs: 1
     steps: 2
 questions:
+  - id: q1
+    kind: blocking
+    status: open
+    question: 'Hold (Jeff, 2026-11-21): a follow-up of the relay''s component separation (the componentization program''s relay split, M1 onward), not before. The componentization program (FLOW-20) is the north star until it completes (Jeff, 2026-11-21): work not part of the component split waits; there is no release before the program ends and usage is low, so this item is cheaper done on the post-split structure. On resume the design is redone against the separated relay (its repository, its guest API and the collector seam as they stand then) and reviewed again.'
+    options:
+      - 'resume: the relay separation has completed (name its item and merge); the item goes back to Design against the separated relay'
+      - 'resume earlier on Jeffs word, naming why'
+    recommended: 'resume: the relay separation has completed (name its item and merge); the item goes back to Design against the separated relay'
   - id: a1
     kind: assumed
     status: open
@@ -159,3 +176,6 @@ history:
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
     event: 'priority 80 -> 10 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'
+  - at: 2026-11-21T19:20:00Z
+    by: human/jeff
+    event: 'held on Jeff''s word (2026-11-21): q1, a follow-up of the relay''s component separation; f2-answer-q1 added, and f2-design-review waits on it'
