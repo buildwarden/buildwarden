@@ -1,6 +1,6 @@
 feature: config-lookup-test-symlinked-tmp
 title: 'TestConfigFileLookupOrder fails on macOS: it expects the unresolved t.TempDir path, and LoadConfig returns the working directory os.Getwd resolves (/var -> /private/var)'
-priority: 2
+priority: 3
 follows: project-config-trust
 status: in_progress
 round: feature
