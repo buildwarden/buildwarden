@@ -205,15 +205,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261121T105719Z
+      expires: 2026-11-21T12:58:20.003883816Z
 budget:
   estimate:
     runs: 5
     steps: 30
   spent:
-    runs: 8
-    steps: 24
+    runs: 9
+    steps: 25
 questions:
   - id: a16
     kind: assumed
@@ -827,3 +827,6 @@ history:
   - at: 2026-11-20T23:32:27Z
     by: host:macos-finch/macbook.attended-20261120T230945Z
     event: 'back to implement: f6-validate-macos-finch FAILED on a0934b53 (native/macos-finch/2026-11-20/driver-contract/): (1) case 6: warden clean tears down a running container build whose lock is not in keep_ids (another HOME): on finch the driver''s child is ''finch container wait <64-hex container id>'', so driver/container/clean.go liveProcessBuilds never finds warden-build-<id> in ps and the process scan protects nothing on macOS; (2) case 7: a missing runtime (WARDEN_CTR_CLI=podman, --runtime docker, not installed) fails late with ''error building relay image: exec: ... not found'', not the fixable error, and leaves an output directory (main does the same; doctor says ok for it on both); (3) case 9: make driver-conformance with --base-image alpine:3.21 on finch fails lifecycle inputs (ledger lacks conformance-input.txt), stop and end of input (driver reports internal failure instead of stopped before the claim), and clean (reap removed 1 / clean left the killed build); reproducible over two runs. Cases 1-5 and 8 pass.'
+  - at: 2026-11-21T10:58:20Z
+    by: cloud/20261121T105719Z
+    event: claimed f3-implement-r2 until 2026-11-21T12:58:20Z
