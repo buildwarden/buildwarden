@@ -517,7 +517,7 @@ func TestBuildSequenceExitGrace(t *testing.T) {
 		var fe *driver.FixableError
 		if !inTime && (!errors.As(out.err, &fe) ||
 			!strings.Contains(fe.Fix, "build-output.log")) {
-			t.Errorf("after the grace: %v is not fixable with the build's log", out.err)
+			t.Errorf("after the grace: %v is not fixable with its log", out.err)
 		}
 		want := "stop completed"
 		if !inTime {
