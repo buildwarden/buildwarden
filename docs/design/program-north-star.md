@@ -5,7 +5,8 @@ drivers: []              # rule text, skills, CI triggers and the queue's tools;
 seams: []                # no GLOBAL-08 seam changes; FLOW-20 says how program items may change seams
 surfaces: []             # `wf`, the skills and CI are the loop's tools, not a user-facing surface of the product
 repos: []                # only buildwarden/buildwarden; the specifications repository's own release
-                         # workflow change is a program item there, filed by the state step
+                         # workflow change is an item there against its main, filed by the state
+                         # step and merged by Jeff in the one-time setup (Decision 16)
 areas: [rules, loop, designs, build, specs, book]
                          # rules: process.md, behavioral-linter.md, loop-contract.md, loop-profile.md,
                          # ux-cli-config.md, orchestrator.md; loop: tools/workflow and .claude/;
@@ -37,7 +38,8 @@ rule_changes:            # the enforcement under tools/workflow/ and .claude/ is
   - {rule: FLOW-08, change: amend, paths: [docs/development/process.md]}
   - {rule: FLOW-13, change: amend, paths: [docs/development/process.md]}
   - {rule: FLOW-17, change: amend, paths: [docs/development/process.md]}
-  - {rule: FLOW-19, change: amend, paths: [docs/development/process.md]}
+  - {rule: FLOW-19, change: amend, paths: [docs/development/process.md,
+                                          docs/design/TEMPLATE.md]}
   - {rule: LINT-03, change: amend, paths: [docs/development/behavioral-linter.md,
                                           .github/workflows/release.yml]}
   - {rule: LOOP-01, change: amend, paths: [docs/development/loop-contract.md]}
@@ -236,7 +238,7 @@ The rules as written do not say this, and in places say the opposite:
 8. **Each repository the program works in has a program trunk (a11).**
    - Name: `program/componentization`, in `buildwarden/buildwarden` and
      `buildwarden/buildwarden-specs` now, and in each program repository
-     when it is created (a18).
+     when it is created (a19).
    - `config.yaml` records it beside the trunk:
      `program_trunk: program/componentization` in the repository's entry.
      `trunk: main` stays, and stays what the profile file's `trunk` is
@@ -244,12 +246,14 @@ The rules as written do not say this, and in places say the opposite:
    - It is not a trunk: FLOW-08's "only a human merges" keeps meaning
      `main`. It is still never pushed to directly, force-pushed or deleted
      by an agent; it moves only by merged pull requests.
-   - A program item that is not a process item and changes no loop
-     machinery path (`.claude/`, `tools/workflow/`) works against its
+   - A program item that is not a process item, changes no loop
+     machinery path (`.claude/`, `tools/workflow/`) and changes no CI or
+     release configuration (`.github/`, `.goreleaser.yaml`) works against its
      repository's program trunk: Branch setup forks from it, refreshes
      (FLOW-10) and Publish merge it, the PR goes to it, red-trunk holds and
      `wf stale` read it, and its design is archived on it. Every other item
-     (process items, Jeff's released non-program items,
+     (process items, a program item that changes CI or release
+     configuration, Jeff's released non-program items,
      config-lookup-test-symlinked-tmp) keeps `main`.
    - A queue mark `program: true` says which items are program items; wf
      checks it against the design's `related` at Design's done-when.
@@ -259,17 +263,21 @@ The rules as written do not say this, and in places say the opposite:
      f7-merge` passes the **merge gate**, on the PR's current head:
      1. the PR's base is the item's program trunk;
      2. the head is the recorded `pr.head` and the remote branch head;
-     3. every check run on that head completed and succeeded, and the
-        repository's required checks are among them;
+     3. every check run on that head completed with conclusion success,
+        skipped or neutral, none failed, cancelled, timed out or needing
+        action, and every check the program trunk's ruleset requires is
+        among them and succeeded;
      4. the branch contains the program trunk's head (FLOW-08's readiness);
      5. the tier-2 report on the workflow branch is for that head, and no
         MUST finding is open other than one Decision 10 lets the loop defer;
      6. no human step of the item is pending: no blocking question, no
         escalation, no design review not taken, no `host:` blocking
         validation pending (FLOW-09);
-     7. `security_boundary` is `none`, or is the one its design review or
-        umbrella test accepted (Decision 11) and Review recorded that the
-        diff stays within it;
+     7. `security_boundary` is `none`, or its only trip is GLOBAL-06's
+        relay clause with no posture change (a15), the umbrella test or
+        design review accepted it, and Review recorded that the diff stays
+        within it; an item with any other `security_boundary` waits at
+        `f7-merge` on Jeff, who acknowledges its security note there;
      8. every pull request its design names to merge first has merged;
      9. the rule-change clearance passes (FLOW-14).
    - The agent merges with `gh pr merge <n> --squash --match-head-commit
@@ -281,7 +289,8 @@ The rules as written do not say this, and in places say the opposite:
    - One loop merge per program trunk per run; the others wait for their
      refresh, as FLOW-08 already has them.
    - A process item's PR, and any change to the loop's rules or machinery,
-     never goes to a program trunk (LOOP-09): it goes to `main`, and Jeff
+     never goes to a program trunk except as part of `main` merged in by the
+     program sync (Decision 14) (LOOP-09): it goes to `main`, and Jeff
      merges it as today, so every scheduled run takes it from `main`.
 10. **Tier-2 MUST findings on a program PR (a13).** Review fixes a MUST
     finding in a fix round and re-reviews the new head. One still open
@@ -299,8 +308,8 @@ The rules as written do not say this, and in places say the opposite:
     - **The umbrella test** takes a program feature's design review in
       place of Jeff when every point holds (Design, *The umbrella test*):
       the design implements one named phase row or a filed split or
-      follow-up of one; no flagged question; no loop rule change and no
-      change to a protected component rule; no boundary posture change; no
+      follow-up of one; no flagged question; no rule change and no loop
+      machinery change; no boundary posture change; no
       interface break FLOW-20 does not allow; repositories and areas no
       fewer than intake recorded; and an independent reviewer session
       agrees. A pass is recorded as `umbrella test passed at <sha>` and is
@@ -323,26 +332,31 @@ The rules as written do not say this, and in places say the opposite:
       trunk, and additions to an area map that a reviewed or
       umbrella-passed program design names (a new repository's map, the
       areas a move creates, an area split in two).
+    - **Repositories (a19)**: a new program repository of the umbrella's
+      list is created private, by Jeff or an attended session, on the
+      standing word of his approval of that list; making it public stays
+      his.
     - **What always reaches Jeff** is listed under Design, *What still
       reaches Jeff*.
 12. **The program ends with one human squash merge per repository.** A
     process item, `program-land`, filed on hold by this item's state step
     (resumes: every program trunk has its last phase merged), closes the
-    program. Its done-when is Jeff's: every component works as intended when
-    built from its own repository at its program trunk, at the other
-    components' `-rc` tags. Its design names, as pull requests to merge
+    program. Its done-when is Jeff's check: every component works as
+    intended when built from its own repository at its program trunk, at
+    the other components' `-rc` tags. Its design names, as pull requests to merge
     first, one PR per repository from `program/componentization` to its
     trunk, whose body wf renders from the records (`wf program-body`). Jeff
     squash-merges each, specifications first; full release tags follow
     from `main` as today. Its own PR retires FLOW-20 and every
     program-trunk clause, and its state step drops `program_trunk` from
-    `config.yaml`. Before the squash the loop tags each program trunk's head
-    `program/componentization-final`, so the per-item history stays
-    reachable.
+    `config.yaml`. Before his squash merge, Jeff tags each program trunk's
+    head `program/componentization-final` (or has `program-land`'s state
+    step do so on his word), so the per-item history stays reachable.
 13. **Records.** Everything this item lets the loop decide in Jeff's place
     (a loop merge, a deferred MUST finding, an umbrella test, a security
     note read under a15, a re-estimate, a fourth return, a loop-filed item,
-    an area-map addition, a pre-release tag) is appended by `wf record` to
+    an area-map addition, a pre-release tag, a sync's conflict resolution)
+    is appended by `wf record` to
     the workflow branch's `program/records.yaml`, named in the run's digest
     and `QUEUE.md` under **Decided for you**, and listed again in the
     landing PRs. Jeff may call any back at any time: a blocking question on
@@ -351,7 +365,8 @@ The rules as written do not say this, and in places say the opposite:
     past a program trunk (in practice, a process item's merge), the loop
     cuts `sync/program-<main sha>` from the program trunk, merges `main`
     with conflict-only fixes, runs the fast gate, opens a PR to the program
-    trunk and merges it through checks 1 to 4 of the merge gate with
+    trunk and merges it through checks 1 to 4 of the merge gate, and also
+    check 5 on the resolution diff when the merge had conflicts, with
     `--merge` (a merge commit), so `main` stays an ancestor of the program
     trunk and the landing PRs stay conflict-free. A conflict it cannot
     resolve escalates.
@@ -359,8 +374,11 @@ The rules as written do not say this, and in places say the opposite:
     changes a consumable (the profile's Consumables entry), the loop may tag
     `vX.Y.Z-dev.N` (`<directory>/vX.Y.Z-dev.N` in the specifications
     repository) on that merge commit once its checks pass, where X.Y.Z is
-    the next minor after the latest release without a suffix; and `-rc.N`
-    once that component's `program-land` criteria pass. Each publishes as a
+    the next minor after the latest release without a suffix (`v0.1.0`
+    when the repository has none); and `-rc.N` once the component's last
+    phase has merged on its program trunk and its CI and conformance suites
+    pass at the latest `-dev` (or `-rc`) tags of what it consumes. Each
+    publishes as a
     GitHub pre-release that moves no `latest`, and is never moved or
     deleted. On a program trunk a pre-release is a release for LOOP-07, and
     pins may name one; `main` pins only releases without a suffix. A
@@ -368,6 +386,7 @@ The rules as written do not say this, and in places say the opposite:
     gate.
 16. **What only Jeff can do, once.** Review and merge this item's PR; run
     its state step (with the program trunks' creation on his word in it);
+    merge `specs-prerelease-tags` in the specifications repository;
     set each program trunk's ruleset and the tag ruleset; confirm the
     GitHub App may merge; change the nightly task's prompt, which today
     says "Never merge". After that, the loop needs nothing from him to
@@ -497,7 +516,8 @@ None.
   Trunk row and FLOW-20's Program trunk bullet.
   - (a) `program/componentization` in each repository the program works in,
     recorded as `program_trunk` beside `trunk: main` in `config.yaml`;
-    chosen per item (program, not process, no machinery path). Created at
+    chosen per item (program, not process, no machinery, CI or release
+    configuration path). Created at
     `main`'s head in the state step, on Jeff's word in it.
   - (b) Switch the entry's `trunk` to the program branch for everything.
   - (c) No program trunk; program items merge to `main` as today.
@@ -535,9 +555,9 @@ None.
 - **a14. The umbrella test for program design reviews.** Flagged: amends
   FLOW-19 (a third review outcome and the flag rule for seams).
   - (a) A program feature's review is taken by the test U1 to U7 (Design)
-    and recorded for his later reading; a flagged question, a loop rule
-    change, a protected component rule change, a boundary posture change or
-    a failed point sends it to him. Process items keep his review (LOOP-09).
+    and recorded for his later reading; a flagged question, a rule change,
+    a loop machinery change, a boundary posture change or a failed point
+    sends it to him. Process items keep his review (LOOP-09).
   - (b) As (a), but a seam-touching question always flags, so most program
     reviews still reach him.
   - (c) No: every non-trivial program design keeps his review.
@@ -584,8 +604,9 @@ None.
 - **a18. Pre-release tags and pins.** Flagged: amends FLOW-17, LOOP-07.5
   and PROFILE-01's Specifications, Release and Consumables rows.
   - (a) The loop tags `-dev.N` after a loop merge that changes a
-    consumable, and `-rc.N` once the component's `program-land` criteria
-    pass, on program trunks only, published as pre-releases; pins on a
+    consumable, and `-rc.N` once the component's last phase has merged and
+    its suites pass at the latest pre-releases of what it consumes, on
+    program trunks only, published as pre-releases; pins on a
     program trunk and PRs to it may name a pre-release; `main` pins only
     releases without a suffix.
   - (b) `-dev.N` only; `-rc.N` and full releases are Jeff's.
@@ -626,7 +647,8 @@ agent reading one alone does not act against it.
 one equal to `trunk`. `queue.Feature` gains `Program bool
 \`yaml:"program,omitempty"\``. A new `Config.TrunkFor(repo, f)` returns the
 program trunk when the entry has one, `f.Program` is true, the item is not
-a process item, and its declared areas reach no machinery path; otherwise
+a process item, and its declared areas reach no machinery, `.github/` or
+`.goreleaser.yaml` path; otherwise
 `Config.Trunk(repo)`. `Config.Trunk` stays the only reader of `trunk`, and
 LOOP-01's profile comparison (`check/profile.go:104-106`) is unchanged.
 
@@ -671,8 +693,8 @@ base.
   `TrunkFor` is a program trunk is `f7-merge`, `cloud`, offered once
   `MergeReady` passes; every other merge step is still never offered.
   `MayComplete` is unchanged. **`queue/limits.go:379-393`**: a PR at
-  `f7-merge` does not wait on the human; one held at point 5 or 7 on a
-  protected finding does.
+  `f7-merge` does not wait on the human; one held at point 5 on a
+  protected finding, or at point 7 on a posture change, does.
 - **`check/check.go:148, 502`**: the label becomes "merged (FLOW-08)"; the
   proof (`:514-515`) is unchanged and already accepts a squash.
 - **The agent** (`wf-publish`, step `f7-merge`): run the check; on a pass,
@@ -682,7 +704,9 @@ base.
 - **Program sync** (Decision 14): `wf sync-program -repository R` prints
   whether `main` is ahead of the program trunk and the branch name to use;
   the tick dispatches `wf-publish` with step `sync`, which merges with
-  `--merge --match-head-commit` after `MergeReady`'s points 1 to 4.
+  `--merge --match-head-commit` after `MergeReady`'s points 1 to 4, and
+  point 5 on a tier-2 review of the resolution diff when the merge had
+  conflicts; the resolution is recorded.
 
 ### The umbrella test
 
@@ -701,9 +725,9 @@ which seeds Jeff's review as today.
 - **U2.** No blocking question, and no flagged assumed question (FLOW-19,
   with the program's seam clause). Each recommendation cites the umbrella
   decision or recorded answer of Jeff's it follows.
-- **U3.** `rule_changes` names no LOOP, FLOW, LINT or PROFILE rule, and no
-  GLOBAL-06, SEC, RELAY-01 to RELAY-03 or RELAY-05 rule; any other change
-  is one the umbrella's rule table assigns to this phase.
+- **U3.** `rule_changes` is empty (a rule change needs Jeff's clearance,
+  FLOW-14), and the design's `areas` reach no rule or machinery path of the
+  profile (LOOP-09).
 - **U4.** `security_boundary` is `none`, or the only trip is GLOBAL-06's
   relay clause and the Security note states that no boundary's posture
   changes (a15).
@@ -727,10 +751,13 @@ asked".
   the umbrella test.
 - A blocking question the umbrella and his recorded answers do not settle.
 - A MUST finding Decision 10 does not let the loop defer.
+- The security note of a program PR that changes a boundary's posture, at
+  `f7-merge`.
 - CI repair exhausted (FLOW-11), a branch that did not delete (FLOW-16), a
   second runaway budget, a fifth return to Design, a sync conflict the loop
   cannot resolve.
-- A process item's merge to `main` and its state step.
+- A process item's merge to `main` and its state step, and the merge of
+  a program item that changes CI or release configuration (Decision 8).
 - Releasing a held item, an urgent mark, the priority order, `hosts.yaml`
   beyond a19, an area map change other than an addition.
 - Making a repository public; a release without a suffix.
@@ -755,8 +782,10 @@ asked".
   pre-release named explicitly, and `SPECS=newest` (the highest version,
   pre-releases included), refused when the current branch is `main`.
 - The specifications repository's release workflow (`speccheck tag -main`,
-  `gh release create` without `--prerelease`) is changed by a program item
-  in that repository, `specs-prerelease-tags`, which the state step files.
+  `gh release create` without `--prerelease`) is changed by an item in that
+  repository, `specs-prerelease-tags`, which the state step files against
+  its `main`; Jeff merges it as part of the one-time setup (Decision 16),
+  and `wf tag-next` prints nothing for that repository until it has merged.
 - The landing order: specifications squash and full tags; this repository's
   pins move to them on the program trunk, then its landing and full tag;
   then the relay; then the drivers, at the kit's full tag.
@@ -807,7 +836,8 @@ asked".
 - **A non-program item during the program.** Held; only Jeff's word
   releases it.
 - **An item's trunk.** `main`; the program trunk only for a program item
-  that is not a process item and touches no machinery path, in a repository
+  that is not a process item and touches no machinery, `.github/` or
+  `.goreleaser.yaml` path, in a repository
   whose entry has `program_trunk`. No fallback: an entry without
   `program_trunk` gives `main`, and wf names it in `wf trunk`'s output.
 - **The merge method.** Squash per item, merge commit for the program sync.
@@ -817,7 +847,8 @@ asked".
 - **Design review of a program feature.** The umbrella test; on any failed
   point, Jeff.
 - **Pre-release version.** The next minor after the latest release without
-  a suffix, `-dev.N` counting from 1 per minor; `-rc.N` likewise.
+  a suffix, `v0.1.0` when the repository has none; `-dev.N` counting from 1
+  per minor; `-rc.N` likewise.
 - **Interface breaks.** None by default; each named in its design. A
   removed released form errors; trying the new interface and then the old
   one is a fallback under GLOBAL-10 and GLOBAL-11 and is named or not made.
@@ -866,7 +897,8 @@ unless said.
 
 ### FLOW-20 (amend), `docs/development/process.md`
 
-MUST, `agent-judgment`. **Why:** Decisions 1-17.
+MUST; check changes from `agent-judgment` to `automated + agent-judgment`.
+**Why:** Decisions 1-17.
 
 **Current wording** (`process.md:920-950`):
 
@@ -978,7 +1010,8 @@ MUST, `agent-judgment`. **Why:** Decisions 1-17.
 >   trunk*, `program/componentization`, which the loop's configuration
 >   records beside its trunk (LOOP-01). It is not a trunk, and it moves only
 >   by merged pull requests. A program item that is not a process item and
->   changes none of the loop's machinery works against it wherever these
+>   changes none of the loop's machinery or the repository's CI and release
+>   configuration works against it wherever these
 >   rules name the trunk an item forks from, merges, is refreshed against,
 >   opens its pull request to, or is archived on. The loop merges such an
 >   item's pull request into it when FLOW-08's merge gate passes, as one
@@ -988,9 +1021,9 @@ MUST, `agent-judgment`. **Why:** Decisions 1-17.
 > - **Fewer human gates.** A program feature's design review is taken by the
 >   *umbrella test* when every point holds: the design implements one phase
 >   of the program's design, or a filed split or follow-up of one, within
->   that phase's work; no blocking or flagged question is open; it changes
->   no loop rule, no GLOBAL-06, SEC, RELAY-01 to RELAY-03 or RELAY-05 rule,
->   and no other rule the program's design does not assign to that phase;
+>   that phase's work; no blocking or flagged question is open; it declares
+>   no rule change (FLOW-14), and changes no loop machinery and no check that
+>   enforces a loop rule (LOOP-09);
 >   its `security_boundary` is `none`, or its only trip is GLOBAL-06's
 >   relay clause and its security note shows no boundary's posture changes;
 >   each interface break is one this rule allows; it declares no fewer
@@ -1001,21 +1034,26 @@ MUST, `agent-judgment`. **Why:** Decisions 1-17.
 >   raises its estimate to its spend so far, and its second escalates
 >   (FLOW-13). The loop files a phase's items once the gate before its wave
 >   is met, a reconciliation item that adopts a pre-release on a program
->   trunk (LOOP-07), and an area the program's reviewed design adds to a map
->   (FLOW-05). New program repositories, of the program's list, are created
->   on the standing word of the human's approval of that list.
+>   trunk (LOOP-07), and an area a program item's design, reviewed or passed
+>   by the umbrella test, adds to a map (FLOW-05). New program repositories,
+>   of the program's list, are created private, by the human or an attended
+>   session, on the standing word of the human's approval of that list;
+>   making one public stays the human's.
 > - **Records.** Each decision this rule lets the loop take in the human's
 >   place (a loop merge, a deferred tier-2 MUST finding, an umbrella test, a
 >   security note read under it, a re-estimate, a return past the second, a
->   filed item, an area added, a pre-release tag) is recorded in the
+>   filed item, an area added, a pre-release tag, a program sync's conflict
+>   resolution) is recorded in the
 >   workflow branch's program records, named in the run's digest, and listed
 >   again in the pull request that lands the program trunk. The human may
 >   call any back: a blocking question on an open item, or a follow-up
 >   program item for a merged one.
 > - **Pre-releases.** On a program trunk, the loop may tag a pre-release,
 >   `vX.Y.Z-dev.N` (`<directory>/vX.Y.Z-dev.N` for a specification) after a
->   merge that changes a consumable, and `-rc.N` once that component's
->   landing criteria pass, on a commit whose checks passed. Each is
+>   merge that changes a consumable, and `-rc.N` once the component's last
+>   phase has merged on its program trunk and its CI and conformance suites
+>   pass at the latest pre-releases of what it consumes, on a commit whose
+>   checks passed. Each is
 >   published as a pre-release that moves no `latest`, and is never moved
 >   or deleted. On a program trunk a pre-release is a release for LOOP-07; a
 >   trunk names only releases without a suffix. A release without a suffix
@@ -1065,7 +1103,7 @@ MUST, `automated`. **Why:** phase 7 names the human's merge (a12).
 
 **Proposed:**
 
-> | 7 | Merge | The human merged the PR (FLOW-08), or, for a PR to a program trunk, the loop merged it once FLOW-08's merge gate passed (FLOW-20). The loop confirms it, in an unattended run or in an attended session (FLOW-04); there is no step for the human to claim. The PR is ready for the merge only while its branch contains `main`, or its program trunk (FLOW-08); when that moves past it, a refresh step brings it up to date (FLOW-10). |
+> | 7 | Merge | The human merged the PR (FLOW-08), or, for a PR to a program trunk, the loop merged it once FLOW-08's merge gate passed (FLOW-20). The loop confirms it, in an unattended run or in an attended session (FLOW-04); there is no step for the human to claim. The PR is ready for the merge only while its branch contains its trunk, `main`, or, for a PR to a program trunk, that program trunk (FLOW-08); when that moves past it, a refresh step brings it up to date (FLOW-10). |
 
 **Enforcement:** the merge proof (`check/check.go:501-541`) with
 `TrunkFor`.
@@ -1107,7 +1145,8 @@ design names (a17).
 > the queue state, where the Areas entry of the repository's profile says
 > (LOOP-01), and it changes only in an attended session, on the human's
 > word: no agent changes it otherwise, except that the loop adds the areas
-> a program item's reviewed design names (FLOW-20).
+> a program item's design, reviewed or passed by FLOW-20's umbrella test,
+> names (FLOW-20).
 
 **Current wording** (`process.md:369-373`, from "Only holders"):
 
@@ -1141,7 +1180,9 @@ design names (a17).
 **Proposed:**
 
 > question, a pull request waiting for
-> the human's merge, or a spent budget (FLOW-13); it counts once, and
+> the human's merge, or held at a program trunk's merge on a finding or a
+> security note only the human may clear (FLOW-08), or a spent budget
+> (FLOW-13); it counts once, and
 > neither a tracked item nor an item on hold (`resumes`) counts. This limit
 > counts by no relation and stops only a
 > start: work in progress goes on, so the count can pass it. A fix that
@@ -1200,13 +1241,20 @@ MUST, `automated`. **Why:** a12, a13.
 > `security_boundary` additionally need the security note acknowledged (GLOBAL-06).
 >
 > While FLOW-20 stands, the loop merges a program item's pull request into
-> its program trunk, which is not a trunk, and nothing else. It merges only
-> while the *merge gate* passes on the pull request's head: the base is the
-> program trunk; the head is the one recorded and the remote's; every check
-> on it passed; the branch contains the program trunk; the tier-2 report is
-> for that head and has no open MUST finding but one FLOW-20's records defer;
-> no human step of the item is pending; any `security_boundary` is the one
-> its review accepted; each pull request its design names to merge first has
+> its program trunk, which is not a trunk, and nothing else, except the
+> program sync: a pull request that merges the trunk into the program
+> trunk, which it merges as a merge commit, pinned to its head, once the
+> first four points of the merge gate below pass, and the fifth on its
+> conflict resolution when it had one (FLOW-20). It merges a program item's
+> pull request only while the *merge gate* passes on its head: the base is
+> the program trunk; the head is the one recorded and the remote's; every
+> check on it passed or was skipped, and the required ones passed; the
+> branch contains the program trunk; the tier-2 report is for that head and
+> has no open MUST finding but one FLOW-20's records defer; no human step of
+> the item is pending; its `security_boundary` is `none`, or its only trip
+> is GLOBAL-06's relay clause with no change to a boundary's posture, which
+> its review accepted (otherwise the human acknowledges its security note
+> before the merge); each pull request its design names to merge first has
 > merged; and the rule-change clearance passes. It squash-merges, pinned to
 > that head, and records the merge (FLOW-20). The loop defers a MUST finding
 > only after one fix round, and never one under GLOBAL-06, a SEC rule,
@@ -1266,11 +1314,13 @@ a18).
 **Proposed:**
 
 > Opening the PR to its trunk or program trunk needs no confirmation either
-> (FLOW-08). Pushing never includes any repository's trunk or program trunk
-> itself, a force-push, rewriting history that is already on the remote,
-> deleting a remote branch (FLOW-16), or a tag other than a pre-release tag
-> FLOW-20 lets the loop push; no tag is moved or deleted. A program trunk is
-> created at its trunk's head only on the human's word. An unattended
+> (FLOW-08). Pushing never includes any repository's trunk itself, a
+> program trunk other than its creation at its trunk's head on the human's
+> word, a force-push, rewriting history that is already on the remote,
+> deleting a remote branch (FLOW-16), or a tag, except a pre-release tag
+> FLOW-20 lets the loop push and a tag an attended session pushes on the
+> human's word (a release tag, or a program trunk's final tag); no tag is
+> moved or deleted. An unattended
 > session on a native machine pushes a
 
 ### FLOW-19 (amend), `docs/development/process.md`
@@ -1305,8 +1355,12 @@ MUST, `automated + agent-judgment`. **Why:** a14.
 > by FLOW-20's umbrella test; its line `umbrella test passed at <sha>` is an
 > approval, and a failed point makes it `required`. `skip` is
 
-**Enforcement:** `check/review.go` (`approvals`, the Plan gate), the
-`f2-umbrella` step's seeding.
+`docs/design/TEMPLATE.md`'s front-matter comment becomes `required | skip
+| umbrella (FLOW-19, FLOW-20)`.
+
+**Enforcement:** `check/review.go` (`approvals`, the Plan gate,
+`reviewDecision` at `:107`), `queue/queue.go:1313`'s `design_review`
+validation, the `f2-umbrella` step's seeding.
 
 ### LINT-03 (amend), `docs/development/behavioral-linter.md`
 
@@ -1397,12 +1451,14 @@ MUST, `agent-judgment`. **Why:** a17, a18.
 
 MUST, as written. **Why:** a11, a18.
 
-**Current wording** (`loop-profile.md:26`, and the last sentence of `:31`,
-and `:42`, `:43`):
+**Current wording** (`loop-profile.md:26`, the last sentence of `:31`,
+the end of `:41`, and `:42`, `:43`):
 
 > | Trunk | `main`. |
 
 > Each pin is a release tag on `main` and on a pull request to it; a branch may pin a commit of an unmerged specifications branch while its work is in progress. |
+
+> It is not one of this repository's rule files: it changes in an attended session, on the human's word (FLOW-05). `tools/tier1/area-edges.sh` prints this repository's dependency edges, which the loop compares the map's `reaches` with. |
 
 > | Release | A `v*` tag push runs the `release` workflow (GoReleaser), whose `tier1` job is the gate's deterministic half (LINT-03), and the `relay-image` workflow. The human's sign-off of a tier-2 report over the release diff has no wired step yet. |
 
@@ -1413,6 +1469,8 @@ and `:42`, `:43`):
 > | Trunk | `main`. While FLOW-20 stands, the program trunk is `program/componentization`, recorded in the loop's configuration only (LOOP-01). |
 
 > Each pin is a release tag without a suffix on `main` and on a pull request to it; on the program trunk and a pull request to it, a pin may also be a pre-release tag (`-dev.N`, `-rc.N`, FLOW-20); a branch may pin a commit of an unmerged specifications branch while its work is in progress. |
+
+> It is not one of this repository's rule files: it changes in an attended session, on the human's word, or by the loop's addition of areas a program design names (FLOW-05, FLOW-20). `tools/tier1/area-edges.sh` prints this repository's dependency edges, which the loop compares the map's `reaches` with. |
 
 > | Release | A `v*` tag push runs the `release` workflow (GoReleaser), whose `tier1` job is the gate's deterministic half (LINT-03), and the `relay-image` workflow. A tag with a suffix, which only the loop pushes and only on the program trunk (FLOW-20), publishes as a GitHub pre-release and moves neither the Latest release nor the relay image's `latest`; a tag without one is the human's, from `main`. The human's sign-off of a tier-2 report over the release diff has no wired step yet. |
 
@@ -1469,7 +1527,10 @@ MUST, `automated + agent-judgment`. **Why:** a6.
 environment, relay) changes. The change is to who may merge into a
 non-release branch. Its limits: the loop never merges into `main`; it merges
 only under the merge gate, pinned to the head GitHub will check; a finding
-that could open a boundary is never deferred; and every program trunk lands
+that could open a boundary is never deferred; a program PR that changes a
+boundary's posture waits on Jeff's acknowledgment of its security note; a
+change to CI or release configuration, which runs with signing and package
+write access on the loop's tags, is never loop-merged; and every program trunk lands
 on `main` only by Jeff's squash merge, with each deferred finding and
 security note listed. A pre-release is never Latest and never moves the
 relay image's `latest`. The program trunk's ruleset (required checks, no
@@ -1481,7 +1542,8 @@ force-push or deletion) is Jeff's, and no agent changes it.
   `PutOnHold`, `Claim` and `Complete`:
   - `queue`: `Held` and the limits as in the earlier draft; `TrunkFor`
     gives the program trunk only for a program, non-process item with no
-    machinery area in an entry that has one; `Validate` refuses a program
+    machinery, `.github/` or `.goreleaser.yaml` area in an entry that has
+    one, and `main` for one that reaches `.github/`; `Validate` refuses a program
     trunk equal to the trunk; a merge step on a program trunk is offered to
     a cloud worker only when the gate passes and never otherwise; a PR at
     `f7-merge` does not wait on the human; a program item's third return
@@ -1490,8 +1552,9 @@ force-push or deletion) is Jeff's, and no agent changes it.
   - `check`: `MergeReady` fails on each of its nine points alone, with
     fixtures (a base other than the program trunk; a moved head; a failed or
     missing required check; a branch behind; an open protected MUST; a
-    pending human step; a boundary not accepted; a merged-first PR open; an
-    uncleared rule change) and passes with none; the merge proof accepts a
+    pending human step; a boundary not accepted, or a posture change; a
+    merged-first PR open; an uncleared rule change) and passes with none,
+    including one whose push-event job on the same head was skipped; the merge proof accepts a
     squash on the program trunk; `approvals` accepts an umbrella line and
     the Plan gate fails on an impact field changed after it; the declared
     check fails on a `program` mark that disagrees with `related`.
@@ -1499,7 +1562,9 @@ force-push or deletion) is Jeff's, and no agent changes it.
   - `cmd/wf`: `-resumes`; `wf trunk`; `wf main -trunk`; `wf record`
     appends; `wf program-body` renders every record kind; `wf tag-next`
     gives `v0.7.0-dev.1` after `v0.6.0`, then `-dev.2`, nothing on a
-    non-consumable merge.
+    non-consumable merge, `v0.1.0-dev.1` in a repository with no release,
+    and nothing for the specifications repository until
+    `specs-prerelease-tags` has merged.
 - **Scripts:** `check-pins.sh` accepts `v1.2.0-dev.3` with
   `GITHUB_BASE_REF=program/componentization` and refuses it with `main`;
   `pin-specs.sh` refuses `SPECS=newest` on `main`.
@@ -1534,7 +1599,9 @@ TEST-02), and ends with `make test` green.
    FLOW-05, FLOW-08, a12).
 4. Records: `wf record`, `wf program-body`, **Decided for you** in
    `QUEUE.md` and the digest (FLOW-20, a13).
-5. Gates: `design_review: umbrella`, the `f2-umbrella` step, `approvals`;
+5. Gates: `design_review: umbrella` (the validators `queue/queue.go:1313`
+   and `check/review.go:107`, and `TEMPLATE.md`'s comment), the
+   `f2-umbrella` step, `approvals`;
    the FLOW-06 and FLOW-13 carve-outs (FLOW-19, a14 to a16).
 6. Pre-releases: `wf tag-next`; `.goreleaser.yaml`, `relay-image.yml`,
    `release.yml`, `check-pins.sh`, `pin-specs.sh`; `CONTRIBUTING.md`'s pin
@@ -1569,9 +1636,9 @@ Jeff's, after the merge, in one attended sitting):
    wf-state-migration-step stays queued.
 4. `program: true` on driver-contract and relay-release-forms-spec.
 5. File `program-land` (process, held, resumes: "every program trunk has
-   the program's last phase merged") and `specs-prerelease-tags` (program
-   item in `buildwarden/buildwarden-specs`: its release workflow accepts
-   program-trunk pre-release tags with `--prerelease`).
+   the program's last phase merged") and `specs-prerelease-tags` (item in
+   `buildwarden/buildwarden-specs`, trunk `main`, Jeff's merge: its release
+   workflow accepts program-trunk pre-release tags with `--prerelease`).
 6. Create `program/records.yaml` (empty list) and the workflow branch's
    `README.md` schema for `resumes`, `program`, `program_trunk`,
    `design_review: umbrella` and the records.
@@ -1596,8 +1663,11 @@ these, FLOW-08):
   "merge only as the `workflow-tick` skill allows: a program item's PR into
   its program trunk at `f7-merge`, and the program sync". The scheduled
   native sessions merge nothing and need no change.
-- **The landing merges** at the program's end (Decision 12), and the full
-  release tags after them.
+- **`specs-prerelease-tags`**: merge it in the specifications repository
+  once its PR is ready.
+- **The landing merges** at the program's end (Decision 12), the
+  `program/componentization-final` tags before them, and the full release
+  tags after them.
 
 Estimate: 10 steps (9 + 1 state step), two runs; the queue's estimate of 5
 is raised at the review, on Jeff's word.
