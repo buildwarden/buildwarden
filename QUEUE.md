@@ -34,7 +34,7 @@ None.
 
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 2 | config-lookup-test-symlinked-tmp | fix (follows project-config-trust) | - | buildwarden/buildwarden | undeclared | 1 design | f1-design (cloud) | - | - | 1 / 7 |
+| 2 | config-lookup-test-symlinked-tmp | fix (follows project-config-trust) | - | buildwarden/buildwarden | undeclared | 1 design | f1-design (cloud, leased to cloud/20261121T105719Z) | - | - | 2 / 7 |
 | 3 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 1 design | f1-escalate-3 (human) | - | - | 25 / 30 |
 | 4 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 5 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
