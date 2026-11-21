@@ -35,7 +35,9 @@ rule_changes:            # the enforcement under tools/workflow/ and .claude/ is
   - {rule: FLOW-04, change: amend, paths: [docs/development/process.md]}
   - {rule: FLOW-05, change: amend, paths: [docs/development/process.md]}
   - {rule: FLOW-06, change: amend, paths: [docs/development/process.md]}
+  - {rule: FLOW-07, change: amend, paths: [docs/development/process.md]}
   - {rule: FLOW-08, change: amend, paths: [docs/development/process.md]}
+  - {rule: FLOW-11, change: amend, paths: [docs/development/process.md]}
   - {rule: FLOW-13, change: amend, paths: [docs/development/process.md]}
   - {rule: FLOW-17, change: amend, paths: [docs/development/process.md]}
   - {rule: FLOW-19, change: amend, paths: [docs/development/process.md,
@@ -49,7 +51,8 @@ rule_changes:            # the enforcement under tools/workflow/ and .claude/ is
   - {rule: ORCH-03, change: amend, paths: [docs/development/orchestrator.md]}
 concepts: [workflow, componentization, program, program-trunk, freeze, hold, limits,
            waiting-on-human, process-item, program-payoff, compatibility, interfaces, intake,
-           loop-merge, merge-gate, squash, umbrella-test, records, pre-release, pins]
+           loop-merge, merge-gate, squash, umbrella-test, records, pre-release, pins,
+           human-gates]
 related: [componentization.md, loop-parallel.md, alters-slot.md, merge-confirm-attended.md,
           queue-positions.md, loop-repository.md, seam-specs.md]
 ---
@@ -61,9 +64,11 @@ A process item (FLOW-03, LOOP-09), and a program item: it lists
 FLOW-20 so that the program has the queue's priority until it completes; it
 gives the program a **program trunk** in each repository it works in, which
 the loop merges program items into without Jeff, ending with one squash
-merge of each program trunk into `main` that Jeff makes; it takes Jeff out
-of every program step that has nothing for him to judge; and it lets the
-loop tag pre-releases on program trunks.
+merge of each program trunk into `main` that Jeff makes; it lets only three
+kinds of step wait on Jeff during the program (setup, component design, and
+work that needs his privileges or configuration), while the loop decides
+everything else, records it and lets him call it back; and it lets the loop
+tag pre-releases on program trunks.
 
 Words used throughout. **wf** is the loop's tool, `tools/workflow/`. The
 **program** is the work `componentization.md` sets out. A **hold** is an open
@@ -71,7 +76,12 @@ blocking question that keeps an item's steps from being offered (FLOW-07).
 The **program trunk** is the branch `program/componentization` of a
 repository (Decision 8). A **loop merge** is the loop's merge of a pull
 request into a program trunk (Decision 9). The **records** are the
-workflow branch's `program/records.yaml` (Decision 13). Rule wording and
+workflow branch's `program/records.yaml` (Decision 13). The three **kinds**
+of step that may wait on Jeff (Decision 11) are **setup** (kind 1),
+**component design** (kind 2) and **privileged** work (kind 3); a step of
+none of them is **decided by the loop**: recorded, named in the digest and
+`QUEUE.md` under **Decided for you**, listed in the landing PRs, and
+callable back. Rule wording and
 code are `main` at `be13847`; queue state is the `workflow` branch as of
 2026-11-21 19:30 UTC. The **scouts** are five read-only passes of
 2026-11-21 (queue rules, compatibility rules, program shape; then trunk and
@@ -112,6 +122,14 @@ on him:
 > staging/pre-production version tags. I want as little of the forward
 > momentum be blocked on me that isn't where I offer notable meaningful
 > input that isn't easily understood by my intents and design thus far.
+
+And, after the first draft of this design, on what that leaves for him:
+
+> Generally speaking, what I expect to be brought in the loop on are: (1) an
+> initial bulk-setup of the necessary repositories/infrastructure; (2)
+> meaningful design questions/reviews around the components, not on the
+> strategy to implement; (3) work/testing requiring elevated privileges or
+> configuration setup from me directly.
 
 The same day he held two security fixes (relay-collector-failure-fails-open,
 as a follow-up of the relay separation; vm-from-host-path) and two features
@@ -172,6 +190,13 @@ The rules as written do not say this, and in places say the opposite:
    the pilot driver's release (wave 4)" (`:222-224`); Jeff now says "until
    it's complete", which his second statement defines as all components
    working when sourced from their own repositories.
+10. **The rules send Jeff steps of none of his three kinds.** An item that
+    returns to Design a third time (FLOW-06, `queue/phases.go:605`), spends
+    its runaway budget (FLOW-13) or exhausts its CI repairs (FLOW-11)
+    escalates to a `human` step about a stuck item, not a design. FLOW-07
+    makes every blocking question his, a question on how to implement
+    included. componentization a11 asks his word for each repository as its
+    phase starts, rather than in one setup.
 
 ## Prior art
 
@@ -189,7 +214,7 @@ The rules as written do not say this, and in places say the opposite:
   `repositories` the only place wf reads a trunk, and LOOP-01 made a
   profile file whose trunk differs from it a failing finding. That is why
   the program trunk is a second entry beside `trunk: main`, not a new
-  value of it (a11).
+  value of it (a10).
 - **`seam-specs.md`** (a15, Decision 12) has Jeff, or an attended session
   on his word, push specification release tags. Pre-release tags on a
   program trunk are the new case.
@@ -210,6 +235,9 @@ The rules as written do not say this, and in places say the opposite:
    regression fix included, unless Jeff releases it. Never held: the fix
    for a failing `main` or a failing program trunk, and a fix that
    `follows` a program item. The urgent mark does not release a hold.
+   Nothing waits on Jeff for a hold: holding is the default he set on
+   2026-11-21, releasing one is his word whenever he gives it, never a step,
+   and at the program's end the loop resumes each (Decision 12).
 3. **A hold names when it resumes, and a held item counts toward no limit
    (a3).** A hold question gains `resumes`; wf treats an item with an open
    question that has `resumes` as held: it holds no limit, does not wait on
@@ -219,13 +247,18 @@ The rules as written do not say this, and in places say the opposite:
    end of its Design at the latest, and its design is scoped to one review.
 5. **No new order rule.** With non-program work held, program items lead;
    intake places a program item above any released non-program item of its
-   class. Process items stay class 2 (LOOP-04).
-6. **Loop work meets Jeff's bar (a5).** A process item filed while FLOW-20
-   stands carries a **Program payoff** section, judged at its design
-   review. wf-state-migration-step stays queued, as Jeff decided on
-   2026-11-21; its own review judges its payoff.
+   class. Process items stay class 2 (LOOP-04). The order is the loop's to
+   follow, not a step: Jeff may move an item whenever he says so.
+6. **Loop work meets Jeff's bar, and stays his to review (a5).** A process
+   item filed while FLOW-20 stands carries a **Program payoff** section,
+   judged at its design review. That review stays Jeff's: a process item
+   changes the rules every delegation in this design rests on, so it is the
+   loop component's contract and authority, component design (kind 2). This
+   is flagged in a5, which offers narrower options. wf-state-migration-step
+   stays queued, as Jeff decided on 2026-11-21; its own review judges its
+   payoff.
 7. **Interfaces may break for the program, within fixed limits (a6 to
-   a9).** Go APIs, internals and the driver contract (GLOBAL-08); a seam by
+   a8).** Go APIs, internals and the driver contract (GLOBAL-08); a seam by
    a new pre-1.0 release of its specification first; CLI flags, subcommands,
    config keys, environment variables and output forms with no alias or
    window, only where the program needs it, a released form refused with an
@@ -235,10 +268,10 @@ The rules as written do not say this, and in places say the opposite:
    boundary. A program trunk may lack a capability for a while when a
    design names the gap; `main` never does, and no gap is open at the
    final squash.
-8. **Each repository the program works in has a program trunk (a11).**
+8. **Each repository the program works in has a program trunk (a10).**
    - Name: `program/componentization`, in `buildwarden/buildwarden` and
-     `buildwarden/buildwarden-specs` now, and in each program repository
-     when it is created (a19).
+     `buildwarden/buildwarden-specs`, and in each program repository, all
+     created in the one-time setup (a18).
    - `config.yaml` records it beside the trunk:
      `program_trunk: program/componentization` in the repository's entry.
      `trunk: main` stays, and stays what the profile file's `trunk` is
@@ -257,7 +290,7 @@ The rules as written do not say this, and in places say the opposite:
      config-lookup-test-symlinked-tmp) keeps `main`.
    - A queue mark `program: true` says which items are program items; wf
      checks it against the design's `related` at Design's done-when.
-9. **The loop merges program pull requests into the program trunk (a12).**
+9. **The loop merges program pull requests into the program trunk (a11).**
    - A new cloud step, `f7-merge`, replaces the human's merge for a PR to a
      program trunk. `wf next` offers it only while `wf check -step
      f7-merge` passes the **merge gate**, on the PR's current head:
@@ -272,12 +305,14 @@ The rules as written do not say this, and in places say the opposite:
         MUST finding is open other than one Decision 10 lets the loop defer;
      6. no human step of the item is pending: no blocking question, no
         escalation, no design review not taken, no `host:` blocking
-        validation pending (FLOW-09);
+        validation pending (FLOW-09); after Decision 11, every such step is
+        of one of the three kinds;
      7. `security_boundary` is `none`, or its only trip is GLOBAL-06's
-        relay clause with no posture change (a15), the umbrella test or
+        relay clause with no posture change (a14), the umbrella test or
         design review accepted it, and Review recorded that the diff stays
-        within it; an item with any other `security_boundary` waits at
-        `f7-merge` on Jeff, who acknowledges its security note there;
+        within it; an item with any other `security_boundary` changes a
+        component's security posture, component design (kind 2), and waits
+        at `f7-merge` on Jeff, who acknowledges its security note there;
      8. every pull request its design names to merge first has merged;
      9. the rule-change clearance passes (FLOW-14).
    - The agent merges with `gh pr merge <n> --squash --match-head-commit
@@ -291,76 +326,124 @@ The rules as written do not say this, and in places say the opposite:
    - A process item's PR, and any change to the loop's rules or machinery,
      never goes to a program trunk except as part of `main` merged in by the
      program sync (Decision 14) (LOOP-09): it goes to `main`, and Jeff
-     merges it as today, so every scheduled run takes it from `main`.
-10. **Tier-2 MUST findings on a program PR (a13).** Review fixes a MUST
+     merges it as today, so every scheduled run takes it from `main`. A
+     merge to `main` is privileged (kind 3): `main`'s protection reserves it
+     to him, and no agent changes that (FLOW-08). So is the merge of a
+     program item that changes CI or release configuration, which runs with
+     the release's signing and package-write credentials.
+10. **Tier-2 MUST findings on a program PR (a12).** Review fixes a MUST
     finding in a fix round and re-reviews the new head. One still open
     after one fix round is **deferred**: Review records the finding, the
     head and its reason in the records, and the loop may merge. A MUST
     finding under GLOBAL-06, a SEC rule, RELAY-01 to RELAY-03 or RELAY-05,
-    or the never-break list of Decision 7 is never deferred: the item waits
-    at `f7-merge` on Jeff, who fixes the course or dismisses it with a
-    recorded reason, as FLOW-08 has it today. Every deferred finding is
+    or the never-break list of Decision 7 is never deferred and never
+    merged over: the item returns to Design with the finding (FLOW-06) for
+    a plan that conforms, recorded. It reaches Jeff only when the loop
+    judges the finding mistaken, since only he may dismiss it, or when the
+    design would need the posture or contract the finding protects to
+    change; both are component design (kind 2). Every deferred finding is
     listed in the landing PR's body, where Jeff's merge acknowledges or he
     dismisses it (LINT-03). The loop never dismisses a finding.
-11. **Fewer human gates for program items (a14 to a17).** A step that
-    waits on Jeff is kept only where he offers meaningful input his
-    intents and the program's design do not already give.
+11. **Only three kinds of step wait on Jeff (a5, a13 to a16, a18).** In his
+    words of 2026-11-21: (1) **setup**, the initial bulk setup of the
+    program's repositories and infrastructure (Decision 16); (2)
+    **component design**, a question or review about a component's seams,
+    boundaries, contracts or security posture, not about the strategy to
+    implement it, and a process item's design (a5); (3) **privileged**
+    work, which needs his privileges or configuration: a merge to `main`, a
+    change to CI or release configuration, a release without a suffix,
+    making a repository public, the machines of `hosts.yaml`, a native step
+    only his attended machine can take, and a failure only those can fix.
+    Every other step the draft sent him is decided by the loop, recorded
+    (Decision 13) and callable back. Design, *What reaches Jeff*, lists
+    each gate with its kind, and what the loop does instead where it has
+    none.
     - **The umbrella test** takes a program feature's design review in
-      place of Jeff when every point holds (Design, *The umbrella test*):
-      the design implements one named phase row or a filed split or
-      follow-up of one; no flagged question; no rule change and no loop
-      machinery change; no boundary posture change; no
-      interface break FLOW-20 does not allow; repositories and areas no
-      fewer than intake recorded; and an independent reviewer session
-      agrees. A pass is recorded as `umbrella test passed at <sha>` and is
-      an approval for the Plan gate.
-    - **Flagging for program items**: a question that touches a seam is
-      flagged only when the seam's change departs from what the program's
-      design names for the item's phase.
-    - **Security (a15)**: a design whose only GLOBAL-06 trip is "any change
+      place of Jeff (Design, *The umbrella test*). Its component-design
+      points U1 to U5 send a design to him when one fails: the design
+      implements components, seams and boundaries the program's design
+      names for one phase (or a filed split, follow-up or re-sequencing of
+      them); no component-design question is open; no rule change and no
+      loop machinery change; no boundary posture change; no interface
+      break FLOW-20 does not allow. Its loop points U6 and U7 (the areas
+      checked against the map and the dependency edges; an independent
+      reviewer session agrees) return a failing design to Design, not to
+      him. A pass is recorded as `umbrella test passed at <sha>` and is an
+      approval for the Plan gate.
+    - **Questions on a program item (a13).** A question is blocking, or
+      flagged, only when it is component design (a seam's change the
+      program's design does not name for the item's phase, a component's
+      boundary or ownership, a contract, a security posture) or needs setup
+      or privileged work. Any other question, however hard, is about the
+      strategy to implement: it is assumed, proceeds on Design's
+      recommendation, and is confirmed by the umbrella test's session and
+      recorded. A design follows Jeff's recorded decisions; departing from
+      one on component design flags the question, and departing from one
+      on strategy is recorded and listed first under **Decided for you**.
+    - **Security (a14)**: a design whose only GLOBAL-06 trip is "any change
       to the relay itself", with no change to a boundary's posture, passes
       the test with its security note read by the independent session; the
-      note's acknowledgment moves to the landing PR. A posture change goes
-      to Jeff.
-    - **Escalations (a16)**: a program item's return to Design escalates
-      only after its fourth return, not its second; its first runaway
-      budget raises its estimate to its spend so far, recorded, and its
-      second escalates.
-    - **Filing (a17)**: the loop files, unattended and recorded, the items
+      note's acknowledgment moves to the landing PR. A posture change is
+      component design (kind 2) and goes to Jeff, at its design and at
+      `f7-merge`.
+    - **An item that does not converge (a15)** never escalates: its
+      returns to Design do not escalate, since its budget bounds them; its
+      first runaway budget raises its estimate to its spend so far, its
+      second returns it to Design for a new plan by a session that did not
+      write the design (a split or a re-scope), and after that it is held
+      until no other program item has a ready step, returning to Design
+      when it resumes; a CI failure Publish cannot repair in three attempts
+      returns it to Design with the failure as the finding, unless only
+      privileged work can fix it (a secret, a runner, a repository setting:
+      kind 3); a program sync whose conflict the loop cannot resolve leaves
+      the program trunk where it is and files a program item that resolves
+      it (Decision 14). Each is recorded.
+    - **Filing (a16)**: the loop files, unattended and recorded, the items
       of a phase row once the Order's gate before its wave is met, the
       reconciliation items that adopt a program pre-release on a program
-      trunk, and additions to an area map that a reviewed or
-      umbrella-passed program design names (a new repository's map, the
-      areas a move creates, an area split in two).
-    - **Repositories (a19)**: a new program repository of the umbrella's
-      list is created private, by Jeff or an attended session, on the
-      standing word of his approval of that list; making it public stays
-      his.
-    - **What always reaches Jeff** is listed under Design, *What still
-      reaches Jeff*.
+      trunk, and the relations between items their designs name; and it
+      makes the area-map changes a reviewed or umbrella-passed program
+      design names, or that bring the map's `reaches` in line with
+      `tools/tier1/area-edges.sh`.
+    - **Repositories (a18)**: every program repository on the umbrella's
+      list is created private by Jeff in the one-time setup (kind 1). A
+      repository not on the list is a new component, so proposing one is
+      component design (kind 2); making one public is privileged (kind 3).
+    - **Holds, the urgent mark and the order** are Jeff's word whenever he
+      gives it; no step waits on it (Decisions 2 and 5).
 12. **The program ends with one human squash merge per repository.** A
     process item, `program-land`, filed on hold by this item's state step
     (resumes: every program trunk has its last phase merged), closes the
-    program. Its done-when is Jeff's check: every component works as
-    intended when built from its own repository at its program trunk, at
-    the other components' `-rc` tags. Its design names, as pull requests to merge
-    first, one PR per repository from `program/componentization` to its
-    trunk, whose body wf renders from the records (`wf program-body`). Jeff
-    squash-merges each, specifications first; full release tags follow
-    from `main` as today. Its own PR retires FLOW-20 and every
-    program-trunk clause, and its state step drops `program_trunk` from
-    `config.yaml`. Before his squash merge, Jeff tags each program trunk's
-    head `program/componentization-final` (or has `program-land`'s state
-    step do so on his word), so the per-item history stays reachable.
+    program. Its done-when is the loop's evidence, shown in each landing
+    PR: every component, built from its own repository at its program
+    trunk, passes its CI and conformance suites at the other components'
+    `-rc` tags, and TEST-08 and the blocking native validations pass at
+    those heads. Its design names, as pull requests to merge first, one PR
+    per repository from `program/componentization` to its trunk, whose
+    body wf renders from the records (`wf program-body`). Jeff
+    squash-merges each, specifications first (kind 3: merges to `main`);
+    his merge is the sign-off for everything the loop merged there. Full
+    release tags follow from `main` as today, his (kind 3). Before the
+    landing PRs open, the loop tags each program trunk's head
+    `program/componentization-final`, so the per-item history stays
+    reachable, recorded. Its own PR retires FLOW-20 and every program-trunk
+    clause, and its state step drops `program_trunk` from `config.yaml`.
+    Its Close resumes every item held until the program's end, each
+    returning to Design for what the program changed, recorded; Jeff may
+    close any of them instead.
 13. **Records.** Everything this item lets the loop decide in Jeff's place
-    (a loop merge, a deferred MUST finding, an umbrella test, a security
-    note read under a15, a re-estimate, a fourth return, a loop-filed item,
-    an area-map addition, a pre-release tag, a sync's conflict resolution)
-    is appended by `wf record` to
-    the workflow branch's `program/records.yaml`, named in the run's digest
-    and `QUEUE.md` under **Decided for you**, and listed again in the
-    landing PRs. Jeff may call any back at any time: a blocking question on
-    an open item, or a follow-up program item for a merged one.
+    is appended by `wf record` to the workflow branch's
+    `program/records.yaml`: a loop merge, a deferred MUST finding, a
+    protected finding sent back to Design, an umbrella test, a security
+    note read under a14, a question settled as assumed, a departure from a
+    strategy decision of his, a re-estimate, a re-plan, a hold after a
+    runaway, a repair failure sent back to Design, a sync's conflict
+    resolution or the item filed for it, a loop-filed item or relation, an
+    area-map change, a pre-release or final tag, and a hold resumed at the
+    end. Each is named in the run's digest and `QUEUE.md` under **Decided
+    for you**, and listed again in the landing PRs. Jeff may call any back
+    at any time: a blocking question on an open item, or a follow-up
+    program item for a merged one.
 14. **The loop merges `main` into each program trunk.** When `main` moves
     past a program trunk (in practice, a process item's merge), the loop
     cuts `sync/program-<main sha>` from the program trunk, merges `main`
@@ -369,8 +452,12 @@ The rules as written do not say this, and in places say the opposite:
     check 5 on the resolution diff when the merge had conflicts, with
     `--merge` (a merge commit), so `main` stays an ancestor of the program
     trunk and the landing PRs stay conflict-free. A conflict it cannot
-    resolve escalates.
-15. **Pre-release tags (a18).** On a program trunk, after a loop merge that
+    resolve leaves the program trunk where it is: the loop closes the sync
+    PR, files a program item `program-sync-<main sha>` whose design
+    resolves it and which goes through the umbrella test and the merge
+    gate, and records both (a15). Program items go on against the program
+    trunk meanwhile; `program-land` needs every such item merged.
+15. **Pre-release tags (a17).** On a program trunk, after a loop merge that
     changes a consumable (the profile's Consumables entry), the loop may tag
     `vX.Y.Z-dev.N` (`<directory>/vX.Y.Z-dev.N` in the specifications
     repository) on that merge commit once its checks pass, where X.Y.Z is
@@ -382,21 +469,24 @@ The rules as written do not say this, and in places say the opposite:
     GitHub pre-release that moves no `latest`, and is never moved or
     deleted. On a program trunk a pre-release is a release for LOOP-07, and
     pins may name one; `main` pins only releases without a suffix. A
-    release without a suffix stays Jeff's, from `main`, through the full
-    gate.
-16. **What only Jeff can do, once.** Review and merge this item's PR; run
-    its state step (with the program trunks' creation on his word in it);
-    merge `specs-prerelease-tags` in the specifications repository;
-    set each program trunk's ruleset and the tag ruleset; confirm the
-    GitHub App may merge; change the nightly task's prompt, which today
-    says "Never merge". After that, the loop needs nothing from him to
-    advance a program trunk except what Design, *What still reaches Jeff*,
-    lists, ending with the landing merges.
+    release without a suffix stays Jeff's (kind 3), from `main`, through
+    the full gate.
+16. **What only Jeff can do, once: the setup (kind 1).** Review and merge
+    this item's PR; run its state step (with the program trunks' creation
+    on his word in it); create every program repository on the umbrella's
+    list (a18); merge `specs-prerelease-tags` in the specifications
+    repository; set each program trunk's ruleset, the tag ruleset and
+    automatic deletion of head branches; confirm the GitHub App may merge;
+    change the nightly task's prompt, which today says "Never merge". After
+    that, nothing advances a program trunk on Jeff except the steps of kind
+    2 and 3 that Design, *What reaches Jeff*, lists, ending with the
+    landing merges.
 17. **Enforcement stays small where judgment is the check.** The hold
-    counting, the trunk choice, the merge gate, escalation carve-outs and
-    the records are wf code. Program membership, the payoff, each
-    interface break and the umbrella test's points U1 to U5 stay agent
-    judgment at intake, Design and the independent session (U7).
+    counting, the trunk choice, the merge gate, the escalation carve-outs
+    and the records are wf code. Program membership, the payoff, each
+    interface break, a question's kind and the umbrella test's points U1
+    to U6 stay agent judgment at intake, Design and the independent session
+    (U7).
 
 ## Questions
 
@@ -405,6 +495,11 @@ The rules as written do not say this, and in places say the opposite:
 None.
 
 ### Assumed
+
+Eighteen questions; all but a9 are flagged, each because it sets the
+wording of a rule or departs from an earlier decision of Jeff's. Earlier
+drafts asked a9's tier-1 trailer on its own; it is the mechanism of a6's
+choice and is now one of a6's options.
 
 - **a1. When the program ends.** Flagged: departs from componentization a4
   and Decision 14, and sets FLOW-20's closing paragraph.
@@ -424,7 +519,9 @@ None.
   - (a) Held like other non-program work unless Jeff releases one. The fix
     for a failing `main` or program trunk and a fix that `follows` a
     program item are never held. Marking a fix urgent does not release its
-    hold.
+    hold. Releasing is his word whenever he gives it, not a step; a held
+    fix is listed under **Held** so he sees it; the loop resumes each hold
+    at its resume point.
   - (b) Keep both exemptions; Jeff may hold a fix whose code the program
     replaces.
   - (c) Keep FLOW-20 as written; the 2026-11-21 holds stay one-off.
@@ -432,6 +529,8 @@ None.
   Recommended: (a). It is what Jeff did on 2026-11-21, and the red-trunk
   exception keeps refreshes running (FLOW-10). A non-program follow-up an
   unattended session files is held with the followed item's resume point.
+  No release before the program ends exposes a held fix's code to users of
+  a newer release.
 - **a3. Held items and the limits.** Flagged: sets FLOW-05's counting
   sentences.
   - (a) A hold names its resume point (`resumes`); a held item holds no
@@ -452,30 +551,53 @@ None.
   Recommended: (a). The limits count per collision set, so declared
   disjoint items already run side by side; 48 of `QUEUE.md`'s 52
   non-disjoint pairs exist only because one side is undeclared.
-- **a5. Jeff's bar for loop work.** Flagged: sets FLOW-20's Loop work
-  bullet, in his words.
-  - (a) Every process item filed while FLOW-20 stands carries a **Program
-    payoff** section, judged at its design review; one that neither removes
-    interactions that decide nothing nor saves more program time than it
-    costs is held or closed.
-  - (b) Judged at intake only.
-  - (c) As (a), and `wf check` requires the section.
+- **a5. Process items during the program: who reviews them, against what
+  bar.** Flagged: Jeff's three kinds do not name process items, which
+  change the rules the loop runs under and are his today (LOOP-09); it sets
+  FLOW-20's Loop work bullet, in his words, and how FLOW-20 reads LOOP-09.
+  - (a) Every process item's design review stays Jeff's, as component
+    design (kind 2): its rules decide what the loop may do in his place,
+    so they are the loop component's contract and authority. It carries a
+    **Program payoff** section, judged at that review; one that neither
+    removes interactions that decide nothing nor saves more program time
+    than it costs is held or closed.
+  - (b) Only a process item that widens the loop's own authority, or
+    changes a rule about security, merging, pushing or tags, goes to Jeff;
+    any other passes a *process test* like the umbrella test (payoff shown,
+    no such rule touched, an independent session agrees) and is recorded.
+    Its merge to `main` stays his (kind 3). Amends LOOP-09 and FLOW-14
+    besides, and adds a test to the machinery.
+  - (c) None go to him for review: every process item passes the process
+    test; only its merge to `main` stays his.
 
-  Recommended: (a). The review is already Jeff's; (c) is code for a check
-  the review makes anyway.
+  Recommended: (a). During the program the payoff bar keeps process items
+  few, and each still ends at his merge to `main` (kind 3), so (b) saves a
+  review but not the touch, and has the loop judge which of its own rule
+  changes widen its authority; (c) would let the loop rewrite this
+  design's gates without him. (b) is the step to take later if his process
+  reviews turn out to be mostly wording. Judging the payoff at intake
+  only, or having `wf check` require the section, were variants of (a)
+  the earlier draft offered; the review makes that check anyway.
 - **a6. CLI flags, subcommands, config keys, environment variables and
-  output forms.** Flagged: departs from UX-03 and ORCH-03 for program items.
+  output forms.** Flagged: departs from UX-03 and ORCH-03 for program
+  items.
   - (a) A program item may rename or remove one with no alias or window,
     only where the program's change needs it; a form a tagged release
     exposed is refused with an error naming its replacement (UX-04); one no
     release exposed may simply go; the reference docs change with it.
-  - (b) Only forms no release exposed may break.
-  - (c) UX-03 as written.
+    Where tier 1's UX-03 check flags the break, the commit carries a
+    `Tier1-Allow` trailer whose reason names FLOW-20 (LINT-05), as Moves
+    does.
+  - (b) As (a), but tier 1 compares surfaces against the latest release
+    tag instead of taking a trailer.
+  - (c) Only forms no release exposed may break.
+  - (d) UX-03 as written.
 
   Recommended: (a). "Even if it is temporarily incompatible or breaking",
   with "mostly similar" kept by the need test. A removed config key is
   silently ignored today (`cmd/warden/config.go`), so the item that removes
-  a released key adds that error.
+  a released key adds that error. The trailer costs an agent a line, not
+  Jeff an interaction; (b) is a tier-1 change no item needs yet.
 - **a7. The ledger.** Flagged: sets which ledger rules FLOW-20 keeps.
   - (a) `specs/build-ledger/v1.md` and its signatures change only
     additively (RELAY-05); the reader reads every ledger a release wrote; a
@@ -495,14 +617,8 @@ None.
 
   Recommended: (a). The program trunk is where the breaks belong; `main`
   stays whole for anyone who builds it until the landing.
-- **a9. Tier 1's UX-03 check on a deliberate break.**
-  - (a) A `Tier1-Allow` trailer whose reason names FLOW-20 (LINT-05), as
-    Moves does.
-  - (b) Tier 1 compares surfaces against the latest release tag.
-
-  Recommended: (a). It costs an agent a trailer, not Jeff an interaction.
-- **a10. One item or two.**
-  - (a) One item: holds, interfaces, program trunk, fewer gates and
+- **a9. One item or two.**
+  - (a) One item: holds, interfaces, program trunk, human gates and
     pre-releases, reviewed in one sitting.
   - (b) Split: this draft's holds and interfaces, then a second process
     item for the program trunk, gates and tags.
@@ -510,9 +626,9 @@ None.
   Recommended: (a). Jeff asked for the initial gate to be what the
   scheduled runs need and nothing after it; two items mean two merges and
   two state steps, and the program trunk is what makes the interface
-  breaks safe to merge. The sitting takes the 15 rule changes in
+  breaks safe to merge. The sitting takes the 17 rule changes in
   question-call groups (FLOW-19).
-- **a11. The program trunk's shape.** Flagged: sets LOOP-01, PROFILE-01's
+- **a10. The program trunk's shape.** Flagged: sets LOOP-01, PROFILE-01's
   Trunk row and FLOW-20's Program trunk bullet.
   - (a) `program/componentization` in each repository the program works in,
     recorded as `program_trunk` beside `trunk: main` in `config.yaml`;
@@ -526,7 +642,7 @@ None.
   profile check, move config-lookup-test-symlinked-tmp and the loop's own
   process items off `main` (which the scheduled runs read, LOOP-09), and
   leave FLOW-08 forbidding the loop's merges. (c) is what he asked to stop.
-- **a12. Who merges into a program trunk, and how.** Flagged: amends
+- **a11. Who merges into a program trunk, and how.** Flagged: amends
   FLOW-08, FLOW-03, FLOW-04 and LINT-03.
   - (a) The loop, at `f7-merge`, under the nine-point merge gate; squash per
     item pinned to the head; `main` merged in by the loop with a merge
@@ -537,71 +653,106 @@ None.
   Recommended: (a). His "no publish step should wait on me". Squash keeps
   one commit per item, which makes the landing PR readable, and wf's merge
   proof already accepts it; the merge commit for `main` keeps `main` an
-  ancestor so the landing PR has no conflicts.
-- **a13. Tier-2 MUST findings on a program PR.** Flagged: amends LINT-03's
+  ancestor so the landing PR has no conflicts. A merge to `main`, and a
+  program item's change to CI or release configuration, stay his as
+  privileged work (kind 3).
+- **a12. Tier-2 MUST findings on a program PR.** Flagged: amends LINT-03's
   sign-off; touches GLOBAL-06.
   - (a) The loop fixes a MUST in one fix round; one still open is deferred
     and recorded, and signed off at the landing merge, except one under
     GLOBAL-06, a SEC rule, RELAY-01 to RELAY-03, RELAY-05 or FLOW-20's
-    never-break list, which waits on Jeff. The loop never dismisses.
-  - (b) Every open MUST waits on Jeff at `f7-merge`.
-  - (c) Every MUST is deferred, security ones included.
+    never-break list, which is never deferred: the item returns to Design
+    for a plan that conforms, recorded, and reaches Jeff only to dismiss
+    the finding or to change the posture or contract it protects (kind 2).
+    The loop never dismisses.
+  - (b) As (a), but a protected finding still open after the fix round
+    waits on Jeff at `f7-merge` at once, as the earlier draft had it.
+  - (c) Every open MUST waits on Jeff at `f7-merge`.
 
-  Recommended: (a). A MUST the loop cannot fix in one round is usually a
-  judgment about the program's direction, which the landing PR still puts
-  before him; the ones that could open a boundary or break what never
-  breaks stop at once. (b) is the safe side if he prefers it, at a merge
-  wait per such item.
-- **a14. The umbrella test for program design reviews.** Flagged: amends
-  FLOW-19 (a third review outcome and the flag rule for seams).
-  - (a) A program feature's review is taken by the test U1 to U7 (Design)
-    and recorded for his later reading; a flagged question, a rule change,
-    a loop machinery change, a boundary posture change or a failed point
-    sends it to him. Process items keep his review (LOOP-09).
-  - (b) As (a), but a seam-touching question always flags, so most program
-    reviews still reach him.
+  Recommended: (a). A protected finding still open says the change does
+  not yet hold a component's posture or contract; making it hold is the
+  strategy to implement, which the loop owns, and only accepting a
+  different posture or contract is his. (b) is the safe side if he wants
+  to see every protected finding before the loop re-plans.
+- **a13. Program design reviews and questions.** Flagged: amends FLOW-07
+  (which questions block), FLOW-19 (a third review outcome and the flag
+  rule) and FLOW-20's Human gates bullet.
+  - (a) A program feature's review is taken by the umbrella test U1 to U7
+    (Design) and recorded for his later reading; a failed component-design
+    point (U1 to U5) sends it to him, a failed loop point (U6, U7 on
+    anything else) back to Design. On a program item a question blocks, or
+    is flagged, only when it is component design or needs setup or
+    privileged work; any other is assumed on Design's recommendation and
+    confirmed by the umbrella session, recorded.
+  - (b) As (a), but every blocking question stays his (FLOW-07 as
+    written), and a question that touches a seam always flags, so most
+    program reviews still reach him.
   - (c) No: every non-trivial program design keeps his review.
 
   Recommended: (a). The program's phases, seams and order are his already
   approved design; a design that implements a phase row within it, and
   that an independent session agrees does, is what he called "easily
-  understood by my intents and design thus far".
-- **a15. GLOBAL-06's relay clause under the umbrella test.** Flagged:
-  touches a security boundary.
-  - (a) A design whose only trip is "any change to the relay itself", with
-    no boundary posture change, passes U4 with its security note read by
-    the independent session; Jeff acknowledges the note at the landing
-    merge. A posture change (a new listener or egress path, key, CA or
-    trust-store handling, the SSRF filter, netns or iptables, the socketpair
-    topology) goes to him. TEST-08 runs at each `-rc` and the landing.
+  understood by my intents and design thus far", and a question on how to
+  implement it is the "strategy to implement" he asked not to be brought
+  in on.
+- **a14. Security posture under the umbrella test.** Flagged: touches a
+  security boundary. Under every option, a change to a component's
+  security posture is component design (kind 2) and stays his.
+  - (a) A design whose only trip is GLOBAL-06's "any change to the relay
+    itself", with no boundary posture change, passes U4 with its security
+    note read by the independent session; Jeff acknowledges the note at the
+    landing merge. A posture change (a new listener or egress path, key, CA
+    or trust-store handling, the SSRF filter, netns or iptables, the
+    socketpair topology) goes to him, at its design and at `f7-merge`.
+    TEST-08 runs at each `-rc` and the landing.
   - (b) Every program design with `security_boundary` other than `none` is
     reviewed by Jeff.
 
   Recommended: (a). Every M-track item and S2, S4 trip the relay clause;
-  (b) puts the whole relay track back in his queue, design by design.
-- **a16. Escalations on program items.** Flagged: amends FLOW-06 and
-  FLOW-13.
-  - (a) A return to Design escalates after the fourth, not the second;
-    the first runaway budget raises the estimate to the spend so far; both
-    recorded; the second runaway escalates.
-  - (b) FLOW-06 and FLOW-13 as written.
+  (b) puts the whole relay track back in his queue, design by design,
+  though most of it changes no posture.
+- **a15. A program item that does not converge.** Flagged: amends FLOW-06,
+  FLOW-11 and FLOW-13, and removes their escalations for program items.
+  - (a) No escalation: returns to Design do not escalate (the budget
+    bounds them); the first runaway budget raises the estimate to the
+    spend so far, the second returns the item to Design for a new plan by
+    a fresh session, and after that it is held until no other program item
+    has a ready step; a CI failure Publish cannot repair returns it to
+    Design with the failure as the finding, unless only privileged work
+    can fix it (kind 3); a sync conflict the loop cannot resolve is filed
+    as a program item (Decision 14). Each recorded, and listed first under
+    **Decided for you**.
+  - (b) The earlier draft: escalate after the fourth return and at the
+    second runaway; repair exhaustion and an unresolved sync conflict
+    escalate.
+  - (c) FLOW-06, FLOW-11 and FLOW-13 as written.
 
-  Recommended: (a). A re-design still meets the umbrella test or reaches
-  him, so the extra returns cost steps, not judgment; the second runaway
-  still stops a loop that is not converging.
-- **a17. Filing without Jeff.** Flagged: amends LOOP-07.2 and FLOW-05's area
-  map sentence.
+  Recommended: (a). None of these is a design question: an item that does
+  not converge needs a different plan, which is the strategy he asked to
+  stay out of. FLOW-13's run budget still caps each run's spend, and the
+  hold puts a non-converging item behind every other program step, so it
+  costs only idle time; the record puts it in front of him without
+  blocking on him. (b) is the safe side if he wants to hear of a stuck
+  item at once.
+- **a16. Filing and area maps without Jeff.** Flagged: amends LOOP-07.2,
+  FLOW-05's area-map sentence and PROFILE-01's Areas row.
   - (a) The loop files a phase row's items once the Order's gate before its
     wave is met, reconciliation items that adopt a pre-release on a program
-    trunk, and additive area-map changes a reviewed or umbrella-passed
-    program design names; each recorded. Changing an area's mode or
-    `reaches`, removing one, and relating or narrowing items stay his.
-  - (b) Jeff at intake and in attended sessions, as today.
+    trunk, and the relations between items their designs name; it makes
+    the area-map changes a reviewed or umbrella-passed program design names
+    (a new repository's map, an area a move creates or empties, a split, a
+    mode) or that bring `reaches` in line with `area-edges.sh`; each
+    recorded.
+  - (b) As (a), but only additions to an area map; changing a mode or
+    `reaches`, removing an area, and relating or narrowing items stay his.
+  - (c) Jeff at intake and in attended sessions, as today.
 
   Recommended: (a). The phase rows and their order are already his; a
-  pre-release adoption is mechanical; a new repository's map is what lets
-  its items run side by side at all.
-- **a18. Pre-release tags and pins.** Flagged: amends FLOW-17, LOOP-07.5
+  pre-release adoption is mechanical; an area map is the loop's
+  scheduling, derived from the code's edges and the designs, not a
+  component's design, and keeping its changes his would block the moves
+  that create and empty areas throughout the program.
+- **a17. Pre-release tags and pins.** Flagged: amends FLOW-17, LOOP-07.5
   and PROFILE-01's Specifications, Release and Consumables rows.
   - (a) The loop tags `-dev.N` after a loop merge that changes a
     consumable, and `-rc.N` once the component's last phase has merged and
@@ -614,18 +765,23 @@ None.
 
   Recommended: (a). His "staging/pre-production version tags": `-dev` is
   staging, `-rc` is pre-production. Semver orders them below the release.
-- **a19. Program repositories.** Flagged: departs from componentization
+- **a18. Program repositories.** Flagged: departs from componentization
   a11 (Jeff's word in each session).
-  - (a) His approval of this design is the standing word for the
-    umbrella's list (the relay, the loop, one repository per driver):
-    each is created private when its phase starts, by him or an attended
-    session, with its `config.yaml` entry, its program trunk and its
-    `hosts.yaml` line for a machine that already serves its host. Going
-    public stays his, one action per repository.
-  - (b) Each repository on his word when its phase starts, as a11 says.
+  - (a) Jeff creates every repository on the umbrella's list (the relay,
+    the loop, one repository per driver) in the one-time setup, private,
+    each with an initial commit, its `config.yaml` entry, its program trunk,
+    the organization rulesets, automatic deletion of head branches, the
+    loop's App, and its `hosts.yaml` line for a machine that already serves
+    its host. A repository not on the list is a new component, proposed in
+    a program design and reviewed by him (kind 2). Going public stays his,
+    one action per repository (kind 3).
+  - (b) Each is created when its phase starts, by him or an attended
+    session, on the standing word of his approval of the list.
+  - (c) Each on his word when its phase starts, as a11 says.
 
-  Recommended: (a). The list is in the umbrella he approved; asking again
-  per repository decides nothing new.
+  Recommended: (a). His "initial bulk-setup of the necessary
+  repositories/infrastructure": one sitting instead of one per phase, and
+  an empty private repository costs nothing until its phase starts.
 
 ## Design
 
@@ -634,11 +790,15 @@ None.
 FLOW-20 is rewritten (full wording under **Rule changes**): **Hold**
 replaces **Freeze**; **Areas**, **Loop work** and **Interfaces** as in the
 earlier draft (Interfaces' gap sentence now names the program trunk);
-three new bullets, **Program trunk**, **Fewer human gates** and
-**Pre-releases**; **Moves** and **Overview** unchanged. The closing list of
+new bullets, **Program trunk**, **Human gates**, **Records** and
+**Pre-releases**; **Moves** and **Overview** unchanged. **Human gates**
+states Jeff's three kinds as the only steps that wait on him and says what
+the loop does in place of each gate it removes. The closing list of
 what stays as written now reads FLOW-08 and FLOW-19 "as this rule reads
 them". The other rules gain one clause each that points to FLOW-20, so an
-agent reading one alone does not act against it.
+agent reading one alone does not act against it: FLOW-06, FLOW-11 and
+FLOW-13 for an item that does not converge, FLOW-07 and FLOW-19 for
+questions and reviews.
 
 ### The program trunk
 
@@ -693,8 +853,11 @@ base.
   `TrunkFor` is a program trunk is `f7-merge`, `cloud`, offered once
   `MergeReady` passes; every other merge step is still never offered.
   `MayComplete` is unchanged. **`queue/limits.go:379-393`**: a PR at
-  `f7-merge` does not wait on the human; one held at point 5 on a
-  protected finding, or at point 7 on a posture change, does.
+  `f7-merge` does not wait on the human; one held at point 7 on a posture
+  change, or at point 5 on a protected finding the loop has asked him to
+  dismiss, does. A protected finding otherwise returns the item to Design
+  (Decision 10), which `wf-review` seeds with the finding as for any
+  return.
 - **`check/check.go:148, 502`**: the label becomes "merged (FLOW-08)"; the
   proof (`:514-515`) is unchanged and already accepts a squash.
 - **The agent** (`wf-publish`, step `f7-merge`): run the check; on a pass,
@@ -706,7 +869,10 @@ base.
   the tick dispatches `wf-publish` with step `sync`, which merges with
   `--merge --match-head-commit` after `MergeReady`'s points 1 to 4, and
   point 5 on a tier-2 review of the resolution diff when the merge had
-  conflicts; the resolution is recorded.
+  conflicts; the resolution is recorded. A conflict it cannot resolve:
+  close the sync PR, `wf new -program` the item
+  `program-sync-<main sha>` with the conflict as its finding, and record
+  both; the next sync waits until that item has merged.
 
 ### The umbrella test
 
@@ -715,25 +881,43 @@ pass, and records the points. wf seeds `f2-umbrella`, a cloud step that
 `wf-review` takes in a fresh session: it reads the design against
 `componentization.md` and the records, and either writes the line
 `r<N>, <date>: umbrella test passed at <sha> (FLOW-20)` with each point's
-evidence, or writes the failing point and sets `design_review: required`,
-which seeds Jeff's review as today.
+evidence, or writes the failing point. A failed component-design point (U1
+to U5) sets `design_review: required`, which seeds Jeff's review as today.
+A failed loop point (U6, or U7 on anything but U1 to U5) returns the item
+to Design with the session's finding (FLOW-06), recorded, and the next
+design takes the test again.
+
+The component-design points (kind 2 when one fails):
 
 - **U1.** Program item: `related` lists `componentization.md`, and the
-  design implements one named phase row (P, S, K or M), a filed split of
-  one, or a follow-up of a program item, within that row's Work and Done
-  when.
-- **U2.** No blocking question, and no flagged assumed question (FLOW-19,
-  with the program's seam clause). Each recommendation cites the umbrella
-  decision or recorded answer of Jeff's it follows.
-- **U3.** `rule_changes` is empty (a rule change needs Jeff's clearance,
-  FLOW-14), and the design's `areas` reach no rule or machinery path of the
-  profile (LOOP-09).
+  design implements the components, seams and boundaries the program's
+  design names for one phase row (P, S, K or M), or a filed split,
+  follow-up or re-sequencing of them, within that row's Work and Done
+  when. A design that changes only the order, the split or the method is
+  within U1; one that adds a component, moves a boundary or a component's
+  ownership, or adds a seam the program does not name, is not.
+- **U2.** No blocking question and no flagged assumed question (FLOW-07,
+  FLOW-19, with the program's clauses: only component design, setup or
+  privileged work blocks or flags). Each recommendation cites the umbrella
+  decision or recorded answer of Jeff's it follows, or says it settles a
+  question of strategy.
+- **U3.** `rule_changes` is empty (a component invariant is its contract
+  and needs Jeff's clearance, FLOW-14), and the design's `areas` reach no
+  rule or machinery path of the profile (a loop rule is a process item's,
+  LOOP-09, a5).
 - **U4.** `security_boundary` is `none`, or the only trip is GLOBAL-06's
   relay clause and the Security note states that no boundary's posture
-  changes (a15).
+  changes (a14).
 - **U5.** Each interface break is one FLOW-20's Interfaces bullet allows.
-- **U6.** `repos` and `areas` declared, no fewer than intake recorded.
-- **U7.** The independent session agrees.
+
+The loop points (decided by the loop when one fails):
+
+- **U6.** `repos` and `areas` declared. Where they are fewer than intake
+  recorded, or intake recorded none, the session checks them against the
+  area map and `tools/tier1/area-edges.sh` and records the check; FLOW-19's
+  "no fewer than intake" otherwise sends a narrowing to Jeff, and would
+  send every program item intake left undeclared.
+- **U7.** The independent session agrees, point by point.
 
 `check/review.go`'s `approvals` accepts `umbrella test passed at <sha>` as
 an approval, so the Plan gate's delta check works as for Jeff's: a later
@@ -743,25 +927,53 @@ today.
 
 Design also settles a question from the umbrella or a recorded answer
 before it raises one, citing the source, and records "settled by <ref>, not
-asked".
+asked". A question of strategy it cannot settle that way it asks as
+assumed, with its recommendation, and the umbrella session confirms or
+returns it.
 
-### What still reaches Jeff
+### What reaches Jeff
 
-- The design review of a process item, and of a program design that fails
-  the umbrella test.
-- A blocking question the umbrella and his recorded answers do not settle.
-- A MUST finding Decision 10 does not let the loop defer.
-- The security note of a program PR that changes a boundary's posture, at
-  `f7-merge`.
-- CI repair exhausted (FLOW-11), a branch that did not delete (FLOW-16), a
-  second runaway budget, a fifth return to Design, a sync conflict the loop
-  cannot resolve.
-- A process item's merge to `main` and its state step, and the merge of
-  a program item that changes CI or release configuration (Decision 8).
-- Releasing a held item, an urgent mark, the priority order, `hosts.yaml`
-  beyond a19, an area map change other than an addition.
-- Making a repository public; a release without a suffix.
-- The landing merges (Decision 12), with the records in their bodies.
+Every gate the earlier draft sent to Jeff during the program, with its
+kind; a gate of none of the three kinds is decided by the loop, and the
+last column says what the loop does instead. Every "decided by the loop"
+entry is recorded (Decision 13) and callable back.
+
+| Gate | Kind | Instead |
+|---|---|---|
+| This item's review and merge, its state step, program trunks, rulesets, App permissions, nightly prompt, `specs-prerelease-tags` (Decision 16) | 1 setup | |
+| Creating the program repositories on the umbrella's list (a18) | 1 setup | |
+| A process item's design review and state step (a5) | 2 design | |
+| A program design failing U1 to U5: a new component, a boundary moved, a seam the program does not name, a rule change, a posture change, a break FLOW-20 does not allow | 2 design | |
+| A blocking or flagged question on component design (a13) | 2 design | |
+| A blocking question of strategy | none | assumed on Design's recommendation, confirmed by the umbrella session |
+| A departure from a recorded decision of his on strategy | none | made, listed first under **Decided for you** |
+| A program design failing U6, or U7 on anything but U1 to U5 | none | back to Design with the finding |
+| A program PR's security note with a posture change, at `f7-merge` (a14) | 2 design | |
+| A security note whose only trip is the relay clause (a14) | none | read by the independent session; acknowledged by the landing merge |
+| A tier-2 MUST the loop could not fix in one round, not protected (a12) | none | deferred; signed off by the landing merge |
+| A protected MUST finding (a12) | none, then 2 | back to Design to conform; to Jeff only to dismiss it or to change the posture or contract it protects |
+| A program item's third return to Design (FLOW-06, a15; the earlier draft's fifth) | none | no escalation; its budget bounds the returns |
+| A runaway budget (FLOW-13, a15) | none | 1st: estimate raised to spend; 2nd: new plan by a fresh session; then held until no other program item has a ready step |
+| CI repair exhausted (FLOW-11, a15) | none, or 3 | back to Design with the failure; Jeff only when a secret, runner or repository setting must change |
+| A sync conflict the loop cannot resolve (Decision 14, a15) | none | program trunk stays; a program item `program-sync-<sha>` is filed to resolve it |
+| A branch that did not delete (FLOW-16) | 3 privileged | as written; the setup's automatic deletion prevents it, and it blocks no program step |
+| A process item's merge to `main` (FLOW-08) | 3 privileged | |
+| The merge of a program item that changes CI or release configuration (Decision 8) | 3 privileged | |
+| A program item's merge into its program trunk (a11) | none | `f7-merge` under the merge gate |
+| Releasing a held item; an urgent mark; the priority order (a2, Decision 5) | none | the hold stays, the order is FLOW-05's; his word overrides whenever given, and nothing waits on it |
+| Filing phase items and reconciliation items; relating items (a16) | none | filed by the loop |
+| An area-map change (a16) | none | made by the loop when a reviewed or umbrella-passed design names it or `area-edges.sh` shows it |
+| A `hosts.yaml` change | 3 privileged | a new repository's line is part of the setup (kind 1) |
+| A native step only his attended machine can take, or a machine not serving (FLOW-09) | 3 privileged | |
+| A repository not on the umbrella's list (a18) | 2 design | |
+| Making a repository public (a18) | 3 privileged | |
+| A `-dev` or `-rc` tag (a17) | none | tagged by the loop |
+| A release without a suffix | 3 privileged | |
+| The `program/componentization-final` tags (Decision 12) | none | pushed by `program-land` |
+| `program-land`'s design review (a5) | 2 design | |
+| "Every component works as intended" (Decision 12) | none | the loop's evidence, in each landing PR |
+| The landing merges, with the records in their bodies (Decision 12) | 3 privileged | |
+| Answering each hold at the program's end | none | `program-land`'s Close resumes each; he may close any |
 
 ### Pre-release tags
 
@@ -804,18 +1016,23 @@ asked".
     ahead.
   - After dispatch: `wf tag-next` and its push; `wf record` for each
     decision the run made.
-  - Digest: **Held** (one line), **Decided for you** (the run's records),
-    and Blocked on Jeff without held items or loop-merged PRs.
+  - Digest: **Held** (one line), **Decided for you** (the run's records,
+    a stuck item's re-plan or hold and a departure from his decisions
+    first), and Blocked on Jeff without held items or loop-merged PRs,
+    each step there named with its kind (setup, design, privileged).
+  - A program item's runaway, repair exhaustion or unresolved sync
+    conflict is dispatched as Decision 11 says, not escalated.
 - **`workflow-human`**: step 2 shows held items apart; step 3 checks a
   process item's Program payoff, a program design's interface breaks and
   areas, and lists the umbrella passes since the last sitting for reading;
   item 5 (`SKILL.md:145-150`) does not offer a PR to a program trunk ("the
-  loop merges it"), lists those held at `f7-merge` on a protected finding,
-  and the records since the last sitting; a new last item walks the
-  landing PRs once `program-land` resumes.
+  loop merges it"), lists those held at `f7-merge` on a posture change or
+  a protected finding the loop asks him to dismiss, and the records since
+  the last sitting; a new last item walks the landing PRs once
+  `program-land` resumes.
 - **`workflow-intake`**: the hold wording of the earlier draft (`-hold
   "<why>" -resumes "<when>"`), `-program` for a program item, and an
-  unattended path for a17's filings, recorded.
+  unattended path for a16's filings, recorded.
 - **`workflow-native`** (`SKILL.md:3, 36, 130, 206`): tests each trunk and
   program trunk, then the waiting branches; never pushes `main` or a
   program trunk, and merges nothing; `settings.native.json:89`'s deny of
@@ -823,18 +1040,24 @@ asked".
 - **`wf-publish`** (`.claude/agents/wf-publish.md:16, 19, 41, 66, 91`):
   every `origin/main` and `main` becomes "the item's trunk (`dist/wf
   trunk`)"; new steps `f7-merge` and `sync`; the Never line as in
-  workflow-tick.
-- **`wf-review`**: the `f2-umbrella` step; each MUST and SHOULD finding
-  recorded with the head it was found on; a deferral with its reason.
+  workflow-tick; for a program item, repair exhaustion (`:58-59`) returns
+  the item to Design unless only privileged work can fix the failure.
+- **`wf-review`**: the `f2-umbrella` step, U6's area check included; each
+  MUST and SHOULD finding recorded with the head it was found on; a
+  deferral with its reason; a protected finding still open sends the item
+  back to Design.
 - **`wf-design`**: the umbrella self-check and `design_review: umbrella`;
-  settle a question from the umbrella before raising it.
+  settle a question from the umbrella before raising it; on a program
+  item, ask a question of strategy as assumed, never blocking, and flag
+  only component design.
 
 ## Defaults and overrides
 
 - **A hold's resume point.** `program-end` unless Jeff names another.
   `-resumes` is required with `-hold`.
 - **A non-program item during the program.** Held; only Jeff's word
-  releases it.
+  releases it, and nothing waits on that word. At the program's end the
+  loop resumes it.
 - **An item's trunk.** `main`; the program trunk only for a program item
   that is not a process item and touches no machinery, `.github/` or
   `.goreleaser.yaml` path, in a repository
@@ -843,9 +1066,21 @@ asked".
 - **The merge method.** Squash per item, merge commit for the program sync.
   No other method is used, and no loop merge runs without the gate.
 - **A MUST finding the loop could not fix.** Deferred and recorded, except
-  the protected ones, which wait on Jeff.
-- **Design review of a program feature.** The umbrella test; on any failed
-  point, Jeff.
+  the protected ones, which send the item back to Design; Jeff only to
+  dismiss one or to change what it protects.
+- **Design review of a program feature.** The umbrella test; on a failed
+  component-design point (U1 to U5), Jeff; on a failed loop point, back to
+  Design.
+- **A question on a program item.** Assumed, on Design's recommendation,
+  unless it is component design or needs setup or privileged work.
+- **A program item that does not converge.** No escalation: estimate
+  raised, then a new plan, then held behind every other program step;
+  Jeff only for a failure only his privileges can fix.
+- **A step that waits on Jeff.** Only setup, component design or
+  privileged work (Decision 11); anything else is decided by the loop and
+  recorded.
+- **Program repositories.** All on the umbrella's list, created private in
+  the one-time setup.
 - **Pre-release version.** The next minor after the latest release without
   a suffix, `v0.1.0` when the repository has none; `-dev.N` counting from 1
   per minor; `-rc.N` likewise.
@@ -874,6 +1109,15 @@ bar (Decision 6).
     to 20 designs passing, 8 to 10 sittings.
   - Alias and window questions: a few per program design.
   - Specification tags: each `-dev` tag (today his push, seam-specs a15).
+  - Escalations of a stuck program item: K1's one escalation so far, and
+    each third return, runaway, repair exhaustion or sync conflict to come,
+    go to 0 (a15).
+  - Questions of strategy: each blocking question on how to implement a
+    program item becomes an assumed one the umbrella session confirms.
+  - Repositories: one word per repository as its phase starts (a11 of
+    componentization) becomes one setup sitting (a18).
+  - The program's end: answering each of 8 holds becomes the loop's
+    resume.
 - **Time saved.** Three in-progress places and an `alters_relationships`
   slot are freed now; a program PR merges in the run that makes it ready,
   not at his next sitting; pins can follow a pre-release the same day.
@@ -888,7 +1132,10 @@ bar (Decision 6).
   appears; a follow-up process item may, under the bar.
 - Count the PR slot per trunk: with non-program work held, `main` has no
   feature PRs to share it with.
-- Create any repository, or change `main`'s protection.
+- Create any repository itself (Jeff does, in the setup, a18), or change
+  `main`'s protection.
+- Change who reviews a process item (a5 keeps it Jeff's), or let the loop
+  merge to `main`.
 
 ## Rule changes
 
@@ -1018,32 +1265,74 @@ MUST; check changes from `agent-judgment` to `automated + agent-judgment`.
 >   squash commit, and merges the trunk into it, as a merge commit, whenever
 >   the trunk moves past it. A process item, and any change to the loop's
 >   rules or machinery, goes to the trunk by the human's merge (LOOP-09).
-> - **Fewer human gates.** A program feature's design review is taken by the
->   *umbrella test* when every point holds: the design implements one phase
->   of the program's design, or a filed split or follow-up of one, within
->   that phase's work; no blocking or flagged question is open; it declares
->   no rule change (FLOW-14), and changes no loop machinery and no check that
->   enforces a loop rule (LOOP-09);
->   its `security_boundary` is `none`, or its only trip is GLOBAL-06's
->   relay clause and its security note shows no boundary's posture changes;
->   each interface break is one this rule allows; it declares no fewer
->   repositories or areas than intake recorded; and a review session that
->   did not write the design agrees. Any other program design is reviewed by
->   the human (FLOW-19). A program item's return to Design escalates after
->   its fourth return, not its second (FLOW-06); its first runaway budget
->   raises its estimate to its spend so far, and its second escalates
->   (FLOW-13). The loop files a phase's items once the gate before its wave
->   is met, a reconciliation item that adopts a pre-release on a program
->   trunk (LOOP-07), and an area a program item's design, reviewed or passed
->   by the umbrella test, adds to a map (FLOW-05). New program repositories,
->   of the program's list, are created private, by the human or an attended
->   session, on the standing word of the human's approval of that list;
->   making one public stays the human's.
+> - **Human gates.** A step waits on the human only when it is one of three
+>   kinds (the human, 2026-11-21): *setup*, the one-time setup of the
+>   program's repositories and infrastructure; *component design*, a
+>   question or review about a component's seams, boundaries, contracts or
+>   security posture, not about the strategy to implement it, and the
+>   design of a process item (LOOP-09); and *privileged* work, which needs
+>   the human's privileges or configuration: a merge to a trunk, a change
+>   to CI or release configuration, a release without a suffix, making a
+>   repository public, the machines of the hosts table (LOOP-05), a native
+>   step only the human's attended machine can take, and a failure only
+>   those can fix. The loop decides everything else, and records it:
+>   - A program feature's design review is taken by the *umbrella test*
+>     when every component-design point holds: the design implements the
+>     components, seams and boundaries the program's design names for one
+>     of its phases, or a filed split, follow-up or re-sequencing of them,
+>     within that phase's work; no blocking or flagged question is open; it
+>     declares no rule change (FLOW-14), and changes no loop machinery and
+>     no check that enforces a loop rule (LOOP-09); its
+>     `security_boundary` is `none`, or its only trip is GLOBAL-06's relay
+>     clause and its security note shows no boundary's posture changes;
+>     and each interface break is one this rule allows. A review session
+>     that did not write the design judges each point, and checks the
+>     item's repositories and areas against the area map and the
+>     repository's dependency edges; a failure of that check, or a
+>     disagreement on anything but a component-design point, returns the
+>     design to Design (FLOW-06). A design that fails a component-design
+>     point is reviewed by the human (FLOW-19).
+>   - On a program item, a question is blocking, or flagged, only when it
+>     is component design or needs setup or privileged work; any other
+>     question proceeds as assumed on Design's recommendation, and the
+>     umbrella test's session confirms it (FLOW-07, FLOW-19). A design
+>     follows the human's recorded decisions: one that departs from a
+>     decision on component design flags the question, and one that
+>     departs from a decision on strategy records the departure.
+>   - A program item does not escalate for not converging. Its returns to
+>     Design do not escalate (FLOW-06). A CI failure Publish cannot repair
+>     returns it to Design with the failure as the finding, unless only
+>     privileged work can fix it (FLOW-11). Its first runaway budget raises
+>     its estimate to its spend so far; its second returns it to Design for
+>     a new plan by a session that did not write the design; after that it
+>     is held until no other program item has a ready step, and returns to
+>     Design when it resumes (FLOW-13). A program sync whose conflict the
+>     loop cannot resolve leaves the program trunk as it is, and the loop
+>     files a program item that resolves it.
+>   - A tier-2 MUST finding the loop may not defer (FLOW-08) returns the
+>     item to Design for a change that conforms; it reaches the human only
+>     to be dismissed, or when the posture or contract it protects would
+>     have to change.
+>   - The loop files a phase's items once the gate before its wave is met,
+>     a reconciliation item that adopts a pre-release on a program trunk
+>     (LOOP-07), and the relations between items that their designs name;
+>     and it changes an area map where a program item's design, reviewed or
+>     passed by the umbrella test, names the change, or where the change
+>     brings the map's `reaches` in line with the repository's dependency
+>     edges (FLOW-05).
+>   - Releasing a hold, marking a fix urgent and the order of the queue are
+>     the human's word whenever given; no step waits on it.
+>   - Every repository on the program's list is created private in the
+>     setup. A repository not on it is a new component, and proposing one
+>     is component design; making one public is privileged work.
 > - **Records.** Each decision this rule lets the loop take in the human's
->   place (a loop merge, a deferred tier-2 MUST finding, an umbrella test, a
->   security note read under it, a re-estimate, a return past the second, a
->   filed item, an area added, a pre-release tag, a program sync's conflict
->   resolution) is recorded in the
+>   place (a loop merge, a deferred tier-2 MUST finding, a protected one
+>   sent back to Design, an umbrella test, a security note read under it, a
+>   question settled as assumed, a departure from a decision on strategy, a
+>   re-estimate, a new plan, a hold after a runaway, a repair failure sent
+>   back to Design, a program sync's conflict resolution or the item filed
+>   for it, a filed item or relation, an area-map change, a tag, a hold
+>   resumed at the program's end) is recorded in the
 >   workflow branch's program records, named in the run's digest, and listed
 >   again in the pull request that lands the program trunk. The human may
 >   call any back: a blocking question on an open item, or a follow-up
@@ -1078,24 +1367,28 @@ MUST; check changes from `agent-judgment` to `automated + agent-judgment`.
 > into its trunk, or earlier by the human's word. A process item that the
 > loop holds until the program's last phase has merged lands it: its design
 > names one pull request per repository from the program trunk to the
-> trunk, whose body lists the program records, and its own change retires
-> this rule. Its Close lists every item held until the program's end, and
-> the human answers each hold, resuming the item or closing it.
+> trunk, whose body lists the program records and the evidence that each
+> component works when built from its own repository, and its own change
+> retires this rule. Its Close resumes every item held until the program's
+> end, each returning to Design for what the program changed, and records
+> it; the human may close any of them instead.
 >
 > The automated part: wf chooses an item's trunk, checks the queue's program
 > mark against the design's `related`, takes an umbrella-test line as an
-> approval, and counts a held item toward no limit. The agent part: intake
-> and Design judge whether an item is a program item; the design review or
-> the umbrella test's session judges a Program payoff, each interface break
-> and each point of the test.
+> approval, counts a held item toward no limit, and turns a program item's
+> escalations into the steps above. The agent part: intake and Design judge
+> whether an item is a program item and which kind a question is; the
+> design review or the umbrella test's session judges a Program payoff,
+> each interface break and each point of the test.
 
 **Enforcement:** `Config.TrunkFor`, `Feature.Program`, the declared check,
 `approvals` (`check/review.go`), and the escalation carve-outs
-(`queue/phases.go:599-605`, `queue/limits.go`, `Runaway`).
+(`queue/phases.go:599-605`, `queue/limits.go`, `Runaway` at
+`queue/queue.go:1425`, `.claude/agents/wf-publish.md:58-59`).
 
 ### FLOW-03 (amend), `docs/development/process.md`
 
-MUST, `automated`. **Why:** phase 7 names the human's merge (a12).
+MUST, `automated`. **Why:** phase 7 names the human's merge (a11).
 
 **Current wording** (`process.md:158`):
 
@@ -1110,7 +1403,7 @@ MUST, `automated`. **Why:** phase 7 names the human's merge (a12).
 
 ### FLOW-04 (amend), `docs/development/process.md`
 
-MUST, `automated`. **Why:** the loop's merge is a step it takes (a12).
+MUST, `automated`. **Why:** the loop's merge is a step it takes (a11).
 
 **Current wording** (`process.md:248-250`):
 
@@ -1131,8 +1424,8 @@ MUST, `automated`. **Why:** the loop's merge is a step it takes (a12).
 ### FLOW-05 (amend), `docs/development/process.md`
 
 SHOULD, `automated`. **Why:** held items hold no limit (a3); a PR the loop
-merges does not wait on the human (a12); the loop adds areas a program
-design names (a17).
+merges does not wait on the human (a11); the loop changes an area map as a
+program design names or the dependency edges show (a16).
 
 **Current wording** (`process.md:337-339`):
 
@@ -1144,9 +1437,10 @@ design names (a17).
 
 > the queue state, where the Areas entry of the repository's profile says
 > (LOOP-01), and it changes only in an attended session, on the human's
-> word: no agent changes it otherwise, except that the loop adds the areas
-> a program item's design, reviewed or passed by FLOW-20's umbrella test,
-> names (FLOW-20).
+> word: no agent changes it otherwise, except that, while FLOW-20 stands,
+> the loop makes a change that a program item's design, reviewed or passed
+> by FLOW-20's umbrella test, names, or that brings the map's `reaches` in
+> line with the repository's dependency edges, and records it (FLOW-20).
 
 **Current wording** (`process.md:369-373`, from "Only holders"):
 
@@ -1180,9 +1474,9 @@ design names (a17).
 **Proposed:**
 
 > question, a pull request waiting for
-> the human's merge, or held at a program trunk's merge on a finding or a
-> security note only the human may clear (FLOW-08), or a spent budget
-> (FLOW-13); it counts once, and
+> the human's merge, or held at a program trunk's merge on a security note
+> or a finding only the human may clear (FLOW-08), or a spent budget
+> (FLOW-13), which a program item's never is (FLOW-20); it counts once, and
 > neither a tracked item nor an item on hold (`resumes`) counts. This limit
 > counts by no relation and stops only a
 > start: work in progress goes on, so the count can pass it. A fix that
@@ -1199,7 +1493,7 @@ design names (a17).
 
 ### FLOW-06 (amend), `docs/development/process.md`
 
-MUST, `agent-judgment`. **Why:** a16.
+MUST, `agent-judgment`. **Why:** a15.
 
 **Current wording** (`process.md:430-431`):
 
@@ -1209,14 +1503,34 @@ MUST, `agent-judgment`. **Why:** a16.
 **Proposed:**
 
 > delta (FLOW-19). A feature that returns to Design more than twice escalates to a
-> `human` step instead of looping again; a program item, more than four times
-> (FLOW-20).
+> `human` step instead of looping again. A program item's returns do not
+> escalate: its budget bounds them (FLOW-13, FLOW-20).
 
 **Enforcement:** `queue/phases.go:599-605`.
 
+### FLOW-07 (amend), `docs/development/process.md`
+
+MUST, `agent-judgment`. **Why:** a13.
+
+**Current wording** (`process.md:450-451`):
+
+> - **Blocking** — the design cannot proceed without the answer. The feature waits on
+>   a `human` step; the worker moves on to other work.
+
+**Proposed:**
+
+> - **Blocking** — the design cannot proceed without the answer. The feature waits on
+>   a `human` step; the worker moves on to other work. For a program item
+>   (FLOW-20), a question is blocking only when it is component design or
+>   needs setup or privileged work; any other proceeds as assumed, on its
+>   recommendation.
+
+**Enforcement:** none new; Design and the umbrella test's session judge a
+question's kind (`wf-design`, `wf-review`).
+
 ### FLOW-08 (amend), `docs/development/process.md`
 
-MUST, `automated`. **Why:** a12, a13.
+MUST, `automated`. **Why:** a11, a12, a14.
 
 **Current wording** (`process.md:463`, `:468-473`):
 
@@ -1259,7 +1573,8 @@ MUST, `automated`. **Why:** a12, a13.
 > that head, and records the merge (FLOW-20). The loop defers a MUST finding
 > only after one fix round, and never one under GLOBAL-06, a SEC rule,
 > RELAY-01 to RELAY-03 or RELAY-05, or that breaks what FLOW-20 says never
-> breaks; it never dismisses one. The human's merge of the program trunk
+> breaks: such a finding returns the item to Design for a change that
+> conforms (FLOW-20). It never dismisses one. The human's merge of the program trunk
 > into its trunk is the sign-off for everything the loop merged there, and
 > its pull request lists each deferred finding and each security note to
 > acknowledge.
@@ -1280,9 +1595,29 @@ MUST, `automated`. **Why:** a12, a13.
 **Enforcement:** `check.MergeReady`, `f7-merge` (`queue/next.go`), the
 records (`wf record`, `wf program-body`).
 
+### FLOW-11 (amend), `docs/development/process.md`
+
+MUST, `automated`. **Why:** a15.
+
+**Current wording** (`process.md:605-606`):
+
+> The Publish phase fixes CI failures for at most three attempts per distinct
+> failure before escalating to a `human` step. A failure that does not reproduce is
+
+**Proposed:**
+
+> The Publish phase fixes CI failures for at most three attempts per distinct
+> failure before escalating to a `human` step; for a program item (FLOW-20), it
+> returns the item to Design with the failure as the finding instead, and records
+> it, unless only the human's privileges or configuration can fix the failure (a
+> secret, a runner, a repository setting). A failure that does not reproduce is
+
+**Enforcement:** `.claude/agents/wf-publish.md:58-59`, and Design's seeding
+of a return (`queue/phases.go:550-566`).
+
 ### FLOW-13 (amend), `docs/development/process.md`
 
-MUST, `automated`. **Why:** a16.
+MUST, `automated`. **Why:** a15.
 
 **Current wording** (`process.md:647-648`):
 
@@ -1292,17 +1627,19 @@ MUST, `automated`. **Why:** a16.
 **Proposed:**
 
 > the run: an open (queued or in-progress) item that spends `runaway_factor` times
-> its estimated steps escalates to a `human` step (a program item's first
-> time, its estimate is raised to its spend so far instead, and recorded,
-> FLOW-20), and no unattended run takes
+> its estimated steps escalates to a `human` step (a program item does not:
+> the first time, its estimate is raised to its spend so far; the second, it
+> returns to Design for a new plan by a session that did not write the design;
+> after that, it is held until no other program item has a ready step; each is
+> recorded, FLOW-20), and no unattended run takes
 
 **Enforcement:** `Schedule.Runaway` and the escalation seeding in
 `queue/limits.go` and `queue/phases.go`.
 
 ### FLOW-17 (amend), `docs/development/process.md`
 
-MUST, `agent-judgment`. **Why:** program trunks and pre-release tags (a11,
-a18).
+MUST, `agent-judgment`. **Why:** program trunks and the loop's tags (a10,
+a17, Decision 12).
 
 **Current wording** (`process.md:806-809`):
 
@@ -1317,15 +1654,15 @@ a18).
 > (FLOW-08). Pushing never includes any repository's trunk itself, a
 > program trunk other than its creation at its trunk's head on the human's
 > word, a force-push, rewriting history that is already on the remote,
-> deleting a remote branch (FLOW-16), or a tag, except a pre-release tag
-> FLOW-20 lets the loop push and a tag an attended session pushes on the
-> human's word (a release tag, or a program trunk's final tag); no tag is
-> moved or deleted. An unattended
+> deleting a remote branch (FLOW-16), or a tag, except a pre-release tag or
+> a program trunk's final tag FLOW-20 lets the loop push, and a release tag
+> an attended session pushes on the human's word; no tag is moved or
+> deleted. An unattended
 > session on a native machine pushes a
 
 ### FLOW-19 (amend), `docs/development/process.md`
 
-MUST, `automated + agent-judgment`. **Why:** a14.
+MUST, `automated + agent-judgment`. **Why:** a13, a14.
 
 **Current wording** (`process.md:875-877`):
 
@@ -1338,9 +1675,11 @@ MUST, `automated + agent-judgment`. **Why:** a14.
 > answered on its own. A question is flagged, and always answered on its
 > own, when it touches a security boundary or a seam, or departs from
 > prior art or from an earlier decision of the human's. For a program item
-> (FLOW-20), a question that touches a seam is flagged only when the seam's
-> change departs from what the program's design names for the item's
-> phase.
+> (FLOW-20), a question is flagged only when it is component design: when
+> it changes a seam in a way the program's design does not name for the
+> item's phase, changes a security boundary's posture, a component's
+> boundary or a contract, or departs from an earlier decision of the
+> human's on component design.
 
 **Current wording** (`process.md:892-893`):
 
@@ -1353,7 +1692,8 @@ MUST, `automated + agent-judgment`. **Why:** a14.
 > `design_review: required`, `skip`, or, for a program feature, `umbrella`
 > (FLOW-20), in the front-matter and the queue. An `umbrella` review is taken
 > by FLOW-20's umbrella test; its line `umbrella test passed at <sha>` is an
-> approval, and a failed point makes it `required`. `skip` is
+> approval; a failed component-design point makes it `required`, and any
+> other failed point returns the feature to Design (FLOW-06). `skip` is
 
 `docs/design/TEMPLATE.md`'s front-matter comment becomes `required | skip
 | umbrella (FLOW-19, FLOW-20)`.
@@ -1364,7 +1704,7 @@ validation, the `f2-umbrella` step's seeding.
 
 ### LINT-03 (amend), `docs/development/behavioral-linter.md`
 
-MUST, `automated`. **Why:** a13, a18.
+MUST, `automated`. **Why:** a12, a17.
 
 **Current wording** (`behavioral-linter.md:59-65`):
 
@@ -1396,7 +1736,7 @@ job, so a release without a suffix is diffed against the last one.
 
 ### LOOP-01 (amend), `docs/development/loop-contract.md`
 
-MUST, as written. **Why:** a11.
+MUST, as written. **Why:** a10.
 
 **Current wording** (`loop-contract.md:102-106`):
 
@@ -1419,7 +1759,7 @@ MUST, as written. **Why:** a11.
 
 ### LOOP-07 (amend), `docs/development/loop-contract.md`
 
-MUST, `agent-judgment`. **Why:** a17, a18.
+MUST, `agent-judgment`. **Why:** a16, a17.
 
 **Current wording** (`loop-contract.md:321-324`, `:331-333`):
 
@@ -1449,7 +1789,7 @@ MUST, `agent-judgment`. **Why:** a17, a18.
 
 ### PROFILE-01 (amend), `docs/development/loop-profile.md`
 
-MUST, as written. **Why:** a11, a18.
+MUST, as written. **Why:** a10, a16, a17.
 
 **Current wording** (`loop-profile.md:26`, the last sentence of `:31`,
 the end of `:41`, and `:42`, `:43`):
@@ -1470,7 +1810,7 @@ the end of `:41`, and `:42`, `:43`):
 
 > Each pin is a release tag without a suffix on `main` and on a pull request to it; on the program trunk and a pull request to it, a pin may also be a pre-release tag (`-dev.N`, `-rc.N`, FLOW-20); a branch may pin a commit of an unmerged specifications branch while its work is in progress. |
 
-> It is not one of this repository's rule files: it changes in an attended session, on the human's word, or by the loop's addition of areas a program design names (FLOW-05, FLOW-20). `tools/tier1/area-edges.sh` prints this repository's dependency edges, which the loop compares the map's `reaches` with. |
+> It is not one of this repository's rule files: it changes in an attended session, on the human's word, or by the loop, as a program design names or as the dependency edges below show (FLOW-05, FLOW-20). `tools/tier1/area-edges.sh` prints this repository's dependency edges, which the loop compares the map's `reaches` with. |
 
 > | Release | A `v*` tag push runs the `release` workflow (GoReleaser), whose `tier1` job is the gate's deterministic half (LINT-03), and the `relay-image` workflow. A tag with a suffix, which only the loop pushes and only on the program trunk (FLOW-20), publishes as a GitHub pre-release and moves neither the Latest release nor the relay image's `latest`; a tag without one is the human's, from `main`. The human's sign-off of a tier-2 report over the release diff has no wired step yet. |
 
@@ -1498,7 +1838,7 @@ MUST, `automated + agent-judgment`. **Why:** a6.
 > Post-1.0 this tightens, consistent with the seam-stability posture (GLOBAL-08).
 
 **Enforcement:** unchanged; a deliberate break carries a `Tier1-Allow`
-trailer naming FLOW-20 (a9).
+trailer naming FLOW-20 (a6).
 
 ### ORCH-03 (amend), `docs/development/orchestrator.md`
 
@@ -1527,8 +1867,12 @@ MUST, `automated + agent-judgment`. **Why:** a6.
 environment, relay) changes. The change is to who may merge into a
 non-release branch. Its limits: the loop never merges into `main`; it merges
 only under the merge gate, pinned to the head GitHub will check; a finding
-that could open a boundary is never deferred; a program PR that changes a
-boundary's posture waits on Jeff's acknowledgment of its security note; a
+that could open a boundary is never deferred or merged over, and sends the
+item back to Design; a change to a component's security posture is
+component design, so the design that makes it is reviewed by Jeff and the
+program PR that carries it waits on his acknowledgment of its security
+note; the decisions this item moves from Jeff to the loop (questions of
+strategy, re-plans, holds, area maps, filing) open no boundary; a
 change to CI or release configuration, which runs with signing and package
 write access on the loop's tags, is never loop-merged; and every program trunk lands
 on `main` only by Jeff's squash merge, with each deferred finding and
@@ -1546,9 +1890,12 @@ force-push or deletion) is Jeff's, and no agent changes it.
     one, and `main` for one that reaches `.github/`; `Validate` refuses a program
     trunk equal to the trunk; a merge step on a program trunk is offered to
     a cloud worker only when the gate passes and never otherwise; a PR at
-    `f7-merge` does not wait on the human; a program item's third return
-    does not escalate and its fifth does; its first runaway raises the
-    estimate and records it, its second escalates.
+    `f7-merge` does not wait on the human, and one held on a posture change
+    does; a program item's returns to Design never escalate, while a
+    feature's third still does; its first runaway raises the estimate, its
+    second seeds a return to Design, its third holds it until no other
+    program item has a ready step, each recorded and none a `human`
+    step.
   - `check`: `MergeReady` fails on each of its nine points alone, with
     fixtures (a base other than the program trunk; a moved head; a failed or
     missing required check; a branch behind; an open protected MUST; a
@@ -1558,7 +1905,8 @@ force-push or deletion) is Jeff's, and no agent changes it.
     squash on the program trunk; `approvals` accepts an umbrella line and
     the Plan gate fails on an impact field changed after it; the declared
     check fails on a `program` mark that disagrees with `related`.
-  - `summary`: **Held** and **Decided for you**.
+  - `summary`: **Held**, and **Decided for you** with a stuck item's
+    re-plan or hold listed first.
   - `cmd/wf`: `-resumes`; `wf trunk`; `wf main -trunk`; `wf record`
     appends; `wf program-body` renders every record kind; `wf tag-next`
     gives `v0.7.0-dev.1` after `v0.6.0`, then `-dev.2`, nothing on a
@@ -1592,23 +1940,25 @@ TEST-02), and ends with `make test` green.
 2. Program trunk: `RepositoryEntry.ProgramTrunk`, `Feature.Program`,
    `Config.TrunkFor`, `Validate`; `check/repos.go` `trunk()`; the declared
    check; `wf trunk`, `wf main -trunk`, `wf stale`, `wf areas`, `wf drops`,
-   `wf new -program` (FLOW-20, LOOP-01, a11).
+   `wf new -program` (FLOW-20, LOOP-01, a10).
 3. Merge gate: `check.MergeReady`, `wf check -step f7-merge`; the merge
    label; `queue/next.go` and `queue/phases.go` seed and offer `f7-merge`;
    `queue/limits.go` waiting rule; `wf sync-program` (FLOW-03, FLOW-04,
-   FLOW-05, FLOW-08, a12).
+   FLOW-05, FLOW-08, a11, a12); a protected finding seeds a return to
+   Design; the sync's unresolved conflict files `program-sync-<sha>`.
 4. Records: `wf record`, `wf program-body`, **Decided for you** in
-   `QUEUE.md` and the digest (FLOW-20, a13).
+   `QUEUE.md` and the digest (FLOW-20, Decision 13).
 5. Gates: `design_review: umbrella` (the validators `queue/queue.go:1313`
    and `check/review.go:107`, and `TEMPLATE.md`'s comment), the
    `f2-umbrella` step, `approvals`;
-   the FLOW-06 and FLOW-13 carve-outs (FLOW-19, a14 to a16).
+   U6's area check; the FLOW-06, FLOW-11 and FLOW-13 carve-outs (FLOW-07,
+   FLOW-19, a13 to a15).
 6. Pre-releases: `wf tag-next`; `.goreleaser.yaml`, `relay-image.yml`,
    `release.yml`, `check-pins.sh`, `pin-specs.sh`; `CONTRIBUTING.md`'s pin
-   and release paragraphs (`:186-187, :205-219`) (a18).
+   and release paragraphs (`:186-187, :205-219`) (a17).
 7. CI triggers: `main.yml` and `flow18.yml` add `'program/**'`.
-8. Rules: FLOW-20, FLOW-03, FLOW-04, FLOW-05, FLOW-06, FLOW-08, FLOW-13,
-   FLOW-17, FLOW-19 in `process.md`; LINT-03; LOOP-01 and LOOP-07;
+8. Rules: FLOW-20, FLOW-03, FLOW-04, FLOW-05, FLOW-06, FLOW-07, FLOW-08,
+   FLOW-11, FLOW-13, FLOW-17, FLOW-19 in `process.md`; LINT-03; LOOP-01 and LOOP-07;
    PROFILE-01; UX-03; ORCH-03; as approved (FLOW-14).
 9. Skills and agents as under **Design, Skills and agents**:
    `workflow-tick`, `workflow-human`, `workflow-intake`, `workflow-native`,
@@ -1620,10 +1970,12 @@ TEST-02), and ends with `make test` green.
     2, FLOW-12). Jeff merges it.
 
 **State step** (`x4-state`, recorded at review with `wf state-step`;
-Jeff's, after the merge, in one attended sitting):
+Jeff's, after the merge, in one attended sitting, the setup of kind 1):
 
 1. `config.yaml`: `program_trunk: program/componentization` on the
-   `buildwarden/buildwarden` and `buildwarden/buildwarden-specs` entries.
+   `buildwarden/buildwarden` and `buildwarden/buildwarden-specs` entries,
+   and an entry with it for each program repository Jeff has created
+   (a18), with its `hosts.yaml` line.
 2. Create each program trunk at its `main` head, on Jeff's word in this
    sitting (FLOW-17): `git push origin
    origin/main:refs/heads/program/componentization` in each repository.
@@ -1645,8 +1997,14 @@ Jeff's, after the merge, in one attended sitting):
 7. `dist/wf status`, `QUEUE.md`; `dist/wf commit`.
 
 **What only Jeff can do, once** (outside the repository; no agent does
-these, FLOW-08):
+these, FLOW-08; all kind 1):
 
+- **Repositories (a18).** Create every repository on the umbrella's list
+  (the relay, the loop, one per driver), private, each with an initial
+  commit on `main`, the loop's App installed, and "Automatically delete head
+  branches" on, which FLOW-16's Close relies on; set the same option on
+  `buildwarden/buildwarden` and `buildwarden/buildwarden-specs` where it is
+  off.
 - **Rulesets.** On `program/componentization` in each repository (an
   organization ruleset on `program/**` covers new repositories too):
   require a pull request with no approving review (the App cannot approve
@@ -1655,7 +2013,8 @@ these, FLOW-08):
   deletion; no bypass for the App. A tag ruleset that lets the App create
   `v*-dev.*`, `v*-rc.*` and `*/v*-dev.*`, `*/v*-rc.*` tags, never update or
   delete any tag, and reserves bare `v*` tags to him, where GitHub's
-  patterns allow. `main`'s protection is unchanged.
+  patterns allow; it also lets the App create
+  `program/componentization-final`. `main`'s protection is unchanged.
 - **GitHub App permissions.** Confirm the loop's App has `contents: write`
   and `pull_requests: write` on each repository, which a merge needs (it
   already pushes branches and opens PRs; merging is not verified).
@@ -1665,9 +2024,8 @@ these, FLOW-08):
   native sessions merge nothing and need no change.
 - **`specs-prerelease-tags`**: merge it in the specifications repository
   once its PR is ready.
-- **The landing merges** at the program's end (Decision 12), the
-  `program/componentization-final` tags before them, and the full release
-  tags after them.
+- Not once, but kind 3 and his alone: **the landing merges** at the
+  program's end (Decision 12) and the full release tags after them.
 
 Estimate: 10 steps (9 + 1 state step), two runs; the queue's estimate of 5
 is raised at the review, on Jeff's word.
