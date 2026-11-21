@@ -4,10 +4,15 @@ priority: 2
 follows: project-config-trust
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/config-lookup-test-symlinked-tmp.md
 branch: feat/config-lookup-test-symlinked-tmp
-alters_relationships: null
+areas:
+  - cli
+  - designs
+declared: 8eb333d
+alters_relationships: false
+design_review: required
 source: 'host:qemu-any/macbook.20261120T125213Z (unattended) found it; that run''s push failed (session left uncommitted workflow changes) so the filing was lost; refiled attended from the saved leftover on Jeff''s word, 2026-11-20. go test -count=1 -run TestConfigFileLookupOrder ./cmd/warden FAILS on darwin/arm64 on main e9315c2 and again on be13847: subtests ''./warden.toml when nothing names a file'' and ''an empty variable is not set'' get config file /private/var/folders/.../warden.toml, want /var/folders/.../warden.toml (cmd/warden/configfile_test.go:125, added by project-config-trust). Log: native/qemu-any/2026-11-20/cmd-warden-go-test.log.'
 steps:
   - id: f0-branch-setup
@@ -20,10 +25,26 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261121T105719Z
-      expires: 2026-11-21T13:06:18.222487666Z
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -31,7 +52,16 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: q1
+    kind: assumed
+    status: open
+    question: 'Fix the test, not the product: for ./warden.toml the config: line keeps naming the working directory as the process was given it (the shell''s PWD, through os.Getwd), not as links resolve it (/var/... on macOS, not /private/var/...). Proceeding with (a); confirm.'
+    options:
+      - (a) the tests enter their directory as a shell does (t.Chdir, which sets PWD), and a new test pins the unresolved path on every OS
+      - (b) configFile resolves links (EvalSymlinks), so the line always names the real file; tests and reference updated
+      - (c) the test resolves its expected path (EvalSymlinks) and nothing else changes
+    recommended: (a), the design's Decision 1
 history:
   - at: 2026-11-20T22:54:19Z
     by: host:qemu-any/macbook.attended-20261120T225419Z
@@ -54,3 +84,12 @@ history:
   - at: 2026-11-21T11:06:18Z
     by: cloud/20261121T105719Z
     event: claimed f1-design until 2026-11-21T13:06:18Z
+  - at: 2026-11-21T11:10:24Z
+    by: cloud/20261121T105719Z
+    event: 'declared at 8eb333d: areas declared: cli, designs; alters_relationships unset -> false; design_review unset -> required'
+  - at: 2026-11-21T11:11:01Z
+    by: cloud/20261121T105719Z
+    event: done f1-design
+  - at: 2026-11-21T11:11:01Z
+    by: cloud/20261121T105719Z
+    event: entered phase 2 (plan)

@@ -1176,3 +1176,17 @@ gaps:
       item's leftovers on the machine, which only a led item's .scratch/ worktree makes; none yet.
       2026-11-20 (host:windows-hyperv/windows-desktop.20261120T224051Z, unattended, main be13847): not run.
       No .scratch/ directory or local feature branch on windows-desktop; nothing to clean.
+  - id: config-lookup-test-symlinked-tmp-darwin
+    host: qemu-any
+    status: open
+    what: >-
+      On the macbook (darwin/arm64), on feat/config-lookup-test-symlinked-tmp and then on main after its
+      merge: go test -count=1 ./cmd/warden passes, TestConfigFileLookupOrder included, with t.TempDir
+      under /var/folders (a link into /private/var); and in a shell, cd into a directory under
+      /var/folders holding a warden.toml, warden doctor's first line names /var/folders/.../warden.toml,
+      not /private/var/....
+    design: docs/design/config-lookup-test-symlinked-tmp.md
+    note: >-
+      Tracked, not blocking (design tier2_gaps): the fix is in cmd/warden's tests only, and its new
+      tier-0 test reproduces the linked directory on Linux CI. Added at f1-design
+      (cloud/20261121T105719Z, 2026-11-21). The failure it closes: native/qemu-any/2026-11-20/cmd-warden-go-test.log.
