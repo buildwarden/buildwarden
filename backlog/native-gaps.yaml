@@ -1154,6 +1154,13 @@ gaps:
       Tracked, not blocking (design tier2_gaps). Added at x4-state (Jeff, 2026-11-20). Runs on main
       since the merge: 2026-11-19T12:40Z worked; 2026-11-20T12:52Z failed ("session left uncommitted
       workflow changes"), to be read by the next macbook session. The unset-remote run is not yet done.
+      2026-11-21 (host:macos-vz/macbook.20261121T124005Z, unattended, main be13847): the 12:52Z failure was
+      read by host:qemu-any/macbook.attended-20261120T225419Z, which recorded that run's saved leftover
+      (its push had failed) under qemu-environment-descriptors; the wrapper's save-and-report path worked
+      as designed. The 2026-11-20T22:40:36Z scheduled run worked (native/status/macbook.yaml: outcome
+      worked, "claude exited 0") and pushed through wf commit, and this 12:40Z run started under launchd
+      with the release stage and found work through wf gate. Still open: no led item, so native-push.sh is
+      unexercised here, and no run with the private session remote unset.
   - id: loop-native-lead-windows-wrapper
     host: windows-hyperv
     status: open
@@ -1195,3 +1202,7 @@ gaps:
       Tracked, not blocking (design tier2_gaps): the fix is in cmd/warden's tests only, and its new
       tier-0 test reproduces the linked directory on Linux CI. Added at f1-design
       (cloud/20261121T105719Z, 2026-11-21). The failure it closes: native/qemu-any/2026-11-20/cmd-warden-go-test.log.
+      2026-11-21 (host:qemu-any/macbook.20261121T124005Z, unattended, main be13847, go1.26.5): not run on the
+      branch, which is design-only (8eb333d, waiting on human step f2-design-review). On main
+      `go test -count=1 -run TestConfigFileLookupOrder ./cmd/warden` still fails the same two cases (/private/var
+      vs /var/folders). Logs: native/qemu-any/2026-11-21/cmd-warden-go-test.log.

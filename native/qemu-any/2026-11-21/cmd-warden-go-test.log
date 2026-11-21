@@ -1,0 +1,10 @@
+host:qemu-any/macbook.20261121T124005Z, unattended, macbook darwin/arm64, main be138478, go1.26.5
+$ go test -count=1 -run TestConfigFileLookupOrder ./cmd/warden
+--- FAIL: TestConfigFileLookupOrder (0.01s)
+    --- FAIL: TestConfigFileLookupOrder/./warden.toml_when_nothing_names_a_file (0.00s)
+        configfile_test.go:125: config file = "/private/var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/TestConfigFileLookupOrder.warden.toml_when_nothing_names_a_fil2966008064/002/warden.toml" ("found in the working directory"), want "/var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/TestConfigFileLookupOrder.warden.toml_when_nothing_names_a_fil2966008064/002/warden.toml" ("found in the working directory")
+    --- FAIL: TestConfigFileLookupOrder/an_empty_variable_is_not_set (0.00s)
+        configfile_test.go:125: config file = "/private/var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/TestConfigFileLookupOrderan_empty_variable_is_not_set1647332582/002/warden.toml" ("found in the working directory"), want "/var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/TestConfigFileLookupOrderan_empty_variable_is_not_set1647332582/002/warden.toml" ("found in the working directory")
+FAIL
+FAIL	github.com/buildwarden/buildwarden/cmd/warden	0.478s
+FAIL
