@@ -34,6 +34,7 @@ None.
 
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
+| 2 | config-lookup-test-symlinked-tmp | fix (follows project-config-trust) | - | buildwarden/buildwarden | undeclared | 0 branch-setup | f0-branch-setup (cloud, leased to cloud/20261121T105719Z) | - | - | 1 / 7 |
 | 3 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 1 design | f1-escalate-3 (human) | - | - | 25 / 30 |
 | 4 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 5 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
@@ -125,7 +126,6 @@ Open features that are not disjoint. Process items are outside the relations (FL
 | Pri | Item | Kind | Repositories | Areas | Est. steps |
 |---|---|---|---|---|---|
 | 1 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
-| 2 | config-lookup-test-symlinked-tmp | fix (follows project-config-trust) | buildwarden/buildwarden | undeclared | 7 |
 | 7 | relay-release-forms-spec | feature | buildwarden/buildwarden, buildwarden/buildwarden-specs | undeclared | 12 |
 | 8 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
 | 9 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |

@@ -2,7 +2,7 @@ feature: config-lookup-test-symlinked-tmp
 title: 'TestConfigFileLookupOrder fails on macOS: it expects the unresolved t.TempDir path, and LoadConfig returns the working directory os.Getwd resolves (/var -> /private/var)'
 priority: 2
 follows: project-config-trust
-status: queued
+status: in_progress
 round: feature
 phase: 0
 design: docs/design/config-lookup-test-symlinked-tmp.md
@@ -15,15 +15,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261121T105719Z
+      expires: 2026-11-21T13:05:45.583754678Z
 budget:
   estimate:
     runs: 1
     steps: 7
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-11-20T22:54:19Z
@@ -32,3 +32,9 @@ history:
   - at: 2026-11-20T22:54:19Z
     by: host:qemu-any/macbook.attended-20261120T225419Z
     event: 'repos and areas taken from project-config-trust: it has none'
+  - at: 2026-11-21T11:05:45Z
+    by: cloud/20261121T105719Z
+    event: started (FLOW-05)
+  - at: 2026-11-21T11:05:45Z
+    by: cloud/20261121T105719Z
+    event: claimed f0-branch-setup until 2026-11-21T13:05:45Z
