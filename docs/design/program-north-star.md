@@ -141,12 +141,12 @@ The rules as written do not say this, and in places say the opposite:
    its last phase has merged (the Order's wave 6, K5), or earlier by Jeff's
    word. The process item that retires FLOW-20 lists every item held until
    the program's end, and Jeff answers each.
-2. **Non-program work is held, fixes included (a2, a3).** Intake files an
-   item that is not a program item on hold, a security or regression fix
-   included, unless Jeff releases it. Two kinds are program work and never
-   held: the fix for a failing `main` (no branch is refreshed while `main`
-   fails, FLOW-10, so holding it would stop the program), and a fix that
-   `follows` a program item. The urgent mark does not release a hold.
+2. **Non-program work is held, fixes included (a2, a3).** Intake files an item
+   that is neither a program item nor a process item on hold, a security or
+   regression fix included, unless Jeff releases it. Two kinds are program
+   work and never held: the fix for a failing `main` (no branch is refreshed
+   while `main` fails, FLOW-10, so holding it would stop the program), and a
+   fix that `follows` a program item. The urgent mark does not release a hold.
 3. **A hold names when it resumes, and a held item counts toward no limit
    (a4).** A hold question gains `resumes` (free text: `program-end`, a
    named item's merge, or Jeff's words). wf treats an item with an open
@@ -170,19 +170,22 @@ The rules as written do not say this, and in places say the opposite:
    unchanged: process items stay class 2.
 6. **Loop work meets Jeff's bar (a7, a8).** A process item filed while
    FLOW-20 stands carries a **Program payoff** section, judged at its design
-   review; one whose payoff does not exceed its cost is held or closed. It
-   applies to P1's remaining move too. wf-state-migration-step is held
-   until the program's end (a8).
-7. **Interfaces may break for the program, within fixed limits (a9 to
-   a12).** A program item may break Go APIs, internals and the driver
-   contract (as GLOBAL-08 already allows), a seam by a new pre-1.0 release
-   of its specification first, and CLI flags, subcommands, config keys,
-   environment variables and output forms with no alias or window. A
-   released form is refused with an error naming its replacement (UX-04),
-   never silently ignored. These never break: the ledger wire format and
-   its signatures (additive only), the reader's support for every ledger a
-   release wrote, a written schema `$id`, and every security boundary.
-   `main` may lack a capability for a while when the design names the gap.
+   review; one that neither removes such interactions nor saves more time
+   than it costs is held or closed. It applies to P1's remaining move too.
+   wf-state-migration-step stays queued; its design shows its payoff (a8).
+7. **Interfaces may break for the program, within fixed limits (a9 to a12).**
+   A program item may break Go APIs, internals and the driver contract (as
+   GLOBAL-08 already allows), a seam by a new pre-1.0 release of its
+   specification first, and CLI flags, subcommands, config keys, environment
+   variables and output forms with no alias or window, only where the
+   program's change needs it; the CLI and config otherwise keep their shape
+   (the human: "mostly similar"), and a rename for its own sake is not a
+   program break. A released form is refused with an error naming its
+   replacement (UX-04), never silently ignored. These never break: the ledger
+   wire format and its signatures (additive only), the reader's support for
+   every ledger a release wrote, a written schema `$id`, and every security
+   boundary. `main` may lack a capability for a while when the design names
+   the gap.
 8. **Enforcement stays small.** The hold counting is wf code, because the
    limits are (FLOW-05, automated). Program membership, the payoff and each
    interface break stay agent judgment at intake and the design review, as
@@ -272,8 +275,8 @@ None.
   - (a) Every process item filed while FLOW-20 stands, P1's remaining move
     included, carries a **Program payoff** section (interactions that decide
     nothing removed, per week; or program time saved before the end against
-    its steps and review), judged at its design review; one that fails is
-    held or closed.
+    its steps and review), judged at its design review; one that does
+    neither is held or closed.
   - (b) Judged at intake only, no design section.
   - (c) As (a), and `wf check` requires the section to be present.
 
@@ -285,17 +288,19 @@ None.
   - (b) Left at position 2; its own review judges its payoff.
   - (c) Closed.
 
-  Recommended: (a). Its case has happened once and its estimate is 200 to
-  400 lines of Go; under (b) its review alone takes a sitting Jeff would
-  spend on program designs.
+  Recommended: (b). Jeff kept it queued on 2026-11-21 under this bar; its
+  own review judges its payoff.
 - **a9. CLI flags, subcommands, config keys, environment variables and
   output forms.** Flagged: departs from UX-03 and ORCH-03 for program
   items.
-  - (a) A program item may rename or remove one with no alias or window. A
-    form a tagged release exposed (v0.6.0 or earlier) is refused with an
-    error naming its replacement (UX-04), never silently ignored; one no
-    release exposed may simply go. Reference docs change in the same change
-    (UX-01), with a migration note for a released form.
+  - (a) A program item may rename or remove one with no alias or window, only
+    where the program's change needs it; the CLI and config otherwise keep
+    their shape (the human: "mostly similar"), and a rename for its own sake
+    is not a program break. A form a tagged release exposed (v0.6.0 or
+    earlier) is refused with an error naming its replacement (UX-04), never
+    silently ignored; one no release exposed may simply go. Reference docs
+    change in the same change (UX-01), with a migration note for a released
+    form.
   - (b) Only forms no release exposed may break; released ones keep UX-03.
   - (c) UX-03 as written.
 
@@ -381,14 +386,14 @@ present ones. Answering a hold (`wf answer`) is unchanged and releases it.
 ### Skills
 
 - **`workflow-intake`**:
-  - `SKILL.md:41-43`: "agree too whether the item is a program item; one
-    that is not is filed on hold (FLOW-20), with `-hold "<why>" -resumes
-    "<when>"`, the resume point being the program's end unless Jeff names
-    another, whatever the item fixes, unless Jeff says in this sitting to
-    file it unheld. A program item gets its `-repos` and `-areas` now where
-    the program's design gives them, and is placed above any released
-    non-program item of its class. A process item's design will carry a
-    Program payoff (FLOW-20): say so."
+  - `SKILL.md:41-43`: "agree too whether the item is a program item; one that
+    is not, and is not a process item, is filed on hold (FLOW-20), with
+    `-hold "<why>" -resumes "<when>"`, the resume point being the program's end
+    unless Jeff names another, whatever the item fixes, unless Jeff says in
+    this sitting to file it unheld. A program item gets its `-repos` and
+    `-areas` now where the program's design gives them, and is placed above
+    any released non-program item of its class. A process item's design will
+    carry a Program payoff (FLOW-20): say so."
   - `:53-62`: held items do not count toward the waiting limit; there is no
     security exemption left to judge; offer `-urgent` only for a security
     fix Jeff releases that follows no item, and say the mark does not
@@ -403,7 +408,7 @@ present ones. Answering a hold (`wf answer`) is unchanged and releases it.
 - **`workflow-tick`** (`SKILL.md:250-255`): the digest gains a **Held** line
   (slug and resume point, one line for all), and Blocked on Jeff no longer
   lists a held item.
-- **`workflow-human`**: step 1 (`SKILL.md:43-47`) adds that held items are
+- **`workflow-human`**: step 2 (`SKILL.md:47-50`) adds that held items are
   shown apart with their resume points and not asked about again; step 3
   adds that a process item's review checks its Program payoff (FLOW-20) and
   a program item's review checks each interface break its design names and
@@ -519,15 +524,16 @@ the hold lives in FLOW-05's limits).
 > its items in flight at once as the relations allow, even where an item
 > breaks an interface for a while. While this rule stands:
 >
-> - **Hold.** An item that is not a program item is held unless the human
->   releases it; a fix for a security problem or for a regression is held
->   like any other. Intake files it on hold, with a blocking question only
->   the human answers that names when it resumes: the program's end, unless
->   the human names another point. An item already queued or in progress
->   that is not a program item is held the same way and keeps its branch and
->   design; on resume it returns to Design for what the program changed
->   (FLOW-06). Two kinds of item are program work and are never held: the
->   fix for a failing `main` (FLOW-09), since no branch is refreshed while
+> - **Hold.** An item that is neither a program item nor a process item (Loop
+>   work, below) is held unless the human releases it; a fix for a security
+>   problem or for a regression is held like any other. Intake files it on
+>   hold, with a blocking question only the human answers that names when it
+>   resumes: the program's end, unless the human names another point. An item
+>   already queued or in progress that is neither a program item nor a process
+>   item is held the same way unless the human has released it, and keeps its
+>   branch and design; on resume it returns to Design for what the program
+>   changed (FLOW-06). Two kinds of item are program work and are never held:
+>   the fix for a failing `main` (FLOW-09), since no branch is refreshed while
 >   `main` fails (FLOW-10), and a fix that `follows` a program item. A held
 >   item holds no limit and does not wait on the human (FLOW-05). The human
 >   releases a held item by answering its question, or files one unheld at
@@ -544,8 +550,9 @@ the hold lives in FLOW-05's limits).
 >   one possible answer, a decision restated on every run, a step only the
 >   human may complete with nothing to judge), counted per week, or the
 >   program time it saves before the program ends against its own cost in
->   steps and review. Its design review declines one whose payoff does not
->   exceed its cost, and the item is then held or closed.
+>   steps and review. Its design review declines one that neither removes
+>   such interactions nor saves more program time than its own cost, and the
+>   item is then held or closed.
 > - **Interfaces.** A program item may break an interface for the program,
 >   and its design names each break:
 >   - the Go API of any package, the driver contract, and the internals of
@@ -555,7 +562,10 @@ the hold lives in FLOW-05's limits).
 >     first (GLOBAL-08, LOOP-02), each implementation adopting it as LOOP-07
 >     sets out;
 >   - a CLI flag, subcommand, config key, environment variable or output
->     form, with no alias or removal window (UX-03, ORCH-03). A form a
+>     form, with no alias or removal window (UX-03, ORCH-03), only where the
+>     program's change needs it; the CLI and config otherwise keep their
+>     shape (the human: "mostly similar"), and a rename for its own sake is
+>     not a program break. A form a
 >     tagged release exposed is refused with an error that names its
 >     replacement (UX-04), never silently ignored; one no release exposed
 >     may simply go. The reference docs change with it (UX-01), with a
@@ -605,7 +615,7 @@ Severity and check unchanged: SHOULD, `automated`.
 **Why:** a held item holds no limit and does not wait on the human, and the
 urgent mark does not release a hold (Decisions 2 and 3, a3, a4).
 
-**Current wording** (`process.md:369-373`):
+**Current wording** (`process.md:369-373`, from "Only holders"):
 
 > Only holders are counted and an item that holds is
 > never refused, so no two items wait for each other.
@@ -619,8 +629,8 @@ urgent mark does not release a hold (Decisions 2 and 3, a3, a4).
 > never refused, so no two items wait for each other.
 > Process items are not counted because they are short and already ranked
 > ahead of fixes and features; one that would disrupt running work declares
-> `holds`. An item on hold under FLOW-20, whose open question names when it
-> resumes, is not counted while it is held.
+> `holds`. An item on hold, whose open blocking question names when it
+> resumes (`resumes`), is not counted while it is held.
 
 **Current wording** (`process.md:401-408`):
 
@@ -636,7 +646,7 @@ urgent mark does not release a hold (Decisions 2 and 3, a3, a4).
 **Proposed:**
 
 > the merge, or a spent budget (FLOW-13); it counts once, and neither a
-> tracked item nor an item on hold under FLOW-20 counts. This limit counts
+> tracked item nor an item on hold (`resumes`) counts. This limit counts
 > by no relation and stops only a
 > start: work in progress goes on, so the count can pass it. A fix that
 > `follows` an item, the fix for a failing `main` (FLOW-09), a security
@@ -680,7 +690,7 @@ Severity and check unchanged: MUST, `automated + agent-judgment`.
 
 **Why:** the config half of the same promise (a9).
 
-**Current wording** (`orchestrator.md:69-73`, the paragraph's last three
+**Current wording** (`orchestrator.md:70-73`, the paragraph's last three
 sentences):
 
 > read is an error. Configuration precedence stays `flag > environment variable >
@@ -688,7 +698,7 @@ sentences):
 > or changed config key is documented in the same change; this is the config half
 > of the docs-coupling rule (UX-01).
 
-**Proposed** (one clause added to the third sentence):
+**Proposed** (one clause added to the second sentence):
 
 > read is an error. Configuration precedence stays `flag > environment variable >
 > the config file > default`. Defaults are sane and changes are additive, except
@@ -757,9 +767,8 @@ Jeff's, after the merge):
      onward) has merged", as Jeff held it;
    - runtime-former-values-removal: "the change that prepares 1.0", as held
      on 2026-11-15.
-2. wf-state-migration-step (a8 (a)): put on hold by hand, in `PutOnHold`'s
-   shape (q1 with `resumes: program-end`, and `x1-answer-q1` that
-   `x1-design` needs).
+2. config-lookup-test-symlinked-tmp: released by Jeff (2026-11-21) to
+   finish; not held. wf-state-migration-step stays queued (a8 (b)).
 3. The `workflow` branch's `README.md` schema: `resumes` on a question.
 4. `config.yaml` limits unchanged (a5).
 5. `dist/wf status` and `QUEUE.md`: the held items under **Held**, the
