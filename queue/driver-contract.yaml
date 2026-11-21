@@ -209,10 +209,11 @@ steps:
     lease:
       claimed_by: ""
       expires: null
+    note: 'Jeff''s decisions at f1-escalate-3 (2026-11-20 sitting, 2026-11-21 19:00Z): (1) clean''s live-build signal is option (a): the container driver''s waiter waits on the container by name (container wait warden-build-<id>), and the scan counts a waiter only while its parent process is a live warden-driver-container (ps -o pid,ppid,args); an orphaned waiter (driver killed) is not live; conmon and other runtime processes are not counted; Windows has no ps and the scan finds nothing, as before; rewrite the design''s clean row (driver-contract.md:3717), case 6''s expectation and the suite''s lifecycle clean case accordingly, with a parse test over ps lines in docker''s and finch''s shapes, the name form and an orphan. (2) case 7: the probe refuses a named runtime (--runtime, WARDEN_CTR_CLI or the key) that is missing or does not answer, as a fixable error naming its source, before any output directory exists; reword ''as newDriver does today''; list it as a new Behaviour difference (20). Case 9 is fixed by 6590782; the finch validation re-runs at Publish.'
   - id: f1-escalate-3
     phase: 1
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -223,7 +224,7 @@ budget:
     steps: 30
   spent:
     runs: 9
-    steps: 25
+    steps: 26
 questions:
   - id: a16
     kind: assumed
@@ -858,3 +859,9 @@ history:
   - at: 2026-11-21T11:05:27Z
     by: cloud/20261121T105719Z
     event: 'back to design: f3-implement-r2 at 6590782, from f6-validate-macos-finch''s case 6 (native/macos-finch/2026-11-20/driver-contract/): the design''s clean row (driver-contract.md:3717) says the process scan finds the driver''s ''container wait warden-build-<id>'' child, but the driver waits on the 64-hex container ID (driver/container/container.go:177, :478), on every runtime, as main does; so on docker and finch only keep_ids protects a running build. Naming the container in the waiter would keep a build whose driver alone was SIGKILLed (its waiter is orphaned), failing the suite''s lifecycle clean case (conformance/driver/lifecycle.go:837) and case 6''s X; and podman''s conmon holds -n warden-build-<id> for the whole run on Linux. Design must choose what signals a live build to clean: (a) a waiter only while its parent is a live warden-driver-container, (b) tie the waiter to the driver''s life (Pdeathsig on Linux, polling on macOS), or (c) drop the scan, keep_ids only, and change line 3717 and case 6''s expectation. Also for Design to confirm: case 7, a named runtime that is missing or not answering is refused by the probe as a fixable error before any output directory (lines 3713 and ~2183 say so; ''as newDriver does today'' says not; main fails late); the fix is small if confirmed. Case 9 is fixed by Jeff''s 6590782 as far as code and tests show; finch has not re-run it.'
+  - at: 2026-11-21T19:00:08Z
+    by: human/jeff
+    event: claimed f1-escalate-3 until 2026-11-21T21:00:08Z
+  - at: 2026-11-21T19:00:08Z
+    by: human/jeff
+    event: done f1-escalate-3

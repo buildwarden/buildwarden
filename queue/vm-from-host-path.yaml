@@ -1,6 +1,7 @@
 feature: vm-from-host-path
 title: A Dockerfile FROM naming a host path boots that host file as the VM disk (qemu, firecracker), and a FROM that does not translate silently boots the default image (security fix)
-priority: 8
+priority: 7
+urgent: human/jeff
 status: queued
 round: feature
 phase: 0
@@ -33,4 +34,7 @@ history:
     event: 'priority 71 -> 72 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 72 -> 11 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'
+    event: priority 72 -> 11 (renumbered to the item's 1-indexed queue position (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-21T19:00:08Z
+    by: human/jeff
+    event: marked urgent (FLOW-05)

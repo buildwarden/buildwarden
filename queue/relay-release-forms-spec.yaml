@@ -1,6 +1,6 @@
 feature: relay-release-forms-spec
 title: 'Seam 8: specify the relay''s release forms (form names, file roles, manifest and hash) before M6 adopts a release'
-priority: 7
+priority: 8
 status: queued
 round: feature
 phase: 0
@@ -31,3 +31,6 @@ history:
   - at: 2026-11-20T22:53:31Z
     by: human/jeff
     event: queued at position 7
+  - at: 2026-11-21T19:00:08Z
+    by: human/jeff
+    event: 'moved to position 8 from 7 (asked 8): Jeff, 2026-11-21: after vm-from-host-path, as placed at intake on 2026-11-20'
