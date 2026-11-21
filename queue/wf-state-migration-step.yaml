@@ -32,3 +32,6 @@ history:
   - at: 2026-11-20T20:05:00Z
     by: human/jeff
     event: 'narrowed on Jeff''s word (2026-11-20): the seeded state step moved into merge-confirm-attended; this item keeps the FLOW-19 mechanical-rebase exemption'
+  - at: 2026-11-21T19:30:00Z
+    by: human/jeff
+    event: 'kept queued on Jeff''s word (2026-11-21), under the program-north-star bar for loop work during the program: it must either reduce the number of non-meaningful human interactions, or speed up the workflow enough to save more time than its implementation takes; its design shows which, with numbers'
