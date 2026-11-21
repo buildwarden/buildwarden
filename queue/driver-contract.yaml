@@ -1,9 +1,9 @@
 feature: driver-contract
 title: 'The driver command contract, its suite and the kit: warden runs a driver binary, the container driver is one, and every build runs through warden''s build sequence (componentization K1)'
-priority: 1
+priority: 3
 status: in_progress
 round: feature
-phase: 3
+phase: 1
 design: docs/design/driver-contract.md
 branch: feat/driver-contract
 seams:
@@ -200,13 +200,23 @@ steps:
       claimed_by: ""
       expires: null
     note: Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation; where a case says "as main", capture main's output first. vz stays linked; its build now runs through warden's build sequence, which owns the signals. (1) warden doctor --driver vz and warden image list print what main prints. (2) a vz build succeeds, its ledger verifies, relay.log is written, driver.json says linked; with a Containerfile in the context it is ignored and inputs/ is absent, as on main. (3) a script that exits 3 makes warden exit 3; --timeout 30s on a sleeping script exits 124. (4) Ctrl-C mid-build leaves no relay process and no work directory; SIGTERM mid-build does the same and exits 1, where on main it kills warden. (5) --runtime docker and --network x with --driver vz are each refused as an unknown flag for driver vz; [runtime] cli = 5 in warden.toml does not stop a vz build (design Behaviour 13); warden clean --driver vz reports nothing to clean and needs no container runtime. Evidence under native/macos-vz/<date>/.
-  - id: f3-implement-r2
-    phase: 3
+  - id: f1-design-r4
+    phase: 1
     affinity: cloud
     status: pending
+    needs:
+      - f1-escalate-3
     lease:
-      claimed_by: cloud/20261121T105719Z
-      expires: 2026-11-21T12:58:20.003883816Z
+      claimed_by: ""
+      expires: null
+  - id: f1-escalate-3
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Returned to Design more than twice (FLOW-06): the human decides.'
 budget:
   estimate:
     runs: 5
@@ -830,3 +840,21 @@ history:
   - at: 2026-11-21T10:58:20Z
     by: cloud/20261121T105719Z
     event: claimed f3-implement-r2 until 2026-11-21T12:58:20Z
+  - at: 2026-11-21T11:05:27Z
+    by: cloud/20261121T105719Z
+    event: kept f6-validate-windows-hyperv pending for phase 6
+  - at: 2026-11-21T11:05:27Z
+    by: cloud/20261121T105719Z
+    event: kept f6-validate-qemu-any pending for phase 6
+  - at: 2026-11-21T11:05:27Z
+    by: cloud/20261121T105719Z
+    event: kept f6-validate-macos-finch pending for phase 6
+  - at: 2026-11-21T11:05:27Z
+    by: cloud/20261121T105719Z
+    event: kept f6-validate-container-any pending for phase 6
+  - at: 2026-11-21T11:05:27Z
+    by: cloud/20261121T105719Z
+    event: kept f6-validate-macos-vz-r2 pending for phase 6
+  - at: 2026-11-21T11:05:27Z
+    by: cloud/20261121T105719Z
+    event: 'back to design: f3-implement-r2 at 6590782, from f6-validate-macos-finch''s case 6 (native/macos-finch/2026-11-20/driver-contract/): the design''s clean row (driver-contract.md:3717) says the process scan finds the driver''s ''container wait warden-build-<id>'' child, but the driver waits on the 64-hex container ID (driver/container/container.go:177, :478), on every runtime, as main does; so on docker and finch only keep_ids protects a running build. Naming the container in the waiter would keep a build whose driver alone was SIGKILLed (its waiter is orphaned), failing the suite''s lifecycle clean case (conformance/driver/lifecycle.go:837) and case 6''s X; and podman''s conmon holds -n warden-build-<id> for the whole run on Linux. Design must choose what signals a live build to clean: (a) a waiter only while its parent is a live warden-driver-container, (b) tie the waiter to the driver''s life (Pdeathsig on Linux, polling on macOS), or (c) drop the scan, keep_ids only, and change line 3717 and case 6''s expectation. Also for Design to confirm: case 7, a named runtime that is missing or not answering is refused by the probe as a fixable error before any output directory (lines 3713 and ~2183 say so; ''as newDriver does today'' says not; main fails late); the fix is small if confirmed. Case 9 is fixed by Jeff''s 6590782 as far as code and tests show; finch has not re-run it.'
