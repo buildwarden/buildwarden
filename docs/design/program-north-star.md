@@ -460,7 +460,10 @@ The rules as written do not say this, and in places say the opposite:
       design names, or that bring the map's `reaches` in line with
       `tools/tier1/area-edges.sh`.
     - **Repositories (a18)**: every program repository on the umbrella's
-      list is created private by Jeff in the one-time setup (kind 1). A
+      list is created private by Jeff in the one-time setup (kind 1), its
+      CI and flow18 workflows committed to its `main` and their job names
+      required by its ruleset before its program trunk is cut, so nothing
+      waits on him when its phase starts. A
       repository not on the list is a new component, so proposing one is
       component design (kind 2); making one public is privileged (kind 3).
     - **Holds, the urgent mark and the order** are Jeff's word whenever he
@@ -538,7 +541,9 @@ The rules as written do not say this, and in places say the opposite:
 16. **What only Jeff can do, once: the setup (kind 1).** Review and merge
     this item's PR; run its state step (with the program trunks' creation
     on his word in it); create every program repository on the umbrella's
-    list (a18); merge `specs-prerelease-tags` in the specifications
+    list, commit its CI and flow18 workflows to its `main` and add their
+    job names to its ruleset's required checks, before its program trunk
+    is cut (a18); merge `specs-prerelease-tags` in the specifications
     repository; set each program trunk's ruleset, the tag ruleset and
     automatic deletion of head branches; confirm the GitHub App may merge;
     change the nightly task's prompt, which today says "Never merge". After
@@ -566,7 +571,10 @@ design at `8cb13d8`. Each entry below keeps its options and its
 recommendation, and says which he chose. Fourteen were confirmed as
 recommended: a1 to a4, a6, a8 to a10, a12 to a14 and a16 to a18. Four
 depart from the recommendation, and the design is revised for each: a5
-(b), a7 (his own wording), a11 (b) and a15 (b).
+(b), a7 (his own wording), a11 (b) and a15 (b). At a follow-up later the
+same day he confirmed a5 (b) and a15 (b) as the design reads them, and
+moved each new program repository's CI into the setup sitting (a18); each
+answer says so.
 
 Eighteen questions; all but a9 are flagged, each because it sets the
 wording of a rule or departs from an earlier decision of Jeff's. Earlier
@@ -675,6 +683,8 @@ choice and is now one of a6's options.
   classes, read by effect: loosening either test, or removing or
   narrowing a gate of his, widens the loop's authority, so the loop
   cannot use the process test to loosen the process test (Decision 6).
+  **Confirmed by Jeff at the follow-up, 2026-11-22:** the reserved rules
+  are his two classes, judged by effect, as the design says.
 - **a6. CLI flags, subcommands, config keys, environment variables and
   output forms.** Flagged: departs from UX-03 and ORCH-03 for program
   items.
@@ -884,6 +894,8 @@ choice and is now one of a6's options.
   and 14, Design, *What reaches Jeff*, the Skills and agents, FLOW-06's and
   FLOW-13's wording, FLOW-20's Human gates bullet, and the Validation
   plan; FLOW-11 is no longer amended, since it already escalates.
+  **Confirmed by Jeff at the follow-up, 2026-11-22:** the fifth return
+  escalates, meaning more than four returns, as the design says.
 - **a16. Filing and area maps without Jeff.** Flagged: amends LOOP-07.2,
   FLOW-05's area-map sentence and PROFILE-01's Areas row.
   - (a) The loop files a phase row's items once the Order's gate before its
@@ -940,7 +952,15 @@ choice and is now one of a6's options.
   an empty private repository costs nothing until its phase starts.
 
   **Answered by Jeff, 2026-11-22: (a), as recommended.** He bulk-creates
-  the program repositories in one setup sitting.
+  the program repositories in one setup sitting. **Changed by Jeff at the
+  follow-up, 2026-11-22:** in that sitting he also commits each new
+  program repository's CI and flow18 workflows to its `main`, and adds
+  their job names to its ruleset's required checks, before its program
+  trunk is cut, so nothing waits on him when the repository's phase
+  starts. The design is revised: Decisions 11 and 16, Design, *What
+  reaches Jeff*, Defaults and overrides, the Program payoff, the
+  Validation plan, and the Implementation plan's state step and setup
+  list. No rule's proposed wording changes.
 
 ## Design
 
@@ -1298,7 +1318,7 @@ callable back.
 | Gate | Kind | Instead |
 |---|---|---|
 | This item's review and merge, its state step, program trunks, rulesets, App permissions, nightly prompt, `specs-prerelease-tags` (Decision 16) | 1 setup | |
-| Creating the program repositories on the umbrella's list (a18) | 1 setup | |
+| Creating the program repositories on the umbrella's list, each with its CI and flow18 workflows on `main` and their job names required, before its program trunk is cut (a18) | 1 setup | |
 | A process item's design review when it touches a reserved rule: widens the loop's authority, read by effect, or changes a rule on security, merging, pushing or tags (a5 (b); the cases in FLOW-20's Loop work bullet) | 2 design | |
 | Any other process item's design review (a5 (b)) | none | the process test, P1 to P3, recorded; a failed P2 goes to him, a failed P1 holds the item |
 | A process item's state step (FLOW-03) | 3 privileged | recorded and taken by him with his merge of it to `main` |
@@ -1319,7 +1339,7 @@ callable back.
 | A sync conflict the loop cannot resolve (Decision 14, a15 (b)) | escalation | the program trunk stays; `program-sync-<sha>` is filed with the escalation as its first step |
 | A branch that did not delete (FLOW-16) | 3 privileged | as written; the setup's automatic deletion prevents it, and it blocks no program step |
 | A process item's merge to `main` (FLOW-08) | 3 privileged | |
-| The merge of a program item that changes CI or release configuration (Decision 8) | 3 privileged | |
+| The merge of a program item that changes CI or release configuration (Decision 8) | 3 privileged | a new program repository's first CI is not one: it is committed in the setup (a18) |
 | A program item's merge into its program trunk (a11 (b)) | none | `f7-merge` under the merge gate, a merge commit |
 | Releasing a held item; an urgent mark; the priority order (a2, Decision 5) | none | the hold stays, the order is FLOW-05's; his word overrides whenever given, and nothing waits on it |
 | Filing phase items and reconciliation items; relating items (a16) | none | filed by the loop |
@@ -1496,7 +1516,9 @@ an estimate after `wf new`. So:
   privileged work (Decision 11), and the escalations of a15 (b); anything
   else is decided by the loop and recorded.
 - **Program repositories.** All on the umbrella's list, created private in
-  the one-time setup.
+  the one-time setup, each with its CI and flow18 workflows on `main` and
+  their job names required by its ruleset before its program trunk is
+  cut.
 - **Pre-release version.** The next minor after the latest release without
   a suffix, `v0.1.0` when the repository has none; `-dev.N` counting from 1
   per minor; `-rc.N` likewise.
@@ -1536,7 +1558,8 @@ bar (Decision 6).
   - Questions of strategy: each blocking question on how to implement a
     program item becomes an assumed one the umbrella session confirms.
   - Repositories: one word per repository as its phase starts (a11 of
-    componentization) becomes one setup sitting (a18).
+    componentization) becomes one setup sitting (a18), which also takes
+    each new repository's CI merge and required checks.
   - The program's end: answering each of 8 holds becomes the loop's
     resume.
 - **Time saved.** Three in-progress places and an `alters_relationships`
@@ -2597,7 +2620,8 @@ force-push or deletion) is Jeff's, and no agent changes it.
   items under **Held**; `dist/wf trunk -feature driver-contract` prints
   `program/componentization`; a PR to the program trunk gets the check
   runs its ruleset requires (`ci-ok` and `sessions-private` in this
-  repository); the first program merge is a merge commit on the
+  repository, and in each new program repository the job names Jeff
+  required at setup, which its program trunk's workflows run); the first program merge is a merge commit on the
   program trunk, recorded in `program/records.yaml`; the program trunk's
   ruleset shows merge commits as the only method allowed.
 - No native host is needed.
@@ -2693,7 +2717,10 @@ Jeff's, after the merge, in one attended sitting, the setup of kind 1):
    (a18), with its `hosts.yaml` line.
 2. Create each program trunk at its `main` head, on Jeff's word in this
    sitting (FLOW-17): `git push origin
-   origin/main:refs/heads/program/componentization` in each repository.
+   origin/main:refs/heads/program/componentization` in each repository;
+   in a new program repository, only once its CI and flow18 workflows
+   are on `main` and their job names are in its ruleset's required
+   checks (a18, below), so the trunk starts with them.
 3. `resumes:` on each open hold: `program-end` for prebuilt-artifacts,
    workdir-in-context, vm-from-host-path, configuration-bugfixes,
    auto-tidy-pull-request, relay-exit-code-unreadable;
@@ -2716,7 +2743,9 @@ these, FLOW-08; all kind 1):
 
 - **Repositories (a18).** Create every repository on the umbrella's list
   (the relay, the loop, one per driver), private, each with an initial
-  commit on `main`, the loop's App installed, and "Automatically delete head
+  commit on `main`, its CI and flow18 workflows committed to `main`
+  (triggered on `main` and `'program/**'`, as this repository's are), the
+  loop's App installed, and "Automatically delete head
   branches" on, which FLOW-16's Close relies on; set the same option on
   `buildwarden/buildwarden` and `buildwarden/buildwarden-specs` where it is
   off.
@@ -2729,14 +2758,15 @@ these, FLOW-08; all kind 1):
   workflow name, so they are set per repository: in
   `buildwarden/buildwarden`, `ci-ok` (`main.yml`) and `sessions-private`
   (`flow18.yml`); in `buildwarden/buildwarden-specs`, the job names of its
-  own CI. A new program repository has only an initial commit and no CI,
-  so its program trunk requires no check at setup, and `MergeReady`'s
-  point 3, which reads the required list from `rules/branches/<t>` and
-  never assumes one, refuses a loop merge into a program trunk whose
-  ruleset requires none. The repository's CI arrives on its `main` as a
-  change to CI configuration, which keeps `main` and is his merge (kind 3,
-  Decision 8), reaches the program trunk by the program sync, and he then
-  adds its job names to that repository's required checks (kind 1).
+  own CI; in each new program repository, the job names of the CI and
+  flow18 workflows he commits to its `main` in this sitting, added before
+  its program trunk is cut, so the trunk starts with its CI and its
+  ruleset requires those checks from its first pull request. `MergeReady`'s
+  point 3 reads the required list from `rules/branches/<t>` and never
+  assumes one, and refuses a loop merge into a program trunk whose
+  ruleset requires none, so a repository whose CI was missed at setup
+  waits for it rather than merging unchecked. Nothing about a new
+  repository's CI waits on him when its phase starts.
 - **Tag ruleset.** One that lets the App create
   `v*-dev.*`, `v*-rc.*` and `*/v*-dev.*`, `*/v*-rc.*` tags, never update or
   delete any tag, and reserves bare `v*` tags to him, where GitHub's
