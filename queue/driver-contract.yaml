@@ -207,8 +207,8 @@ steps:
     needs:
       - f1-escalate-3
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261122T105700Z
+      expires: 2026-11-22T13:18:55.897106718Z
     note: 'Jeff''s decisions at f1-escalate-3 (2026-11-20 sitting, 2026-11-21 19:00Z): (1) clean''s live-build signal is option (a): the container driver''s waiter waits on the container by name (container wait warden-build-<id>), and the scan counts a waiter only while its parent process is a live warden-driver-container (ps -o pid,ppid,args); an orphaned waiter (driver killed) is not live; conmon and other runtime processes are not counted; Windows has no ps and the scan finds nothing, as before; rewrite the design''s clean row (driver-contract.md:3717), case 6''s expectation and the suite''s lifecycle clean case accordingly, with a parse test over ps lines in docker''s and finch''s shapes, the name form and an orphan. (2) case 7: the probe refuses a named runtime (--runtime, WARDEN_CTR_CLI or the key) that is missing or does not answer, as a fixable error naming its source, before any output directory exists; reword ''as newDriver does today''; list it as a new Behaviour difference (20). Case 9 is fixed by 6590782; the finch validation re-runs at Publish.'
   - id: f1-escalate-3
     phase: 1
@@ -223,8 +223,8 @@ budget:
     runs: 5
     steps: 30
   spent:
-    runs: 9
-    steps: 26
+    runs: 10
+    steps: 27
 questions:
   - id: a16
     kind: assumed
@@ -865,3 +865,6 @@ history:
   - at: 2026-11-21T19:00:08Z
     by: human/jeff
     event: done f1-escalate-3
+  - at: 2026-11-22T11:18:55Z
+    by: cloud/20261122T105700Z
+    event: claimed f1-design-r4 until 2026-11-22T13:18:55Z
