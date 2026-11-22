@@ -3,7 +3,7 @@ title: 'The driver command contract, its suite and the kit: warden runs a driver
 priority: 2
 status: in_progress
 round: feature
-phase: 3
+phase: 4
 design: docs/design/driver-contract.md
 branch: feat/driver-contract
 seams:
@@ -237,10 +237,17 @@ steps:
   - id: f3-implement-r2
     phase: 3
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review-r2
+    phase: 4
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261122T180143Z
-      expires: 2026-11-22T20:04:20.26986127Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -949,3 +956,9 @@ history:
   - at: 2026-11-22T18:04:20Z
     by: cloud/20261122T180143Z
     event: claimed f3-implement-r2 until 2026-11-22T20:04:20Z
+  - at: 2026-11-22T18:23:25Z
+    by: cloud/20261122T180143Z
+    event: done f3-implement-r2
+  - at: 2026-11-22T18:23:25Z
+    by: cloud/20261122T180143Z
+    event: entered phase 4 (review)
