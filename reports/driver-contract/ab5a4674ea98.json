@@ -1,0 +1,191 @@
+{
+  "feature": "driver-contract",
+  "branch": "feat/driver-contract",
+  "head": "ab5a4674ea98",
+  "heads": {
+    "buildwarden/buildwarden": "ab5a4674ea98"
+  },
+  "base": "be138478cd83",
+  "base_note": "merge base with origin/main. origin/main moved to d67da9ddf967 (#134, test-only, 4 files) during this review; the trial merge with it is clean and go vet + go test -count=1 ./cmd/warden/ pass on it (FLOW-10)",
+  "round": "feature",
+  "step": "f4-review-r2",
+  "worker": "cloud/20261122T180143Z",
+  "previous_report": "reports/driver-contract/4d3b76001349.json",
+  "scope": "git diff origin/main...feat/driver-contract: 203 files, +37469/-2910 (LINT-04). One repository. Tier 1 over all of it. Tier 2 on the r4 rework git diff c0fa7bc..ab5a467 (tasks 39-42; 18 files, +520/-43) against the design approved at 6357b90, plus the code parts of bc91149..fa1d28d (consolidation, Windows fixes, Jeff's 6590782, c81892d, fa1d28d); the rest carried forward.",
+  "design": "docs/design/driver-contract.md, r4 approved at 6357b90 (a28 confirmed (i), Behaviour 7's change from c81892d kept); plan re-confirmed at c0fa7bc; rule changes approved at a6c8f0b",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": {
+    "source": "docs/development/*.md at ab5a4674ea98 (LINT-01; no file under docs/development changed since 4d3b760)",
+    "rules": 100,
+    "agent_judgment": 44,
+    "hybrid": 42,
+    "automated": 14
+  },
+  "since_previous": {
+    "commits": [
+      "bc91149..fa1d28d: guide, consolidation against be13847, driver tables test, Windows fixes, removal order, Jeff's 6590782, c81892d, fa1d28d",
+      "6357b90 design r4",
+      "fec0243 r4 approved",
+      "c0fa7bc plan re-confirmed",
+      "37f178e task 39",
+      "04bc615 task 40",
+      "e86ff49 task 41",
+      "ab5a467 task 42"
+    ],
+    "resolved": [],
+    "open": [
+      "3 GLOBAL-06 (MUST-review): carried forward for Jeff at merge."
+    ],
+    "new_in_delta": [
+      "4 FLOW-06 (MUST): driver/container/container.go:131 runHeld starts no waiter"
+    ]
+  },
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass at ab5a467 (golangci-lint 0 issues x3; tier1 be138478cd83...ab5a4674ea98: 0 MUST, 0 MUST-review, 0 SHOULD, 5 hints, 0 suppressed)",
+    "make_test": "pass at ab5a467 (exit 0, no FAIL lines); go test -count=1 ./cmd/warden/ ./driver/container/ ./conformance/driver/ also passed uncached",
+    "goos_windows_make_lint": "pass (exit 0, same tier1 lines)",
+    "goos_darwin_make_lint": "pass (exit 0, same tier1 lines)",
+    "make_enforcement": "pass (exit 0), before and after origin/main moved: 4 ok lines, main's tier 1 findings kept (FLOW-14): UX-03 surface-removed cmd/warden/config.go:0 for keys cli, relay_image, windows_image, windows_image_update, each \"dropped by approved rule change UX-03\". r4 changes neither tools/tier1/ nor tools/workflow/check/.",
+    "dist_wf_check": "before this report (no -run): ok clean branch head ab5a4674ea98; FAIL make lint/make test skipped (run separately above, green); FAIL report .md/.json missing (written by this report); ok rule changes cleared (FLOW-14): bootstrap.md (BOOT-02), global.md (GLOBAL-08), loop-profile.md (PROFILE-01), orchestrator.md (ORCH-01..ORCH-04), testing.md (TEST-05), ux-cli-config.md (UX-08), tools/tier1/rules.yaml (GLOBAL-08, ORCH-01, TEST-05), tools/tier1/surface/surface.go, surface_test.go, testdata/driver.go.txt (ORCH-03, UX-01, UX-03); ok queue records what the design declares (FLOW-03) as declared at 6357b90; ok diff inside the declared areas: undeclared, collides with every item, no path outside (FLOW-05)",
+    "wf_check_from_merge_base": "wf built from be13847 (git worktree of the merge base, tools/workflow/cmd/wf built to a scratch wf), run with -repo on the branch checkout at ab5a467: the same lines as dist/wf check",
+    "area_edges": "tools/tier1/area-edges.sh | dist/wf areas -state .dev/workflow -check -rev HEAD -edges -: 25 differences at ab5a467, exit 0, unchanged from 4d3b760: 19 catch-all (conformance/driver/ files and cmd/warden-driver-container/main.go fall to core), 6 reaches (core lacks collector, driver-core, driver/container, executor, ledger, relaycfg, through cmd/warden-driver-container). The item is undeclared, so nothing is outside its areas and nothing is widened (FLOW-03).",
+    "trial_merge_flow10": "dist/wf check prints no trial-merge line. By hand: origin/main d67da9d (#134: cmd/warden/configfile_test.go, configline_test.go, vmdns_test.go, a design) merges cleanly with ab5a467 (git merge-tree); go vet and go test -count=1 ./cmd/warden/ pass on the merge"
+  },
+  "findings": [
+    {
+      "id": 4,
+      "rule": "FLOW-06",
+      "related_rules": [
+        "ORCH-04",
+        "UX-01"
+      ],
+      "severity": "MUST",
+      "check": "agent-judgment",
+      "file": "driver/container/container.go",
+      "line": 131,
+      "also": [
+        "driver/container/container.go:110",
+        "driver/container/container.go:117",
+        "docs/book/src/guide/cli.md:408",
+        "docs/design/driver-contract.md:4363"
+      ],
+      "finding": "Decision 25 has run start the waiter by the container's name and the scan count a build only by that waiter under a live driver; Behaviour 6 says another user's running build on docker or finch is now kept and that what clean removes is what is not running. The waiter is started only in mode build (watchExit/containerWait at container.go:117). mode shell returns into runHeld (container.go:110, 131), which starts no container wait; attach's `<rt> container exec -i -t warden-build-<id> ...` is not a waiter. So another user's live `warden shell` session (another HOME, lock not in keep_ids) has nothing the scan counts, and this user's warden clean tears it down on every runtime: finch case 6's failure, for the shell. On podman main kept it through conmon -n warden-build-<id>, which r4 drops (a regression there); on docker and finch main did not either (its shell exec named the 64-hex ID). guide/cli.md:408 now promises a running build is left alone while its warden-driver-container runs, even another user's. The design names no such gap; its run row and Decision 25 cover run in both modes.",
+      "fix": "In runHeld, once the held build container runs, start the same waiter by name under the driver (waitArgs, through watchExit or a bare containerWait whose result runHeld handles), with a test that a held run starts it. If Implement finds a waiter does not fit mode shell (e.g. what its exited means during a shell), back-to-design (FLOW-06) to name the gap instead. Either way keep cli.md:408 true to the result.",
+      "status": "open (new in r4)"
+    },
+    {
+      "id": 3,
+      "rule": "GLOBAL-06",
+      "related_rules": [
+        "TEST-08",
+        "FLOW-08"
+      ],
+      "severity": "MUST-review",
+      "check": "agent-judgment",
+      "file": "cmd/warden/driverlookup.go",
+      "line": 17,
+      "also": [
+        "cmd/warden/buildseq.go:381",
+        "docs/design/driver-contract.md:6407"
+      ],
+      "finding": "The change alters two security boundaries, as the design declares (security_boundary: host-env, and env-relay). (1) host-env: the code that builds the isolation is now chosen at run time by a lookup (PATH first, then beside warden, then linked), with no ownership or mode check (a16 as Jeff answered it). The one guard is that a config file may name a driver, not a file (driverlookup.go findByPath, sourceConfig). (2) env-relay: warden now makes the claim token and claims every driver's relay. The design's Security note covers both. In the code read, the guard is implemented as the note says: a relative or empty PATH entry is an error, on Windows only .exe is a candidate, and a non-executable file is skipped and listed. Carried from the previous reports, unchanged by 321017c, 274a988, the merge 78a4a6e and 4d3b760. MUST-review: this needs the human's sign-off at merge, not a fix.",
+      "fix": "None required. The human acknowledges it at merge (FLOW-08) against the design's Security note. Whether this change trips TEST-08's security suite is that rule's call at release.",
+      "status": "open (MUST-review, for the human at merge); carried forward unchanged, r4 touches neither driver lookup nor the claim"
+    }
+  ],
+  "counts": {
+    "MUST": 1,
+    "MUST-review": 1,
+    "SHOULD": 0
+  },
+  "suppressions": [],
+  "suppressions_note": "The previous report (4d3b76001349) had none; nothing to carry over.",
+  "deviations_judged": [
+    {
+      "deviation": "(1) The refusal prints twice: the relayed driver stderr line and warden's ERROR with its fix.",
+      "judgment": "Not a finding. The kit logs every error's message on the driver's stderr (driver/drivercmd/main.go:122, 281, since task 13; DRV-40) and warden relays it, then prints the error object, so every probe refusal on the branch prints twice (r3's --runtime nope too). Reproduced for --runtime, WARDEN_CTR_CLI, [driver.container] cli and doctor. r4 adds nothing new; the guide's examples show warden's lines only, as configuration.md:494 already did. See informational UX-04."
+    },
+    {
+      "deviation": "(2) The ps parse splits at blanks; a runtime or driver path holding a space is not recognised and the build is left to keep_ids.",
+      "judgment": "Runtime half moot: the driver starts the waiter by the bare runtime name (exec.Command(name,...)) and paths are refused as the runtime setting (runtime_former.go), so the waiter's argv[0] is never a path. Driver half real: warden runs the driver as its full path (cmd/warden/drivercall.go:633, 769), so a driver path with a blank fails path.Base(parent.args[0]) (driver/container/clean.go:204), and another user's running build under it is removed. The design's 'base name of its first argument' is met only for paths without blanks; the design accepts the same degradation to keep_ids for BusyBox (driver-contract.md:5219) but does not name this one. Not counted; see informational FLOW-06."
+    },
+    {
+      "deviation": "(3) Under the fault, the fake treats waiter.pid's presence as a live child, with no check that the process lives.",
+      "judgment": "Not a finding. The fault plays a driver that takes a process naming the build for a sign of life; in the Clean case the waiter really is alive when clean runs (it sleeps an hour and only stopRelay kills it), so a signal-0 check would answer the same. The self-test sees Clean fail under it, and stopStubRelays now also kills waiters (*.pid)."
+    }
+  ],
+  "follow_ups": [],
+  "informational": [
+    {
+      "rule": "FLOW-06",
+      "file": "driver/container/container.go",
+      "line": 117,
+      "note": "The window before the waiter: even in mode build the waiter starts only after the relay container, the claim, the holder, the sidecar and the build container's start, pulls included, which can take minutes. Until then the scan finds nothing, and another user's starting build is not kept by it. On podman main kept it through the relay's and build's conmon; on docker and finch nothing did. Decision 25 drops the relay and conmon deliberately, so this follows from the approved wording, but Behaviour 6's 'what it removes is what is not running' overstates it. Name it in 'What Decision 25 relies on' (driver-contract.md:5219), or accept it explicitly. For Jeff, or Publish's design consolidation."
+    },
+    {
+      "rule": "FLOW-06",
+      "file": "driver/container/clean.go",
+      "line": 204,
+      "note": "A driver path with a blank (deviation 2). Either Implement fixes the parse while it handles finding 4 (read each line as PID, PPID and the rest; the parent is the driver when the rest less a trailing ' run' has base name warden-driver-container; add a case under '/opt/my tools/'), or the design names the limit beside BusyBox at consolidation. Jeff's call. Not counted, because its effect falls back to keep_ids, as the accepted degradations do."
+    },
+    {
+      "rule": "UX-04",
+      "file": "driver/drivercmd/main.go",
+      "line": 122,
+      "note": "Every fixable probe or command error from a driver binary prints its message twice: the driver's log line and warden's ERROR. If Jeff wants one line, warden could leave out a relayed last line equal to the error's message, or the kit could stop logging errors it also returns. Either is contract-wide, and not on main, so not a FLOW-09 follow-up."
+    },
+    {
+      "rule": "TEST-04",
+      "file": "conformance/driver/fake/run.go",
+      "line": 188,
+      "note": "teardown now calls stopRelay(dir) after relay.Process.Kill(), and stopRelay kills relay.pid's PID again. By then the goroutine's relay.Wait() may have reaped the relay, and if the PID was reused an unrelated process gets the signal. The window is microseconds and this is a test double. Killing only waiter.pid in teardown closes it."
+    },
+    {
+      "rule": "FLOW-05",
+      "file": "conformance/driver/",
+      "line": 0,
+      "note": "Carried: before saving the area map at merge, place cmd/warden-driver-container/ (for example with driver/container) or widen core's reaches. Jeff's call."
+    },
+    {
+      "rule": "FLOW-14",
+      "file": "docs/development/",
+      "line": 0,
+      "note": "Carried: every rule-change edit matches the approved wording; loop-profile.md keeps main's Specifications sentences. r4 changes no rule."
+    },
+    {
+      "rule": "TEST-05",
+      "file": "conformance/driver/lifecycle.go",
+      "line": 0,
+      "note": "Carried: confirm the integration workflow's make driver-conformance against warden-driver-container with the real relay is green on the PR; finch's case 9 re-runs both tiers."
+    },
+    {
+      "rule": "FLOW-15",
+      "file": "cmd/warden/drivercall.go",
+      "line": 294,
+      "note": "Carried: the old-name table and common keys are written twice (cmd/warden/drivercall.go and driver/drivercmd/settings.go). For the duplication sweep."
+    },
+    {
+      "rule": "GLOBAL-04",
+      "file": "conformance/driver/fake/",
+      "line": 0,
+      "note": "Carried: tier1's 5 tests-with-change hints, unchanged. Hints, not findings."
+    },
+    {
+      "rule": "ORCH-04",
+      "file": "driver/drivercmd/pipe.go",
+      "line": 92,
+      "note": "Carried: pipeHost.Wait may return 'interrupted' in place of the stop's reason; nothing changes today."
+    }
+  ],
+  "judged_clean": [
+    "Task 39: waitArgs clones ctrctl.Cli and names warden-build-<id>; liveBuilds is a pure parse of one ps -A -ww -o pid=,ppid=,args= listing counting exactly '<runtime> container wait warden-build-<id>' (supported runtime by name or path) under a parent present in the listing whose argv[0] base name is warden-driver-container; not the orphan (PID 1, or parent gone), a shell or finch as parent, the 64-hex ID, conmon, the relay's name, extra arguments or nerdctl. Build IDs hold no '-'. No ps (Windows) finds nothing. TestLiveBuilds, TestWaiterNamesTheContainer and TestLiveProcessBuildsWithoutPs match the Validation plan's r4 parse cases.",
+    "Task 40: checkedRunner adds checkNamedRuntime after buildRunner in the probe and doctor only; run resolves as before. Only a named runtime is checked: LookPath, then info within 3 s; fixable error naming the source as keyInFile words it, fix to install or start it or name another; detection never tried in its place (GLOBAL-10, matches the Defaults and overrides row). Reproduced: no output directory, exit 1; doctor exits 1 with no ok (a28 (i), UX-09). Tests cover each source (--runtime, WARDEN_CTR_CLI, both keys), both states and doctor, nothing run past info; the e2e test covers the binary.",
+    "Task 41: the Clean case's comment and failure message say the driver is killed alone and name the likely cause; the fault orphan-counts-as-alive is in the self-test's table under clean; the fake's waiter has no stdio of the fake's.",
+    "Task 42: configuration.md's new subsection with the exact message (verified against the binary); cli.md's paragraph (see finding 4 for shell sessions); overview.md shows the resolve step's refusal and the waiter under watch (FLOW-15).",
+    "GLOBAL-09..11 against Defaults and overrides: the 3 s info timeout and the narrowed scan are rows there; no new default, merge or fallback.",
+    "RELAY-08: no relay setting touched.",
+    "bc91149..fa1d28d code parts: c81892d/fa1d28d (failure after the grace is fixable, fix names build-output.log, Behaviour 7 as approved at 6357b90, checked by TestBuildSequenceExitGrace); 6590782 (stop before claim answers stopped; clean removes dead builds' work dirs and passes over those it cannot remove); 0842d90 (removal order, build first, holder last); 0ee1eea (Windows message stream on a duplicated handle); a0934b5 (spec tables test). No new default, merge, fallback or relay setting."
+  ],
+  "resolved_findings": []
+}
