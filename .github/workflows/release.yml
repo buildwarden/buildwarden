@@ -68,7 +68,7 @@ jobs:
         working-directory: tools/tier1
       - name: tier1 against the previous tag
         run: |
-          prev=$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_REF_NAME}^")
+          prev=$(git describe --tags --abbrev=0 --match 'v*' --exclude '*-*' "${GITHUB_REF_NAME}^")
           ./dist/tier1 -base "$prev"
       - run: ./dist/tier1 designs -all
 

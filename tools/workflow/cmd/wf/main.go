@@ -32,6 +32,7 @@
 //	wf record   -state DIR -list [-since TIME]
 //	wf program-body -state DIR [-repository OWNER/NAME]
 //	wf reestimate -state DIR -worker W -feature F
+//	wf tag-next -state DIR -repo DIR [-repository OWNER/NAME]
 //	wf review-human -state DIR -worker W -feature F -why TEXT
 //	wf move     -state DIR -worker human/NAME -feature F -to N [-why TEXT]
 //	wf urgent   -state DIR -worker human/NAME -feature F [-clear]
@@ -147,6 +148,12 @@
 // item escalates at its fifth return to Design, and its first runaway is
 // answered by reestimate, which raises its estimate to its spend so far and
 // is the cloud's only then; status names an item that needs it.
+//
+// tag-next prints the pre-release tags the loop may push on a program
+// trunk's head, vX.Y.Z-dev.N after the latest release without a suffix
+// (<directory>/vX.Y.Z-dev.N per changed specification, the harness first),
+// or "none" with why: the last merge changed no consumable, the head is
+// tagged or its checks are not green, or specs-prerelease-tags is not done.
 //
 // new -lead, and lead for an item already queued or in progress, name the
 // host name whose machines take a feature's cloud steps of Branch setup
@@ -501,7 +508,7 @@ func run(cmd string, args []string, now time.Time) error {
 		"answer": answer, "back": back, "new": newFeature, "move": move, "urgent": urgent,
 		"lead": lead, "state-step": stateStep, "hold": hold, "trunk": trunkCmd,
 		"sync-program": syncProgram, "record": record, "program-body": programBody,
-		"reestimate": reestimate, "review-human": reviewHuman,
+		"reestimate": reestimate, "review-human": reviewHuman, "tag-next": tagNext,
 		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
 		"declare": declareItem, "relate": relate, "relations": relations,
 		"digest": digest, "areas": areasCmd, "native": native,
@@ -1165,6 +1172,29 @@ func reviewHuman(s *queue.State, o opts) error {
 		return err
 	}
 	return s.Save(f)
+}
+
+// tagNext is wf tag-next: the pre-release tags the loop may push on a
+// repository's program trunk head, one a line, or why there are none
+// (FLOW-20, Decision 15). The tick pushes each with git push origin <tag>
+// and records it.
+func tagNext(s *queue.State, o opts) error {
+	repo := o.repository
+	if repo == "" {
+		repo = s.Config.Repository
+	}
+	tags, why, err := check.TagNext(env(s, o), repo)
+	if err != nil {
+		return err
+	}
+	if len(tags) == 0 {
+		fmt.Printf("none\t%s\t%s\n", repo, why)
+		return nil
+	}
+	for _, t := range tags {
+		fmt.Println(t)
+	}
+	return nil
 }
 
 // programBody is wf program-body: the program records of a repository as
