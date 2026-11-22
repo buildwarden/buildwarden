@@ -152,7 +152,11 @@ func (e *e2e) buildArgs(more ...string) []string {
 func (e *e2e) command(extraEnv []string, args ...string) *exec.Cmd {
 	cmd := exec.Command(filepath.Join(e.bin, exeName("warden")), args...)
 	cmd.Dir = e.root
-	cmd.Env = append(append([]string{}, e.env...), extraEnv...)
+	// PWD names the directory as entered, as a shell sets it: without it,
+	// warden's working directory resolves symbolic links (macOS's /var is
+	// /private/var), and the paths it prints are not the ones the test wrote.
+	env := append(append([]string{}, e.env...), "PWD="+e.root)
+	cmd.Env = append(env, extraEnv...)
 	return cmd
 }
 
