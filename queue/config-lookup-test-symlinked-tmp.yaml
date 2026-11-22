@@ -71,8 +71,8 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261122T105700Z
+      expires: 2026-11-22T13:05:35.581909792Z
   - id: f6-consolidate
     phase: 6
     affinity: cloud
@@ -97,7 +97,7 @@ budget:
     steps: 7
   spent:
     runs: 2
-    steps: 7
+    steps: 8
 questions:
   - id: q1
     kind: assumed
@@ -185,3 +185,6 @@ history:
   - at: 2026-11-22T11:05:27Z
     by: cloud/20261122T105700Z
     event: entered phase 6 (publish)
+  - at: 2026-11-22T11:05:35Z
+    by: cloud/20261122T105700Z
+    event: claimed f6-merge-main until 2026-11-22T13:05:35Z
