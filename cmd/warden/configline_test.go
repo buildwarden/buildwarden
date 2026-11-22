@@ -113,9 +113,7 @@ func TestConfigLineEscapesThePath(t *testing.T) {
 			t.Fatal(err)
 		}
 		write(t, dir, projectConfig, body)
-		if err := os.Chdir(dir); err != nil {
-			t.Fatal(err)
-		}
+		t.Chdir(dir)
 		return filepath.Join(parent, shown, projectConfig)
 	}
 	t.Run("the line", func(t *testing.T) {
