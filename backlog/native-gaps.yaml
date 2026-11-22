@@ -1039,6 +1039,9 @@ gaps:
       nothing changed. feat/prebuilt-artifacts is still 49b513a (design only), under the FLOW-20 hold.
       2026-11-22 (host:container-any/windows-desktop.20261122T171002Z, unattended, main be13847): not run,
       nothing changed. feat/prebuilt-artifacts is still 49b513a (design only), under the FLOW-20 hold.
+      2026-11-22 (host:container-any/windows-desktop.20261122T231002Z, unattended, main fa1dc64): not run.
+      main moved (#134 to #136; driver-contract merged as #135), but feat/prebuilt-artifacts is still
+      49b513a (design only), under the FLOW-20 hold.
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: open
@@ -1147,6 +1150,9 @@ gaps:
       nothing changed. feat/workdir-in-context is still 24376c0 (design only), under the FLOW-20 hold.
       2026-11-22 (host:container-any/windows-desktop.20261122T171002Z, unattended, main be13847): not run,
       nothing changed. feat/workdir-in-context is still 24376c0 (design only), under the FLOW-20 hold.
+      2026-11-22 (host:container-any/windows-desktop.20261122T231002Z, unattended, main fa1dc64): not run.
+      main moved (#134 to #136), but feat/workdir-in-context is still 24376c0 (design only), under the
+      FLOW-20 hold.
   - id: workdir-in-context-macos
     host: macos-finch
     status: open
