@@ -2,9 +2,10 @@ feature: program-north-star
 title: 'The componentization program is the north star: prioritize and parallelize for it, even across interface breaks, until it completes'
 priority: 3
 kind: process
-status: queued
+state_step: 'Jeff''s setup, after the merge (program-north-star, Implementation plan, State step and What only Jeff can do, once): (1) config.yaml program_trunk: program/componentization on buildwarden/buildwarden, buildwarden/buildwarden-specs and each program repository he created, with hosts.yaml lines; (2) create each program trunk at main''s head on his word, in a new repository only once its CI and flow18 are on main and required (a18); (3) resumes: on each open hold; (4) program: true on driver-contract and relay-release-forms-spec; (5) file program-land (held) and specs-prerelease-tags; (6) program/records.yaml and the README schema; (7) wf status, QUEUE.md, wf commit. Outside the repository: create the program repositories (private, CI and flow18 on main, App, auto-delete head branches), merge specs-prerelease-tags, set program-trunk and tag rulesets, confirm the App may merge, change the nightly prompt''s ''Never merge''.'
+status: in_progress
 round: process
-phase: 1
+phase: 2
 design: docs/design/program-north-star.md
 branch: feat/program-north-star
 alters_relationships: null
@@ -13,6 +14,13 @@ steps:
   - id: x1-design
     phase: 1
     affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
       claimed_by: ""
@@ -23,9 +31,24 @@ budget:
     steps: 5
   spent:
     runs: 0
-    steps: 0
+    steps: 1
 questions: []
 history:
   - at: 2026-11-21T19:26:09Z
     by: human/jeff
     event: queued at position 1
+  - at: 2026-11-22T19:11:56Z
+    by: human/jeff
+    event: started (FLOW-05)
+  - at: 2026-11-22T19:11:56Z
+    by: human/jeff
+    event: claimed x1-design until 2026-11-22T21:11:56Z
+  - at: 2026-11-22T19:11:56Z
+    by: human/jeff
+    event: 'state step recorded: Jeff''s setup, after the merge (program-north-star, Implementation plan, State step and What only Jeff can do, once): (1) config.yaml program_trunk: program/componentization on buildwarden/buildwarden, buildwarden/buildwarden-specs and each program repository he created, with hosts.yaml lines; (2) create each program trunk at main''s head on his word, in a new repository only once its CI and flow18 are on main and required (a18); (3) resumes: on each open hold; (4) program: true on driver-contract and relay-release-forms-spec; (5) file program-land (held) and specs-prerelease-tags; (6) program/records.yaml and the README schema; (7) wf status, QUEUE.md, wf commit. Outside the repository: create the program repositories (private, CI and flow18 on main, App, auto-delete head branches), merge specs-prerelease-tags, set program-trunk and tag rulesets, confirm the App may merge, change the nightly prompt''s ''Never merge''.'
+  - at: 2026-11-22T19:11:56Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-11-22T19:11:56Z
+    by: human/jeff
+    event: entered phase 2 (implement)
