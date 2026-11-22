@@ -129,6 +129,40 @@ func TestConfigFileLookupOrder(t *testing.T) {
 	}
 }
 
+// ./warden.toml is named by the working directory as the user entered it,
+// through a symbolic link as a shell's PWD gives it, not as the kernel
+// resolves it: macOS's $TMPDIR is under /var, a link to /private/var.
+func TestConfigLineNamesTheDirectoryAsEntered(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("needs a symbolic link, which Windows restricts")
+	}
+	inConfigFiles(t, "")
+	realDir := t.TempDir()
+	write(t, realDir, projectConfig, outputDirFile("from-dir"))
+	link := filepath.Join(t.TempDir(), "linked")
+	if err := os.Symlink(realDir, link); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(link)
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	want := filepath.Join(link, projectConfig)
+	if cfg.File != want || cfg.FileSource != configFromDir {
+		t.Errorf("config file = %q (%q), want %q (%q)", cfg.File, cfg.FileSource,
+			want, configFromDir)
+	}
+	if cfg.Build.OutputDir != "from-dir" {
+		t.Errorf("output_dir = %q, want %q: another file was decoded",
+			cfg.Build.OutputDir, "from-dir")
+	}
+	wantLine := "config: " + want + " (" + configFromDir + ")"
+	if line := configLine(cfg); line != wantLine {
+		t.Errorf("configLine = %q, want %q", line, wantLine)
+	}
+}
+
 // A file that is named is the only one: the sources below it are not
 // opened, so a file there that no decoder takes is not an error.
 func TestNamedConfigFileIsTheOnlyOneRead(t *testing.T) {
