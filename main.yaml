@@ -1,7 +1,7 @@
-sha: be138478cd83a1852f25e7af5597bbd01122c9bb
+sha: d67da9ddf967ada454b24344228fff6ba73dfd7f
 ci: green
 up_to_date: required
 areas:
-  sha: be138478cd83a1852f25e7af5597bbd01122c9bb
+  sha: d67da9ddf967ada454b24344228fff6ba73dfd7f
   differences: 0
   lines: []
