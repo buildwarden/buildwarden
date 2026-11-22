@@ -351,6 +351,10 @@ type State struct {
 	// summaryDir is where a view's writes regenerate QUEUE.md: the queue
 	// state's own directory. Empty, it is Dir.
 	summaryDir string
+	// MergeGate reports whether FLOW-08's merge gate passes for the item's
+	// pull request in the repository (check.MergeReady); wf sets it. Nil,
+	// no loop merge is offered.
+	MergeGate func(f *Feature, repo string) bool
 }
 
 // doneFolder is where done items live once wf migrate -done has created it.
@@ -926,6 +930,26 @@ func (f *Feature) PutOnHold(why, resumes string, now time.Time, by string) error
 		Question: why, Options: []string{resume}, Recommended: resume, Resumes: resumes})
 	f.Steps = append([]Step{answer}, f.Steps...)
 	f.Log(now, by, "on hold (%s, resumes: %s): %s", id, resumes, why)
+	return nil
+}
+
+// Escalate makes a newly queued item's first step a human escalation that
+// carries why, which the item's own first step needs: the program sync's
+// conflict the loop could not resolve is filed this way, so the human says
+// how it resolves before the item's Design follows his word (FLOW-20).
+func (f *Feature) Escalate(why string, now time.Time, by string) error {
+	if strings.TrimSpace(why) == "" {
+		return errors.New("an escalation says what the human decides")
+	}
+	if f.Status != "queued" || len(f.Steps) == 0 {
+		return fmt.Errorf("%s: only a newly queued item is filed with an escalation",
+			f.Feature)
+	}
+	esc := Step{ID: StepID(f.Round, f.Phase, "escalate"), Phase: f.Phase,
+		Affinity: "human", Status: "pending", Note: why}
+	f.Steps[0].Needs = addNeeds(f.Steps[0].Needs, esc.ID)
+	f.Steps = append([]Step{esc}, f.Steps...)
+	f.Log(now, by, "filed with an escalation (FLOW-20): %s", why)
 	return nil
 }
 

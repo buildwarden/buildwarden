@@ -34,6 +34,9 @@ type Env struct {
 	// State is the queue state, for the area map and the other items. Nil,
 	// there is no map: every item is undeclared.
 	State *queue.State
+	// GitHub is what the merge gate reads from GitHub; nil, the gh command
+	// (MergeReady, SyncReady).
+	GitHub GitHub
 }
 
 // Result is one check's outcome.
@@ -146,7 +149,7 @@ func MergedFirst(env Env, f *queue.Feature, n int) []Result {
 		return c.out
 	}
 	if n < 1 || n > len(f.Work) {
-		c.add("merged by a human (FLOW-08)", false, "work has no entry %d", n)
+		c.add("merged (FLOW-08)", false, "work has no entry %d", n)
 		return c.out
 	}
 	c.repos()
@@ -500,7 +503,7 @@ func (c *checker) prGreen() {
 // commit on the trunk alone is the proof. Each repository the item has a
 // branch in is checked against its own trunk (FLOW-08).
 func (c *checker) merged() {
-	const name = "merged by a human (FLOW-08)"
+	const name = "merged (FLOW-08)"
 	var prCommits []string
 	pr := c.pr()
 	if c.at != c.home && pr == nil {

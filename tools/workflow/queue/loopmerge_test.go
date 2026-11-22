@@ -1,0 +1,116 @@
+package queue
+
+import (
+	"strings"
+	"testing"
+)
+
+// loopMerging is a program item at its merge step with its PR into the
+// program trunk recorded, in a state with the program trunk configured and
+// the gate answering pass.
+func loopMerging(t *testing.T, pass bool) (*State, *Feature) {
+	t.Helper()
+	f := mergeWaiting(working("p", 1, 0, "relay"), 42)
+	f.Program = true
+	s := programState(t, f)
+	s.MergeGate = func(*Feature, string) bool { return pass }
+	return s, f
+}
+
+// TestLoopMergeOffered: a merge step on a program trunk is offered to a cloud
+// worker only while the merge gate passes, and never otherwise; it does not
+// wait on the human. Any other merge step is never offered and waits on the
+// human (FLOW-04, FLOW-05, FLOW-08).
+func TestLoopMergeOffered(t *testing.T) {
+	s, f := loopMerging(t, true)
+	if got := next(t, s, "cloud/run"); got != "p f7-merge" {
+		t.Fatalf("cloud next = %s with the gate passing", got)
+	}
+	if got := next(t, s, "human/jeff"); got != "none" {
+		t.Fatalf("human next = %s: the loop's merge is a cloud step", got)
+	}
+	if w := s.WaitsOnHuman(); len(w) != 0 {
+		t.Fatalf("a loop merge waits on the human: %v", w[0].Feature)
+	}
+	st, _ := f.Step("f7-merge")
+	if err := s.MayClaim(f, st, "cloud/run", now); err != nil {
+		t.Fatalf("MayClaim: %v", err)
+	}
+
+	s, f = loopMerging(t, false)
+	_, blocked := s.Next("cloud/run", now)
+	if len(blocked) != 1 || !strings.Contains(blocked[0].Reason, "the merge gate in") {
+		t.Fatalf("blocked = %v, want the merge gate", blocked)
+	}
+	st, _ = f.Step("f7-merge")
+	if err := s.MayClaim(f, st, "cloud/run", now); err == nil {
+		t.Fatal("MayClaim passed with the gate failing")
+	}
+	s.MergeGate = nil
+	if got := next(t, s, "cloud/run"); got != "none" {
+		t.Fatalf("cloud next = %s with no gate set", got)
+	}
+
+	// Not a program item: the human's merge, whatever the gate says.
+	s, f = loopMerging(t, true)
+	f.Program = false
+	if got := next(t, s, "cloud/run"); got != "none" {
+		t.Fatalf("cloud next = %s on main's merge", got)
+	}
+	if w := s.WaitsOnHuman(); len(w) != 1 {
+		t.Fatal("main's merge does not wait on the human")
+	}
+	st, _ = f.Step("f7-merge")
+	if err := s.MayClaim(f, st, "cloud/run", now); err == nil ||
+		!strings.Contains(err.Error(), "never claimed") {
+		t.Fatalf("MayClaim of the human's merge: %v", err)
+	}
+}
+
+// TestLoopMergeTwoRepositories: a two-repository program item's f6-merged-1
+// and f7-merge are both cloud merge steps, each under its repository's
+// gate, and the item merges with no human step (FLOW-08, FLOW-20).
+func TestLoopMergeTwoRepositories(t *testing.T) {
+	f := working("p", 1, 0, "relay")
+	f.Program = true
+	f.Repos = []string{"buildwarden/buildwarden", "buildwarden/buildwarden-specs"}
+	f.Work = []Work{{Repo: "buildwarden/buildwarden-specs", Branch: f.Branch, First: true,
+		PR: &PR{Number: 5}}}
+	advance(f, 6)
+	s := programState(t, f)
+	for i := range s.Config.Repositories {
+		if s.Config.Repositories[i].Name == "buildwarden/buildwarden-specs" {
+			s.Config.Repositories[i].ProgramTrunk = programTrunk
+		}
+	}
+	gate := map[string]bool{}
+	s.MergeGate = func(_ *Feature, repo string) bool { return gate[repo] }
+	for i := range f.Steps {
+		if st := &f.Steps[i]; st.Phase == 6 && !isMergedFirst(st) {
+			st.Status = "done"
+		}
+	}
+	if got := next(t, s, "cloud/run"); got != "none" {
+		t.Fatalf("cloud next = %s before the specs gate passes", got)
+	}
+	gate["buildwarden/buildwarden-specs"] = true
+	if got := next(t, s, "cloud/run"); got != "p f6-merged-1" {
+		t.Fatalf("cloud next = %s, want the merged-first step", got)
+	}
+	st, _ := f.Step("f6-merged-1")
+	f.Work[0].Merged = "0123456789abcdef0123456789abcdef01234567"
+	Complete(f, st, "cloud/run", now)
+	f.PR = &PR{Number: 42}
+	if got := next(t, s, "cloud/run"); got != "none" {
+		t.Fatalf("cloud next = %s before the home's gate passes", got)
+	}
+	gate["buildwarden/buildwarden"] = true
+	if got := next(t, s, "cloud/run"); got != "p f7-merge" {
+		t.Fatalf("cloud next = %s, want f7-merge", got)
+	}
+	for _, st := range f.Steps {
+		if st.Status == "pending" && st.Affinity == "human" {
+			t.Fatalf("a human step: %s", st.ID)
+		}
+	}
+}

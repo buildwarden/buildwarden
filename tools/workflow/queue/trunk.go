@@ -74,22 +74,23 @@ func (s *State) chooseTrunk(repo string, f *Feature) (string, error) {
 		return "", err
 	}
 	pt := s.Config.ProgramTrunkOf(repo)
-	if pt == "" || !f.Program || f.IsProcess() || s.reachesMachinery(repo, f) {
+	if pt == "" || !f.Program || f.IsProcess() || s.reachesMachinery(f) {
 		return trunk, nil
 	}
 	return pt, nil
 }
 
 // reachesMachinery reports whether the item's declared areas hold a path of
-// the loop's machinery or of the repository's CI or release configuration,
-// as repo's area map places them. An undeclared item reaches none it has
-// declared; one that declares areas where repo has no map is taken to reach
-// them, so the program trunk is never chosen on a guess.
-func (s *State) reachesMachinery(repo string, f *Feature) bool {
+// the loop's machinery or of CI or release configuration, as the map of the
+// item's home, whose names its areas are, places them. An undeclared item
+// reaches none it has declared; one that declares areas where its home has
+// no map is taken to reach them, so the program trunk is never chosen on a
+// guess.
+func (s *State) reachesMachinery(f *Feature) bool {
 	if f.Areas == nil || len(*f.Areas) == 0 {
 		return false
 	}
-	v, err := s.ForRepository(repo)
+	v, err := s.ForRepository(s.ReposOf(f)[0])
 	if err != nil || v.Areas == nil {
 		return true
 	}

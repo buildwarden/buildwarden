@@ -9,7 +9,8 @@ import (
 
 // programHere is config.yaml with o/here's program trunk recorded.
 const programHere = "repository: o/here\nrepositories:\n" +
-	"  - {name: o/here, trunk: main, program_trunk: program/componentization}\n"
+	"  - {name: o/here, trunk: main, program_trunk: program/componentization,\n" +
+	"    profile: docs/development/loop-profile.yaml}\n"
 
 // TestTrunkCommands: wf trunk prints the branch an item works against, and
 // wf main -trunk records the program trunk's reading in program.yaml
@@ -41,5 +42,40 @@ func TestTrunkCommands(t *testing.T) {
 	if got := must(t, dir, "trunk", "-feature", "p"); got !=
 		"main\t(o/here has no program trunk)\n" {
 		t.Fatalf("wf trunk with no program trunk = %q", got)
+	}
+}
+
+// TestSyncProgram: wf sync-program names the sync branch once main is ahead
+// of the program trunk, says the program trunk is current otherwise, and
+// waits while a program-sync item is open; wf new -escalate files that item
+// with a human escalation as its first step (FLOW-20, Decision 14).
+func TestSyncProgram(t *testing.T) {
+	work := codeRepo(t)
+	gitT(t, work, "push", "-q", "origin", "main:refs/heads/program/componentization")
+	gitT(t, work, "fetch", "-q", "origin")
+	dir := stateDir(t, programHere)
+	got := must(t, dir, "sync-program", "-repo", work)
+	if !strings.HasPrefix(got, "current\to/here\t") {
+		t.Fatalf("wf sync-program on a current program trunk = %q", got)
+	}
+	moveMain(t, work, "process item", "rules.txt")
+	gitT(t, work, "fetch", "-q", "origin")
+	head := gitT(t, work, "rev-parse", "origin/main")
+	got = must(t, dir, "sync-program", "-repo", work)
+	if !strings.HasPrefix(got, "sync\to/here\tsync/program-"+head[:12]+"\t") {
+		t.Fatalf("wf sync-program with main ahead = %q", got)
+	}
+
+	queued(t, dir, "program-sync-"+head[:12], "1", "-program", "-escalate",
+		"rules.txt conflicts: main "+head[:7]+", program trunk")
+	f := item(t, dir, "program-sync-"+head[:12])
+	if f.Steps[0].ID != "f0-escalate" || f.Steps[0].Affinity != "human" ||
+		!strings.Contains(f.Steps[0].Note, "rules.txt conflicts") ||
+		f.Steps[1].Needs[0] != "f0-escalate" {
+		t.Fatalf("steps %+v, want the escalation first", f.Steps)
+	}
+	got = must(t, dir, "sync-program", "-repo", work)
+	if !strings.HasPrefix(got, "waits\to/here\tprogram-sync-") {
+		t.Fatalf("wf sync-program with a program-sync item open = %q", got)
 	}
 }

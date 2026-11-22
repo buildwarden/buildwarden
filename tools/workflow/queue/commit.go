@@ -70,6 +70,15 @@ func (s *State) MayClaim(f *Feature, st *Step, worker string, now time.Time) err
 	if why := s.Guard(f, st, worker); why != "" && !mine {
 		return fmt.Errorf("%s may not be claimed: %s", st.ID, why)
 	}
+	if IsMerge(st) || isMergedFirst(st) {
+		if !s.LoopMerges(f, st) {
+			return fmt.Errorf("%s waits for the human's merge and is never claimed "+
+				"(FLOW-08)", st.ID)
+		}
+		if why := s.gateWait(f, st); why != "" && !mine {
+			return fmt.Errorf("%s may not be claimed: it waits on %s", st.ID, why)
+		}
+	}
 	return nil
 }
 

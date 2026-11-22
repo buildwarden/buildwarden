@@ -12,6 +12,10 @@
 //	wf release  -state DIR -machine M -stale -current M.RUN -why TEXT
 //	wf renew    -state DIR -worker W -feature F -step S
 //	wf check    -state DIR -repo DIR -feature F [-run]
+//	wf check    -state DIR -repo DIR -feature F -step f7-merge|f6-merged-N
+//	            [-repository OWNER/NAME]
+//	wf check    -state DIR -repo DIR -sync -repository OWNER/NAME -pr N
+//	wf sync-program -state DIR -repo DIR [-repository OWNER/NAME]
 //	wf done     -state DIR -repo DIR -worker W -feature F -step S [-run]
 //	wf answer   -state DIR -worker W -feature F -question Q -answer TEXT
 //	wf back     -state DIR -worker W -feature F -why FINDING [-to 1|3]
@@ -20,6 +24,7 @@
 //	            [-kind process -holds PATTERN,...] [-hold WHY -resumes WHEN]
 //	            [-repos OWNER/NAME,...] [-areas AREA,...] [-seams SEAM,...]
 //	            [-adopts CONSUMABLE@VERSION] [-urgent] [-lead host:NAME] [-program]
+//	            [-escalate TEXT]
 //	wf hold     -state DIR -worker W -feature F -why TEXT -resumes WHEN
 //	wf trunk    -state DIR -feature F [-repository OWNER/NAME]
 //	wf move     -state DIR -worker human/NAME -feature F -to N [-why TEXT]
@@ -93,6 +98,25 @@
 // main.yaml, and a refresh waits while the item's own trunk is red. stale
 // compares each item with its own trunk, and areas -rev defaults to the
 // program trunk while a program item works against it.
+//
+// A program item's merge step, and an f6-merged-<n> whose work entry is on a
+// program trunk, are the loop's (FLOW-08, FLOW-20): next offers each to a
+// cloud worker, and claim takes it, only while FLOW-08's merge gate passes
+// for every repository the step covers, and they do not wait on the human.
+// check -step runs that gate (check.MergeReady) in each of them, or only
+// -repository's, each failure naming its point: the PR's base is the
+// program trunk; its head is pr.head and the remote's; every check run on
+// it passed, was skipped or neutral, and the ruleset's required ones
+// succeeded; it contains the program trunk; the tier-2 report is for it with
+// no open MUST the records do not defer; no human step is pending; the
+// security boundary is none or the human acknowledged its note; the
+// merged-first PRs merged; and the rule changes are cleared. Every other
+// merge step is the human's, as before. sync-program prints whether the
+// trunk is ahead of the program trunk and, when it is, the sync branch
+// sync/program-<trunk sha>; it waits while a program-sync-<sha> item is open.
+// check -sync is the sync's gate (check.SyncReady). new -escalate files an
+// item, such as program-sync-<sha>, whose first step is a human escalation
+// carrying TEXT.
 //
 // new -lead, and lead for an item already queued or in progress, name the
 // host name whose machines take a feature's cloud steps of Branch setup
@@ -285,6 +309,9 @@ type opts struct {
 	repos, areas, seams, adopts, with, message, claimed       string
 	rev, edges, repository                                    string
 	urgent, clear, check, list, clones, prepare, program      bool
+	sync                                                      bool
+	pr                                                        int
+	escalate                                                  string
 	// given holds the names of the flags the command line set, for a flag
 	// whose empty value means something.
 	given                                      map[string]bool
@@ -344,6 +371,11 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.source, "source", "", "new: where the item came from")
 	fs.StringVar(&o.kind, "kind", "", "new: feature (default) or process")
 	fs.StringVar(&o.follows, "follows", "", "new: the item this one fixes or finishes")
+	fs.BoolVar(&o.sync, "sync", false,
+		"check: the program sync's gate for -repository's PR -pr (FLOW-20)")
+	fs.IntVar(&o.pr, "pr", 0, "check -sync: the sync's pull request number")
+	fs.StringVar(&o.escalate, "escalate", "",
+		"new: the item's first step is a human escalation carrying this text (FLOW-20)")
 	fs.BoolVar(&o.program, "program", false,
 		"new: a program item, whose design lists componentization.md in related (FLOW-20)")
 	fs.StringVar(&o.holds, "holds", "",
@@ -426,11 +458,15 @@ func run(cmd string, args []string, now time.Time) error {
 	if err != nil {
 		return err
 	}
+	s.MergeGate = func(f *queue.Feature, repo string) bool {
+		return check.OK(check.MergeReady(env(s, o), f, repo))
+	}
 	cmds := map[string]func(*queue.State, opts) error{
 		"validate": validate, "status": status, "next": next, "check": checkPhase,
 		"answer": answer, "back": back, "new": newFeature, "move": move, "urgent": urgent,
 		"lead": lead, "state-step": stateStep, "hold": hold, "trunk": trunkCmd,
-		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
+		"sync-program": syncProgram,
+		"gate":         gate, "budget": budget, "migrate": migrate, "stale": stale,
 		"declare": declareItem, "relate": relate, "relations": relations,
 		"digest": digest, "areas": areasCmd, "native": native,
 	}
@@ -642,13 +678,96 @@ func next(s *queue.State, o opts) error {
 }
 
 func checkPhase(s *queue.State, o opts) error {
+	if o.sync {
+		if o.repository == "" || o.pr < 1 {
+			return errors.New("check -sync needs -repository and -pr")
+		}
+		if !printResults(check.SyncReady(env(s, o), o.repository, o.pr)) {
+			return fmt.Errorf("the sync gate does not pass for %s PR #%d (FLOW-20)",
+				o.repository, o.pr)
+		}
+		return nil
+	}
 	f, err := s.Find(o.feature)
 	if err != nil {
 		return err
 	}
+	if o.step != "" {
+		return checkMerge(s, o, f)
+	}
 	if !runChecks(s, o, f) {
 		return fmt.Errorf("phase %d done-when not met", f.Phase)
 	}
+	return nil
+}
+
+// checkMerge is wf check -step for a loop merge: FLOW-08's merge gate in each
+// repository the step covers, or only -repository's (FLOW-20).
+func checkMerge(s *queue.State, o opts, f *queue.Feature) error {
+	st, err := f.Step(o.step)
+	if err != nil {
+		return err
+	}
+	if !s.LoopMerges(f, st) {
+		return fmt.Errorf("%s is not a merge into a program trunk: the human merges it "+
+			"(FLOW-08)", st.ID)
+	}
+	ok := true
+	for _, repo := range s.MergeRepos(f, st) {
+		if o.repository != "" && repo != o.repository {
+			continue
+		}
+		ok = printResults(check.MergeReady(env(s, o), f, repo)) && ok
+	}
+	if !ok {
+		return fmt.Errorf("the merge gate does not pass for %s (FLOW-08)", st.ID)
+	}
+	return nil
+}
+
+// syncProgram is wf sync-program: whether repo's trunk is ahead of its
+// program trunk and, when it is, the branch the sync is built on,
+// sync/program-<trunk sha>, cut from the program trunk with origin/<trunk>
+// merged into it (FLOW-20, Decision 14). It waits while a program-sync item
+// filed for an unresolved conflict is open.
+func syncProgram(s *queue.State, o opts) error {
+	repo := o.repository
+	if repo == "" {
+		repo = s.Config.Repository
+	}
+	pt := s.Config.ProgramTrunkOf(repo)
+	if pt == "" {
+		return fmt.Errorf("config.yaml records no program trunk for %s", repo)
+	}
+	trunk, err := s.Config.Trunk(repo)
+	if err != nil {
+		return err
+	}
+	for _, f := range s.Ordered() {
+		if strings.HasPrefix(f.Feature, "program-sync-") && f.Status != "done" {
+			fmt.Printf("waits\t%s\t%s is open: the next sync waits for it\n", repo,
+				f.Feature)
+			return nil
+		}
+	}
+	dir := o.repo
+	if repo != s.Config.Repository {
+		if dir, err = check.Clone(env(s, o), repo); err != nil {
+			return err
+		}
+	}
+	head, err := git(dir, "rev-parse", "origin/"+trunk)
+	if err != nil {
+		return err
+	}
+	if _, err := git(dir, "merge-base", "--is-ancestor", "origin/"+trunk,
+		"origin/"+pt); err == nil {
+		fmt.Printf("current\t%s\t%s contains origin/%s at %s\n", repo, pt, trunk,
+			short(head))
+		return nil
+	}
+	fmt.Printf("sync\t%s\tsync/program-%s\tmerge origin/%s (%s) into origin/%s\n", repo,
+		head[:12], trunk, short(head), pt)
 	return nil
 }
 
@@ -881,10 +1000,8 @@ func newFeature(s *queue.State, o opts) error {
 	if err := accept(s, f, o); err != nil {
 		return err
 	}
-	if o.held {
-		if err := f.PutOnHold(o.hold, o.resumes, o.now, o.worker); err != nil {
-			return fmt.Errorf("-hold: %w", err)
-		}
+	if err := holdOrEscalate(f, o); err != nil {
+		return err
 	}
 	if err := s.Save(f); err != nil {
 		return err
@@ -911,6 +1028,22 @@ func hold(s *queue.State, o opts) error {
 	}
 	q := f.Hold()
 	fmt.Printf("held\t%s\t%s\tresumes: %s\n", f.Feature, q.ID, q.Resumes)
+	return nil
+}
+
+// holdOrEscalate files a new item on hold (-hold) or with an escalation as
+// its first step (-escalate), as new's flags ask (FLOW-20).
+func holdOrEscalate(f *queue.Feature, o opts) error {
+	if o.held {
+		if err := f.PutOnHold(o.hold, o.resumes, o.now, o.worker); err != nil {
+			return fmt.Errorf("-hold: %w", err)
+		}
+	}
+	if o.escalate != "" {
+		if err := f.Escalate(o.escalate, o.now, o.worker); err != nil {
+			return fmt.Errorf("-escalate: %w", err)
+		}
+	}
 	return nil
 }
 

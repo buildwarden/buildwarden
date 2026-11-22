@@ -257,10 +257,11 @@ func (s *State) offer(f *Feature, worker string, now time.Time) (
 // wait returns what the worker waits on before it can take the offered step,
 // or "", with Guard's refusal when that is the reason.
 func (s *State) wait(f *Feature, st *Step, worker string, now time.Time) (string, refusal) {
+	loop := s.LoopMerges(f, st)
 	switch {
-	case IsMerge(st):
+	case IsMerge(st) && !loop:
 		return mergeWait(f), refusal{}
-	case isMergedFirst(st):
+	case isMergedFirst(st) && !loop:
 		return mergedFirstWait(f, st), refusal{}
 	case !Satisfies(worker, st.Affinity):
 		return fmt.Sprintf("%s step %s", st.Affinity, st.ID), refusal{}
@@ -269,6 +270,11 @@ func (s *State) wait(f *Feature, st *Step, worker string, now time.Time) (string
 	}
 	if why := s.machineRefuses(f, st, worker); why != "" {
 		return why, refusal{}
+	}
+	if loop {
+		if why := s.gateWait(f, st); why != "" {
+			return why, refusal{}
+		}
 	}
 	if Kind(worker) != "human" {
 		if why, red := s.unattendedHold(f, st); why != "" {
@@ -279,7 +285,63 @@ func (s *State) wait(f *Feature, st *Step, worker string, now time.Time) (string
 	return r.why, r
 }
 
-// mergeWait is the reason an item at its merge step waits.
+// LoopMerges reports whether the loop merges what the merge step or
+// f6-merged-<n> waits for: every repository the step covers is one where the
+// item works against a program trunk (FLOW-08, FLOW-20). The merge step
+// covers each repository the item has a branch in; an f6-merged-<n> its work
+// entry's. Every other merge step is the human's.
+func (s *State) LoopMerges(f *Feature, st *Step) bool {
+	repos := s.MergeRepos(f, st)
+	if len(repos) == 0 {
+		return false
+	}
+	for _, r := range repos {
+		if !s.OnProgramTrunk(r, f) {
+			return false
+		}
+	}
+	return true
+}
+
+// MergeRepos are the repositories a merge step or f6-merged-<n> covers, or
+// nil for any other step.
+func (s *State) MergeRepos(f *Feature, st *Step) []string {
+	if n, ok := MergedFirst(st); ok {
+		if n > len(f.Work) {
+			return nil
+		}
+		return []string{f.Work[n-1].Repo}
+	}
+	if !IsMerge(st) || f.Round != "feature" {
+		return nil
+	}
+	repos := []string{s.ReposOf(f)[0]}
+	for _, w := range f.Work {
+		repos = append(repos, w.Repo)
+	}
+	return repos
+}
+
+// gateWait is what a loop merge waits on: the merge gate in each repository
+// the step covers that has not merged yet, or "" once MergeGate passes for
+// all of them. With no MergeGate set it waits: the gate is never assumed.
+func (s *State) gateWait(f *Feature, st *Step) string {
+	var waits []string
+	for _, r := range s.MergeRepos(f, st) {
+		if w := s.workEntry(f, r); w != nil && w.Merged != "" {
+			continue
+		}
+		if s.MergeGate == nil || !s.MergeGate(f, r) {
+			waits = append(waits, r)
+		}
+	}
+	if len(waits) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("the merge gate in %s (wf check -step %s, FLOW-08)",
+		strings.Join(waits, ", "), st.ID)
+}
+
 // isMergedFirst reports whether the step is an f6-merged-<n>.
 func isMergedFirst(st *Step) bool {
 	_, ok := MergedFirst(st)

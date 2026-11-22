@@ -410,7 +410,10 @@ func (s *State) waitsOnHuman(f *Feature) bool {
 		if st.Status != "pending" || st.Phase > f.Phase || !allDone(st.Needs, done) {
 			continue
 		}
-		if st.Affinity == "human" || (IsMerge(st) && f.hasPR()) || isMergedFirst(st) {
+		// A pull request the loop merges into a program trunk waits on no
+		// one but the gate (FLOW-05, FLOW-20).
+		human := (IsMerge(st) && f.hasPR()) || isMergedFirst(st)
+		if st.Affinity == "human" || (human && !s.LoopMerges(f, st)) {
 			return true
 		}
 	}

@@ -866,7 +866,7 @@ func TestCloseAfterASquash(t *testing.T) {
 	p.Kind, p.Round, p.PR = "process", "process", &queue.PR{Number: 9}
 	squash(t, work, "#9")
 	if got := failures(Phase(env, p)); !strings.Contains(got, "branch deleted") ||
-		strings.Contains(got, "merged by a human") {
+		strings.Contains(got, "merged (FLOW-08)") {
 		t.Fatalf("x4 before the branches go: %q, want only the deletions failing", got)
 	}
 	git(t, work, "push", "-q", "origin", ":feat/demo")

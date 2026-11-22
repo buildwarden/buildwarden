@@ -234,8 +234,8 @@ func TestMergedPerRepository(t *testing.T) {
 	branchIn(t, clone, "spec.md")
 	f.PR, f.Work[0].PR = &queue.PR{Number: 5}, &queue.PR{Number: 7}
 	got := failures(Phase(env, f))
-	if !strings.Contains(got, "merged by a human (FLOW-08): ") ||
-		!strings.Contains(got, "merged by a human (FLOW-08) in o/specs") {
+	if !strings.Contains(got, "merged (FLOW-08): ") ||
+		!strings.Contains(got, "merged (FLOW-08) in o/specs") {
 		t.Fatalf("nothing merged: failures %q", got)
 	}
 	if OK(MergedFirst(env, f, 1)) {
