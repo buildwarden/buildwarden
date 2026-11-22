@@ -35,7 +35,7 @@ None.
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | config-lookup-test-symlinked-tmp | fix (follows project-config-trust) | - | buildwarden/buildwarden | cli, designs | 8 close | f8-close (cloud) | - | [#134](https://github.com/buildwarden/buildwarden/pull/134) | 10 / 7 |
-| 2 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 6 publish | f6-validate-qemu-any (host:qemu-any), f6-validate-macos-vz-r2 (host:macos-vz) | - | - | 37 / 30 |
+| 2 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 6 publish | f6-validate-qemu-any (host:qemu-any), f6-validate-macos-vz-r2 (host:macos-vz, leased to host:macos-vz/macbook.attended-20261122T190734Z) | - | - | 38 / 30 |
 | 3 | program-north-star | process | - | buildwarden/buildwarden | - | 2 implement | x2-implement (cloud, leased to cloud/20261122T180143Z) | - | - | 2 / 12 |
 | 5 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 6 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
@@ -45,7 +45,7 @@ None.
 
 | Machine | Host names | Last run | Leads | Holds |
 |---|---|---|---|---|
-| macbook | macos-vz, macos-qemu, macos-finch, qemu-any, container-any, macos-any | worked, 2026-11-22 12:40 (since 2026-11-20): claude exited 0 | - | - |
+| macbook | macos-vz, macos-qemu, macos-finch, qemu-any, container-any, macos-any | worked, 2026-11-22 12:40 (since 2026-11-20): claude exited 0 | - | driver-contract/f6-validate-macos-vz-r2 until 2026-11-23 15:24 |
 | windows-desktop | windows-hyperv, container-any, linux-kvm, windows-any | worked, 2026-11-22 11:10: claude exited 0; skipped windows-hyperv (native.prepare failed) | - | - |
 
 ## Relations
