@@ -287,3 +287,40 @@ func TestRuntimeAnswersWhileAChildHoldsStdout(t *testing.T) {
 			"and exited 0 while its child held stdout")
 	}
 }
+
+// The build's first engine call on a named runtime (checkEngine) waits
+// doctorTimeout, not answerTimeout: a runtime slower than the probe's
+// timeout but within doctor's passes, and one slower than doctor's fails.
+func TestBuildEngineCheckWaitsDoctorTimeout(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		doctor time.Duration
+		pass   bool
+	}{
+		{"within doctor's timeout", 5 * time.Second, true},
+		{"past doctor's timeout", 200 * time.Millisecond, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeRuntime(t, dir, "podman", slow)
+			onlyOnPath(t, dir)
+			shortTimeouts(t, 50*time.Millisecond, tc.doctor)
+			t.Setenv("WARDEN_CTR_CLI", "podman")
+			t.Setenv("WARDEN_IMAGE", "")
+			set, err := drivercmd.Resolve("container", Settings, drivercmd.CmdRun, nil,
+				"", os.Environ())
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = checkEngine("podman", set)
+			if tc.pass && err != nil {
+				t.Fatalf("checkEngine = %v; want the slow podman to pass", err)
+			}
+			var fe *driver.FixableError
+			if !tc.pass && (!errors.As(err, &fe) ||
+				!strings.Contains(fe.Msg, "installed but not running")) {
+				t.Fatalf("checkEngine = %v; want installed but not running", err)
+			}
+		})
+	}
+}
