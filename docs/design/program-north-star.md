@@ -1,6 +1,6 @@
 ---
 feature: program-north-star
-status: draft
+status: archived
 drivers: []              # rule text, skills, CI triggers and the queue's tools; no driver tree is reached
 seams: []                # no GLOBAL-08 seam changes; FLOW-20 says how program items may change seams
 surfaces: []             # `wf`, the skills and CI are the loop's tools, not a user-facing surface of the product
@@ -2871,10 +2871,132 @@ A process item has no Publish phase and no consolidation pass (FLOW-03).
 
 ## Rollback notes
 
-Setting `program_trunk` off in `config.yaml` returns every item to `main`
-in wf; the program trunk's content then lands by an early `program-land`.
-A tag already pushed stays (never moved or deleted).
+Nothing changes in the loop's behaviour until the state step sets
+`program_trunk` in `config.yaml`: with no program trunk configured every
+item keeps `main`, `f7-merge` is never seeded, a process item keeps Jeff's
+design review, and holds without `resumes` behave as before. Before the
+state step, reverting this PR's merge commit on `main` is a complete
+rollback. After it, removing `program_trunk` from `config.yaml` returns
+every item to `main` in wf; whatever a program trunk already holds then
+lands by an early `program-land` (Jeff's squash merge per repository). A
+tag already pushed stays (tags are never moved or deleted), and
+`program/records.yaml` stays on the `workflow` branch as the record of what
+the loop decided. Reverting the rule text alone, without the code, leaves
+wf enforcing rules the documents no longer state, so the rule text and
+`tools/workflow/` revert together.
 
 ## Archive summary
 
-Filled in at the item's PR (FLOW-12).
+Implemented on 2026-11-22 as a process item (`x2-implement`, attended tick
+`cloud/20261122T180143Z`), after design review r1 approved the design and
+its 19 rule changes by name at `60f5666` (Jeff; review entry `dce352e`;
+a1 to a18 answered, a5 (b), a7, a11 (b) and a15 (b) changed from the
+recommendation). Implement finished at `aaabae8`; three gaps a check
+against the plan found were closed at `64019d6` (merge gate point 7's
+relay-clause note, `wf tag-next -rc`, the loop's area-map changes); a
+five-lens implementation review confirmed 26 findings, all applied at
+`43fab9b`. `main` had moved to `d67da9d` (#134,
+config-lookup-test-symlinked-tmp), merged without conflicts before the PR
+was opened.
+
+- **Built: holds** (`queue/queue.go`, `queue/next.go`, `queue/limits.go`,
+  `queue/summary.go`, `wf hold`): a hold question's `resumes`; a held item
+  holds no limit, does not wait on the human and is listed once under
+  **Held**; `wf hold` puts an in-progress item on hold (Decisions 2, 3).
+- **Built: the program trunk** (`queue/trunk.go`, `queue/repos.go`,
+  `queue/declare.go`, `check/repos.go`): `program_trunk` on a repository
+  entry, `program: true` on an item, `Config.TrunkFor`, the trunk recorded
+  on each work entry and returned from then on; `wf trunk`, `wf main
+  -trunk`, `wf stale`, `wf areas`, `wf drops` and `wf new -program` read it
+  (Decision 8).
+- **Built: the merge gate and the loop merge** (`check/merge.go`,
+  `queue/next.go`, `queue/phases.go`, `queue/limits.go`): `MergeReady`'s
+  nine points against the item's program trunk, point 3 reading the
+  required checks from the ruleset and refusing a trunk that requires
+  none; `wf check -step f7-merge`; `f7-merge` seeded and offered, and an
+  `f6-merged-<n>` on a program trunk offered as a cloud merge step;
+  `SyncReady`, `wf check -sync` and `wf sync-program` for the program sync
+  (Decisions 9, 10, 14).
+- **Built: records** (`queue/records.go`, `queue/commit.go`, `wf record`,
+  `wf program-body`): `program/records.yaml`, **Decided for you** in
+  `QUEUE.md` and the digest, and the landing PR body (Decision 13).
+- **Built: the gates** (`queue/queue.go`, `queue/phases.go`,
+  `check/review.go`, `TEMPLATE.md`): `design_review: umbrella` and
+  `process-test`, the `f2-umbrella` and `x2-process-test` steps, the cloud
+  `x1-design` of a process item while a program trunk is configured, the
+  later escalation thresholds (more than four returns; `wf reestimate`
+  once, then escalate) (Decisions 6, 11).
+- **Built: pre-releases** (`check/tags.go`, `wf tag-next`, `.goreleaser.yaml`,
+  `relay-image.yml`, `release.yml`, `check-pins.sh`, `pin-specs.sh`,
+  `CONTRIBUTING.md`): `-dev.N` and `-rc.N` tags on a program trunk,
+  published as pre-releases that move no `latest` (Decision 15).
+- **Built: CI and the ledger's working draft**: `main.yml` and `flow18.yml`
+  also run on `'program/**'`; `specs/README.md`'s working-draft line and
+  `specs/specs_test.go`'s `checkDrafts`, with `specs/pins_test.go`
+  (Decision 7, a7). No draft is opened.
+- **Rule text**, word for word as approved at `60f5666`: FLOW-20, FLOW-03,
+  FLOW-04, FLOW-05, FLOW-06, FLOW-07, FLOW-08, FLOW-13, FLOW-14, FLOW-17,
+  FLOW-19 (`process.md`, `TEMPLATE.md`); LINT-03, LINT-04
+  (`behavioral-linter.md`, `release.yml`); LOOP-01, LOOP-07, LOOP-09
+  (`loop-contract.md`); PROFILE-01 (`loop-profile.md`); UX-03
+  (`ux-cli-config.md`); ORCH-03 (`orchestrator.md`). FLOW-20's entry in
+  `tools/tier1/rules.yaml` maps its new check.
+- **Skills and agents**: `workflow-tick`, `workflow-human`,
+  `workflow-intake`, `workflow-native`, `wf-publish`, `wf-review`,
+  `wf-design`, `wf-plan`, as under *Skills and agents*.
+- **Departures** (Implementation plan, **Implementation departures**; none
+  changes a decision or an approved rule's wording): the fetch after a
+  loop merge names the program trunk only; a trunk flip is refused in `wf
+  declare` only; the sync's recorded head; `waitsOnHuman` through
+  `check.MergeWaitsOnHuman`, with both callbacks set on every state wf
+  loads; a process item before Implement holds no worker only while a
+  program trunk is configured; `wf drops` defaults `-base` to the program
+  trunk only when given `-state`.
+- **Implementation choices the reviewers left open**, taken as follows:
+  - `Validate` no longer refuses a trunk flip; `wf declare` still does,
+    where a declaration changes. A recorded area-map change or a done
+    item must not make the whole state invalid and stop every `wf commit`.
+  - A `sync` record is written by `wf sync-program -head <sha>`, which
+    checks that the head is a merge of `origin/<program trunk>` and a
+    trunk commit carrying nothing else; `SyncReady` passes only that head.
+    The tier-2 report on a sync whose tree is not git's clean merge lives
+    on the workflow branch at `reports/sync/<head12>.json`.
+  - "A protected finding the loop asked him to dismiss" is read as a
+    `protected` record on the PR's current head: such a merge waits on
+    Jeff at point 5, and one on an older head does not hold the new head.
+- **Decisions taken.** The program is the north star until its landing
+  (1, a1); non-program work held, fixes included, with `resumes` (2, 3, a2,
+  a3); parallelism from declared areas (4, a4); no new order rule (5); the
+  process test for a process item touching no reserved rule, judged by
+  effect (6, a5 (b)); interfaces may break within the never-break list,
+  the ledger v2 as a working draft (7, a6 to a8, a7 in Jeff's words); a
+  program trunk per repository (8, a10); loop merges as merge commits under
+  the merge gate (9, a11 (b)); one fix round, then a deferred MUST, never
+  for a protected rule (10, a12); three kinds of step on Jeff plus the
+  escalations he kept (11, a13 to a16, a15 (b)); one squash merge per
+  repository at `program-land` (12); records (13); the program sync (14);
+  pre-release tags (15, a17); repositories with CI at setup (16, a18).
+- **Rejected.** Ending the program at its last phase or at the pilot
+  driver's release (a1 (b), (c)); raising the limits or exempting program
+  items from them (a4 (b), (c)); Jeff's review of every process item, or
+  of none (a5 (a), (c)); a squash per item into the program trunk, or
+  Jeff merging each PR there (a11 (a), (c)); no escalation for a program
+  item that does not converge, or FLOW-06 and FLOW-13 as written (a15 (a),
+  (c)); a FLOW-11 carve-out; and the other options each Assumed entry
+  lists.
+- **For future designs touching `workflow`, `componentization`,
+  `program`, `program-trunk`, `freeze`, `hold`, `limits`,
+  `waiting-on-human`, `process-item`, `process-test`, `loop-merge`,
+  `merge-gate`, `umbrella-test`, `escalation`, `records`, `pre-release` or
+  `pins`:** every program-trunk clause is FLOW-20's and retires with it at
+  `program-land`. The trunk is read only through `Config.TrunkFor` and the
+  work entry's recorded trunk; `trunk: main` stays the profile's trunk. A
+  loop merge is always a merge commit with `--match-head-commit`, and
+  anything the loop decides in Jeff's place is a `wf record` entry that
+  the landing body lists. A change that widens what the loop may do is a
+  reserved rule and goes to Jeff.
+- **After the merge**, at `x4-state` (Jeff, one attended sitting), once
+  `dist/wf` is rebuilt from the merged `main`: the state step recorded on
+  the queue item (Implementation plan, **State step**), and outside the
+  repository **What only Jeff can do, once**. config-lookup-test-symlinked-tmp
+  has since merged (#134), so the state step's line about it needs no action.
