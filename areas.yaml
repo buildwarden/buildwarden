@@ -4,7 +4,7 @@ catch_all: core
 areas:
   driver/container:
     mode: exclusive
-    paths: [driver/container/, cmd/warden-pause/]
+    paths: [driver/container/, cmd/warden-pause/, cmd/warden-driver-container/]
     reaches: [collector, driver-core, executor, ledger, relaycfg]
   driver/qemu:
     mode: exclusive
@@ -55,6 +55,10 @@ areas:
   loop:
     mode: exclusive
     paths: [tools/workflow/, .claude/, .entire/]
+  conformance:
+    mode: exclusive
+    paths: [conformance/]
+    reaches: [collector, ledger, relaycfg]
   core:
     mode: exclusive
   cli:

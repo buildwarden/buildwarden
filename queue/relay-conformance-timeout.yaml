@@ -1,6 +1,6 @@
 feature: relay-conformance-timeout
 title: Relay conformance runs fail intermittently on a relay connection timeout
-priority: 4
+priority: 5
 follows: seam-specs
 status: queued
 round: feature
