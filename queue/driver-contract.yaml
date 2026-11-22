@@ -3,7 +3,7 @@ title: 'The driver command contract, its suite and the kit: warden runs a driver
 priority: 4
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/driver-contract.md
 branch: feat/driver-contract
 seams:
@@ -23,7 +23,7 @@ rules_changed:
   - ORCH-03
   - PROFILE-01
   - UX-08
-declared: 028ffe2
+declared: 6357b90
 alters_relationships: true
 design_review: required
 source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase K1 (wave 2 by the order table; the design says it does not depend on the relay and can start as soon as P0 merges). Done when adding a driver touches only its own directory. Jeff, attended session 2026-11-12: go ahead.'
@@ -61,7 +61,7 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-    note: Blocking native validation (design Validation plan, a7, a20; FLOW-09), on the branch after consolidation; where a case says "as main", capture main's output first. hyperv stays linked; StartRelay hands its session and claim to warden. (1) warden doctor --driver hyperv, elevated and not, prints what main prints; --network is honoured. (2) elevated warden setup --driver hyperv --slots 2 is idempotent. (3) a non-elevated durable build and an elevated ephemeral build succeed and verify; [driver.hyperv] network is honoured and --network overrides it; the old name [vm] network is honoured too, with one warning line that names the new key; with [driver] image_refresh_after set low, the detached image prepare --driver hyperv starts and logs, and with [driver.hyperv] image_refresh_after = "30d" beside it in the same file, it does not. (4) with the service installed, a service-delegated build succeeds. (5) a build whose script powers the VM off without completing fails with the build-VM-off error about 10 s after the VM stops (the grace was 5 s). (6) Ctrl-C mid-build removes both VMs and the switch; record the time from Ctrl-C to exit, to judge the 60 s default of the teardown wait ([build] teardown_timeout) against a real teardown before K2 applies it to Hyper-V (a20). (7) --keep-vms leaves both VMs; warden clean --driver hyperv then removes them and leaves a running build's. Evidence under native/windows-hyperv/<date>/.
+    note: Blocking native validation (design Validation plan, a7, a20; FLOW-09), on the branch after consolidation; where a case says "as main", capture main's output first. hyperv stays linked; StartRelay hands its session and claim to warden. (1) warden doctor --driver hyperv, elevated and not, prints what main prints; --network is honoured. (2) elevated warden setup --driver hyperv --slots 2 is idempotent. (3) a non-elevated durable build and an elevated ephemeral build succeed and verify; [driver.hyperv] network is honoured and --network overrides it; the old name [vm] network is honoured too, with one warning line that names the new key; with [driver] image_refresh_after set low, the detached image prepare --driver hyperv starts and logs, and with [driver.hyperv] image_refresh_after = "30d" beside it in the same file, it does not. (4) with the service installed, a service-delegated build succeeds. (5) a build whose script powers the VM off without completing fails with the build-VM-off error about 10 s after the VM stops (the grace was 5 s); (r4, c81892d) the error is fixable and its fix names the build's build-output.log. (6) Ctrl-C mid-build removes both VMs and the switch; record the time from Ctrl-C to exit, to judge the 60 s default of the teardown wait ([build] teardown_timeout) against a real teardown before K2 applies it to Hyper-V (a20). (7) --keep-vms leaves both VMs; warden clean --driver hyperv then removes them and leaves a running build's. Evidence under native/windows-hyperv/<date>/.
   - id: f6-validate-qemu-any
     phase: 6
     affinity: host:qemu-any
@@ -81,7 +81,7 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-    note: 'Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation. The container driver is a separate binary, warden-driver-container, run through the driver commands. (1) warden driver list shows container at the built warden-driver-container, found beside warden and marked as selected, and the four linked drivers; warden doctor prints container runtime: finch and ok. (2) a default build succeeds and its ledger verifies; driver.json names the driver binary and its digest; inputs/ holds Containerfile and build.sh. (3) warden shell opens a shell and passes its exit code through. (4) [driver.container] relay_image = "dev" builds the relay from source, and so does the old name [runtime] relay_image = "dev", with one warning line that names the new key; a warden.toml that sets both is refused before anything is created; WARDEN_IMAGE=<ref> pulls that image; an unpullable reference fails without trying the default. (5) Ctrl-C mid-build tears down and leaves nothing; SIGTERM mid-build does the same and exits 1; with the driver killed mid-build warden fails the build and reaps; with warden killed (SIGKILL) mid-build the driver tears down by itself and no container of the build is left. (6) with warden and the driver both killed, the build''s containers are still running; warden clean, run with another --tmpdir than the build''s and after the build''s warden.toml was deleted, removes that build''s containers, network, work directory, stage directory, lock and record, and leaves a running build''s; a running build started with another HOME, whose lock is elsewhere, is left alone too. (7) WARDEN_CTR_CLI and --runtime select the runtime; a missing one gives the fixable error and leaves no output directory; --network x is refused by warden as an unknown flag for the container driver; [runtime] cli = 5 in warden.toml is refused by the driver, naming the file, and leaves no output directory, and so is [driver.container] cli = 5. (8) with nothing customized, a build''s driver.json has found: beside-warden and nothing shadowed; a copy of warden-driver-container placed in a directory that comes before warden''s on PATH runs in place of the one beside warden: warden driver list shows it and the copy it shadows, and the build''s driver.json has found: PATH, its digest and the bundled copy under shadowed; the same copy in a directory after warden''s on PATH does not run and is listed as shadowed; [runtime] driver = "./x" in the project''s warden.toml is refused. (9) make driver-conformance DRIVER=dist/warden-driver-container passes both tiers on finch. Evidence under native/macos-finch/<date>/.'
+    note: 'Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation. The container driver is a separate binary, warden-driver-container, run through the driver commands. (1) warden driver list shows container at the built warden-driver-container, found beside warden and marked as selected, and the four linked drivers; warden doctor prints container runtime: finch and ok. (2) a default build succeeds and its ledger verifies; driver.json names the driver binary and its digest; inputs/ holds Containerfile and build.sh. (3) warden shell opens a shell and passes its exit code through. (4) [driver.container] relay_image = "dev" builds the relay from source, and so does the old name [runtime] relay_image = "dev", with one warning line that names the new key; a warden.toml that sets both is refused before anything is created; WARDEN_IMAGE=<ref> pulls that image; an unpullable reference fails without trying the default. (5) Ctrl-C mid-build tears down and leaves nothing; SIGTERM mid-build does the same and exits 1; with the driver killed mid-build warden fails the build and reaps; with warden killed (SIGKILL) mid-build the driver tears down by itself and no container of the build is left. (6) with warden and the driver both killed, the build''s containers are still running; warden clean, run with another --tmpdir than the build''s and after the build''s warden.toml was deleted, removes that build''s containers, network, work directory, stage directory, lock and record, and leaves a running build''s; a running build started with another HOME, whose lock is elsewhere, is left alone too. (r4, Decision 25) Before warden clean, record ps -A -ww -o pid,ppid,args: the killed build''s finch container wait warden-build-<id> waiter, when still there, has lost its driver parent and does not keep it; the other HOME''s waiter runs under its live warden-driver-container and keeps it. (7) WARDEN_CTR_CLI and --runtime select the runtime; (r4, Decision 26) a named runtime that is not installed (WARDEN_CTR_CLI=podman, --runtime docker, [driver.container] cli = "podman") is refused, each naming its source, with a fixable error and no output directory, and so is --runtime finch with finch''s VM stopped (finch vm stop); warden doctor with WARDEN_CTR_CLI=podman is blocked with the same error; --network x is refused by warden as an unknown flag for the container driver; [runtime] cli = 5 in warden.toml is refused by the driver, naming the file, and leaves no output directory, and so is [driver.container] cli = 5. (8) with nothing customized, a build''s driver.json has found: beside-warden and nothing shadowed; a copy of warden-driver-container placed in a directory that comes before warden''s on PATH runs in place of the one beside warden: warden driver list shows it and the copy it shadows, and the build''s driver.json has found: PATH, its digest and the bundled copy under shadowed; the same copy in a directory after warden''s on PATH does not run and is listed as shadowed; [runtime] driver = "./x" in the project''s warden.toml is refused. (9) make driver-conformance DRIVER=dist/warden-driver-container passes both tiers on finch. Evidence under native/macos-finch/<date>/.'
   - id: f6-validate-container-any
     phase: 6
     affinity: host:container-any
@@ -203,12 +203,12 @@ steps:
   - id: f1-design-r4
     phase: 1
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f1-escalate-3
     lease:
-      claimed_by: cloud/20261122T105700Z
-      expires: 2026-11-22T13:18:55.897106718Z
+      claimed_by: ""
+      expires: null
     note: 'Jeff''s decisions at f1-escalate-3 (2026-11-20 sitting, 2026-11-21 19:00Z): (1) clean''s live-build signal is option (a): the container driver''s waiter waits on the container by name (container wait warden-build-<id>), and the scan counts a waiter only while its parent process is a live warden-driver-container (ps -o pid,ppid,args); an orphaned waiter (driver killed) is not live; conmon and other runtime processes are not counted; Windows has no ps and the scan finds nothing, as before; rewrite the design''s clean row (driver-contract.md:3717), case 6''s expectation and the suite''s lifecycle clean case accordingly, with a parse test over ps lines in docker''s and finch''s shapes, the name form and an orphan. (2) case 7: the probe refuses a named runtime (--runtime, WARDEN_CTR_CLI or the key) that is missing or does not answer, as a fixable error naming its source, before any output directory exists; reword ''as newDriver does today''; list it as a new Behaviour difference (20). Case 9 is fixed by 6590782; the finch validation re-runs at Publish.'
   - id: f1-escalate-3
     phase: 1
@@ -218,6 +218,22 @@ steps:
       claimed_by: ""
       expires: null
     note: 'Returned to Design more than twice (FLOW-06): the human decides.'
+  - id: f2-design-review-r3
+    phase: 2
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan-r3
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review-r3
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -486,6 +502,33 @@ questions:
       - (iv) as stated, but transitional under a marker and removed at 1.0 for new names too (a miscased new name would then be silently ignored)
     recommended: '(i): the answer as given, made precise; each detail is the narrowest that keeps GLOBAL-10 and lets a driver on any TOML library meet it with ASCII folding of a decoded tree.'
     answer: (i), as stated (Jeff, 2026-11-20, r3 delta review)
+  - id: q3
+    kind: blocking
+    status: answered
+    question: What clean takes as a sign of a live container build (r4, return from f3-implement-r2 after f6-validate-macos-finch case 6; design, Questions, Blocking, q3; Decision 25). The design's clean row said the process scan finds the driver's container wait warden-build-<id> child, but the driver waits on the 64-hex container ID on every runtime, as main does, so on docker and finch only keep_ids protects a running build. Naming the container in the waiter alone keeps a build whose driver alone was killed (orphaned waiter), and podman's conmon holds -n warden-build-<id> for the whole run on Linux.
+    options:
+      - (a) a waiter counts only while its parent is a live warden-driver-container
+      - (b) tie the waiter to the driver's life (Pdeathsig on Linux, polling on macOS)
+      - (c) drop the scan, keep_ids only; change the clean row and case 6's expectation
+    recommended: (a)
+    answer: '(a), Jeff at f1-escalate-3 (2026-11-21): the container driver''s waiter waits on the container by name (container wait warden-build-<id>), and the scan counts a waiter only while its parent process is a live warden-driver-container (ps -o pid,ppid,args); an orphaned waiter (driver killed) is not live; conmon and other runtime processes are not counted; Windows has no ps and the scan finds nothing, as before.'
+  - id: q4
+    kind: blocking
+    status: answered
+    question: A named container runtime that is missing or does not answer (r4, from f6-validate-macos-finch case 7; design, Questions, Blocking, q4; Decision 26). The run row said the probe refuses a missing or stopped one "as newDriver does today"; main refuses neither when the runtime is named, and fails late after the output directory exists.
+    options:
+      - the probe refuses it, as a fixable error naming its source, before any output directory exists
+      - keep main's late failure and reword the run row
+    recommended: the probe refuses it
+    answer: The probe refuses a named runtime (--runtime, WARDEN_CTR_CLI or the key) that is missing or does not answer, as a fixable error naming its source, before any output directory exists; reword 'as newDriver does today'; list it as Behaviour 20. Jeff at f1-escalate-3 (2026-11-21).
+  - id: a28
+    kind: assumed
+    status: open
+    question: 'Does warden doctor report a named container runtime that cannot be used (r4, from q4; design, Questions, Assumed, a28; Behaviour 20)? On main and on the branch doctor prints container runtime: podman and ok for a podman that is not installed. Proceeding with (i).'
+    options:
+      - (i) the container driver's doctor makes the probe's check and reports the same fixable error as blocked, so warden doctor exits 1 with no ok (UX-09)
+      - (ii) doctor as on main, reporting the name without checking it
+    recommended: (i)
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
@@ -868,3 +911,12 @@ history:
   - at: 2026-11-22T11:18:55Z
     by: cloud/20261122T105700Z
     event: claimed f1-design-r4 until 2026-11-22T13:18:55Z
+  - at: 2026-11-22T11:26:26Z
+    by: cloud/20261122T105700Z
+    event: 'declared at 6357b90: nothing changed'
+  - at: 2026-11-22T11:28:00Z
+    by: cloud/20261122T105700Z
+    event: done f1-design-r4
+  - at: 2026-11-22T11:28:00Z
+    by: cloud/20261122T105700Z
+    event: entered phase 2 (plan)
