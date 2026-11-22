@@ -1,6 +1,6 @@
 ---
 feature: config-lookup-test-symlinked-tmp
-status: draft
+status: archived
 drivers: []              # cmd/warden test files only; no driver tree, and no shared
                          # package (driver/, relay/, ledger/, collector/) is edited
 seams: []
@@ -360,4 +360,55 @@ is.
 
 ## Rollback notes
 
+None: test code only. Reverting the branch's commits restores the old
+helper, and `TestConfigFileLookupOrder` fails on macOS again.
+
 ## Archive summary
+
+Filed 2026-11-20 as `project-config-trust`'s follow-up (FLOW-09), from the
+macbook's `qemu-any` run that saw `TestConfigFileLookupOrder` fail on
+darwin/arm64. Designed 2026-11-21, design review r1 approved at `8eb333d`
+(Jeff), implemented and published by the cloud loop 2026-11-22. Product
+code, reference docs and `overview.md` are unchanged.
+
+- **Built.**
+  - `cmd/warden/vmdns_test.go`: `inConfigFiles` enters its directory with
+    `t.Chdir`, which sets `PWD` as a shell does, in place of
+    `os.Getwd`/`os.Chdir`/`t.Cleanup`.
+  - `cmd/warden/configline_test.go`: `TestConfigLineEscapesThePath` enters
+    its escaped subdirectory with `t.Chdir`, so `PWD` is not left stale.
+  - `cmd/warden/configfile_test.go`: new
+    `TestConfigLineNamesTheDirectoryAsEntered` enters a symbolic link to a
+    directory holding `warden.toml` and expects `cfg.File` and the
+    `config:` line to name the link's path; skipped on Windows. It puts
+    macOS's linked `$TMPDIR` case in Linux CI.
+  - Checked once on Linux: `TMPDIR=<a link> go test -count=1 ./cmd/warden`
+    failed at `be13847` and passes on the branch.
+- **Decisions taken:** the test was wrong and the product right: for
+  `./warden.toml` the `config:` line names the working directory as the
+  process was given it (the shell's `PWD`, through `os.Getwd`) (1, q1
+  confirmed by Jeff); fix the helper with `t.Chdir` (2); add a test that
+  links its directory on every OS but Windows (3); `design_review: required`
+  because declaring `areas: [cli, designs]` narrowed an undeclared queue
+  record (4).
+- **Rejected:** resolving links in `configFile` (`EvalSymlinks`), which
+  would change what every macOS user reads; resolving the expected path in
+  the test, which pins the uncommon case; building the expectation from
+  `os.Getwd()`, which asserts nothing; relying on the macbook's runs alone;
+  leaving `areas` out to skip the review.
+- **For a future design touching `config-file`, `config-lookup`,
+  `config-line`, `working-directory`, `getwd`, `pwd`, `macos` or
+  `testing`:**
+  - The `config:` line and `cfg.File` for `./warden.toml` are the directory
+    as `os.Getwd` gives it, which is `$PWD` when that names the directory:
+    the unresolved path a user's shell shows. Resolving links there is a
+    surface change, not a fix.
+  - A test that changes directory uses `t.Chdir` (sets `PWD`), never
+    `os.Chdir`, or paths built from it disagree with `os.Getwd` wherever
+    the temp directory is reached through a link (macOS `/var`).
+    `TestResolvePath_Empty` still uses `os.Chdir` and `EvalSymlinks`; it
+    compares a build context by identity, not a printed path.
+  - `t.Chdir` panics in a parallel test; no test in `cmd/warden` calls
+    `t.Parallel`.
+  - CI runs no `cmd/` tests on macOS; the darwin/arm64 run stays the
+    tracked gap `config-lookup-test-symlinked-tmp-darwin` (`qemu-any`).
