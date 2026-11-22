@@ -129,29 +129,43 @@ func TestStaticContainer(t *testing.T) {
 }
 
 // runtimePath is a PATH that holds a fake docker when withRuntime is set,
-// and no other runtime; on Windows it adds the directory a batch file's
-// interpreter is run from. The fake prints a server version to its version
-// query and nothing to any other call, so listings are empty and nothing
-// is created.
+// and no other runtime the driver can use. The fake prints a server version
+// to its version query and nothing to any other call, so listings are
+// empty and nothing is created. On Windows a PATH with the fake adds the
+// directory a batch file's interpreter is run from, System32, which can
+// hold the host's own docker.exe, as the GitHub Windows runner's does: the
+// fakes are first on PATH, which Windows searches a directory at a time,
+// and finch and podman, which detection would ask before docker or after
+// it, are fakes that fail, so no real runtime is reached. Without a
+// runtime, nothing is run and the PATH is the empty directory alone, on
+// any host (TEST-04).
 func runtimePath(t *testing.T, withRuntime bool) string {
 	t.Helper()
 	dir := t.TempDir()
-	if withRuntime {
-		file, script := filepath.Join(dir, "docker"),
-			"#!/bin/sh\n[ \"$1\" = version ] && echo 27.3.1\nexit 0\n"
-		if runtime.GOOS == "windows" {
-			file, script = file+".cmd",
-				"@echo off\r\nif \"%~1\"==\"version\" echo 27.3.1\r\nexit 0\r\n"
-		}
-		if err := os.WriteFile(file, []byte(script), 0o755); err != nil {
-			t.Fatal(err)
-		}
+	if !withRuntime {
+		return dir
 	}
-	if runtime.GOOS == "windows" {
-		return dir + string(os.PathListSeparator) +
-			filepath.Join(os.Getenv("SystemRoot"), "System32")
+	file, script := filepath.Join(dir, "docker"),
+		"#!/bin/sh\n[ \"$1\" = version ] && echo 27.3.1\nexit 0\n"
+	if runtime.GOOS != "windows" {
+		writeFake(t, file, script)
+		return dir
 	}
-	return dir
+	writeFake(t, file+".cmd",
+		"@echo off\r\nif \"%~1\"==\"version\" echo 27.3.1\r\nexit 0\r\n")
+	for _, name := range []string{"finch", "podman"} {
+		writeFake(t, filepath.Join(dir, name+".cmd"), "@echo off\r\nexit 1\r\n")
+	}
+	return dir + string(os.PathListSeparator) +
+		filepath.Join(os.Getenv("SystemRoot"), "System32")
+}
+
+// writeFake writes an executable fake runtime.
+func writeFake(t *testing.T, file, script string) {
+	t.Helper()
+	if err := os.WriteFile(file, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // The suite's self-test: each check fails under the fake's fault that breaks

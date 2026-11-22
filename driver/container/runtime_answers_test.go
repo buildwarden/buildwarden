@@ -3,6 +3,7 @@ package container
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -69,14 +70,26 @@ func writeRuntime(t *testing.T, dir, name string, r reply) {
 }
 
 // onlyOnPath makes dir the whole PATH, but for the directory Windows runs a
-// batch file's interpreter from.
+// batch file's interpreter from, and the only directory the driver looks a
+// runtime up in. System32 can hold the host's own docker.exe, as the GitHub
+// Windows runner's does, which PATH would find for a runtime dir lacks; the
+// lookup in dir alone never finds it, and a runtime it finds is the first
+// on PATH, so the one run (TEST-04).
 func onlyOnPath(t *testing.T, dir string) {
 	t.Helper()
+	path := dir
 	if runtime.GOOS == "windows" {
-		dir += string(os.PathListSeparator) +
+		path += string(os.PathListSeparator) +
 			filepath.Join(os.Getenv("SystemRoot"), "System32")
 	}
-	t.Setenv("PATH", dir)
+	t.Setenv("PATH", path)
+	old := lookPath
+	// A name with a separator is looked up as that file alone, with
+	// PATHEXT's extensions on Windows.
+	lookPath = func(name string) (string, error) {
+		return exec.LookPath(filepath.Join(dir, name))
+	}
+	t.Cleanup(func() { lookPath = old })
 }
 
 // The probe asks each runtime for its engine's version, not for `info`,

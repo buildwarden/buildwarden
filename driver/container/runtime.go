@@ -16,6 +16,12 @@ import (
 // file or a state file is one of these or is refused (resolveRuntime).
 var runtimes = []string{"finch", "docker", "podman"}
 
+// lookPath finds a runtime on PATH, for detection and for the check of a
+// named runtime. Tests limit it to their fake runtimes' directory, which
+// PATH alone cannot do on Windows, where PATH keeps System32 for the fakes'
+// interpreter and System32 can hold the host's own docker.exe (TEST-04).
+var lookPath = exec.LookPath
+
 // The sources the kit gives the container driver's settings when they were
 // not read from a file: the flag and the two variables.
 const (
@@ -84,7 +90,7 @@ func checkNamedRuntime(rt string, set driver.Settings) error {
 	if v, _ := set.String("runtime"); v == "" {
 		return nil
 	}
-	if _, err := exec.LookPath(rt); err != nil {
+	if _, err := lookPath(rt); err != nil {
 		setting, other := namedRuntimeFix(set.Source("runtime"))
 		return driver.Fixable(runtimeInstallHint(rt)+", "+other,
 			"%s names the container runtime %s, which is not installed "+
@@ -187,7 +193,7 @@ func unsupportedRuntime(value, source string) error {
 func detectRuntime() (string, error) {
 	var installed []string
 	for _, name := range runtimes {
-		if _, err := exec.LookPath(name); err != nil {
+		if _, err := lookPath(name); err != nil {
 			continue
 		}
 		installed = append(installed, name)
