@@ -1,0 +1,3 @@
+time="2026-11-22T11:23:32-08:00" level=info msg="Credential daemon already stopped"
+time="2026-11-22T11:23:32-08:00" level=info msg="Stopping existing Finch virtual machine..."
+time="2026-11-22T11:23:34-08:00" level=info msg="Finch virtual machine stopped successfully"

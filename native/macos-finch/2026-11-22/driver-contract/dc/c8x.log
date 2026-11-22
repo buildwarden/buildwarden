@@ -1,0 +1,3 @@
+[warden] config: /Users/jeff/src/buildwarden-native/.scratch/fp/c8x/warden.toml (found in the working directory)
+[warden] ERROR: [runtime] driver in /Users/jeff/src/buildwarden-native/.scratch/fp/c8x/warden.toml is "./x": a config file names a driver, not a file
+  To fix: name the driver by its name in the config file, or give its file with --driver or WARDEN_DRIVER

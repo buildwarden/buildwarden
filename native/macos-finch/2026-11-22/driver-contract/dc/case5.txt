@@ -1,0 +1,18 @@
+== INT; before: containers=0 nets=0 workdirs=0 drivers=0 locks=0
+   mid: containers=3 nets=1 workdirs=2 drivers=1 locks=3
+   rc=130; after: containers=0 nets=0 workdirs=0 drivers=0 locks=0
+   | [warden] Tearing down environment...
+   | warden: build interrupted
+== TERM; before: containers=0 nets=0 workdirs=0 drivers=0 locks=0
+   mid: containers=3 nets=1 workdirs=2 drivers=1 locks=3
+   rc=1; after: containers=0 nets=0 workdirs=0 drivers=0 locks=0
+   | [warden] Tearing down environment...
+   | warden: build terminated (SIGTERM)
+== KILLDRIVER; before: containers=0 nets=0 workdirs=0 drivers=0 locks=0
+   mid: containers=3 nets=1 workdirs=2 drivers=1 locks=3
+   rc=1; after: containers=0 nets=0 workdirs=0 drivers=0 locks=0
+   | [warden] ERROR: build failed: lost the connection to the relay
+== KILLWARDEN; before: containers=0 nets=0 workdirs=0 drivers=0 locks=0
+   mid: containers=3 nets=1 workdirs=2 drivers=1 locks=3
+./f5.sh: line 7: 13127 Killed: 9               ( cd fp/long && exec $B build -o ../../out-sig$mode . > $E/sig$mode.log 2>&1 )
+   rc=137; after: containers=0 nets=0 workdirs=1 drivers=0 locks=3

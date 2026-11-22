@@ -1,0 +1,27 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+[warden] Build ID: iswmhopt
+[warden] Using relay image: ghcr.io/buildwarden/relay:no-such-tag-xyz
+ghcr.io/buildwarden/relay:no-such-tag-xyz: resolving      |[32m[0m--------------------------------------| 
+elapsed: 0.1 s                             total:   0.0 B (0.0 B/s)                                         
+ghcr.io/buildwarden/relay:no-such-tag-xyz: resolving      |[32m[0m--------------------------------------| 
+elapsed: 0.2 s                             total:   0.0 B (0.0 B/s)                                         
+time="2026-11-22T11:12:28-08:00" level=info msg="fetch failed after status: 404 Not Found" host=ghcr.io
+time="2026-11-22T11:12:28-08:00" level=fatal msg="failed to resolve reference \"ghcr.io/buildwarden/relay:no-such-tag-xyz\": ghcr.io/buildwarden/relay:no-such-tag-xyz: not found"
+[warden] Tearing down environment...
+[warden] driver container: error pulling image ghcr.io/buildwarden/relay:no-such-tag-xyz: exit status 1
+warden: build FAILED
+[warden] ERROR: driver "container" (/Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container): error pulling image ghcr.io/buildwarden/relay:no-such-tag-xyz: exit status 1
+  The driver's last output:
+    [warden] Build ID: iswmhopt
+    [warden] Using relay image: ghcr.io/buildwarden/relay:no-such-tag-xyz
+    ghcr.io/buildwarden/relay:no-such-tag-xyz: resolving      |\x1b[32m\x1b[0m--------------------------------------| 
+    elapsed: 0.1 s                             total:   0.0 B (0.0 B/s)                                         
+    ghcr.io/buildwarden/relay:no-such-tag-xyz: resolving      |\x1b[32m\x1b[0m--------------------------------------| 
+    elapsed: 0.2 s                             total:   0.0 B (0.0 B/s)                                         
+    time="2026-11-22T11:12:28-08:00" level=info msg="fetch failed after status: 404 Not Found" host=ghcr.io
+    time="2026-11-22T11:12:28-08:00" level=fatal msg="failed to resolve reference \"ghcr.io/buildwarden/relay:no-such-tag-xyz\": ghcr.io/buildwarden/relay:no-such-tag-xyz: not found"
+    [warden] Tearing down environment...
+    [warden] driver container: error pulling image ghcr.io/buildwarden/relay:no-such-tag-xyz: exit status 1
+
+  This is a bug in the driver "container" (/Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container) version dev; report it at https://github.com/buildwarden/buildwarden/issues/new
+

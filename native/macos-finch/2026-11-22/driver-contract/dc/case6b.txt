@@ -1,0 +1,33 @@
+X warden=27056 driver=27070; Z warden=27243 driver=27257
+== ps before the kill (waiters and drivers)
+27070 27056 /Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container run
+27220 27070 finch container wait warden-build-w605xnp9
+27224 27220 /Applications/Finch/lima/bin/limactl shell finch sudo -E nerdctl container wait warden-build-w605xnp9
+27227 27224 /usr/bin/ssh -F /dev/null -o IdentityFile="/Applications/Finch/lima/data/_config/user" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o NoHostAuthenticationForLocalhost=yes -o PreferredAuthentications=publickey -o Compression=no -o BatchMode=yes -o IdentitiesOnly=yes -o GSSAPIAuthentication=no -o Ciphers="^aes128-gcm@openssh.com,aes256-gcm@openssh.com" -o User=jeff -o ControlMaster=auto -o ControlPath="/Applications/Finch/lima/data/finch/ssh.sock" -o ControlPersist=yes -o ForwardAgent=yes -o LogLevel=ERROR -p 64300 127.0.0.1 -- cd /Users/jeff/src/buildwarden-native/.scratch/fp/c6 || cd /Users/jeff ; exec "$SHELL" -l -c 'sudo -E nerdctl container wait warden-build-w605xnp9'
+27257 27243 /Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container run
+27425 27257 finch container wait warden-build-ocz1ggsu
+27429 27425 /Applications/Finch/lima/bin/limactl shell finch sudo -E nerdctl container wait warden-build-ocz1ggsu
+27432 27429 /usr/bin/ssh -F /dev/null -o IdentityFile="/Applications/Finch/lima/data/_config/user" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o NoHostAuthenticationForLocalhost=yes -o PreferredAuthentications=publickey -o Compression=no -o BatchMode=yes -o IdentitiesOnly=yes -o GSSAPIAuthentication=no -o Ciphers="^aes128-gcm@openssh.com,aes256-gcm@openssh.com" -o User=jeff -o ControlMaster=auto -o ControlPath="/Applications/Finch/lima/data/finch/ssh.sock" -o ControlPersist=yes -o ForwardAgent=yes -o LogLevel=ERROR -p 64300 127.0.0.1 -- cd /Users/jeff/src/buildwarden-native/.scratch/home2 ; exec "$SHELL" -l -c 'sudo -E nerdctl container wait warden-build-ocz1ggsu'
+./f6b.sh: line 8: 27056 Killed: 9               ( cd fp/c6 && exec $B build --tmpdir $S/tmpA -o $S/out-c6bx . > $E/c6bx.log 2>&1 )
+== ps after killing X's warden and driver, before warden clean
+27220     1 finch container wait warden-build-w605xnp9
+27224 27220 /Applications/Finch/lima/bin/limactl shell finch sudo -E nerdctl container wait warden-build-w605xnp9
+27227 27224 /usr/bin/ssh -F /dev/null -o IdentityFile="/Applications/Finch/lima/data/_config/user" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o NoHostAuthenticationForLocalhost=yes -o PreferredAuthentications=publickey -o Compression=no -o BatchMode=yes -o IdentitiesOnly=yes -o GSSAPIAuthentication=no -o Ciphers="^aes128-gcm@openssh.com,aes256-gcm@openssh.com" -o User=jeff -o ControlMaster=auto -o ControlPath="/Applications/Finch/lima/data/finch/ssh.sock" -o ControlPersist=yes -o ForwardAgent=yes -o LogLevel=ERROR -p 64300 127.0.0.1 -- cd /Users/jeff/src/buildwarden-native/.scratch/fp/c6 || cd /Users/jeff ; exec "$SHELL" -l -c 'sudo -E nerdctl container wait warden-build-w605xnp9'
+27257 27243 /Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container run
+27425 27257 finch container wait warden-build-ocz1ggsu
+27429 27425 /Applications/Finch/lima/bin/limactl shell finch sudo -E nerdctl container wait warden-build-ocz1ggsu
+27432 27429 /usr/bin/ssh -F /dev/null -o IdentityFile="/Applications/Finch/lima/data/_config/user" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o NoHostAuthenticationForLocalhost=yes -o PreferredAuthentications=publickey -o Compression=no -o BatchMode=yes -o IdentitiesOnly=yes -o GSSAPIAuthentication=no -o Ciphers="^aes128-gcm@openssh.com,aes256-gcm@openssh.com" -o User=jeff -o ControlMaster=auto -o ControlPath="/Applications/Finch/lima/data/finch/ssh.sock" -o ControlPersist=yes -o ForwardAgent=yes -o LogLevel=ERROR -p 64300 127.0.0.1 -- cd /Users/jeff/src/buildwarden-native/.scratch/home2 ; exec "$SHELL" -l -c 'sudo -E nerdctl container wait warden-build-ocz1ggsu'
+== clean rc=0
+  | Cleaning up after build w605xnp9 (container)
+  | Removing container: warden-build-w605xnp9
+  | Removing container: warden-relay-w605xnp9
+  | Removing container: warden-holder-w605xnp9
+  | Removing network: warden-w605xnp9
+  | Removing image: warden-relay:w605xnp9
+  | Removing /Users/jeff/src/buildwarden-native/.scratch/tmpA/warden-container-w605xnp9-1623782569
+  | Kept the cache (85411 MB, /Users/jeff/Library/Caches/warden); --cache removes it
+  | Removed 7 resource(s).
+  containers now: warden-build-ocz1ggsu warden-holder-ocz1ggsu warden-relay-ocz1ggsu 
+  Z alive=yes
+  Z rc=130
+  after: containers=0 locks=0 tmpA=0

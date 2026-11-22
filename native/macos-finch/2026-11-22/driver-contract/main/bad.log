@@ -1,0 +1,16 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+[warden] Build ID: oz6obeq3
+[warden] Using relay image: ghcr.io/buildwarden/relay:no-such-tag-xyz
+ghcr.io/buildwarden/relay:no-such-tag-xyz: resolving      |[32m[0m--------------------------------------| 
+elapsed: 0.1 s                             total:   0.0 B (0.0 B/s)                                         
+ghcr.io/buildwarden/relay:no-such-tag-xyz: resolving      |[32m[0m--------------------------------------| 
+elapsed: 0.2 s                             total:   0.0 B (0.0 B/s)                                         
+time="2026-11-22T11:10:08-08:00" level=info msg="fetch failed after status: 404 Not Found" host=ghcr.io
+time="2026-11-22T11:10:08-08:00" level=fatal msg="failed to resolve reference \"ghcr.io/buildwarden/relay:no-such-tag-xyz\": ghcr.io/buildwarden/relay:no-such-tag-xyz: not found"
+[warden] Tearing down environment...
+warden: build FAILED
+[warden] ERROR: error pulling image ghcr.io/buildwarden/relay:no-such-tag-xyz: exit status 1
+
+  If this is unexpected, please file a bug:
+  https://github.com/buildwarden/buildwarden/issues/new?title=Bug%3A+error+pulling+image+ghcr.io%2Fbuildwarden%2Frelay%3Ano-such-tag-xyz%3A+exit+status+1&body=%23%23+Environment%0A-+OS%3A+darwin%2Farm64%0A-+Version%3A+dev%0A%0A%23%23+Error%0A%60%60%60%0Aerror+pulling+image+ghcr.io%2Fbuildwarden%2Frelay%3Ano-such-tag-xyz%3A+exit+status+1%0A%60%60%60%0A%0A%23%23+Steps+to+reproduce%0A1.+%0A
+

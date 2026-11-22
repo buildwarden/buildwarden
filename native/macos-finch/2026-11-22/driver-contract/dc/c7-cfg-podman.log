@@ -1,0 +1,4 @@
+[warden] config: /Users/jeff/src/buildwarden-native/.scratch/fp/c7pod/warden.toml (found in the working directory)
+[warden] driver container: [driver.container] cli in /Users/jeff/src/buildwarden-native/.scratch/fp/c7pod/warden.toml names the container runtime podman, which is not installed (not found on PATH)
+[warden] ERROR: [driver.container] cli in /Users/jeff/src/buildwarden-native/.scratch/fp/c7pod/warden.toml names the container runtime podman, which is not installed (not found on PATH)
+  To fix: install Podman, or set it to another runtime, or remove it

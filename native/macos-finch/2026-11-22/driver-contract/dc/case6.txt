@@ -1,0 +1,43 @@
+== X: --tmpdir tmpA, warden.toml; then SIGKILL warden and its driver
+./f6.sh: line 6: 13522 Killed: 9               ( cd fp/c6 && exec $B build --tmpdir $S/tmpA -o $S/out-c6x . > $E/c6x.log 2>&1 )
+  containers: warden-build-7t0jn4n1 warden-holder-7t0jn4n1 warden-relay-7t0jn4n1 
+  nets: warden-7t0jn4n1 
+  locks: build-container-7t0jn4n1.json build-container-7t0jn4n1.lock build-container-7t0jn4n1.state build-container-g7sghns9.json build-container-g7sghns9.lock build-container-g7sghns9.state 
+  home2 locks: 
+  tmpA: warden-container-7t0jn4n1-2736146849 warden-stage-7t0jn4n1  | TMPDIR: warden-stage-g7sghns9 
+== Y running (default HOME)
+== Z running (HOME=home2)
+== before clean
+  containers: warden-build-7t0jn4n1 warden-build-oatyy600 warden-build-wsy6knav warden-holder-7t0jn4n1 warden-holder-oatyy600 warden-holder-wsy6knav warden-relay-7t0jn4n1 warden-relay-oatyy600 warden-relay-wsy6knav 
+  nets: warden-7t0jn4n1 warden-oatyy600 warden-wsy6knav 
+  locks: build-container-7t0jn4n1.json build-container-7t0jn4n1.lock build-container-7t0jn4n1.state build-container-g7sghns9.json build-container-g7sghns9.lock build-container-g7sghns9.state build-container-wsy6knav.json build-container-wsy6knav.lock build-container-wsy6knav.state 
+  home2 locks: build-container-oatyy600.json build-container-oatyy600.lock build-container-oatyy600.state 
+  tmpA: warden-container-7t0jn4n1-2736146849 warden-stage-7t0jn4n1  | TMPDIR: warden-container-oatyy600-430216725 warden-container-wsy6knav-3442819373 warden-stage-g7sghns9 warden-stage-oatyy600 warden-stage-wsy6knav 
+== warden clean (from fp/c6, warden.toml deleted)
+  clean rc=0
+  | Cleaning up after build g7sghns9 (container)
+  | Cleaning up after build 7t0jn4n1 (container)
+  | Removing container: warden-build-7t0jn4n1
+  | Removing container: warden-relay-7t0jn4n1
+  | Removing container: warden-holder-7t0jn4n1
+  | Removing network: warden-7t0jn4n1
+  | Removing image: warden-relay:7t0jn4n1
+  | Removing /Users/jeff/src/buildwarden-native/.scratch/tmpA/warden-container-7t0jn4n1-2736146849
+  | Kept the cache (85411 MB, /Users/jeff/Library/Caches/warden); --cache removes it
+  | Removed 8 resource(s).
+== after clean
+  containers: warden-build-oatyy600 warden-build-wsy6knav warden-holder-oatyy600 warden-holder-wsy6knav warden-relay-oatyy600 warden-relay-wsy6knav 
+  nets: warden-oatyy600 warden-wsy6knav 
+  locks: build-container-wsy6knav.json build-container-wsy6knav.lock build-container-wsy6knav.state 
+  home2 locks: build-container-oatyy600.json build-container-oatyy600.lock build-container-oatyy600.state 
+  tmpA:  | TMPDIR: warden-container-oatyy600-430216725 warden-container-wsy6knav-3442819373 warden-stage-oatyy600 warden-stage-wsy6knav 
+  Y alive=yes Z alive=yes
+  15s later: Y alive=yes Z alive=yes
+  Y rc=130
+  Z rc=130
+== after stopping Y and Z
+  containers: 
+  nets: 
+  locks: 
+  home2 locks: 
+  tmpA:  | TMPDIR: 

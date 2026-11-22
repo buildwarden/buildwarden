@@ -1,0 +1,42 @@
+### dc 190b092d hyperv setup: name [driver.hyperv] networ
+-- 1
+   NAME            RUNS                                                                         FOUND
+   container    *  /Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container  beside warden
+   qemu            (linked into warden)                                                         linked
+   vz              (linked into warden)                                                         linked
+   hyperv          (linked into warden)                                                         linked
+   firecracker     (linked into warden)                                                         linked
+   doctor: container runtime: finch
+   doctor: ok
+-- 2
+== basic rc=0 out=yes :: [warden] Building relay from source... fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-dc-basic) 
+ SIGNATURES: ✅ All 13 signatures valid
+   inputs: Containerfile build.sh 
+{"name":"container","version":"dev","contract":1,"path":"/Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container","sha256":"e45e0460867ff0f26fded094eed749a9108c37436d7321b3536db2fa266bdbbb","found":"beside-warden","shadowed":[]}
+-- 4
+== ri-new rc=0 out=yes :: [warden] Building relay from source... fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-dc-ri-new) 
+== ri-old rc=0 out=yes :: [warden] Building relay from source... [warden] warning: /Users/jeff/src/buildwarden-native/.scratch/fp/ri-old/warden.toml: [runtime] relay_image is deprecated; use [driver.container] relay_image fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-dc-ri-old) 
+== ri-both rc=1 out=no ::   To fix: remove [runtime] relay_image from /Users/jeff/src/buildwarden-native/.scratch/fp/ri-both/warden.toml [warden] ERROR: /Users/jeff/src/buildwarden-native/.scratch/fp/ri-both/warden.toml sets [driver.container] relay_image twice: as [driver.container] relay_image and as its old name [runtime] relay_image 
+== env rc=1 out=yes ::   https://github.com/buildwarden/buildwarden/issues/new?title=Bug%3A+connecting+to+relay%3A+relaycfg%3A+relay+at+127.0.0.1%3A49980+never+accepted+the+tunnel%3A+context+deadline+exceeded+%28last+error%3A+unexpected+EOF%29&body=%23%23+Environment%0A-+OS%3A+darwin%2Farm64%0A-+Version%3A+dev%0A%0A%23%23+Error%0A%60%60%60%0Aconnecting+to+relay%3A+relaycfg%3A+rela
+== bad rc=1 out=yes ::     [warden] Using relay image: ghcr.io/buildwarden/relay:no-such-tag-xyz     [warden] driver container: error pulling image ghcr.io/buildwarden/relay:no-such-tag-xyz: exit status 1     time="2026-11-22T11:12:28-08:00" level=fatal msg="failed to resolve reference \"ghcr.io/buildwarden/relay:no-such-tag-xyz\": ghcr.io/buildwarden/relay:no-such-tag-xyz: not fo
+-- 7
+== c7-env rc=0 out=yes :: [warden] Building relay from source... fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-dc-c7-env) 
+== c7-flag rc=0 out=yes :: [warden] Building relay from source... fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-dc-c7-flag) 
+== c7-miss-env rc=1 out=no ::   To fix: install Podman, or set WARDEN_CTR_CLI to another runtime, or unset it [warden] ERROR: WARDEN_CTR_CLI names the container runtime podman, which is not installed (not found on PATH) 
+== c7-miss-flag rc=1 out=no ::   To fix: install Docker, or pass --runtime another runtime, or leave it out [warden] ERROR: --runtime names the container runtime docker, which is not installed (not found on PATH) 
+== c7-network rc=1 out=no ::   To fix: see 'warden build --driver container --help' for the flags this driver takes [warden] ERROR: unknown flag --network for driver "container" 
+== c7-cli5 rc=1 out=no ::   To fix: set it to a string [warden] ERROR: /Users/jeff/src/buildwarden-native/.scratch/fp/c7cli5/warden.toml [runtime] cli: want a string, not an integer 
+== c7-dcli5 rc=1 out=no ::   To fix: set it to a string [warden] ERROR: /Users/jeff/src/buildwarden-native/.scratch/fp/c7dcli5/warden.toml [driver.container] cli: want a string, not an integer 
+   doctor podman: [warden] driver container: WARDEN_CTR_CLI names the container runtime podman, which is not installed (not found on PATH)|[warden] ERROR: WARDEN_CTR_CLI names the container runtime podman, which is not installed (not found on PATH)|  To fix: install P
+-- 8
+   ahead: NAME            RUNS                                                                                                   FOUND
+   ahead: container    *  /Users/jeff/src/buildwarden-native/.scratch/pathA/warden-driver-container                              PATH
+   ahead:                   shadows /Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container (beside warden)  
+== c8a rc=0 out=yes :: [warden] Building relay from source... fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-dc-c8a) 
+{"name":"container","version":"dev","contract":1,"path":"/Users/jeff/src/buildwarden-native/.scratch/pathA/warden-driver-container","sha256":"e45e0460867ff0f26fded094eed749a9108c37436d7321b3536db2fa266bdbbb","found":"PATH","shadowed":[{"path":"/Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container","found":"beside-warden"}]}
+   behind: NAME            RUNS                                                                                 FOUND
+   behind: container    *  /Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container          beside warden
+   behind:                   shadows /Users/jeff/src/buildwarden-native/.scratch/pathB/warden-driver-container  
+== c8b rc=0 out=yes :: [warden] Building relay from source... fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-dc-c8b) 
+{"name":"container","version":"dev","contract":1,"path":"/Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden-driver-container","sha256":"e45e0460867ff0f26fded094eed749a9108c37436d7321b3536db2fa266bdbbb","found":"beside-warden","shadowed":[{"path":"/Users/jeff/src/buildwarden-native/.scratch/pathB/warden-driver-container","found":"PATH"}]}
+== c8x rc=1 out=no ::   To fix: name the driver by its name in the config file, or give its file with --driver or WARDEN_DRIVER [warden] ERROR: [runtime] driver in /Users/jeff/src/buildwarden-native/.scratch/fp/c8x/warden.toml is "./x": a config file names a driver, not a file 

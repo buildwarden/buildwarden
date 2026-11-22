@@ -1,0 +1,4 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+[warden] driver container: --runtime names the container runtime docker, which is not installed (not found on PATH)
+[warden] ERROR: --runtime names the container runtime docker, which is not installed (not found on PATH)
+  To fix: install Docker, or pass --runtime another runtime, or leave it out

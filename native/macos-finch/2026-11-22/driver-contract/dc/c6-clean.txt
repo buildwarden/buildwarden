@@ -1,0 +1,11 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+Cleaning up after build g7sghns9 (container)
+Cleaning up after build 7t0jn4n1 (container)
+Removing container: warden-build-7t0jn4n1
+Removing container: warden-relay-7t0jn4n1
+Removing container: warden-holder-7t0jn4n1
+Removing network: warden-7t0jn4n1
+Removing image: warden-relay:7t0jn4n1
+Removing /Users/jeff/src/buildwarden-native/.scratch/tmpA/warden-container-7t0jn4n1-2736146849
+Kept the cache (85411 MB, /Users/jeff/Library/Caches/warden); --cache removes it
+Removed 8 resource(s).

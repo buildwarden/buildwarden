@@ -1,0 +1,4 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+[warden] driver container: --runtime names the container runtime finch, which is installed but not running (`finch info` failed)
+[warden] ERROR: --runtime names the container runtime finch, which is installed but not running (`finch info` failed)
+  To fix: start its VM: finch vm start (or finch vm init the first time), or pass --runtime another runtime, or leave it out

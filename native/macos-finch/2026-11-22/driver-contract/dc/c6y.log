@@ -1,0 +1,29 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+[warden] Build ID: wsy6knav
+[warden] Building relay from source...
+[warden] Pulling image: alpine:3.21
+docker.io/library/alpine:3.21: resolving      |[32m[0m--------------------------------------| 
+elapsed: 0.1 s                 total:   0.0 B (0.0 B/s)                                         
+docker.io/library/alpine:3.21: resolving      |[32m[0m--------------------------------------| 
+elapsed: 0.2 s                 total:   0.0 B (0.0 B/s)                                         
+docker.io/library/alpine:3.21: resolving      |[32m[0m--------------------------------------| 
+elapsed: 0.3 s                 total:   0.0 B (0.0 B/s)                                         
+docker.io/library/alpine:3.21: resolving      |[32m[0m--------------------------------------| 
+elapsed: 0.4 s                 total:   0.0 B (0.0 B/s)                                         
+docker.io/library/alpine:3.21: resolving      |[32m[0m--------------------------------------| 
+elapsed: 0.5 s                 total:   0.0 B (0.0 B/s)                                         
+docker.io/library/alpine:3.21:                                                    resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
+index-sha256:bc21487101ae47172509130ee1092cc273a831968d64b617776d1f69c81e42ab:    done           |[32m++++++++++++++++++++++++++++++++++++++[0m| 
+manifest-sha256:e77b401c86e6d0651b12ca45dea812bdf6ffca3b6e16662b7c116180e56ec9f7: done           |[32m++++++++++++++++++++++++++++++++++++++[0m| 
+config-sha256:ed2dcc5679354d1c17b64f71343e311652c575a6551bbce979eab00644a14eee:   done           |[32m++++++++++++++++++++++++++++++++++++++[0m| 
+elapsed: 0.6 s                                                                    total:   0.0 B (0.0 B/s)                                         
+[warden] Allocating network...
+[warden] Starting relay...
+[warden] Starting build container...
+time="2026-11-22T11:16:35-08:00" level=warning msg="failed to remove hosts file for container \"8a5103bbd6a94d697e7bb01a4e96406c88388e5b0bc6b6d07bc1f82ae19e2453\"" error="hosts-store error\nnot found\nstat /var/lib/nerdctl/1935db59/etchosts/finch/8a5103bbd6a94d697e7bb01a4e96406c88388e5b0bc6b6d07bc1f82ae19e2453: no such file or directory"
+build-started
+[warden] Executing build...
+
+Interrupted, cleaning up... (press ctrl+c again to force)
+[warden] Tearing down environment...
+warden: build interrupted

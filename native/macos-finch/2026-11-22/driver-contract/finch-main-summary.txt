@@ -1,0 +1,25 @@
+### main d67da9dd The config lookup tests change directory 
+-- 1
+   [warden] ERROR: unknown command "driver" for "warden"
+     To fix: see 'warden --help'
+   doctor: container runtime: finch
+   doctor: ok
+-- 2
+== basic rc=0 out=yes :: [warden] Building relay from source... fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-main-basic) 
+ SIGNATURES: ✅ All 13 signatures valid
+   inputs: Containerfile build.sh 
+-- 4
+== ri-new rc=0 out=yes :: [warden] Building relay from source... fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-main-ri-new) 
+== ri-old rc=0 out=yes :: [warden] Building relay from source... fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-main-ri-old) 
+== ri-both rc=0 out=yes :: [warden] Building relay from source... fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-main-ri-both) 
+== env rc=1 out=yes ::   https://github.com/buildwarden/buildwarden/issues/new?title=Bug%3A+connecting+to+relay%3A+relaycfg%3A+relay+at+127.0.0.1%3A49559+never+accepted+the+tunnel%3A+context+deadline+exceeded+%28last+error%3A+unexpected+EOF%29&body=%23%23+Environment%0A-+OS%3A+darwin%2Farm64%0A-+Version%3A+dev%0A%0A%23%23+Error%0A%60%60%60%0Aconnecting+to+relay%3A+relaycfg%3A+rela
+== bad rc=1 out=yes ::   https://github.com/buildwarden/buildwarden/issues/new?title=Bug%3A+error+pulling+image+ghcr.io%2Fbuildwarden%2Frelay%3Ano-such-tag-xyz%3A+exit+status+1&body=%23%23+Environment%0A-+OS%3A+darwin%2Farm64%0A-+Version%3A+dev%0A%0A%23%23+Error%0A%60%60%60%0Aerror+pulling+image+ghcr.io%2Fbuildwarden%2Frelay%3Ano-such-tag-xyz%3A+exit+status+1%0A%60%60%60%0A%0A%23%
+-- 7
+== c7-env rc=0 out=yes :: [warden] Building relay from source... fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-main-c7-env) 
+== c7-flag rc=0 out=yes :: [warden] Building relay from source... fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-main-c7-flag) 
+== c7-miss-env rc=1 out=yes ::   https://github.com/buildwarden/buildwarden/issues/new?title=Bug%3A+error+building+relay+image%3A+exec%3A+%22podman%22%3A+executable+file+not+found+in+%24PATH&body=%23%23+Environment%0A-+OS%3A+darwin%2Farm64%0A-+Version%3A+dev%0A%0A%23%23+Error%0A%60%60%60%0Aerror+building+relay+image%3A+exec%3A+%22podman%22%3A+executable+file+not+found+in+%24PATH%0A%60%60%
+== c7-miss-flag rc=1 out=yes ::   https://github.com/buildwarden/buildwarden/issues/new?title=Bug%3A+error+building+relay+image%3A+exec%3A+%22docker%22%3A+executable+file+not+found+in+%24PATH&body=%23%23+Environment%0A-+OS%3A+darwin%2Farm64%0A-+Version%3A+dev%0A%0A%23%23+Error%0A%60%60%60%0Aerror+building+relay+image%3A+exec%3A+%22docker%22%3A+executable+file+not+found+in+%24PATH%0A%60%60%
+== c7-network rc=1 out=no :: [warden] ERROR: --network is only used by --driver hyperv 
+== c7-cli5 rc=1 out=no ::   To fix: fix the TOML syntax in /Users/jeff/src/buildwarden-native/.scratch/fp/c7cli5/warden.toml [warden] ERROR: parsing /Users/jeff/src/buildwarden-native/.scratch/fp/c7cli5/warden.toml: toml: line 2 (last key "runtime.cli"): incompatible types: TOML value has type int64; destination has type string 
+== c7-dcli5 rc=0 out=yes :: [warden] Building relay from source... fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-main-c7-dcli5) 
+   doctor podman: container runtime: podman|ok|

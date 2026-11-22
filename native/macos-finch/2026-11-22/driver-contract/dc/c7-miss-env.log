@@ -1,0 +1,4 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+[warden] driver container: WARDEN_CTR_CLI names the container runtime podman, which is not installed (not found on PATH)
+[warden] ERROR: WARDEN_CTR_CLI names the container runtime podman, which is not installed (not found on PATH)
+  To fix: install Podman, or set WARDEN_CTR_CLI to another runtime, or unset it
