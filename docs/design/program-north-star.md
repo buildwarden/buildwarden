@@ -2791,7 +2791,51 @@ hold before raising it.
 
 ## Design review
 
-Pending.
+- **r1, 2026-11-22: approved at `60f5666`** (Jeff, workflow-human,
+  FLOW-19); read at `8cb13d8` for the questions, and at `e290e4d` and
+  `60f5666` for the rule changes. Page:
+  https://claude.ai/artifact/RuRdk7xVctRAWoxA26NFc8.
+- **Decisions.** a1 to a18 answered (Questions, Assumed): fourteen as
+  recommended; a5 (b), a7 in his own words, a11 (b) and a15 (b) changed.
+  Folded in at `93bb6e2`, then an independent check (four report-only
+  checkers, each finding given to a refuter: 32 findings, 29 confirmed and
+  applied at `e290e4d`). Follow-ups the fold-in raised, answered the same
+  sitting and folded in at `60f5666`: a15 (b), the fifth return escalates
+  (more than four); a5 (b), the reserved rules are his two classes judged
+  by effect, not the wider set the first fold-in drafted; a18, each new
+  program repository's CI and flow18 workflows go to its `main`, with
+  their job names required, in the setup sitting before its program
+  trunk is cut. Implementation choices the check left open (wf-design
+  creates a process item's branch; an attended path to a cloud
+  `x1-design` goes through `/workflow-tick attended`) were not asked:
+  they are strategy, not his to decide (his three kinds).
+- **Rule changes**, each asked on its own (FLOW-14), all approved as
+  worded at `60f5666`; 19 entries (17 at `8cb13d8`, plus FLOW-14 and
+  LOOP-09 from a5 (b) and LINT-04 from the check, less FLOW-11, which
+  now applies as written):
+- **rule change FLOW-20 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change FLOW-03 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change FLOW-04 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change FLOW-05 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change FLOW-06 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change FLOW-07 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change FLOW-08 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change FLOW-13 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change FLOW-14 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change FLOW-17 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change FLOW-19 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change LINT-03 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change LINT-04 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change LOOP-01 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change LOOP-07 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change LOOP-09 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change PROFILE-01 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change UX-03 approved at `60f5666`**, as worded under **Rule changes**.
+- **rule change ORCH-03 approved at `60f5666`**, as worded under **Rule changes**.
+- **State step** recorded with `wf state-step` from the Implementation
+  plan's **State step**; the setup outside the repository (**What only
+  Jeff can do, once**) is his at the merge.
+- sitting: 2026-11-22, asks: 44 (in 11 batches)
 
 ## Consolidation
 
