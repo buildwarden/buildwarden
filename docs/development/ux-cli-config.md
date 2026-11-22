@@ -44,6 +44,8 @@ The automated part checks TTY detection and the presence of a structured mode.
 
 Flags, subcommands, and config keys are additive. A rename or removal ships an alias
 plus a deprecation notice with a documented removal window, never a silent break.
+While FLOW-20 stands, a program item may rename or remove one without the alias
+and window, as FLOW-20 says, and still never silently.
 Post-1.0 this tightens, consistent with the seam-stability posture (GLOBAL-08).
 
 The automated part flags a removed or renamed surface with no alias or deprecation.

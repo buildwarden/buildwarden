@@ -6,7 +6,13 @@
 #
 #   make pin-specs SPECS="relay-claim@v0.2.0 collector-outputs@v0.1.1"
 #   make pin-specs SPECS=latest     # all six at their newest releases
+#   make pin-specs SPECS=newest     # all six at their highest versions,
+#                                   # pre-releases included; not on main
 #   make pin-specs REF=<commit>     # all six at one commit, on a branch only
+#
+# A version named in SPECS may be a pre-release, vX.Y.Z-dev.N or -rc.N, which
+# a program trunk may pin (FLOW-20); main pins only releases without a
+# suffix, which check-pins.sh holds it to.
 #
 # It is given SPECS or REF, never both and never neither: it has no default.
 #
@@ -29,7 +35,8 @@ kit=github.com/buildwarden/buildwarden/tools/conformance
 dirs="bootstrap-config collector-inputs collector-outputs executor-initialize relay-claim relay-guest-api"
 root=tools/conformance
 page=docs/book/src/concepts/seams.md
-release_re='^v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*$'
+# A release, or a program trunk's pre-release (FLOW-20).
+version_re='^v[0-9]+\.[0-9]+\.[0-9]+(-(dev|rc)\.[0-9]+)?$'
 pseudo_re='[0-9]\{14\}-[0-9a-f]\{12\}$'
 
 # A go.work above the checkout would give the six modules one build list,
@@ -45,7 +52,7 @@ die() {
 SPECS="${SPECS:-}"
 REF="${REF:-}"
 if [ -z "$SPECS" ] && [ -z "$REF" ]; then
-	die 'give SPECS="<directory>@<version> ...", SPECS=latest or REF=<commit>'
+	die 'give SPECS="<directory>@<version> ...", SPECS=latest, SPECS=newest or REF=<commit>'
 fi
 if [ -n "$SPECS" ] && [ -n "$REF" ]; then
 	die "give SPECS or REF, not both"
@@ -110,14 +117,23 @@ if [ -n "$REF" ]; then
 	for d in $dirs; do echo "$d $REF" >>"$plan"; done
 elif [ "$SPECS" = latest ]; then
 	for d in $dirs; do echo "$d latest" >>"$plan"; done
+elif [ "$SPECS" = newest ]; then
+	branch=$(git rev-parse --abbrev-ref HEAD)
+	[ "$branch" != main ] ||
+		die "SPECS=newest takes pre-releases, which main never pins (FLOW-20)"
+	for d in $dirs; do
+		v=$(cd "$tmp" && go list -m -versions "$repo/$d" | tr ' ' '\n' | tail -n 1)
+		echo "$v" | grep -Eq "$version_re" || die "$repo/$d has no version"
+		echo "$d $v" >>"$plan"
+	done
 else
 	for s in $SPECS; do
 		d=${s%%@*}
 		v=${s#*@}
 		[ "$d@$v" = "$s" ] || die "$s is not <directory>@<version>"
 		is_dir "$d" || die "$d is not a specification; the six are: $dirs"
-		echo "$v" | grep -q "$release_re" ||
-			die "$s: $v is not a release version vX.Y.Z"
+		echo "$v" | grep -Eq "$version_re" ||
+			die "$s: $v is not a release version vX.Y.Z or a pre-release vX.Y.Z-dev.N or -rc.N"
 		! grep -q "^$d " "$plan" || die "$d is named twice"
 		echo "$d $v" >>"$plan"
 	done
@@ -128,7 +144,7 @@ else
 		mod="$root/$d/go.mod"
 		[ -f "$mod" ] || die "$mod is missing; name $d in SPECS too"
 		v=$(require_version "$mod" "$repo/$d")
-		if ! echo "$v" | grep -q "$release_re" || grep -q '^replace' "$mod"; then
+		if ! echo "$v" | grep -Eq "$version_re" || grep -q '^replace' "$mod"; then
 			die "$d is pinned at $v, not a release; name it in SPECS too, or give SPECS=latest"
 		fi
 	done
@@ -144,7 +160,7 @@ while read -r d q <&3; do
 	out=$(resolve "$mod" "$q")
 	v=$(echo "$out" | sed -n 1p)
 	gomod=$(echo "$out" | sed -n 2p)
-	if [ -z "$REF" ] && ! echo "$v" | grep -q "$release_re"; then
+	if [ -z "$REF" ] && ! echo "$v" | grep -Eq "$version_re"; then
 		die "$mod@$q is $v, not a release"
 	fi
 	goline=$(sed -n 's/^go[[:space:]][[:space:]]*\([^[:space:]]*\).*/\1/p' "$gomod")

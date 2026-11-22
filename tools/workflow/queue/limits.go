@@ -124,9 +124,12 @@ func (l *limit) head(most int) string {
 }
 
 // counted reports whether the limits count the item: a feature that is not
-// tracked (FLOW-05). A process item stops other work only through its holds,
-// and a tracked item rests on state entered by hand.
-func (s *State) counted(f *Feature) bool { return !f.IsProcess() && !s.Tracked(f) }
+// tracked and not on hold (FLOW-05, FLOW-20). A process item stops other work
+// only through its holds, a tracked item rests on state entered by hand, and
+// a held item has no work going on.
+func (s *State) counted(f *Feature) bool {
+	return !f.IsProcess() && !s.Tracked(f) && !f.Held()
+}
 
 // takesStart reports whether the worker's claim of a step of the item takes
 // the in-progress limit: the item is a queued counted feature and the worker
@@ -377,12 +380,13 @@ func (s *State) prSlotAhead(f *Feature) string {
 // QUEUE.md's Needs Jeff opens with (FLOW-05). An item waits when it is in
 // progress, is not tracked, and has a human step that is due, an open
 // blocking question, a pull request at its merge step, or a spent runaway
-// budget (FLOW-13). A queued item is not counted, even one on hold: the loop
-// has put no work behind it.
+// budget (FLOW-13). A queued item is not counted, and an item on hold is not
+// either, in progress or not: holding it was the human's decision, and it
+// waits for no new one (FLOW-20).
 func (s *State) WaitsOnHuman() []*Feature {
 	var out []*Feature
 	for _, f := range s.Ordered() {
-		if f.Status == "in_progress" && !s.Tracked(f) && s.waitsOnHuman(f) {
+		if f.Status == "in_progress" && !s.Tracked(f) && !f.Held() && s.waitsOnHuman(f) {
 			out = append(out, f)
 		}
 	}
@@ -406,7 +410,32 @@ func (s *State) waitsOnHuman(f *Feature) bool {
 		if st.Status != "pending" || st.Phase > f.Phase || !allDone(st.Needs, done) {
 			continue
 		}
-		if st.Affinity == "human" || (IsMerge(st) && f.hasPR()) || isMergedFirst(st) {
+		// A pull request the loop merges into a program trunk waits on no
+		// one but the gate, unless the gate holds it on the human: a posture
+		// change at point 7 or a protected finding at point 5 (FLOW-05,
+		// FLOW-20).
+		human := (IsMerge(st) && f.hasPR()) || isMergedFirst(st)
+		if st.Affinity == "human" {
+			return true
+		}
+		if human && (!s.LoopMerges(f, st) || s.loopMergeWaitsOnHuman(f, st)) {
+			return true
+		}
+	}
+	return false
+}
+
+// loopMergeWaitsOnHuman reports whether a loop merge is held on the human in
+// a repository the step covers that has not merged yet.
+func (s *State) loopMergeWaitsOnHuman(f *Feature, st *Step) bool {
+	if s.MergeWaitsOnHuman == nil {
+		return false
+	}
+	for _, r := range s.MergeRepos(f, st) {
+		if w := s.workEntry(f, r); w != nil && w.Merged != "" {
+			continue
+		}
+		if s.MergeWaitsOnHuman(f, r) {
 			return true
 		}
 	}

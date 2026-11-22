@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func process(name string, prio int, status string, holds ...string) *Feature {
@@ -12,6 +13,17 @@ func process(name string, prio int, status string, holds ...string) *Feature {
 		Round: "process", Phase: 1, Holds: holds,
 		Budget: Budget{Estimate: Count{Runs: 1, Steps: 4}}}
 	Seed(f)
+	return f
+}
+
+// implementing is a process item in progress past its Design, its
+// x2-implement leased to another session: the phase whose work its holds
+// guard (FLOW-05).
+func implementing(name string, prio int, holds ...string) *Feature {
+	f := process(name, prio, "in_progress", holds...)
+	advance(f, 2)
+	exp := now.Add(time.Hour)
+	f.Steps[len(f.Steps)-1].Lease = Lease{ClaimedBy: "cloud/implementer", Expires: &exp}
 	return f
 }
 
@@ -98,7 +110,7 @@ func TestHoldsBlockMatchingWorkersUntilDone(t *testing.T) {
 	a := feature("a", 1, "in_progress")
 	a.Steps = append(a.Steps, Step{ID: "f0-on-mac", Affinity: "host:macos-vz",
 		Status: "pending"})
-	p := process("rules", 2, "in_progress", "cloud", "host:*")
+	p := implementing("rules", 2, "cloud", "host:*")
 	s := state(a, p)
 	s.sortFeatures()
 
@@ -110,8 +122,8 @@ func TestHoldsBlockMatchingWorkersUntilDone(t *testing.T) {
 	if got := next(t, s, "host:macos-vz/run"); got != "none" {
 		t.Fatalf("host next = %q, want none under host:*", got)
 	}
-	if got := next(t, s, "human/jeff"); got != "rules x1-design" {
-		t.Fatalf("human next = %q; human is not held", got)
+	if got := next(t, s, "human/jeff"); got != "none" {
+		t.Fatalf("human next = %q; the human has no step here", got)
 	}
 	if s.Hold(p, "cloud") != "" {
 		t.Fatal("a process item held its own steps")
@@ -138,7 +150,7 @@ func TestHoldLeavesAClaimedStepClaimed(t *testing.T) {
 	a := feature("a", 1, "in_progress")
 	s := state(a)
 	s.Claim(a, &a.Steps[0], "cloud/run", now)
-	p := process("rules", 2, "in_progress", "cloud")
+	p := implementing("rules", 2, "cloud")
 	s.Features = append(s.Features, p)
 	s.sortFeatures()
 
@@ -166,7 +178,7 @@ func TestGateHonorsHolds(t *testing.T) {
 	a := feature("a", 1, "in_progress")
 	a.Branch = "feat/a"
 	a.Steps[0].Affinity = "host:macos-qemu"
-	s := nativeState(a, process("rules", 2, "in_progress", "host:macos-*"))
+	s := nativeState(a, implementing("rules", 2, "host:macos-*"))
 	s.sortFeatures()
 	s.Gaps = []Gap{{ID: "g1", Host: "macos-vz", Status: "open"}}
 	mac, _ := s.Machine("mac")

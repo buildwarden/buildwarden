@@ -47,7 +47,11 @@ jobs:
           TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
-            TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION"
+            TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION"
+            # A pre-release (-dev.N, -rc.N) never moves latest (FLOW-20).
+            if [[ "$VERSION" != *-* ]]; then
+              TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            fi
           fi
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
 

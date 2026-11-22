@@ -160,7 +160,103 @@ func headerSchemas(t *testing.T) []string {
 	return h.Meta.Schemas
 }
 
+// draftMark opens a working draft's status block (FLOW-20).
+const draftMark = "> **Working draft, unreleased (FLOW-20).**"
+
+// draftListed is how the index names a working draft.
+const draftListed = "(working draft, unreleased)"
+
+// checkDrafts fails a specs/ document that opens with a working draft's
+// status block when the index does not list it as unreleased, or when base,
+// the branch a pull request targets or a push is to, is main: a draft
+// reaches main only finalized, when the program lands (FLOW-20, RELAY-05).
+func checkDrafts(fsys fs.FS, base string) error {
+	docs, err := fs.Glob(fsys, "specs/*/v*.md")
+	if err != nil {
+		return fmt.Errorf("glob documents: %w", err)
+	}
+	index, err := fs.ReadFile(fsys, "specs/README.md")
+	if err != nil {
+		return fmt.Errorf("read the index: %w", err)
+	}
+	for _, doc := range docs {
+		data, err := fs.ReadFile(fsys, doc)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", doc, err)
+		}
+		if !bytes.Contains(data, []byte(draftMark)) {
+			continue
+		}
+		if base == "main" {
+			return fmt.Errorf("%s is a working draft: it reaches main only "+
+				"finalized, when the program lands (FLOW-20)", doc)
+		}
+		link := "(" + strings.TrimPrefix(doc, "specs/") + ")"
+		listed := false
+		for _, line := range strings.Split(string(index), "\n") {
+			if strings.Contains(line, link) && strings.Contains(line, draftListed) {
+				listed = true
+			}
+		}
+		if !listed {
+			return fmt.Errorf("specs/README.md does not list %s as %s", doc,
+				draftListed)
+		}
+	}
+	return nil
+}
+
+// ciBase is the branch CI checks against: a pull request's base, or the
+// branch a push is to; empty outside CI.
+func ciBase() string {
+	if b := os.Getenv("GITHUB_BASE_REF"); b != "" {
+		return b
+	}
+	return os.Getenv("GITHUB_REF_NAME")
+}
+
+// TestDrafts: a working draft is listed as unreleased and kept off main
+// (FLOW-20).
+func TestDrafts(t *testing.T) {
+	const draftDoc = "specs/build-ledger/v2.md"
+	draft := file("# Ledger wire format, v2\n\n" + draftMark + " Not a released version " +
+		"of the ledger format.\n")
+	listed := file("# index\n\n- [Ledger wire format, v2 (working draft, unreleased)]" +
+		"(build-ledger/v2.md)\n")
+	for _, tc := range []struct {
+		name, base string
+		index      *fstest.MapFile
+		ok         bool
+	}{
+		{"listed, to the program trunk", "program/componentization", listed, true},
+		{"listed, no CI", "", listed, true},
+		{"to main", "main", listed, false},
+		{"not listed", "program/componentization", file("# index\n"), false},
+	} {
+		m := fixture()
+		m[draftDoc], m["specs/README.md"] = draft, tc.index
+		if err := checkDrafts(m, tc.base); (err == nil) != tc.ok {
+			t.Errorf("%s: checkDrafts = %v, want ok %v", tc.name, err, tc.ok)
+		}
+	}
+	if err := checkDrafts(fixture(), "main"); err != nil {
+		t.Errorf("no draft, on main: %v", err)
+	}
+	t.Setenv("GITHUB_BASE_REF", "")
+	t.Setenv("GITHUB_REF_NAME", "main")
+	if got := ciBase(); got != "main" {
+		t.Errorf("a push to main: ciBase = %q", got)
+	}
+	t.Setenv("GITHUB_BASE_REF", "program/componentization")
+	if got := ciBase(); got != "program/componentization" {
+		t.Errorf("a pull request: ciBase = %q", got)
+	}
+}
+
 func TestRepoSpecs(t *testing.T) {
+	if err := checkDrafts(repo(), ciBase()); err != nil {
+		t.Error(err)
+	}
 	if err := checkHeaderURIs(repo(), headerSchemas(t)); err != nil {
 		t.Error(err)
 	}

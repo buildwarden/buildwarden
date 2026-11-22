@@ -75,7 +75,8 @@ a reserved output name; the agent part judges new input-handling paths.
 `WARDEN_CONFIG` names, else `warden.toml` in the working directory when it
 exists. It reads no other file and merges none; a named file that cannot be
 read is an error. Configuration precedence stays `flag > environment variable >
-the config file > default`. Defaults are sane and changes are additive. A new
+the config file > default`. Defaults are sane and changes are additive, except
+where FLOW-20 lets a program item break a key. A new
 or changed config key is documented in the same change; this is the config half
 of the docs-coupling rule (UX-01).
 

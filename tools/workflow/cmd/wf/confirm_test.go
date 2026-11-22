@@ -48,7 +48,7 @@ func TestAttendedConfirmsAMerge(t *testing.T) {
 		refused(t, dir, "may not take cloud step "+c.step, "claim", step...)
 		out, err := wf(t, dir, "done", step...)
 		if err == nil || !strings.Contains(err.Error(), c.step+" done-when not met") ||
-			!strings.Contains(out, "FAIL merged by a human") {
+			!strings.Contains(out, "FAIL merged (FLOW-08)") {
 			t.Fatalf("%s: wf done before the merge: %v\n%s", c.name, err, out)
 		}
 		if st, _ := item(t, dir, c.name).Step(c.step); st.Status != "pending" {
@@ -69,7 +69,7 @@ func TestAttendedConfirmsAMerge(t *testing.T) {
 		step := []string{"-repo", work, "-worker", c.worker, "-feature", c.name, "-step",
 			c.step}
 		if out, err := wf(t, dir, "done", step...); err != nil ||
-			!strings.Contains(out, "ok   merged by a human") {
+			!strings.Contains(out, "ok   merged (FLOW-08)") {
 			t.Fatalf("%s: wf done after the merge: %v\n%s", c.name, err, out)
 		}
 		f := item(t, dir, c.name)

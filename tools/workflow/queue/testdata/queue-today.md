@@ -28,6 +28,10 @@ None.
 - **loop-native-lead**: design review (`x1-design`, FLOW-19)
 - **loop-repository**: design review (`x1-design`, FLOW-19)
 
+### Held
+
+None.
+
 ## Active
 
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |

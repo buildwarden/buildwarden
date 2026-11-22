@@ -58,11 +58,16 @@ Implementing the tier-1 checks is Deep-dive #2.
 
 Tier 1 red blocks the release outright. Tier 2 MUST-severity findings require
 explicit human sign-off (acknowledge, or dismiss with a recorded reason) before the
-release proceeds; SHOULD findings are informational. The agent never auto-blocks and
-never auto-approves trunk.
+release proceeds; SHOULD findings are informational. The agent never auto-blocks,
+never auto-approves trunk, and never dismisses a MUST finding.
 
 Per PR, the sign-off is the human's merge (FLOW-08): the PR body lists the
-MUST findings, and a dismissal is recorded as a PR comment. For releases, the gate needs a concrete home (a required PR check a human
+MUST findings, and a dismissal is recorded as a PR comment. A pull request the
+loop merges into a program trunk carries its findings, any MUST finding it
+deferred among them, into the program's records, and the human's merge of the
+program trunk into its trunk signs them off (FLOW-08, FLOW-20). A pre-release a
+program trunk tags needs tier 1 green on its commit; the full gate above is
+for a release without a suffix. For releases, the gate needs a concrete home (a required PR check a human
 toggles, a release-checklist item, or a branch-protection rule), tied to how
 releases are cut today (GoReleaser on a tag push). That wiring is decided at
 implementation time.
@@ -75,7 +80,8 @@ implementation time.
 **Check:** automated
 
 The linter runs on a diff, never the whole repo: the PR diff per-PR, and
-`last-release-tag..HEAD` at release. This keeps it from re-flagging pre-existing debt
+`last-release-tag..HEAD` at release, where the last release tag is the
+last tag without a suffix (a pre-release, FLOW-20, is not one). This keeps it from re-flagging pre-existing debt
 and keeps it cheap and focused, the same spirit as gofmt-on-touched-lines (GLOBAL-02).
 
 ---

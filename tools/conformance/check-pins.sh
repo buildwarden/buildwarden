@@ -6,7 +6,10 @@
 # too, and no replace line; and make pin-specs, given the versions the six
 # files name, must change no file, which holds each go.mod and go.sum to what
 # that release names. A branch in progress may pin an unreleased commit, so
-# the workflow does not run this on a branch push.
+# the workflow does not run this on a branch push. A pull request to a
+# program trunk (GITHUB_BASE_REF program/...) may also pin a pre-release,
+# vX.Y.Z-dev.N or -rc.N, of a specification and of the harness; one to main
+# may not (FLOW-20).
 #
 #   tools/conformance/check-pins.sh     # from the repository root
 set -eu
@@ -14,7 +17,10 @@ set -eu
 repo=github.com/buildwarden/buildwarden-specs
 harness=$repo/conformance
 dirs="bootstrap-config collector-inputs collector-outputs executor-initialize relay-claim relay-guest-api"
-release_re='^v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*$'
+release_re='^v[0-9]+\.[0-9]+\.[0-9]+$'
+case "${GITHUB_BASE_REF:-}" in
+program/*) release_re='^v[0-9]+\.[0-9]+\.[0-9]+(-(dev|rc)\.[0-9]+)?$' ;;
+esac
 fail=0
 specs=""
 
@@ -23,7 +29,7 @@ bad() {
 	fail=1
 }
 
-is_release() { echo "$1" | grep -q "$release_re"; }
+is_release() { echo "$1" | grep -Eq "$release_re"; }
 
 for d in $dirs; do
 	mod="tools/conformance/$d/go.mod"

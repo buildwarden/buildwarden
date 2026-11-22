@@ -112,6 +112,12 @@ func (s *State) Declare(f *Feature, d Declaration, worker string, now time.Time)
 			return fmt.Errorf("%v; wf declare changed nothing", err)
 		}
 	}
+	if flips := s.trunkFlips(f); flips != "" {
+		*f = before
+		return fmt.Errorf("the declaration would change the trunk the item recorded "+
+			"(%s); wf declare changed nothing: back to Design to split it (FLOW-06, "+
+			"FLOW-20)", flips)
+	}
 	if over := s.newLimitFindings(was); len(over) > 0 {
 		*f = before
 		then := "back to Design (FLOW-06)"
@@ -123,7 +129,7 @@ func (s *State) Declare(f *Feature, d Declaration, worker string, now time.Time)
 	}
 	f.Declared = d.Commit
 	f.Log(now, worker, "declared at %s: %s", d.Commit, changes)
-	return nil
+	return s.PinTrunks(f, worker, now)
 }
 
 // declaredWork is the item's work as the design declares it: one entry per
@@ -140,7 +146,7 @@ func declaredWork(f *Feature, repos, mergeFirst, live []string) ([]Work, error) 
 		w := Work{Repo: r, Branch: f.Branch}
 		for _, old := range f.Work {
 			if old.Repo == r {
-				w.PR, w.Merged = old.PR, old.Merged
+				w.PR, w.Merged, w.Trunk = old.PR, old.Merged, old.Trunk
 			}
 		}
 		w.First = slices.Contains(mergeFirst, r)
@@ -226,9 +232,15 @@ func (s *State) target(f *Feature, d Declaration) Declaration {
 	if !f.IsProcess() {
 		return d
 	}
+	review := f.DesignReview
+	if s.Config.HasProgramTrunk() {
+		// While FLOW-20 stands a process item's Design records which review
+		// settles it: the process test or the human's (FLOW-20).
+		review = d.DesignReview
+	}
 	return Declaration{Repos: d.Repos, Areas: f.Areas, Seams: f.Seams,
 		RulesChanged: f.RulesChanged, Alters: f.AltersRelationships,
-		DesignReview: f.DesignReview, MergeFirst: d.MergeFirst, Live: d.Live}
+		DesignReview: review, MergeFirst: d.MergeFirst, Live: d.Live}
 }
 
 // declarable applies the rule for where the item is and who asks. For an

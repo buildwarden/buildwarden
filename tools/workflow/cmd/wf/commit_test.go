@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/buildwarden/buildwarden/tools/workflow/queue"
 )
@@ -201,7 +202,12 @@ func commitClaimDropped(t *testing.T) {
 				"-priority", "9", "-estimate-steps", "4", "-kind", "process",
 				"-holds", "cloud")
 			claimStep(t, b, "human/jeff", "p", "x1-design")
-			pushed(t, b, "human/jeff", "p: claim", "queue/p.yaml")
+			// Its design done, the item holds from its Implement on (FLOW-20).
+			edit(t, b, "p", func(f *queue.Feature) {
+				queue.Complete(f, &f.Steps[0], "human/jeff", time.Now())
+			})
+			claimStep(t, b, "cloud/b", "p", "x2-implement")
+			pushed(t, b, "cloud/b", "p: implement", "queue/p.yaml")
 		}},
 		{"a blocking question", "blocking question q1", func(t *testing.T, b string) {
 			edit(t, b, "x", func(f *queue.Feature) {
@@ -384,4 +390,74 @@ func TestCommitAreasUnpushedCommit(t *testing.T) {
 	if !strings.Contains(remoteFile(t, a, "areas.yaml"), "a/") {
 		t.Fatal("the human's push did not carry the map change")
 	}
+}
+
+// TestCommitAreasProgram: while a program trunk is configured, a worker that
+// is not human commits a change to areas.yaml when it commits an area-map
+// record with it, one for each map change the push carries; without one, or
+// with no program trunk configured, it is refused (FLOW-05, FLOW-20, a16).
+func TestCommitAreasProgram(t *testing.T) {
+	a, _ := stateRepos(t, programHere)
+	write(t, a, "areas.yaml", areasYAML("o/here", "a/"))
+	out, code := commit(t, a, "cloud/run", "areas: a", "areas.yaml")
+	if code == 0 || !strings.Contains(out, "area-map record") {
+		t.Fatalf("an unrecorded map change: exit %d, want a refusal:\n%s", code, out)
+	}
+	refused(t, a, "area-map record says why", "record", "-worker", "cloud/run", "-kind",
+		"area-map", "-note", "split a")
+	must(t, a, "record", "-worker", "cloud/run", "-kind", "area-map", "-ref",
+		"docs/design/relay-split.md", "-note", "area a, as the design names it")
+	out, code = commit(t, a, "cloud/run", "areas: a", "areas.yaml")
+	if code == 0 || !strings.Contains(out, "area-map record") {
+		t.Fatalf("a record left uncommitted: exit %d, want a refusal:\n%s", code, out)
+	}
+	pushed(t, a, "cloud/run", "areas: a", "areas.yaml", queue.RecordsFile)
+	if !strings.Contains(remoteFile(t, a, "areas.yaml"), "a/") {
+		t.Fatal("the recorded map change was not pushed")
+	}
+	// A second change needs a second record: the first is pushed.
+	write(t, a, "areas.yaml", areasYAML("o/here", "b/"))
+	out, code = commit(t, a, "cloud/run", "areas: b", "areas.yaml", queue.RecordsFile)
+	if code == 0 || !strings.Contains(out, "area-map record") {
+		t.Fatalf("a second change on the first record: exit %d:\n%s", code, out)
+	}
+	must(t, a, "record", "-worker", "cloud/run", "-kind", "area-map", "-ref",
+		queue.AreaMapEdges, "-note", "b reaches a, as area-edges.sh shows")
+	pushed(t, a, "cloud/run", "areas: b", "areas.yaml", queue.RecordsFile)
+
+	// With no program trunk configured, the map stays the human's.
+	h, _ := stateRepos(t, here)
+	write(t, h, "areas.yaml", areasYAML("o/here", "a/"))
+	if err := queue.AppendRecord(h, queue.Record{By: "cloud/run", Kind: "area-map",
+		Ref: queue.AreaMapEdges, Note: "edges"}); err != nil {
+		t.Fatal(err)
+	}
+	out, code = commit(t, h, "cloud/run", "areas: a", "areas.yaml", queue.RecordsFile)
+	if code == 0 || !strings.Contains(out, "human's word") {
+		t.Fatalf("no program trunk: exit %d, want the human-only refusal:\n%s", code, out)
+	}
+}
+
+// TestCommitProgramTrunkHumanOnly: a worker that is not human may neither
+// push a config.yaml that adds a program trunk, nor turn on the loop's map
+// changes by adding one to its own uncommitted config.yaml: whether they are
+// on is read from origin (FLOW-20).
+func TestCommitProgramTrunkHumanOnly(t *testing.T) {
+	a, _ := stateRepos(t, here)
+	write(t, a, "config.yaml", "run_budget: {steps: 8}\n"+programHere)
+	out, code := commit(t, a, "cloud/run", "config: program trunk", "config.yaml")
+	if code == 0 || !strings.Contains(out, "program_trunk") {
+		t.Fatalf("a loop's program trunk: exit %d, want a refusal:\n%s", code, out)
+	}
+	write(t, a, "areas.yaml", areasYAML("o/here", "a/"))
+	if err := queue.AppendRecord(a, queue.Record{By: "cloud/run", Kind: "area-map",
+		Ref: queue.AreaMapEdges, Note: "edges"}); err != nil {
+		t.Fatal(err)
+	}
+	out, code = commit(t, a, "cloud/run", "areas: a", "areas.yaml", queue.RecordsFile)
+	if code == 0 || !strings.Contains(out, "human's word") {
+		t.Fatalf("a local program trunk: exit %d, want the human-only refusal:\n%s", code,
+			out)
+	}
+	pushed(t, a, "human/jeff", "config: program trunk", "config.yaml")
 }

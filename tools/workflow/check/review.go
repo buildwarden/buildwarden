@@ -10,9 +10,11 @@ import (
 )
 
 // approvedRe finds an approval in the design's Design review section: each
-// approval names the commit the approved design was read at (FLOW-19).
-// The phrase may wrap across lines.
-var approvedRe = regexp.MustCompile("(?i)approved\\s+at\\s+`?([0-9a-f]{7,40})")
+// approval names the commit the approved design was read at (FLOW-19): the
+// human's "approved at", or, while FLOW-20 stands, a passed umbrella test or
+// process test. The phrase may wrap across lines.
+var approvedRe = regexp.MustCompile("(?i)(approved|umbrella\\s+test\\s+passed|" +
+	"process\\s+test\\s+passed)\\s+at\\s+`?([0-9a-f]{7,40})")
 
 // entryHeadRe matches the head of a Design review entry: its ID, r<N>,
 // optionally after "Re-review".
@@ -24,8 +26,9 @@ var entryHeadRe = regexp.MustCompile(`^(?:Re-review\s+)?r\d+\b`)
 // `approved at <sha>` in the whole bullet whose sha no earlier entry recorded,
 // so a citation of an older approval, in the entry or in a bullet that is not
 // an entry, neither moves the baseline nor counts as an approval. A rule
-// change's own approval (`rule change <ID> approved at <sha>`) is not one.
-func approvals(d *Design) []string {
+// change's own approval (`rule change <ID> approved at <sha>`) is not one,
+// and a process test's line is one only for a process item (FLOW-20).
+func approvals(d *Design, process bool) []string {
 	var out []string
 	for _, b := range reviewBullets(d.Sections["Design review"]) {
 		b = ruleApprovedRe.ReplaceAllString(b, "")
@@ -33,8 +36,11 @@ func approvals(d *Design) []string {
 			continue
 		}
 		for _, m := range approvedRe.FindAllStringSubmatch(b, -1) {
-			if !citedEarlier(out, m[1]) {
-				out = append(out, m[1])
+			if !process && strings.HasPrefix(strings.ToLower(m[1]), "process") {
+				continue
+			}
+			if !citedEarlier(out, m[2]) {
+				out = append(out, m[2])
 				break
 			}
 		}
@@ -54,8 +60,8 @@ func citedEarlier(earlier []string, sha string) bool {
 }
 
 // lastApproval returns the newest review entry's approval.
-func lastApproval(d *Design) (string, bool) {
-	a := approvals(d)
+func lastApproval(d *Design, process bool) (string, bool) {
+	a := approvals(d, process)
 	if len(a) == 0 {
 		return "", false
 	}
@@ -104,8 +110,9 @@ func bulletHead(b string) string {
 // design_review, the queue matches it, and a skip meets the criteria.
 func (c *checker) reviewDecision(d *Design) {
 	dr := d.Front.DesignReview
-	c.add("design_review decided (FLOW-19)", dr == "required" || dr == "skip",
-		"design_review %q", dr)
+	ok := dr == "required" || dr == "skip" ||
+		(dr == "umbrella" && c.f.Program && c.state().Config.HasProgramTrunk())
+	c.add("design_review decided (FLOW-19, FLOW-20)", ok, "design_review %q", dr)
 	c.add("design_review recorded in queue", dr != "" && dr == c.f.DesignReview,
 		"design %q, queue %q", dr, c.f.DesignReview)
 	if dr == "skip" {
@@ -127,16 +134,26 @@ func (c *checker) reviewed() {
 		c.skipValid(d)
 		return
 	}
-	want := 1
-	if c.f.Round != "process" {
-		want = 0
-		for _, st := range c.f.Steps {
-			if strings.Contains(st.ID, "-design-review") {
-				want++
-			}
+	// Each review gate seeded so far needs its own approval: a feature's
+	// design reviews and umbrella tests, a process item's process tests and
+	// design reviews (FLOW-20), so a return to Design needs a fresh pass. A
+	// process item with none seeded took the human's review in its Design.
+	gates := []string{"-design-review", "-umbrella"}
+	if c.f.Round == "process" {
+		gates = []string{"-design-review", "-process-test"}
+	}
+	want := 0
+	for _, st := range c.f.Steps {
+		if slices.ContainsFunc(gates, func(g string) bool {
+			return strings.Contains(st.ID, g)
+		}) {
+			want++
 		}
 	}
-	got := len(approvals(d))
+	if c.f.Round == "process" && want == 0 {
+		want = 1
+	}
+	got := len(approvals(d, c.f.IsProcess()))
 	c.add("design reviewed (FLOW-19)", want > 0 && got >= want,
 		"%d approvals recorded in Design review, %d reviews seeded", got, want)
 }
@@ -158,7 +175,7 @@ func (c *checker) approvalDelta() {
 		c.add(name, false, "%v", err)
 		return
 	}
-	base, ok := lastApproval(d)
+	base, ok := lastApproval(d, c.f.IsProcess())
 	if !ok {
 		return
 	}
@@ -260,7 +277,7 @@ func (c *checker) skipValid(d *Design) {
 		}
 	}
 	base := c.trunk()
-	if last, ok := lastApproval(d); ok {
+	if last, ok := lastApproval(d, c.f.IsProcess()); ok {
 		base = last
 		prev, err := c.loadDesign(base)
 		if err != nil {

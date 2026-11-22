@@ -73,6 +73,12 @@ type RepositoryEntry struct {
 	// Profile is the path of the repository's profile file in it. Empty,
 	// the repository has not adopted the contract (LOOP-08).
 	Profile string `yaml:"profile,omitempty"`
+	// ProgramTrunk is the repository's program trunk while FLOW-20 stands,
+	// program/componentization: a program item works against it, and the
+	// loop merges into it (FLOW-20). It is not a trunk: Trunk stays what
+	// the profile is compared with (LOOP-01). Empty, the repository has
+	// none.
+	ProgramTrunk string `yaml:"program_trunk,omitempty"`
 }
 
 // Entry returns repo's repositories entry, or nil when it has none.
@@ -143,6 +149,13 @@ type Feature struct {
 	// records it (wf state-step); Seed adds it as x4-state when the item
 	// enters Close, and x4-close waits for it (FLOW-03).
 	StateStep string `yaml:"state_step,omitempty"`
+	// Program marks a program item: its design lists componentization.md in
+	// related, which wf checks at Design's done-when (FLOW-20).
+	Program bool `yaml:"program,omitempty"`
+	// Trunk is the branch the item works against in its home, recorded at
+	// Branch setup or its first wf declare (TrunkFor). Empty, none is
+	// recorded yet.
+	Trunk string `yaml:"trunk,omitempty"`
 	// Lead is the host name, host:<name>, whose machines take a feature's
 	// cloud steps of phases 0 to 5 (FLOW-04, FLOW-09). Empty, the item is
 	// not led. Any worker may set or clear it (SetLead); each change is a
@@ -218,6 +231,9 @@ type Work struct {
 	// Merged is the merge commit the loop confirmed on the repository's
 	// trunk.
 	Merged string `yaml:"merged,omitempty"`
+	// Trunk is the branch the item works against in this repository,
+	// recorded as Feature.Trunk is (TrunkFor).
+	Trunk string `yaml:"trunk,omitempty"`
 }
 
 // Adopts is what a reconciliation item adopts: a release of a consumable
@@ -290,6 +306,11 @@ type Question struct {
 	Options     []string `yaml:"options"`
 	Recommended string   `yaml:"recommended"`
 	Answer      string   `yaml:"answer,omitempty"`
+	// Resumes, on a blocking question, makes it a hold (FLOW-20): it names
+	// when the item resumes, the program's end (program-end) unless the
+	// human named another point. An item with such a question open is held
+	// (Feature.Held).
+	Resumes string `yaml:"resumes,omitempty"`
 }
 
 // Event is one history entry.
@@ -316,6 +337,12 @@ type State struct {
 	// Main is main.yaml, what a session last recorded about main; the file
 	// is optional. Nil, main's CI is not known, which is not read as green.
 	Main *Main
+	// ProgramMain is program.yaml, the same record for the program trunk
+	// (FLOW-20); optional as main.yaml is.
+	ProgramMain *Main
+	// Records are the program records, program/records.yaml (FLOW-20); the
+	// file is optional.
+	Records []Record
 	// doneDir records that queue/done/ exists: done items are written there
 	// and carry no number (queue-positions, Decision 8).
 	doneDir bool
@@ -327,6 +354,15 @@ type State struct {
 	// summaryDir is where a view's writes regenerate QUEUE.md: the queue
 	// state's own directory. Empty, it is Dir.
 	summaryDir string
+	// MergeGate reports whether FLOW-08's merge gate passes for the item's
+	// pull request in the repository (check.MergeReady); wf sets it. Nil,
+	// no loop merge is offered.
+	MergeGate func(f *Feature, repo string) bool
+	// MergeWaitsOnHuman reports whether a loop merge in the repository is
+	// held on the human: at merge gate point 7 on a posture change he has
+	// not acknowledged, or at point 5 on a protected finding
+	// (check.MergeWaitsOnHuman); wf sets it. Nil, no loop merge waits on him.
+	MergeWaitsOnHuman func(f *Feature, repo string) bool
 }
 
 // doneFolder is where done items live once wf migrate -done has created it.
@@ -379,9 +415,19 @@ var shaRe = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
 // (-gates) stays when a later reading for the same commit is green, and goes
 // with another head. The follow-up is recorded once while main is red.
 func (s *State) RecordMain(r MainReading) error {
+	return s.record(&s.Main, "main.yaml", r)
+}
+
+// RecordProgram is RecordMain for the program trunk, in program.yaml: the
+// red-trunk hold is per trunk (FLOW-10, FLOW-20).
+func (s *State) RecordProgram(r MainReading) error {
+	return s.record(&s.ProgramMain, programFile, r)
+}
+
+func (s *State) record(into **Main, file string, r MainReading) error {
 	m := Main{}
-	if s.Main != nil {
-		m = *s.Main
+	if *into != nil {
+		m = **into
 	}
 	if r.CI != "" || r.SHA != "" {
 		if !shaRe.MatchString(r.SHA) {
@@ -405,8 +451,8 @@ func (s *State) RecordMain(r MainReading) error {
 		}
 		m.UpToDate = r.UpToDate
 	}
-	s.Main = &m
-	return s.SaveMain()
+	*into = &m
+	return s.saveRecord(m, file)
 }
 
 // followup records the item filed to fix a red main, once.
@@ -450,16 +496,20 @@ func (m *Main) reading(r MainReading) {
 
 // SaveMain writes main.yaml.
 func (s *State) SaveMain() error {
+	return s.saveRecord(*s.Main, "main.yaml")
+}
+
+func (s *State) saveRecord(m Main, file string) error {
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
-	if err := enc.Encode(s.Main); err != nil {
+	if err := enc.Encode(m); err != nil {
 		return err
 	}
 	if err := s.mkdir(); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(s.Dir, "main.yaml"), buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(s.Dir, file), buf.Bytes(), 0o644); err != nil {
 		return err
 	}
 	if s.summaryDir != "" {
@@ -514,6 +564,10 @@ func Load(dir string) (*State, error) {
 	if err := s.loadMain(); err != nil {
 		return nil, err
 	}
+	var err error
+	if s.Records, err = LoadRecords(dir); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -550,13 +604,23 @@ func (s *State) loadItems() error {
 
 // loadMain reads the optional main.yaml.
 func (s *State) loadMain() error {
-	p := filepath.Join(s.Dir, "main.yaml")
-	if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
-		return nil
+	for file, m := range map[string]**Main{"main.yaml": &s.Main,
+		programFile: &s.ProgramMain} {
+		p := filepath.Join(s.Dir, file)
+		if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		*m = &Main{}
+		if err := readYAML(p, *m); err != nil {
+			return err
+		}
 	}
-	s.Main = &Main{}
-	return readYAML(p, s.Main)
+	return nil
 }
+
+// programFile is the record of the program trunk, beside main.yaml, with the
+// same fields (FLOW-10, FLOW-20).
+const programFile = "program.yaml"
 
 // sortFeatures puts s.Features in FLOW-05 order, a stable starting order for
 // code that walks them; readers that need the current order use Ordered.
@@ -816,6 +880,15 @@ func (s *State) Add(f *Feature, now time.Time, by string) error {
 		f.Round, f.Phase = "tracked", 1
 	}
 	Seed(f)
+	if f.IsProcess() && s.Config.HasProgramTrunk() {
+		// While FLOW-20 stands a process item's Design is the cloud's; its
+		// review follows in phase 2 (the process test or the human's).
+		for i := range f.Steps {
+			if f.Steps[i].ID == StepID(f.Round, 1, "design") {
+				f.Steps[i].Affinity = "cloud"
+			}
+		}
+	}
 	want := f.Priority
 	s.Features = append(s.Features, f)
 	at := s.place(f, want)
@@ -828,29 +901,107 @@ func (s *State) Add(f *Feature, now time.Time, by string) error {
 	return nil
 }
 
-// PutOnHold files a queued item on hold (FLOW-20's freeze): an open blocking
-// question q1 whose text is why, and a human step <f0|x1>-answer-q1 that the
-// item's first step needs, so no worker is offered the item's work until the
-// human answers q1 (FLOW-07). wf answer completes that step. It is for an
-// item Add has just queued: holding one already in progress stays a
-// hand-edit, and one that already has a question is refused, never merged.
-func (f *Feature) PutOnHold(why string, now time.Time, by string) error {
-	if strings.TrimSpace(why) == "" {
+// PutOnHold puts an item on hold (FLOW-20): an open blocking question, the
+// next free q<N>, whose text is why and whose resumes names when the item
+// resumes, and a human step <phase>-answer-q<N> that the item waits for, so
+// no worker is offered its work until the human answers it (FLOW-07). wf
+// answer completes that step. On a newly queued item with no question the
+// item's first step needs the answer; on an item in progress every pending
+// gate of its current phase does. A queued item that already has a question
+// is refused, never merged into, and so is a done item or one with no step
+// to gate.
+func (f *Feature) PutOnHold(why, resumes string, now time.Time, by string) error {
+	switch {
+	case strings.TrimSpace(why) == "":
 		return fmt.Errorf(
 			"a hold needs its reason, the blocking question's text (FLOW-07)")
+	case strings.TrimSpace(resumes) == "":
+		return fmt.Errorf("a hold names when it resumes: program-end, or the point " +
+			"the human named (FLOW-20)")
 	}
-	if f.Status != "queued" || len(f.Steps) == 0 || len(f.Questions) > 0 {
-		return fmt.Errorf("%s: only a newly queued item with no question is put on hold",
+	var gates []*Step
+	switch f.Status {
+	case "queued":
+		if len(f.Steps) > 0 && len(f.Questions) == 0 {
+			gates = []*Step{&f.Steps[0]}
+		}
+	case "in_progress":
+		for i := range f.Steps {
+			st := &f.Steps[i]
+			if st.Status == "pending" && st.Phase == f.Phase && IsGate(f, st) {
+				gates = append(gates, st)
+			}
+		}
+	}
+	if len(gates) == 0 {
+		return fmt.Errorf("%s: only a newly queued item with no question, or an item "+
+			"in progress with a pending gate, is put on hold", f.Feature)
+	}
+	id := f.nextQuestionID()
+	const resume = "resume it"
+	answer := Step{ID: StepID(f.Round, f.Phase, "answer-"+id), Phase: f.Phase,
+		Affinity: "human", Status: "pending"}
+	if f.hasStep(answer.ID) {
+		return fmt.Errorf("%s already has a step %s", f.Feature, answer.ID)
+	}
+	for _, g := range gates {
+		g.Needs = addNeeds(g.Needs, answer.ID)
+	}
+	f.Questions = append(f.Questions, Question{ID: id, Kind: "blocking", Status: "open",
+		Question: why, Options: []string{resume}, Recommended: resume, Resumes: resumes})
+	f.Steps = append([]Step{answer}, f.Steps...)
+	f.Log(now, by, "on hold (%s, resumes: %s): %s", id, resumes, why)
+	return nil
+}
+
+// Escalate makes a newly queued item's first step a human escalation that
+// carries why, which the item's own first step needs: the program sync's
+// conflict the loop could not resolve is filed this way, so the human says
+// how it resolves before the item's Design follows his word (FLOW-20).
+func (f *Feature) Escalate(why string, now time.Time, by string) error {
+	if strings.TrimSpace(why) == "" {
+		return errors.New("an escalation says what the human decides")
+	}
+	if f.Status != "queued" || len(f.Steps) == 0 {
+		return fmt.Errorf("%s: only a newly queued item is filed with an escalation",
 			f.Feature)
 	}
-	const resume = "resume it"
-	f.Questions = append(f.Questions, Question{ID: "q1", Kind: "blocking", Status: "open",
-		Question: why, Options: []string{resume}, Recommended: resume})
-	answer := Step{ID: StepID(f.Round, f.Phase, "answer-q1"), Phase: f.Phase,
-		Affinity: "human", Status: "pending"}
-	f.Steps[0].Needs = addNeeds(f.Steps[0].Needs, answer.ID)
-	f.Steps = append([]Step{answer}, f.Steps...)
-	f.Log(now, by, "on hold (q1): %s", why)
+	esc := Step{ID: StepID(f.Round, f.Phase, "escalate"), Phase: f.Phase,
+		Affinity: "human", Status: "pending", Note: why}
+	f.Steps[0].Needs = addNeeds(f.Steps[0].Needs, esc.ID)
+	f.Steps = append([]Step{esc}, f.Steps...)
+	f.Log(now, by, "filed with an escalation (FLOW-20): %s", why)
+	return nil
+}
+
+// nextQuestionID is the first q<N> the item's questions do not use.
+func (f *Feature) nextQuestionID() string {
+	used := map[string]bool{}
+	for _, q := range f.Questions {
+		used[q.ID] = true
+	}
+	n := 1
+	for used[fmt.Sprintf("q%d", n)] {
+		n++
+	}
+	return fmt.Sprintf("q%d", n)
+}
+
+// Held reports whether the item is on hold: an open blocking question names
+// when it resumes (FLOW-20). A held item holds no limit and does not wait on
+// the human (FLOW-05).
+func (f *Feature) Held() bool {
+	return f.Hold() != nil
+}
+
+// Hold returns the item's open hold question, or nil.
+func (f *Feature) Hold() *Question {
+	for i := range f.Questions {
+		q := &f.Questions[i]
+		if q.Kind == "blocking" && q.Status == "open" && q.Resumes != "" {
+			return q
+		}
+	}
 	return nil
 }
 
@@ -1066,6 +1217,11 @@ func (s *State) validateRepositories() []error {
 			errs = append(errs, fmt.Errorf("config: repositories %s has no trunk",
 				who))
 		}
+		if e.ProgramTrunk != "" && e.ProgramTrunk == e.Trunk {
+			errs = append(errs, fmt.Errorf("config: repositories %s: program_trunk "+
+				"is its trunk %s; a program trunk is not a trunk (FLOW-20)", who,
+				e.Trunk))
+		}
 	}
 	if r := s.Config.Repository; r != "" && !seen[r] {
 		errs = append(errs, fmt.Errorf("config: repositories has no entry for %s, the "+
@@ -1135,6 +1291,14 @@ func (s *State) Problems(f *Feature) []error {
 		bad("pr.head %q is not a commit id", f.PR.Head)
 	}
 	validateWork(f, bad)
+	s.validateReview(f, bad)
+	if f.Program && f.IsProcess() {
+		bad("program is for a feature: a process item keeps the trunk (FLOW-20)")
+	}
+	// A trunk flip is refused where a declaration changes, in wf declare,
+	// and not here: the recorded trunk stays whatever the area map later
+	// says, and a map change or a done item must not make the whole state
+	// invalid (FLOW-06, FLOW-20).
 	return errs
 }
 
@@ -1310,8 +1474,9 @@ func (f *Feature) validate(bad func(string, ...any), tracked, homedHere bool) {
 		bad("status %q is not queued, in_progress or done", f.Status)
 	}
 	f.validateKind(bad, tracked, homedHere)
-	if !oneOf(f.DesignReview, "", "required", "skip") {
-		bad("design_review %q is not required or skip", f.DesignReview)
+	if !oneOf(f.DesignReview, "", "required", "skip", "umbrella", "process-test") {
+		bad("design_review %q is not required, skip, umbrella or process-test",
+			f.DesignReview)
 	}
 	if f.Phase < 0 || f.Phase > 8 {
 		bad("phase %d is outside 0..8", f.Phase)
@@ -1420,9 +1585,39 @@ func (f *Feature) OpenBlocking() []Question {
 	return out
 }
 
-// Runaway reports whether an open item has spent its runaway budget: the
-// runaway factor times its step estimate (FLOW-13). A done item never is.
-func (s *State) Runaway(f *Feature) bool {
+// validateReview checks the FLOW-20 values of design_review: umbrella only
+// on a program feature, process-test only on a process item, and either
+// only while a repository entry has a program trunk (FLOW-19, FLOW-20).
+func (s *State) validateReview(f *Feature, bad func(string, ...any)) {
+	switch {
+	case !oneOf(f.DesignReview, "umbrella", "process-test") || f.Status == "done":
+	case !s.Config.HasProgramTrunk():
+		bad("design_review %s is for FLOW-20, and no repository has a program trunk",
+			f.DesignReview)
+	case f.DesignReview == "umbrella" && (!f.Program || f.IsProcess()):
+		bad("design_review umbrella is for a program feature (FLOW-20)")
+	case f.DesignReview == "process-test" && !f.IsProcess():
+		bad("design_review process-test is for a process item (FLOW-20)")
+	}
+}
+
+// reestimated is the history line wf reestimate writes.
+const reestimated = "re-estimated (FLOW-13)"
+
+// Reestimates counts the item's re-estimates by wf reestimate.
+func (f *Feature) Reestimates() int {
+	n := 0
+	for _, e := range f.History {
+		if strings.HasPrefix(e.Event, reestimated) {
+			n++
+		}
+	}
+	return n
+}
+
+// spentBudget reports whether an open item has spent its runaway budget: the
+// runaway factor times its step estimate (FLOW-13).
+func (s *State) spentBudget(f *Feature) bool {
 	if f.Status == "done" {
 		return false
 	}
@@ -1432,6 +1627,41 @@ func (s *State) Runaway(f *Feature) bool {
 	}
 	est := f.Budget.Estimate.Steps
 	return est > 0 && float64(f.Budget.Spent.Steps) >= factor*float64(est)
+}
+
+// Runaway reports whether an open item is a runaway that escalates to the
+// human (FLOW-13): it has spent its runaway budget, and it is not a program
+// item that has not been re-estimated yet, whose first runaway the loop
+// answers with wf reestimate (FLOW-20). A done item never is.
+func (s *State) Runaway(f *Feature) bool {
+	return s.spentBudget(f) && !s.NeedsReestimate(f)
+}
+
+// NeedsReestimate reports whether a program item has spent its runaway
+// budget for the first time: the tick raises its estimate with wf
+// reestimate before it claims anything else, and it waits on no one
+// (FLOW-13, FLOW-20).
+func (s *State) NeedsReestimate(f *Feature) bool {
+	return f.Program && s.spentBudget(f) && f.Reestimates() == 0
+}
+
+// Reestimate raises the item's step estimate to its spend so far and logs
+// it (wf reestimate). A cloud worker may only answer a program item's first
+// runaway; any other re-estimate is the human's (FLOW-13, FLOW-20).
+func (s *State) Reestimate(f *Feature, worker string, now time.Time) error {
+	human := Kind(worker) == "human"
+	switch {
+	case !human && !s.NeedsReestimate(f):
+		return fmt.Errorf("%s: only a program item's first runaway is re-estimated by "+
+			"the loop; any other is the human's (FLOW-13, FLOW-20)", f.Feature)
+	case f.Status == "done":
+		return fmt.Errorf("%s is done", f.Feature)
+	}
+	was := f.Budget.Estimate.Steps
+	f.Budget.Estimate.Steps = f.Budget.Spent.Steps
+	f.Log(now, worker, "%s: estimate raised from %d to %d steps, its spend so far",
+		reestimated, was, f.Budget.Estimate.Steps)
+	return nil
 }
 
 // Step returns the feature's step with the given id.

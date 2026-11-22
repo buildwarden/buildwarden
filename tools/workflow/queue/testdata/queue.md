@@ -28,6 +28,10 @@ None.
 - **rules**: design review (`x1-design`, FLOW-19)
 - **review**: `f6-provision-windows-hyperv` (from phase 6)
 
+### Held
+
+None.
+
 ## Active
 
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |

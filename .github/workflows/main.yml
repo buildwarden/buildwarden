@@ -2,9 +2,9 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'program/**']
   pull_request:
-    branches: [main]
+    branches: [main, 'program/**']
     # labeled/unlabeled: adding or removing `no-design` reruns tier 1 (FLOW-01).
     types: [opened, synchronize, reopened, labeled, unlabeled]
 

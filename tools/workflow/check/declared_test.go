@@ -87,12 +87,26 @@ func TestDeclaredAtDesign(t *testing.T) {
 		},
 		"a seam":         func(f *queue.Feature) { f.Seams = []string{"relay-claim"} },
 		"a rule changed": func(f *queue.Feature) { f.RulesChanged = []string{"TEST-09"} },
+		// The design's related lists no componentization.md (FLOW-20).
+		"a program mark": func(f *queue.Feature) { f.Program = true },
 	} {
 		g := queueAreas(demo(1), "driver/container", "book")
 		change(g)
 		if got := failures(Phase(env, g)); !strings.Contains(got, matches) {
 			t.Errorf("%s: failures %q, want %q", name, got, matches)
 		}
+	}
+
+	// A design that lists componentization.md in related makes a program
+	// item, and the queue must say so (FLOW-20).
+	commit(t, work, front(declared, "seams: []", "seams: []\nrelated: [componentization.md]"))
+	g := queueAreas(demo(1), "driver/container", "book")
+	if got := failures(Phase(env, g)); !strings.Contains(got, "program (FLOW-20") {
+		t.Errorf("program mark missing: failures %q", got)
+	}
+	g.Program = true
+	if rs := Phase(env, g); !OK(rs) {
+		t.Errorf("a program item marked: %s", failures(rs))
 	}
 
 	// An undeclared design skips the implied areas, and passes.
@@ -104,7 +118,7 @@ func TestDeclaredAtDesign(t *testing.T) {
 	}
 	// An area the map lacks is reported, and the step does not fail on it.
 	commit(t, work, withAreas(design, "[driver/container, book, telemetry]"))
-	g := queueAreas(demo(1), "driver/container", "book", "telemetry")
+	g = queueAreas(demo(1), "driver/container", "book", "telemetry")
 	rs = Phase(env, g)
 	if !OK(rs) || !strings.Contains(result(t, rs, inMap).Info,
 		"telemetry is not in the area map") {

@@ -20,9 +20,11 @@ Read the latest file in `.dev/workflow/digest/`.
 
 ## Never
 
-- Merge, approve, or enable auto-merge on any PR (FLOW-08, LINT-03).
-- Change a trunk's protection: on GitHub, its branch protection rule and
-  the rulesets that apply to it (FLOW-08).
+- Merge, approve, or enable auto-merge on any PR (FLOW-08, LINT-03). A PR
+  into a program trunk is the loop's to merge (`workflow-tick`, FLOW-20);
+  this session merges nothing.
+- Change a trunk's or a program trunk's protection: on GitHub, its branch
+  protection rule and the rulesets that apply to it (FLOW-08).
 - Change `.dev/workflow/areas.yaml`, mark an item urgent, narrow an item's
   areas or relate two items, except on Jeff's word as below (FLOW-05).
 
@@ -31,7 +33,14 @@ Read the latest file in `.dev/workflow/digest/`.
 0. **Process items** (`kind: process`, FLOW-03) before anything else. Their
    design is Jeff's: hold its design review (item 3 below) on the branch the
    queue names, and record the design step with `dist/wf claim` and
-   `dist/wf done` as `human/jeff`, both at the outcome (3.5). After that the loop implements the item on
+   `dist/wf done` as `human/jeff`, both at the outcome (3.5). While FLOW-20
+   stands (a repository entry has `program_trunk`), a process item's
+   `x1-design` is `cloud` (Jeff takes it, when he wants to, through
+   `/workflow-tick attended <feature>`), and its review is
+   `x2-design-review`, which this session claims and completes as above; a
+   process item whose `design_review` is `process-test` is the loop's
+   process test, not this session's, and is skipped here. Show its Program
+   payoff section, which the review judges (FLOW-20). After that the loop implements the item on
    its branch; while one is in progress it holds the workers its `holds` name
    (FLOW-05). A process design fills **Defaults and overrides** like a
    feature's (GLOBAL-09 to GLOBAL-11); `wf check` does not check it. Show each
@@ -45,12 +54,22 @@ Read the latest file in `.dev/workflow/digest/`.
    functionality. A position moves an item within its class only; an item
    moves across classes only by Jeff's word on its `follows` or `kind`,
    recorded in its history.
-2. **Blocking questions**, in FLOW-05's order (`dist/wf status`). Ask each with
+2. **Blocking questions**, in FLOW-05's order (`dist/wf status`). Show the
+   items on hold (`QUEUE.md`'s **Held**) apart, once, and ask nothing about
+   them: holding is decided, and Jeff releases one by answering its
+   question whenever he says so (FLOW-20). Ask each with
    AskUserQuestion: its options, the recommended one first. Record the answer
    with `dist/wf answer -worker $W -feature F -question Q -answer "..."`,
    which also completes the matching `-answer-<Q>` step.
 3. **Design reviews** (`*-design-review` steps, FLOW-19), in FLOW-05's
-   order, capped by load. An *ask* is one AskUserQuestion entry Jeff
+   order, capped by load. While FLOW-20 stands, a program design reaches
+   this item only when the umbrella test failed a component-design point,
+   and a process design only when it touches a rule FLOW-20 reserves to
+   Jeff; for a process item, check its Program payoff, and for a program
+   design its interface breaks and its areas. List the umbrella tests and
+   process tests passed since the last sitting (`dist/wf record -state
+   .dev/workflow -list -since <last sitting>`) for him to read, and call
+   any back on his word. An *ask* is one AskUserQuestion entry Jeff
    answers; the cap counts asks, not calls. Start the next review only while
    it would keep the sitting at or under 30 asks. A large design (more than
    4 assumed questions, or more than 4 `rule_changes` entries) is reviewed
@@ -59,7 +78,8 @@ Read the latest file in `.dev/workflow/digest/`.
    one. An intake Jeff asks for mid-review is noted and done after that
    review's outcome. The review comes after Design and before Plan. Note the
    walkthrough's start time (UTC). Claim the review step (`x1-design` for a
-   process item) only at the outcome, together with its done: a claim of a
+   process item, or `x2-design-review` while FLOW-20 stands) only at the
+   outcome, together with its done: a claim of a
    queued process item starts it, which would hold its `holds` and its
    areas through a review that may end in changes. Check out the feature branch and read the design, and, for a
    re-review, the design at the newest review entry's `approved at <sha>` and the finding that
@@ -93,7 +113,12 @@ Read the latest file in `.dev/workflow/digest/`.
       `tier2_gaps`, and, on a re-review, the finding, the tasks it touches,
       and how Design reconciled the later-phase steps `wf back` kept.
    3. **Risks and what is deferred:** native validation, `tier2_gaps`, rules
-      changed, a Bootstrap comparison or Security note to accept, and the
+      changed, a Bootstrap comparison or Security note to accept (on a
+      program item, when Jeff accepts that its only trip is GLOBAL-06's
+      relay clause with no boundary posture change, record `dist/wf record
+      -state .dev/workflow -kind security-note -ref design -worker
+      human/jeff -feature F -head <sha> -note "..."`, which merge gate
+      point 7 reads, a14), and the
       **Defaults and overrides** section, each named fallback in particular
       (GLOBAL-09 to GLOBAL-11).
       Ask the `rule_changes` entries (FLOW-14), each its own
@@ -140,7 +165,15 @@ Read the latest file in `.dev/workflow/digest/`.
    and a tracked item's steps (FLOW-03, FLOW-04):
    show the decision or the command needed; record the outcome in the queue
    history; raise an estimate only on Jeff's word.
-5. **Open PRs**: record `main`'s CI and its ruleset as `workflow-tick`
+5. **Open PRs** to a trunk; a PR to a program trunk is not offered (the
+   loop merges it), except one held at `f7-merge` on a security note with a
+   posture change, which Jeff acknowledges here with `dist/wf record -state
+   .dev/workflow -kind security-ack -worker human/jeff -feature F -head <head> -note "..."`, or
+   on a protected finding the loop asks him to dismiss. A process item at
+   its merge shows its process-test line, if it took the test, and its
+   proposed state step, which Jeff records here (`dist/wf state-step`).
+   List the records since the last sitting (`dist/wf record -state .dev/workflow
+   -list -since <last sitting>`). Record `main`'s CI and its ruleset as `workflow-tick`
    step 2 does (`dist/wf main`), then run
    `dist/wf stale -state .dev/workflow -repo . -checkouts .dev/checkouts -worker $W`, which skips a PR
    Jeff has already merged. List the PRs that are ready to merge apart from
@@ -158,7 +191,13 @@ Read the latest file in `.dev/workflow/digest/`.
    refresh that one with `/workflow-tick attended <item>`, wait for CI on the
    new head, and list it as ready. A finding he dismisses is recorded as a
    PR comment with his reason.
-6. **Retrospective**, only when Jeff asks for one, by name or by asking how
+6. **The program's landing**, once `program-land` resumes (FLOW-20): walk
+   Jeff through each landing PR, one per repository from
+   `program/componentization` to its trunk, specifications first, with the
+   body `dist/wf program-body -state .dev/workflow -repository <owner>/<name>`
+   renders, its
+   deferred findings and security notes first. He squash-merges each.
+7. **Retrospective**, only when Jeff asks for one, by name or by asking how
    done items went (FLOW-13): run `dist/wf status -all` and read the done
    items' queue history, digests and archived designs. Otherwise leave done
    items out.

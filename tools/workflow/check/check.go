@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -33,6 +34,9 @@ type Env struct {
 	// State is the queue state, for the area map and the other items. Nil,
 	// there is no map: every item is undeclared.
 	State *queue.State
+	// GitHub is what the merge gate reads from GitHub; nil, the gh command
+	// (MergeReady, SyncReady).
+	GitHub GitHub
 }
 
 // Result is one check's outcome.
@@ -145,7 +149,7 @@ func MergedFirst(env Env, f *queue.Feature, n int) []Result {
 		return c.out
 	}
 	if n < 1 || n > len(f.Work) {
-		c.add("merged by a human (FLOW-08)", false, "work has no entry %d", n)
+		c.add("merged (FLOW-08)", false, "work has no entry %d", n)
 		return c.out
 	}
 	c.repos()
@@ -223,14 +227,25 @@ func (c *checker) consolidationNamesMain() {
 // reviewed, x2 archived on the pushed branch with its PR green (the FLOW-14
 // clearance reports it exempt), x3 merged by a human, x4 closed.
 func (c *checker) process() {
+	flow20 := c.state().Config.HasProgramTrunk() || c.f.DesignReview == "process-test"
 	switch c.f.Phase {
 	case 1:
 		_, err := c.git("cat-file", "-e", "refs/heads/"+c.f.Branch+":"+c.f.Design)
 		c.add("design present (FLOW-01)", err == nil, "%s on %s", c.f.Design, c.f.Branch)
+		if flow20 {
+			c.processReviewDecided()
+			break
+		}
 		c.reviewed()
 	case 2:
 		if c.mergedEarly() {
 			break
+		}
+		if c.f.DesignReview == "process-test" || c.f.DesignReview == "required" {
+			// Implement starts from what the process test or the human
+			// approved: a later change to rule_changes, repos or areas
+			// needs a new pass (FLOW-19, FLOW-20).
+			c.approvalDelta()
 		}
 		c.pushed()
 		c.each(c.ruleClearance)
@@ -241,6 +256,23 @@ func (c *checker) process() {
 	case 4:
 		c.closed()
 	}
+}
+
+// processReviewDecided is a process item's Design done-when while FLOW-20
+// stands: the design records whether the process test or the human's design
+// review settles it, and the queue records the same (FLOW-03, FLOW-20).
+func (c *checker) processReviewDecided() {
+	d, err := c.loadDesign(c.f.Branch)
+	if err != nil {
+		c.add("design_review decided (FLOW-19, FLOW-20)", false, "%v", err)
+		return
+	}
+	dr := d.Front.DesignReview
+	c.add("design_review decided (FLOW-19, FLOW-20)",
+		dr == "process-test" || dr == "required",
+		"design_review %q: process-test, or required for the human's review", dr)
+	c.add("design_review recorded in queue", dr != "" && dr == c.f.DesignReview,
+		"design %q, queue %q", dr, c.f.DesignReview)
 }
 
 // OK reports whether every result passed.
@@ -499,7 +531,7 @@ func (c *checker) prGreen() {
 // commit on the trunk alone is the proof. Each repository the item has a
 // branch in is checked against its own trunk (FLOW-08).
 func (c *checker) merged() {
-	const name = "merged by a human (FLOW-08)"
+	const name = "merged (FLOW-08)"
 	var prCommits []string
 	pr := c.pr()
 	if c.at != c.home && pr == nil {
@@ -872,9 +904,20 @@ type Front struct {
 	// rule (FLOW-14).
 	RuleChanges []RuleChange `yaml:"rule_changes"`
 	Concepts    []string     `yaml:"concepts"`
-	present     map[string]bool
+	// Related names the designs this one relates to; one that lists
+	// componentization.md makes the item a program item (FLOW-20).
+	Related []string `yaml:"related"`
+	present map[string]bool
 	// raw is the front-matter as parsed, for the values a profile checks.
 	raw map[string]any
+}
+
+// IsProgram reports whether the design makes its item a program item: its
+// related lists componentization.md (FLOW-20).
+func (fm *Front) IsProgram() bool {
+	return slices.ContainsFunc(fm.Related, func(r string) bool {
+		return path.Base(r) == "componentization.md"
+	})
 }
 
 // loopKeys are the front-matter keys every design carries, whatever its

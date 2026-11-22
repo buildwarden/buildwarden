@@ -190,7 +190,11 @@ make pin-specs REF=<commit>                        # Pin all six at one commit, 
   files into place and rewrites the refs on the seams page, so a failure changes
   nothing. Never move a pin with `go get`: it keeps the old pin's harness
   version. `main` pins releases only; the workflow's `pin` job fails a pull
-  request whose pins name a commit or carry a `replace` line.
+  request whose pins name a commit or carry a `replace` line. A pull request
+  to a program trunk (`program/componentization`, FLOW-20) may also pin a
+  pre-release, `vX.Y.Z-dev.N` or `-rc.N`, named in `SPECS`; `SPECS=newest`
+  pins each specification at its highest version, pre-releases included, and
+  is refused on `main`.
 
 ## Pull requests
 
@@ -211,7 +215,8 @@ make pin-specs REF=<commit>                        # Pin all six at one commit, 
 ## Cutting a release
 
 1. Make sure `make test` passes on `main`. The release workflow runs tier 1
-   against the previous `v*` tag and checks every design's front-matter
+   against the previous `v*` tag without a suffix and checks every design's
+   front-matter
    (`tier1 designs -all`) before it publishes; run
    `make tier1 TIER1_BASE=<previous tag>` first to see what it will report.
    The full release gate (tier-1 checks, the test matrix, the security suite
@@ -223,6 +228,16 @@ make pin-specs REF=<commit>                        # Pin all six at one commit, 
    A released macOS arm64 `warden` therefore has no vz driver, and says so.
 2. Tag the commit and push the tag: `git tag v0.x.y && git push origin v0.x.y`.
 3. GoReleaser, run by GitHub Actions, builds and publishes the binaries.
+
+A release without a suffix is cut from `main` by a maintainer, as above.
+While the componentization program runs (FLOW-20), the loop also tags
+pre-releases on a program trunk, `vX.Y.Z-dev.N` after a merge that changes
+what the repository releases and `-rc.N` once a component's last phase has
+merged, where X.Y.Z is the next minor after the latest release without a
+suffix (`v0.1.0` when there is none). Each publishes as a GitHub
+pre-release that never becomes Latest and never moves the relay image's
+`latest`, and is never moved or deleted (`wf tag-next` names the next one,
+and `wf tag-next -rc -feature <last phase>` the next `-rc.N`).
 
 ## Security
 

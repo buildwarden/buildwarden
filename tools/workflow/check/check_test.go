@@ -96,6 +96,16 @@ Unit tests.
 
 func git(t *testing.T, dir string, args ...string) {
 	t.Helper()
+	cmd := gitCmd(dir, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+// gitCmd is the helper's git command, for a test that expects it to fail: it
+// carries the identity, so the command does not depend on the machine's git
+// configuration (CI has no user.name).
+func gitCmd(dir string, args ...string) *exec.Cmd {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
@@ -103,9 +113,7 @@ func git(t *testing.T, dir string, args ...string) {
 		// Tests edit checked-out files by their text, so the repositories must
 		// hold the bytes written whatever the machine's core.autocrlf says.
 		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=core.autocrlf", "GIT_CONFIG_VALUE_0=false")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
+	return cmd
 }
 
 // TestGitHelperIgnoresAutoCRLF: with core.autocrlf=true in the global config
@@ -550,7 +558,7 @@ func TestApprovalMayWrap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := approvals(d); len(got) != 1 || got[0] != "abc1234" {
+	if got := approvals(d, false); len(got) != 1 || got[0] != "abc1234" {
 		t.Fatalf("approvals = %v", got)
 	}
 }
@@ -866,7 +874,7 @@ func TestCloseAfterASquash(t *testing.T) {
 	p.Kind, p.Round, p.PR = "process", "process", &queue.PR{Number: 9}
 	squash(t, work, "#9")
 	if got := failures(Phase(env, p)); !strings.Contains(got, "branch deleted") ||
-		strings.Contains(got, "merged by a human") {
+		strings.Contains(got, "merged (FLOW-08)") {
 		t.Fatalf("x4 before the branches go: %q, want only the deletions failing", got)
 	}
 	git(t, work, "push", "-q", "origin", ":feat/demo")

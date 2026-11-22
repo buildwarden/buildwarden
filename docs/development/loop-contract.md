@@ -103,7 +103,8 @@ leaves out is the term `none`. The loop's configuration also records
 each repository's trunk, and that record is the trunk the loop's tools
 use, never the file's: a profile file whose trunk differs from it is a
 finding, and every check of the loop's tools that reads the file fails
-on it. The configuration records a repository's profile file only once
+on it. While FLOW-20 stands, it also records a repository's program
+trunk, which is not a trunk and is not in the profile file. The configuration records a repository's profile file only once
 the change that adopts the repository (LOOP-08) has merged.
 
 The agent part: the design review of a change to a profile judges that
@@ -321,7 +322,8 @@ release.
 2. A consumer adopts a release through a **reconciliation item**: an
    item in the queue that names the consumer's repository,
    `adopt <consumable> at <version>`. It is a feature item (LOOP-04),
-   filed through intake, and FLOW-05 gives its place in the order.
+   filed through intake, or by the loop for a pre-release on a program
+   trunk (FLOW-20), and FLOW-05 gives its place in the order.
 3. The item moves the consumer's pin and, where a seam changes, its
    specification first (LOOP-02), then its code, and then retires any
    in-tree equivalent.
@@ -329,8 +331,9 @@ release.
    changed to make that so: a change the consumer needs is a new item
    that names the producer's repository, and a new release.
 5. A component's trunk names only released versions of what it
-   consumes. A branch may name an unreleased commit while its work is in
-   progress.
+   consumes, never a pre-release. A program trunk (FLOW-20) may name a
+   pre-release. A branch may name an unreleased commit while its work is
+   in progress.
 6. A specification kept in a repository of its own is consumed the same
    way. A seam change is released by the repository that holds the
    specification and adopted by each implementation through its own
@@ -410,7 +413,12 @@ The loop rules (LOOP-\*, FLOW-\*, LINT-\*), the loop's machinery (its
 tools, skills and agent definitions) and the checks that enforce a loop
 rule, wherever they are kept, change only through a process item
 (FLOW-03, FLOW-14). Its design is settled by the owner, the human of
-FLOW-08, in a design review (FLOW-19), and its merge is the owner's. No
+FLOW-08, in a design review (FLOW-19), and its merge is the owner's. While
+FLOW-20 stands, a process item whose change touches none of the rules
+FLOW-20 reserves to the owner is settled instead by FLOW-20's process
+test, a review session that did not write the design, and is recorded;
+its merge is still the owner's. Where this contract names a process
+item's design review, that test stands in for it. No
 component signs off a change, and no feature's design declares one. A
 component that needs a loop rule changed asks for a process item.
 
@@ -427,5 +435,7 @@ A component's profile and invariants, and the checks that enforce them,
 are its own. They change by either of FLOW-14's routes, in that
 component.
 
-The agent part: intake and the design review judge that a change to a
-loop rule or to its enforcement is a process item.
+The agent part: intake and the design review, or the process test's
+session, judge that a change to a loop rule or to its enforcement is a
+process item, and the process test's session that it touches none of
+the rules FLOW-20 reserves to the owner.

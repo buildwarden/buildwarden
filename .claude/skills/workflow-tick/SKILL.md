@@ -17,20 +17,29 @@ feature's cloud steps.
 
 ## Never
 
-- Merge, approve, or enable auto-merge on any PR (FLOW-08, LINT-03).
-- Push `main`, force-push, rewrite pushed history, or delete a remote branch
-  (FLOW-16, FLOW-17). Opening a PR needs no confirmation (FLOW-08):
-  `f6-open-pr` and a process item's `x2-implement` open theirs.
+- Approve or enable auto-merge on any PR. Merge one only at `f7-merge` or
+  the program sync, into a program trunk, with `--merge
+  --match-head-commit`, after `wf check` passes (FLOW-08, LINT-03); never
+  into a trunk, never a squash or rebase, never with `--admin`, and never
+  dismiss a finding. An `f6-merged-<n>` whose work entry is on a program
+  trunk is a loop merge too, under the same gate.
+- Push `main` or a program trunk, force-push, rewrite pushed history, or
+  delete a remote branch or a tag (FLOW-16, FLOW-17). The tags this skill
+  pushes are the pre-releases `wf tag-next` names, `-dev.N` and `-rc.N`
+  (FLOW-20). Opening a PR
+  needs no confirmation (FLOW-08): `f6-open-pr` and a process item's
+  `x2-implement` open theirs.
 - Edit `docs/development/`, `.claude/`, or `tools/workflow/` anywhere but on
-  a process item's branch after its design review (FLOW-14). The one
+  a process item's branch after its design review or, while FLOW-20
+  stands, its process test (FLOW-14, FLOW-20). The one
   exception: a rule change a feature's design review approved by name, made
   on that feature's branch in its approved `paths` (never `.claude/` or
   `tools/workflow/` outside `check/`, and never a loop rule or its
   enforcement, LOOP-09). Otherwise, on a feature branch, propose the change
   in the design for its review.
 - Put secrets in prompts (FLOW-18).
-- Change a trunk's protection: on GitHub, its branch protection rule and
-  the rulesets that apply to it (FLOW-08).
+- Change a trunk's or a program trunk's protection: on GitHub, its branch
+  protection rule and the rulesets that apply to it (FLOW-08).
 - Mark an item urgent (FLOW-05).
 
 ## 1. Set up
@@ -69,8 +78,20 @@ other items. Each repository's trunk is the one its `config.yaml`
 `repositories` entry gives; `wf` reads it from there only (LOOP-01).
 
 Keep any `limit:` lines `wf validate` prints for the digest (step 2.5
-and step 4). The tick never edits `.dev/workflow/areas.yaml`: the
-area map changes only on Jeff's word (FLOW-05).
+and step 4). The tick edits `.dev/workflow/areas.yaml` only while
+`config.yaml` records a program trunk (FLOW-20), and then only for a change
+that a program item's design, reviewed by Jeff or passed by the umbrella
+test, names (a new repository's map, an area a move creates or empties, a
+split, a mode), or that brings `reaches` in line with the dependency edges
+(`tools/tier1/area-edges.sh | dist/wf areas -state .dev/workflow -check
+-edges -`). Check the candidate map first with `dist/wf validate -state
+.dev/workflow -areas <candidate> -repo <checkout>`, then
+record each change, `dist/wf record -state .dev/workflow -worker $W -kind
+area-map -ref <docs/design/<name>.md | area-edges> [-repository R] -note
+"<the change and why>"`, and commit `areas.yaml` with
+`program/records.yaml`: `wf commit` refuses a map change the push carries
+without a new `area-map` record for it. With no program trunk configured,
+the area map changes only on Jeff's word (FLOW-05).
 
 `entire doctor --force` installs Entire's git hooks, which a fresh clone lacks;
 `entire status` must name `buildwarden/buildwarden-sessions` as the
@@ -84,9 +105,21 @@ the priority order, push it, and stop.
 
 ## 2. Take steps
 
+While FLOW-20 stands (a `config.yaml` repositories entry has
+`program_trunk`), a program item works against its repository's program
+trunk: `dist/wf trunk -state .dev/workflow -feature F [-repository R]`
+prints the branch an item forks from, merges, refreshes against and opens
+its PR to. Before anything else in the run, each program item `wf status`
+marks `first runaway: wf reestimate` gets `dist/wf reestimate -state
+.dev/workflow -worker $W -feature F`, which raises its estimate to its spend
+so far and records it (FLOW-13, FLOW-20); a second runaway, a fifth return
+to Design, CI repair exhausted and an unresolved sync conflict are
+escalations, `human` steps, named as escalations in the digest.
+
 First, confirm merges, which spend no budget and need no claim: for each
 pending `f6-merged-<n>` of a feature in Publish, each feature in phase 7
-(`f7-merge`) and each process item in phase 3 (`x3-merge`), run `dist/wf done
+(`f7-merge`) and each process item in phase 3 (`x3-merge`), that the human
+merges (`wf next` does not offer it to the cloud), run `dist/wf done
 -state .dev/workflow -repo . -checkouts .dev/checkouts -worker $W -feature F
 -step S`. It passes once the human has merged the pull request it confirms,
 in each repository the item has one in, each against its own trunk
@@ -99,7 +132,11 @@ only pending steps are confirmed, and `wf done` refuses a step already
 done.
 
 Then record each trunk (FLOW-08, FLOW-09): this repository's, and that of
-each repository an in-progress item names in `repos`. For each, read the
+each repository an in-progress item names in `repos`; and each program
+trunk the same way, with `dist/wf main -state .dev/workflow [-repository
+<owner>/<name>] -trunk program/componentization -sha <sha> -ci ...`, which
+writes `program.yaml` beside `main.yaml` (the red-trunk hold is per trunk,
+FLOW-10). For each, read the
 check runs of its trunk's head (`gh api
 repos/<owner>/<name>/commits/<sha>/check-runs`) and whether its ruleset
 requires an up-to-date branch (`gh api
@@ -128,7 +165,23 @@ the follow-up of the item whose PR that merge was, and record it with
 <slug>`; file nothing when the merge was no item's, and list it under
 **Blocked on Jeff**. Then `dist/wf stale -state .dev/workflow -repo .
 -checkouts .dev/checkouts -worker $W`, which seeds a refresh step on each
-item a trunk has moved past, in any repository it has a branch in (FLOW-10).
+item its own trunk has moved past, in any repository it has a branch in
+(FLOW-10). Then the program sync (FLOW-20, Decision 14 of
+`docs/design/program-north-star.md`): for each repository with a program
+trunk, `dist/wf sync-program -state .dev/workflow -repo . -checkouts
+.dev/checkouts -repository <owner>/<name>`; on `sync`, dispatch `wf-publish`
+with step `sync`, the repository, the branch it names and the worker `$W`.
+When `wf-publish` returns `review` (the merge resolved a conflict), dispatch
+`wf-review` on the resolution diff, the sync's merge commit against its
+first parent, for that head, writing its tier-2 report to
+`reports/sync/<head12>.json` on the workflow checkout, the path `wf
+sync-program` printed and `wf check -sync` reads; then dispatch
+`wf-publish` again to merge, which it does only when that report has no
+open MUST finding. The sync spends a step of the budget and has no queue
+item; its push is recorded by `wf sync-program -head` (a `sync` record),
+and its merge (`-kind merge -repository R -ref #N`), its conflict
+resolution (`-kind sync-resolution`) or its escalation (`-kind escalation`
+and the filed item, `-kind filed`) with `wf record`.
 Push what moved with `wf commit` (below): the `main.yaml` files and the
 `queue/` files these wrote.
 
@@ -171,7 +224,9 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
    |---|---|
    | `f0-branch-setup`, `f6-merge-main`, `f6-consolidate`, `f6-open-pr` | `wf-publish` |
    | `f6-refresh`, `x2-refresh` (any `-r<n>`) | `wf-publish` |
-   | `f1-design` | `wf-design` |
+   | `f7-merge`, `f6-merged-<n>` on a program trunk (`wf next` offers them only then) | `wf-publish` |
+   | `f1-design`, a process item's cloud `x1-design` (FLOW-20) | `wf-design` |
+   | `f2-umbrella`, `x2-process-test` | `wf-review`, in a fresh session that did not write the design |
    | `*-plan` | `wf-plan` |
    | `f3-implement`, `f3-implement-r<n>` | `wf-implement` |
    | `x2-implement` | `wf-implement`, then `wf-publish` to archive and open the PR |
@@ -195,6 +250,12 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
    the feature name, step id, the queue file path, the code checkout path, and
    the workflow checkout path. In Review, a red tier 1 goes to `wf-implement`
    for the fix and back to `wf-review`, inside the same step.
+   At a loop merge (`f7-merge`, or an `f6-merged-<n>` on a program trunk)
+   the agent runs `git fetch origin <program trunk>` in each repository it
+   merged in, between `gh pr merge` and `dist/wf done`, so the merge proof
+   reads the merged program trunk and not the ref from before the merge.
+   It never names the branch: GitHub deleted it on the merge, and a fetch
+   of a missing ref fails whole.
 5. Finish the step on the workflow checkout:
    - The agent returned `merged meanwhile` (Jeff merged the PR while a
      refresh ran, FLOW-10): end the step with the merge confirmation above
@@ -214,6 +275,29 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
      Jeff**.
    - `dist/wf commit ... -m "F: <what happened>" <paths changed>` (FLOW-13:
      state after every step).
+   - Each decision the step took in Jeff's place (a loop merge, a deferred
+     or protected finding, an umbrella or process test, a security note
+     read, a question settled as assumed, a departure from a decision of
+     his on strategy, a return to Design past the second, a sync, a filed
+     item, relation or area-map change, a tag), and each record the agent
+     returned (the agents write none themselves, but the sync record
+     `wf sync-program -head` writes, which is committed here too): `dist/wf record -state
+     .dev/workflow -worker $W -kind <kind> [-feature F] [-repository R]
+     [-head <sha>] [-ref <ref>] -note "<what and why>"`, committed with
+     `program/records.yaml` (FLOW-20).
+   - After a loop merge on a program trunk: `dist/wf tag-next -state
+     .dev/workflow -repo . -checkouts .dev/checkouts -repository R` names
+     the `-dev.N` tags. When the merged item is the component's last phase
+     in R (the last item of its phase row in `componentization.md` for that
+     component, with no later program item for R filed), run it again with
+     `-rc -feature F` too: it names the `-rc.N` once F's PR is in the
+     program trunk's head, no other program item in R is open, the head's
+     checks (its CI and conformance suites) passed, and every module R
+     consumes is pinned at the latest pre-release in its clone; a pin that
+     is behind is moved by a reconciliation item first (LOOP-07). For each
+     tag either prints, `git tag <tag> origin/<program trunk>` and `git
+     push origin <tag>` in that repository, and `wf record -kind tag`. It
+     prints `none` with the reason otherwise. Never move or delete a tag.
 6. If the step raised a new blocking question, notify the human now (the
    PushNotification tool when available), naming the feature and question.
 
@@ -247,9 +331,20 @@ order:
   by severity, with the report's path (LINT-05). Each lead this run set or
   cleared (`wf new -lead`, `wf lead`) is a line of its own, from the item's
   history line (FLOW-04).
-- **Blocked on Jeff**: open blocking questions (options and recommendation),
-  design reviews waiting (`*-design-review` steps, FLOW-19), each open PR,
-  as ready to merge or as waiting for a refresh (FLOW-08, FLOW-10),
+- **Held**: one line, the items `QUEUE.md` lists under **Held** (FLOW-20);
+  a held item is never listed under **Blocked on Jeff**.
+- **Decided for you**: the run's records (`dist/wf record -state
+  .dev/workflow -list -since <run start>`, which lists a departure from his
+  decisions, a return past the second and a re-estimate first), so Jeff
+  can call any back (FLOW-20).
+- **Blocked on Jeff**: each step named with its kind, setup, design or
+  privileged, or as an escalation (FLOW-20): open blocking questions
+  (options and recommendation),
+  design reviews waiting (`*-design-review` steps, FLOW-19), each open PR
+  to a trunk, as ready to merge or as waiting for a refresh (FLOW-08,
+  FLOW-10); a PR the loop merges into a program trunk is not listed, but one
+  held at `f7-merge` on a security note or a finding only Jeff may clear
+  is,
   `escalate` steps, an item sent back with its PR open, a red `main`
   (FLOW-09), the `limit:` lines and holders over a limit (FLOW-05), the
   lines of `wf areas -check`, runaway budgets, priority confirmation. List a runaway budget only as `QUEUE.md`'s **Needs Jeff**
@@ -260,7 +355,8 @@ order:
   follow-up does not wait on him, so it is not listed under **Blocked on
   Jeff**.
 - **Design reviews skipped** this run (`design_review: skip`), each with the
-  reason Design gave, so Jeff can call one back (FLOW-19).
+  reason Design gave, so Jeff can call one back (FLOW-19); and each
+  umbrella test and process test passed this run, with its line.
 - **Waiting on a host**: `host:<name>` steps and open native gaps, by
   machine (`hosts.yaml`), each led item with its lead (`wf status`'s
   `lead:` line; `wf next` reports a queued one as waiting on its lead's

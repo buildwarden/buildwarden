@@ -1,6 +1,6 @@
 ---
 name: wf-design
-description: Workflow phase 1. Writes or extends a feature's design doc, decides whether it needs a design review, and records that in the queue. Dispatched by the workflow-tick skill with a feature and a step id.
+description: Workflow phase 1. Writes or extends a feature's design doc, decides whether it needs a design review (the human's, or while FLOW-20 stands the umbrella test or the process test), and records that in the queue. Dispatched by the workflow-tick skill with a feature and a step id; also a process item's cloud x1-design while FLOW-20 stands.
 ---
 
 You do phase 1 of FLOW-03 for one feature. The tick gives you the feature's
@@ -55,7 +55,7 @@ LOOP-04, LOOP-09; from `origin/main` when the branch predates it),
    touches a security boundary or a seam, or departs from prior art or an
    earlier decision of Jeff's; a flagged question is always answered on its
    own (FLOW-19).
-5. Decide `design_review` (FLOW-19): `skip` only when its criteria hold, judged
+5. Decide `design_review` (FLOW-19; step 6 or 7 while FLOW-20 stands): `skip` only when its criteria hold, judged
    on the delta from the newest review entry's `approved at <sha>` when the design was approved
    before; otherwise `required`. A `required` review is seeded at the start
    of phase 2, before Plan, and Plan works from the design it approves.
@@ -67,7 +67,41 @@ LOOP-04, LOOP-09; from `origin/main` when the branch predates it),
    decides whether planning may start. If it refuses because a limit would
    be exceeded, raise a blocking question that names the holders it printed
    (FLOW-07) and leave Design unfinished.
-6. Rule changes (FLOW-14): when the feature needs a rule or its enforcement
+6. While FLOW-20 stands (a `config.yaml` repositories entry has
+   `program_trunk`), on a program item (its design lists
+   `componentization.md` in `related`, and the queue marks it `program`):
+   - Settle a question from the umbrella design or a recorded answer of
+     Jeff's before raising it, citing the source, and record "settled by
+     <ref>, not asked". A question of strategy, however hard, is assumed,
+     never blocking, on your recommendation (a record of `-kind assumed`);
+     only component design (a seam's change the program's design
+     does not name for the item's phase, a component's boundary or
+     ownership, a contract, a security posture), setup or privileged work is
+     blocking or flagged (FLOW-07, FLOW-19). Follow Jeff's recorded
+     decisions; a departure from one on strategy is recorded (`-kind
+     departure`), and one on component design flags its question.
+   - You write no program record yourself: return each one's kind,
+     feature, repository, head, ref and note, and the tick writes it with
+     `dist/wf record -state .dev/workflow -worker $W` (its step 5,
+     FLOW-20).
+   - Judge the umbrella test's points U1 to U6 yourself (`wf-review`'s
+     **The umbrella test**). When they hold, write `design_review: umbrella`,
+     with the points' evidence under **Design**; otherwise `required`.
+   - A design that changes the ledger format opens or changes its working
+     draft beside v1 on the program trunk, as `specs/README.md` says; opening
+     one is component design and goes to Jeff's review.
+7. A process item's cloud `x1-design` while FLOW-20 stands: create
+   `feat/<slug>` from `origin/main` and push it when it does not exist yet,
+   before writing the design. Write the design from the template with a
+   **Program payoff** section (FLOW-20's bar, with figures and how they
+   were reached) and the list of every rule, machinery path and
+   configuration key the change reaches. Then write `design_review:
+   process-test` when it touches none of the rules FLOW-20 reserves to Jeff
+   (`wf-review`'s **The process test**, P2, read by effect), or `required`
+   when it touches one or you doubt it, and run `dist/wf declare`. The
+   process test or his review follows in phase 2. A state step the design
+   proposes is recorded by Jeff at his merge of the item (FLOW-03).
+8. Rule changes (FLOW-14): when the feature needs a rule or its enforcement
    changed, declare each change in `rule_changes` (`rule`, `change: add |
    amend | retire`, and every path it edits, enforcement included) and fill
    the Rule changes section: current and proposed wording, severity and check

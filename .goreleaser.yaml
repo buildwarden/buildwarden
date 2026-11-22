@@ -77,3 +77,8 @@ release:
   github:
     owner: buildwarden
     name: buildwarden
+  # A program trunk's vX.Y.Z-dev.N and -rc.N tags publish as pre-releases
+  # that never become Latest (FLOW-20).
+  prerelease: auto
+  make_latest: '{{ if .Prerelease }}false{{ else }}true{{ end }}'
+

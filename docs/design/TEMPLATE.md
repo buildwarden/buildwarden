@@ -18,7 +18,7 @@ merge_first: []          # repositories in repos, not the home, whose PR merges 
                          # is the home's map; <owner>/<name>:<area> another repository's
 security_boundary: none  # none | host-env | env-relay | env-beyond (GLOBAL-06)
 alters_relationships: false  # true if a component's role or interactions change (FLOW-02, FLOW-05)
-design_review: required  # required | skip (FLOW-19: skip only when its criteria hold)
+design_review: required  # required | skip | umbrella | process-test (FLOW-19, FLOW-20)
 native_validation: []    # - {host: windows-hyperv, blocking: true, reason: "..."}
 tier2_gaps: []           # platform validation knowingly deferred (TEST-03)
 rules: []                # rule IDs relied on or changed, e.g. ORCH-01, UX-01
