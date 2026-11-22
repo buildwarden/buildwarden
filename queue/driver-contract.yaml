@@ -289,15 +289,15 @@ steps:
       - f6-validate-container-any
       - f6-validate-macos-vz-r2
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261122T180143Z
+      expires: 2026-11-22T21:45:37.134712377Z
 budget:
   estimate:
     runs: 5
     steps: 30
   spent:
     runs: 13
-    steps: 39
+    steps: 40
 questions:
   - id: a16
     kind: assumed
@@ -1065,3 +1065,6 @@ history:
   - at: 2026-11-22T19:38:38Z
     by: host:qemu-any/macbook.attended-20261122T190734Z
     event: done f6-validate-qemu-any
+  - at: 2026-11-22T19:45:37Z
+    by: cloud/20261122T180143Z
+    event: claimed f6-open-pr-r2 until 2026-11-22T21:45:37Z
