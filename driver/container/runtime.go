@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"strings"
 	"time"
@@ -252,7 +253,9 @@ func versionCommand(name string) string {
 
 // runtimeAnswers reports whether name's version query succeeds within
 // timeout and prints a version: an empty one is a docker whose Server
-// section is empty, not an engine that is up.
+// section is empty, not an engine that is up. A query that exits 0 and
+// prints a version while a child it left holds stdout ends in
+// exec.ErrWaitDelay, and its engine is up.
 func runtimeAnswers(name string, timeout time.Duration) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -262,7 +265,10 @@ func runtimeAnswers(name string, timeout time.Duration) bool {
 	// waiting for it.
 	cmd.WaitDelay = time.Second
 	out, err := cmd.Output()
-	return err == nil && strings.TrimSpace(string(out)) != ""
+	if err != nil && !errors.Is(err, exec.ErrWaitDelay) {
+		return false
+	}
+	return strings.TrimSpace(string(out)) != ""
 }
 
 // notAnswering is the error for the runtime name, installed as installed

@@ -270,3 +270,20 @@ func TestRunDetectionSkipsARuntimeSlowerThanItsTimeout(t *testing.T) {
 			err)
 	}
 }
+
+// A runtime whose CLI prints its version and exits 0 while a child it left
+// behind holds stdout open is up: Output's WaitDelay ends the wait with
+// exec.ErrWaitDelay, which does not make the engine down.
+func TestRuntimeAnswersWhileAChildHoldsStdout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-script fakes need a POSIX shell")
+	}
+	dir := t.TempDir()
+	writeScript(t, filepath.Join(dir, "podman"),
+		"#!/bin/sh\necho 27.3.1\n/bin/sleep 5 &\nexit 0\n")
+	onlyOnPath(t, dir)
+	if !runtimeAnswers("podman", 4*time.Second) {
+		t.Fatal("runtimeAnswers = false for a runtime that printed its version " +
+			"and exited 0 while its child held stdout")
+	}
+}
