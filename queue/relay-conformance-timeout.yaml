@@ -1,0 +1,37 @@
+feature: relay-conformance-timeout
+title: Relay conformance runs fail intermittently on a relay connection timeout
+priority: 5
+follows: seam-specs
+status: queued
+round: feature
+phase: 0
+design: docs/design/relay-conformance-timeout.md
+branch: feat/relay-conformance-timeout
+repos:
+  - buildwarden/buildwarden
+  - buildwarden/buildwarden-specs
+alters_relationships: null
+source: 'Filed on Jeff''s word, 2026-11-22 (attended), and released from the FLOW-20 hold by him: a test-determinism fix (TEST-04) for main''s CI, ahead of new work since it turns PRs red. The relay job of conformance.yml failed three times with unchanged relay code and passed on re-runs: GUEST-34 on relay-host, ''a connection to the relay''s 10.100.0.1:80: context deadline exceeded'' (PR #135 at e8297df, job 137346008112; PR #136 at f17d7e7, job 137353768984), and GUEST-55, ''relay container not running within 30 s'' (PR #135 at 3efd1fe). See https://github.com/buildwarden/buildwarden/pull/135#issuecomment-7085519553.'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 8
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-22T21:27:52Z
+    by: human/jeff
+    event: queued at position 5 (asked 3)
+  - at: 2026-11-22T21:27:52Z
+    by: human/jeff
+    event: repos and areas taken from seam-specs

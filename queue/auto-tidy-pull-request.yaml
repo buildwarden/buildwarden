@@ -1,6 +1,6 @@
 feature: auto-tidy-pull-request
 title: auto-tidy.yml opens a pull request with the go mod tidy instead of pushing to main
-priority: 12
+priority: 13
 status: queued
 round: feature
 phase: 0
