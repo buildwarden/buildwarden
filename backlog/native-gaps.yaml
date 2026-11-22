@@ -1237,3 +1237,22 @@ gaps:
       /private/var/folders/...), `warden doctor --driver container`'s first line is "config:
       /var/folders/.../warden.toml (found in the working directory)" (scratch Makefile .scratch/clt-case). Kept
       open for the main half, after PR #134 merges. Log: native/qemu-any/2026-11-22/config-lookup-branch.log.
+  - id: driver-contract-runtime-check-finch
+    host: macos-finch
+    status: open
+    what: >-
+      On main after PR #135 merges (or on feat/driver-contract before it): the container driver's
+      runtime check as decided at r4 CI repair (Jeff, 2026-11-22). (1) With finch's VM stopped and
+      --runtime finch (and WARDEN_CTR_CLI=finch): warden build fails with the fixable "container
+      runtime finch is installed but not running (`finch version` failed)" error, the start hint
+      "finch vm start" and a pointer to warden doctor; the output directory is left with driver.json.
+      (2) warden doctor (named and detected) is blocked with the same error and start hint, or, when
+      the VM answers in 3-10 s, the slow hint naming finch. (3) With the VM running: build and doctor
+      pass, and detection order is finch, podman, docker. (4) Case 6 (clean keeps another HOME's
+      running build) as before. Record doctor's elapsed time.
+    design: docs/design/driver-contract.md
+    note: >-
+      Tracked, not blocking: Jeff chose to merge #135 without re-running macos-finch on the final head
+      (2026-11-22, attended). Native validation ran at 190b092, before the version-query change
+      (fa732c3..1b3fb70). From finch's source, `finch version` exits non-zero with the VM stopped;
+      unverified on a real finch. Filed by cloud/20261122T180143Z.
