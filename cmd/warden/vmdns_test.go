@@ -20,7 +20,10 @@ import (
 // variables that name the config file, the runtime, the driver and the CA
 // paths start unset, and --config and the flags a case sets for the runtime,
 // the driver and --tmpdir are cleared when the test ends, so a case sees only
-// the levels it sets.
+// the levels it sets. It enters the directory as a shell does, setting PWD,
+// so the paths warden prints are the directory as t.TempDir named it, not
+// the one the kernel gives with every symbolic link resolved (macOS's
+// $TMPDIR is under /var, a link to /private/var).
 func inConfigFiles(t *testing.T, body string) string {
 	t.Helper()
 	home, dir := t.TempDir(), t.TempDir()
@@ -41,11 +44,7 @@ func inConfigFiles(t *testing.T, body string) string {
 	if body != "" {
 		write(t, dir, projectConfig, body)
 	}
-	orig, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(orig) })
+	t.Chdir(dir)
 	return dir
 }
 
