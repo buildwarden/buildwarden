@@ -3,7 +3,7 @@ title: 'The driver command contract, its suite and the kit: warden runs a driver
 priority: 2
 status: in_progress
 round: feature
-phase: 5
+phase: 6
 design: docs/design/driver-contract.md
 branch: feat/driver-contract
 seams:
@@ -58,6 +58,7 @@ steps:
     status: pending
     needs:
       - f6-consolidate
+      - f6-consolidate-r2
     lease:
       claimed_by: ""
       expires: null
@@ -68,6 +69,7 @@ steps:
     status: pending
     needs:
       - f6-consolidate
+      - f6-consolidate-r2
     lease:
       claimed_by: ""
       expires: null
@@ -78,6 +80,7 @@ steps:
     status: pending
     needs:
       - f6-consolidate
+      - f6-consolidate-r2
     lease:
       claimed_by: ""
       expires: null
@@ -88,6 +91,7 @@ steps:
     status: pending
     needs:
       - f6-consolidate
+      - f6-consolidate-r2
     lease:
       claimed_by: ""
       expires: null
@@ -196,6 +200,8 @@ steps:
     phase: 6
     affinity: host:macos-vz
     status: pending
+    needs:
+      - f6-consolidate-r2
     lease:
       claimed_by: ""
       expires: null
@@ -251,10 +257,40 @@ steps:
   - id: f5-guide-r2
     phase: 5
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main-r2
+    phase: 6
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261122T180143Z
-      expires: 2026-11-22T20:41:45.781609912Z
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate-r2
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-merge-main-r2
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr-r2
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate-r2
+      - f6-validate-windows-hyperv
+      - f6-validate-qemu-any
+      - f6-validate-macos-finch
+      - f6-validate-container-any
+      - f6-validate-macos-vz-r2
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -981,3 +1017,9 @@ history:
   - at: 2026-11-22T18:41:45Z
     by: cloud/20261122T180143Z
     event: claimed f5-guide-r2 until 2026-11-22T20:41:45Z
+  - at: 2026-11-22T18:43:14Z
+    by: cloud/20261122T180143Z
+    event: done f5-guide-r2
+  - at: 2026-11-22T18:43:14Z
+    by: cloud/20261122T180143Z
+    event: entered phase 6 (publish)
