@@ -1,0 +1,51 @@
+feature: program-land
+title: 'Land the componentization program: one squash merge per repository from program/componentization to its trunk, the final tags, and FLOW-20 retired (program-north-star Decision 12)'
+priority: 5
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/program-land.md
+branch: feat/program-land
+alters_relationships: null
+source: 'Filed by program-north-star''s state step (x4-state, item 5) on Jeff''s word, 2026-11-22: docs/design/program-north-star.md, Decision 12. The program ends with one human squash merge per repository; this process item closes it. Done-when: the loop''s evidence in each landing PR (every component, built from its repository at its program trunk, passes its CI and conformance suites at the other components'' -rc tags, and TEST-08 and the blocking native validations pass at those heads; no ledger working draft still marked unreleased; every program-sync item merged). Before the landing PRs open the loop tags each program trunk''s head program/componentization-final, recorded. Its design names one PR per repository from program/componentization to its trunk, body from wf program-body; Jeff squash-merges each, specifications first, then this repository, the relay and the drivers. Its own PR retires FLOW-20 and every program-trunk clause (its design review is Jeff''s, a5 (b)); its state step drops program_trunk from config.yaml; its Close resumes every item held until the program''s end, each returning to Design, recorded. Estimate: the process size row, 4 steps + 1 state step.'
+steps:
+  - id: x1-answer-q1
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x1-design
+    phase: 1
+    affinity: cloud
+    status: pending
+    needs:
+      - x1-answer-q1
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 5
+  spent:
+    runs: 0
+    steps: 0
+questions:
+  - id: q1
+    kind: blocking
+    status: open
+    question: 'Held until the program''s end (program-north-star Decision 12): program-land lands the componentization program, so it starts only once every program trunk has the program''s last phase merged. Resume then, or earlier on Jeff''s word for an early landing.'
+    options:
+      - resume it
+    recommended: resume it
+    resumes: every program trunk has the program's last phase merged
+history:
+  - at: 2026-11-22T23:39:47Z
+    by: human/jeff
+    event: queued at position 5 (asked 99)
+  - at: 2026-11-22T23:39:47Z
+    by: human/jeff
+    event: 'on hold (q1, resumes: every program trunk has the program''s last phase merged): Held until the program''s end (program-north-star Decision 12): program-land lands the componentization program, so it starts only once every program trunk has the program''s last phase merged. Resume then, or earlier on Jeff''s word for an early landing.'

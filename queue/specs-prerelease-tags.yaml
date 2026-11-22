@@ -1,0 +1,32 @@
+feature: specs-prerelease-tags
+title: The specifications repository's release workflow accepts program-trunk pre-release tags and publishes them with --prerelease (program-north-star Decision 16, a17)
+priority: 10
+status: queued
+round: tracked
+phase: 1
+design: docs/design/specs-prerelease-tags.md
+branch: feat/specs-prerelease-tags
+repos:
+  - buildwarden/buildwarden-specs
+alters_relationships: null
+source: 'Filed by program-north-star''s state step (x4-state, item 5) on Jeff''s word, 2026-11-22: docs/design/program-north-star.md, Design, Pre-release tags, and Decision 16. An item in buildwarden/buildwarden-specs against its main, not the program trunk: its release workflow (speccheck tag -main, gh release create without --prerelease) accepts the pre-release tags the loop pushes on the program trunk (<directory>/vX.Y.Z-dev.N and -rc.N) and creates their releases with --prerelease. Jeff merges it as part of the one-time setup; wf tag-next prints nothing for that repository until it has merged.'
+steps:
+  - id: t1-work
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 2
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-22T23:39:52Z
+    by: human/jeff
+    event: queued at position 10 (asked 1)
