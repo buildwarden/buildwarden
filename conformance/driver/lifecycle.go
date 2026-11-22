@@ -815,6 +815,9 @@ func (l *lifecycle) heldIDs() []string {
 	return ids
 }
 
+// caseClean runs two builds to mid-build and kills the driver of one alone;
+// clean, given the other's lock in keep_ids, must remove the killed build
+// and leave the running one (DRV-27, DRV-58).
 func (l *lifecycle) caseClean() (string, string) {
 	if !l.s.lists("clean") {
 		return "clean is not listed", ""
@@ -834,6 +837,10 @@ func (l *lifecycle) caseClean() (string, string) {
 			return "", err.Error()
 		}
 	}
+	// The killed build's driver is killed alone (SIGKILL to its process,
+	// never its group), as a crash kills it: a child it started, such as the
+	// container driver's waiter, is orphaned and may still run when clean
+	// runs, and is no sign that the build lives (DRV-27).
 	_ = dead.cmd.Process.Kill()
 	<-dead.exited
 	dead.lock.release()
@@ -849,7 +856,9 @@ func (l *lifecycle) caseClean() (string, string) {
 		return "", fmt.Sprintf("clean exited %d: %s", o.code, o.errText())
 	}
 	if n, err := l.reap(dead); err != nil || n != 0 {
-		return "", fmt.Sprintf("clean left the killed build: its reap removed %d (%v)",
+		return "", fmt.Sprintf("clean left the killed build: its reap removed %d (%v); "+
+			"only its driver was killed, so a process the driver started may "+
+			"still run: is a process whose driver is gone taken for a sign of life?",
 			n, err)
 	}
 	if _, err := live.stop("interrupted"); err != nil {

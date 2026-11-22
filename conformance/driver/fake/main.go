@@ -93,6 +93,10 @@ func invalid(format string, args ...any) error {
 }
 
 func main() {
+	if os.Getenv(waiterEnv) != "" {
+		waiter()
+		return
+	}
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "warden-driver-fake: no command")
 		os.Exit(2)

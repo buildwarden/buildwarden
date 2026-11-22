@@ -133,6 +133,13 @@ func build(st *start, cfg *config, relayPath string, in <-chan map[string]any) i
 	// reap and clean stop the relay of a build whose driver was killed.
 	_ = os.WriteFile(filepath.Join(dir, relayPIDFile),
 		[]byte(strconv.Itoa(relay.Process.Pid)), 0o600)
+	if fault == faultOrphanAlive {
+		if err := startWaiter(st.BuildID, dir); err != nil {
+			_ = relay.Process.Kill()
+			_ = os.RemoveAll(dir)
+			return failed(err)
+		}
+	}
 	stopping := make(chan struct{})
 	go func() {
 		_ = relay.Wait()
@@ -178,6 +185,7 @@ func teardown(st *start, relay *exec.Cmd, dir string) int {
 		return 0
 	}
 	_ = relay.Process.Kill()
+	stopRelay(dir)
 	if d, err := time.ParseDuration(os.Getenv("WARDEN_FAKE_TEARDOWN")); err == nil {
 		time.Sleep(d)
 	}
@@ -224,3 +232,30 @@ func startRelay(path string, st *start) (*exec.Cmd, string, error) {
 	}
 	return cmd, addr, nil
 }
+
+// waiterEnv marks the fake's process as a build's waiter (faultOrphanAlive).
+const waiterEnv = "WARDEN_FAKE_WAITER"
+
+// startWaiter starts, under faultOrphanAlive, a child of the fake that names
+// build id in its arguments and runs until it is killed, as the container
+// driver's `container wait warden-build-<id>` does; it is not tied to the
+// fake's life, so it outlives a killed driver. Its process ID goes in dir,
+// where clean looks for it. Its standard streams are not the fake's, so that
+// no reader of the fake's output waits on it.
+func startWaiter(id, dir string) error {
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(self, "wait", "warden-build-"+id)
+	cmd.Env = append(os.Environ(), waiterEnv+"=1")
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, waiterPIDFile),
+		[]byte(strconv.Itoa(cmd.Process.Pid)), 0o600)
+}
+
+// waiter is the waiter's process: it waits until it is killed, for an hour
+// at most.
+func waiter() { time.Sleep(time.Hour) }

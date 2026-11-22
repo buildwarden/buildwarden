@@ -68,18 +68,25 @@ func reap(req *request, _ *config, _ []string) (map[string]any, error) {
 	return map[string]any{"removed": removed}, nil
 }
 
-// relayPIDFile, in a build's work directory, holds its relay's process ID.
-const relayPIDFile = "relay.pid"
+// relayPIDFile, in a build's work directory, holds its relay's process ID;
+// waiterPIDFile, under faultOrphanAlive, its waiter's.
+const (
+	relayPIDFile  = "relay.pid"
+	waiterPIDFile = "waiter.pid"
+)
 
-// stopRelay kills the relay of the build whose work directory is dir, left
-// running when its driver was killed.
+// stopRelay kills the relay, and the waiter if there is one, of the build
+// whose work directory is dir, left running when its driver was killed.
 func stopRelay(dir string) {
-	data, err := os.ReadFile(filepath.Join(dir, relayPIDFile))
-	if err != nil {
-		return
-	}
-	if p, err := os.FindProcess(atoi(string(data))); err == nil && atoi(string(data)) > 0 {
-		_ = p.Kill()
+	for _, f := range []string{relayPIDFile, waiterPIDFile} {
+		data, err := os.ReadFile(filepath.Join(dir, f))
+		if err != nil {
+			continue
+		}
+		if p, err := os.FindProcess(atoi(string(data))); err == nil &&
+			atoi(string(data)) > 0 {
+			_ = p.Kill()
+		}
 	}
 }
 
@@ -142,6 +149,10 @@ func clean(req *request, _ *config, _ []string) (map[string]any, error) {
 			continue
 		}
 		path := filepath.Join(root(req.TempDir), e.Name())
+		if _, err := os.Stat(filepath.Join(path, waiterPIDFile)); err == nil &&
+			fault == faultOrphanAlive {
+			continue
+		}
 		fmt.Fprintf(os.Stderr, "Removing %s\n", path)
 		stopRelay(path)
 		if err := os.RemoveAll(path); err != nil {

@@ -39,10 +39,11 @@ func TestLifecycleFake(t *testing.T) {
 func TestLifecycleSelfTest(t *testing.T) {
 	hermetic(t)
 	for fault, check := range map[string]string{
-		"no-teardown":          "stop",
-		"ignore-end-of-input":  "end of input",
-		"die-on-closed-stderr": "orphaned",
-		"reap-without-looking": "kill",
+		"no-teardown":            "stop",
+		"ignore-end-of-input":    "end of input",
+		"die-on-closed-stderr":   "orphaned",
+		"reap-without-looking":   "kill",
+		"orphan-counts-as-alive": "clean",
 	} {
 		t.Run(fault, func(t *testing.T) {
 			s := fakeSuite(t)
@@ -66,9 +67,10 @@ func TestLifecycleSelfTest(t *testing.T) {
 	}
 }
 
-// stopStubRelays kills the stub relays the fake's builds under tmp left.
+// stopStubRelays kills the stub relays, and the waiters, the fake's builds
+// under tmp left.
 func stopStubRelays(tmp string) {
-	pids, _ := filepath.Glob(filepath.Join(tmp, "warden-fake-*", "relay.pid"))
+	pids, _ := filepath.Glob(filepath.Join(tmp, "warden-fake-*", "*.pid"))
 	for _, f := range pids {
 		data, _ := os.ReadFile(f)
 		pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
