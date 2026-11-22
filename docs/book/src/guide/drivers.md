@@ -97,10 +97,11 @@ datadisk: 150GiB
 ### Choosing the runtime
 
 With no runtime named, `warden` uses the first of `finch`, `podman` and
-`docker` that answers. When both `docker` and `podman` are installed and
-running, `podman` is chosen; earlier releases chose `docker`. To use
-`docker`, pass `--runtime docker` or set the key below to `"docker"`. To name one, use `--runtime`, `WARDEN_CTR_CLI` or
-`[driver.container] cli` (old name `[runtime] cli`, read until 1.0):
+`docker` that answers within 3 seconds. When both `docker` and `podman` are
+installed and running, `podman` is chosen; earlier releases chose `docker`.
+To use another runtime, such as `docker`, name it with `--runtime`,
+`WARDEN_CTR_CLI` or `[driver.container] cli` (old name `[runtime] cli`,
+read until 1.0):
 
 ```sh
 warden build --runtime podman .
@@ -134,6 +135,12 @@ to check with `warden doctor`; the output directory is left, as after any
 failed build. `doctor` asks the runtime for its engine's version, waiting
 up to 10 seconds, and is blocked by either. `warden` does not fall back to
 detection, so start the runtime or name another.
+
+With no runtime named, `doctor` detects it as a build does and reports the
+runtime a build would use. When none answers within 3 seconds, it asks each
+installed runtime again with up to 10 seconds; one that answers then is
+running but too slow for detection, and `doctor` is blocked with the fix to
+name it.
 
 The setting belongs to the container driver. A build with a VM driver does
 not read it, so one `warden.toml` can hold `cli` beside the VM drivers'

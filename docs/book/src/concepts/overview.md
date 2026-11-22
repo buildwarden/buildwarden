@@ -187,15 +187,20 @@ resolve the runtime (--runtime, WARDEN_CTR_CLI, [driver.container] cli, else
     the first of finch, podman, docker that answers; any other value is
     refused before anything is run) and write it to the state file
     detection asks each candidate its engine-version query (docker/podman
-    `version --format {{.Server.Version}}`, `finch version`), 3 s each
-    (10 s each for doctor)
+    `version --format {{.Server.Version}}`, `finch version`), 3 s each,
+    for every command, doctor included
     probe: a named runtime not on PATH -> fixable error naming where it was
     named, before any output directory exists; no engine call; detection
     is not tried in its place
     build: a named runtime's first engine call is that query (10 s); it
     fails -> fixable "installed but not running", start hint, warden doctor
-    doctor: that query (10 s) on the named or detected runtime; not on PATH,
-    failing or not answering -> blocked with the fix
+    doctor: a named runtime: that query (10 s); not on PATH, failing or not
+    answering -> blocked with the fix. None named: detection, as above, and
+    the runtime it chooses is not asked again; none up -> each installed
+    candidate asked again, in detection's order, 10 s each: the first that
+    answers -> blocked, "running but answered after more than 3 s", fix:
+    name it; none -> detection's error and start hint. At most 3 x 3 s +
+    3 x 10 s = 39 s
 resolve the relay image (driver/relaysource) and verify it
 start the relay container on a per-build network; report relay-started
 

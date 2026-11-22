@@ -465,10 +465,11 @@ runtime installed outside `PATH` needs its directory added to `PATH`.
 
 When no level names a runtime, BuildWarden probes `finch`, then `podman`,
 then `docker`. The first one that answers its engine-version query within
-3 seconds (10 seconds for `warden doctor`) is used: `finch version` (which asks nerdctl in finch's VM, and
-fails when the VM is stopped), and `docker version --format
-'{{.Server.Version}}'` and the same for `podman` (on Linux, where podman
-has no server, it answers with its own version). A query that fails or
+3 seconds is used, by every command, `warden doctor` included: `finch
+version` (which asks nerdctl in finch's VM, and fails when the VM is
+stopped), and `docker version --format '{{.Server.Version}}'` and the
+same for `podman` (on Linux, where podman has no server, it answers with
+its own version). A query that fails or
 prints no version means the runtime is not running.
 
 When both `docker` and `podman` are installed and running, and finch is not,
@@ -534,11 +535,25 @@ failed build:
   To fix: start its VM: finch vm start (or finch vm init the first time); warden doctor checks it
 ```
 
-`warden doctor` asks the same query, named runtime or detected, and waits up
-to 10 seconds. A runtime that is not installed or not running blocks it with
-the errors above: it exits 1 and prints no `ok`. Detection is not tried in
-its place. When no level names a runtime, detection's own error says that
-none answered.
+`warden doctor` asks a named runtime the same query and waits up to 10
+seconds. A runtime that is not installed or not running blocks it with the
+errors above: it exits 1 and prints no `ok`. Detection is not tried in its
+place.
+
+When no level names a runtime, `warden doctor` detects it as a build does,
+3 seconds per candidate, so it reports the runtime a build would use. When
+detection finds none running, doctor asks each installed one again, in the
+same order, waiting up to 10 seconds. The first that answers is running but
+too slow for detection, and doctor is blocked with the fix to name it:
+
+```
+[warden] ERROR: container runtime podman is running but answered after more than 3 s, so builds skip it
+  To fix: name it: --runtime podman, WARDEN_CTR_CLI=podman or [driver.container] cli = "podman"
+```
+
+When none answers, detection's own error says that none is running, with
+the fix to start it. At most, doctor waits 3 seconds for each of the three
+runtimes and then 10 seconds for each again: 39 seconds.
 
 <!-- TRANSITIONAL(runtime-former-values): this subsection is removed with
      driver/container/runtime_former.go, in the change that prepares 1.0. -->

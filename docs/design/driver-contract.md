@@ -660,8 +660,26 @@ and a driver's `run` during one build.
     <rt> is installed but not running", the start hint and a pointer to
     `warden doctor`, and the output directory, holding `driver.json`, is
     left, as after any failed build. `warden doctor` asks the same query
-    with 10 s of the named or detected runtime (a28), and detection asks
-    it of each candidate with 3 s. This said "or does not answer
+    with 10 s of a named runtime (a28), and detection asks it of each
+    candidate with 3 s. *r4, CI repair, Jeff 2026-11-22: doctor detects as the build does, plus the slow hint*: with no runtime named, `doctor`
+    detects as the build does, 3 s per candidate, so the two choose the
+    same runtime, and the one detection chooses is not asked again: its
+    answer within 3 s is the health check. When detection finds none
+    up, `doctor` asks each installed candidate once more, in detection's
+    order (finch, podman, docker), with 10 s. The first that answers
+    blocks it with the `fixable` error "container runtime <rt> is
+    running but answered after more than 3 s, so builds skip it" and the
+    fix to name it (`--runtime <rt>`, `WARDEN_CTR_CLI=<rt>` or
+    `[driver.container] cli = "<rt>"`), the slow hint; when none does,
+    detection's "installed but not running" error and start hint stay.
+    No runtime is asked more than twice, and `doctor`'s worst case is
+    three queries of 3 s and three of 10 s, 39 s (each may also wait up
+    to 1 s for a child of the runtime's CLI that holds its output, 45 s
+    in all). It said `doctor`'s detection gave each candidate 10 s
+    (`ef312cb`), under which `doctor` could report a runtime the build
+    skips: ok for a sole runtime answering in 5 s that the build
+    refuses, or podman slow and docker fast reported as podman where the
+    build uses docker. This said "or does not answer
     `<runtime> info` within 3 s, is refused by the container driver's
     probe of `run`": `info` makes the engine walk its storage and
     plugins, and on PR #135's windows-latest runner Docker answered it
@@ -1839,6 +1857,12 @@ once more before the design is approved.
   server-version query with 10 s, and is blocked with the `fixable`
   error and the start hint when the engine is down or does not answer,
   where the probe only looks a named runtime up on `PATH` (Decision 26).
+  *r4, CI repair, Jeff 2026-11-22: doctor detects as the build does, plus the slow hint*: a named runtime is asked with 10 s; with none named,
+  `doctor` detects as the build does (3 s per candidate) and does not
+  ask the chosen runtime again, and when detection finds none up it
+  re-asks each installed candidate with 10 s and is blocked with the
+  slow hint naming the first that answers, else with detection's error
+  and start hint (Decision 26). At most 39 s.
   (i) still holds. Not flagged: it touches no seam (`doctor`'s result has
   `blocked` already, DRV-25) and no security boundary, and departs from
   no decision of Jeff's.
@@ -4532,12 +4556,19 @@ three names are those items' changes, not K1's.
     running", the start hint and a pointer to `warden doctor`; for this
     case only, the output directory, holding `driver.json`, is left, as
     after any failed build (*r4, CI repair, Jeff 2026-11-22*; it said both were refused in the
-    probe, with no output directory left). `warden doctor` asks the
-    engine (the version query, 10 s), reports either error and is
-    blocked, where `main` prints `container runtime: podman` and `ok`
+    probe, with no output directory left). `warden doctor` asks a named
+    runtime's engine (the version query, 10 s), reports either error and
+    is blocked, where `main` prints `container runtime: podman` and `ok`
     (a28). Detection, when nothing names a runtime, asks each candidate
-    the version query in place of `info`, 3 s each (*r4, CI repair, Jeff 2026-11-22*). *New, r4
-    (`q4`; Decision 26, a28).*
+    the version query in place of `info`, 3 s each (*r4, CI repair, Jeff 2026-11-22*), for
+    `doctor` as for the build (*r4, CI repair, Jeff 2026-11-22: doctor detects as the build
+    does, plus the slow hint*): the two choose the same runtime. When
+    detection finds none up, `doctor` asks each installed candidate
+    again with 10 s and is blocked by the first that answers with "container
+    runtime <rt> is running but answered after more than 3 s, so builds
+    skip it" and the fix to name it; when none answers, with detection's
+    error and start hint (Decision 26). *New, r4 (`q4`; Decision 26,
+    a28).*
 21. **Detection prefers podman over docker.** *r4, Jeff 2026-11-22: prefer podman over docker (open source)*. When
     nothing names a runtime, detection probes `finch`, then `podman`,
     then `docker`, and takes the first that answers. `main`'s order was
@@ -5370,11 +5401,12 @@ not listed is unchanged and `warden`'s.
 | `reap`, `attach` and `warden clean` use the values in the build's record and state file, not the current invocation's | **New** (Decision 18, a20) | They must look where the build put things. The state file is authoritative: a recorded config file that has gone or changed does not fail `reap` or `attach` (C10) | Nothing. `warden clean --driver <path>` chooses the binary that reaps, when the recorded one is gone |
 | `warden clean` runs `reap` for every build of the selected driver whose lock nobody holds, and removes the lock only when `reap` succeeds | **New** (a20) | No `warden` holds the lock, so the build is dead for this user. `reap` must be safe beside a driver that is still tearing down by itself | Nothing; a held lock's build is never touched |
 | What `clean` treats as live: the held locks (`keep_ids`) and, for the container driver, its process scan, which since r4 counts only the driver's `container wait warden-build-<id>` waiter whose parent is a live `warden-driver-container` | **Changed**: the locks are added; *r4 (Decision 25):* the scan no longer counts any process that names a build (`conmon`, `warden-relay-<id>`), and finds the waiter it could not find before | Either sign is enough to keep a build; a process whose driver is gone is not a sign | Nothing. The dropped fallback, `main`'s scan of any command line, is a rejected alternative in Decision 25 |
-| A container runtime named by `--runtime`, `WARDEN_CTR_CLI` or the key that is not on `PATH`, or whose engine does not answer its server-version query | **Changed** in r4 (Behaviour 20, Decision 26, a28): one not on `PATH` is refused in the probe of `run` and by `doctor`, where `main` failed late. *r4, CI repair, Jeff 2026-11-22*: one whose engine is down is refused by the build's first engine call, the runtime's server-version query (`docker version --format '{{.Server.Version}}'`, the same for `podman`, `finch version`) with 10 s, with the start hint and a pointer to `warden doctor`, the output directory left as after any failed build; and by `doctor`, which asks the same query with 10 s. This said "or does not answer `<runtime> info` within 3 s", refused in the probe | A provided value that cannot be used is an error before any work (GLOBAL-10, UX-08) | Nothing: install or start it, or name another. Detection is not tried in its place (rejected in Decision 26) |
+| A container runtime named by `--runtime`, `WARDEN_CTR_CLI` or the key that is not on `PATH`, or whose engine does not answer its server-version query | **Changed** in r4 (Behaviour 20, Decision 26, a28): one not on `PATH` is refused in the probe of `run` and by `doctor`, where `main` failed late. *r4, CI repair, Jeff 2026-11-22*: one whose engine is down is refused by the build's first engine call, the runtime's server-version query (`docker version --format '{{.Server.Version}}'`, the same for `podman`, `finch version`) with 10 s, with the start hint and a pointer to `warden doctor`, the output directory left as after any failed build; and by `doctor`, which asks the same query with 10 s. *r4, CI repair, Jeff 2026-11-22: doctor detects as the build does, plus the slow hint*: this row is the named runtime's; a detected one is the `runtime` row's. This said "or does not answer `<runtime> info` within 3 s", refused in the probe | A provided value that cannot be used is an error before any work (GLOBAL-10, UX-08) | Nothing: install or start it, or name another. Detection is not tried in its place (rejected in Decision 26) |
 | `--timeout` counts from the start of `run` | **Changed** slightly (Behaviour 14) | One clock for every driver | `--timeout` |
-| A driver setting nobody set | Unchanged per setting: the driver applies its own default (`network`: `warden-dev`; `slots`: 4 for hyperv, 16 for firecracker; `nat-prefix`: `192.168.240.0/20`; `host-ip`: `192.168.240.1`; `name`: `windows-server-2025`; `arch`: the host's; the two ages: `winguest`'s; `runtime`: the first of finch, podman, docker that answers its server-version query within 3 s (*r4, CI repair, Jeff 2026-11-22*; it said `info`; *r4, Jeff 2026-11-22: prefer podman over docker (open source)*: `main`'s order was finch, docker, podman, and the next row is the change), found once per build and kept in its state file). **Changed reader** (a21): the driver resolves it, through the kit, where `cmd/warden` did | These are the values `cmd/warden` and the drivers apply today | The flag, else the setting's environment variable (the two that exist), else the config file: the order `main` has once `project-config-trust` has merged, applied by the kit to the `args` and `config_file` `warden` passes on. In the file a common key is read in the driver's own table and then in `[driver]` (the row on a common key, below). The first place that sets it is the value; it is not merged with a lower one, and a value that does not parse or cannot be used is an error naming where it came from, reported by the driver in its probe (UX-08) |
+| A driver setting nobody set | Unchanged per setting: the driver applies its own default (`network`: `warden-dev`; `slots`: 4 for hyperv, 16 for firecracker; `nat-prefix`: `192.168.240.0/20`; `host-ip`: `192.168.240.1`; `name`: `windows-server-2025`; `arch`: the host's; the two ages: `winguest`'s; `runtime`: the first of finch, podman, docker that answers its server-version query within 3 s (*r4, CI repair, Jeff 2026-11-22*; it said `info`; *r4, Jeff 2026-11-22: prefer podman over docker (open source)*: `main`'s order was finch, docker, podman, and the next row is the change), found once per build and kept in its state file; *r4, CI repair, Jeff 2026-11-22: doctor detects as the build does, plus the slow hint*: `warden doctor` detects the same way, 3 s per candidate, and reports the runtime a build would use, and the row after next is what it does when none answers). **Changed reader** (a21): the driver resolves it, through the kit, where `cmd/warden` did | These are the values `cmd/warden` and the drivers apply today | The flag, else the setting's environment variable (the two that exist), else the config file: the order `main` has once `project-config-trust` has merged, applied by the kit to the `args` and `config_file` `warden` passes on. In the file a common key is read in the driver's own table and then in `[driver]` (the row on a common key, below). The first place that sets it is the value; it is not merged with a lower one, and a value that does not parse or cannot be used is an error naming where it came from, reported by the driver in its probe (UX-08) |
 | Which config file a driver reads: the one `warden` names in `config_file`, and no other | **New** (a21); one file since 2026-11-15 (Decision 23) | `warden` and the driver must read the same file, and a driver that searched by itself, in the working directory or through `WARDEN_CONFIG`, could find another | Nothing for the driver: which file it is, `warden` decides from `--config`, `WARDEN_CONFIG` and the working directory (`project-config-trust`). A driver started with no request, such as a service, reads none and uses its defaults |
 | The container runtime when nobody names one: the first of `finch`, `podman`, `docker` that answers its server-version query | **Changed**, *r4, Jeff 2026-11-22: prefer podman over docker (open source)* (Behaviour 21): `main`'s order was `finch`, `docker`, `podman`, so on a host where both docker and podman answer, and finch does not, `main` chose docker and K1 chooses podman | finch stays first, as on `main`; between the other two the open-source, free runtime is preferred | `--runtime`, else `WARDEN_CTR_CLI`, else `[driver.container] cli` (old name `[runtime] cli`): `--runtime docker` picks docker. A named runtime is used or refused, and detection is not tried in its place |
+| `warden doctor` when no runtime is named and detection finds none up: each installed candidate asked again, in detection's order, with 10 s; the first that answers blocks it with the slow hint ("container runtime <rt> is running but answered after more than 3 s, so builds skip it", fix: name it), and none, with detection's error and start hint | **New**, *r4, CI repair, Jeff 2026-11-22: doctor detects as the build does, plus the slow hint* (Decision 26, Behaviour 20, a28). It said `doctor`'s detection gave each candidate 10 s, so `doctor` could choose a runtime the build skips. No runtime is asked twice after answering; worst case three queries of 3 s and three of 10 s, 39 s | `doctor` reports the runtime the build uses, and a runtime too slow for detection is told apart from one that is down | `--runtime`, `WARDEN_CTR_CLI` or `[driver.container] cli` names the slow runtime, and a build then waits 10 s for it (its first engine call); nothing else changes the 3 s or the 10 s |
 | The values the container driver's `runtime` takes: `finch`, `docker` or `podman` | Unchanged by K1: it is `runtime-cli-project-path`'s rule, which K1 moves into the driver and keeps from every source and under both names of the key | They are the runtimes the driver supports and probes for | Nothing: another value is an error, and detection is not tried in its place |
 | A driver's flag given with an empty value, or a driver's variable that is set but empty: not set, and the next place is read | Unchanged in effect, **changed reader** (a21): `cmd/warden` tests for the empty string today; the contract now states it for every driver (C8) | It is today's behaviour for every such flag and both variables | Nothing; give a value |
 | A driver's switch: on when present | Unchanged in effect: `--force=false` and a repeated switch are settled by `warden`, the last occurrence winning, as the command line does today | A driver reads one form | Nothing |
@@ -5411,8 +5443,10 @@ Named lookups and fallbacks (GLOBAL-10, GLOBAL-11):
   be installed beside `warden-io` and the relay files, as the archive and
   `install.sh` do. A copy that replaces it from another directory (a16)
   looks beside itself and never beside `warden`.
-- **Kept, existing: container runtime autodetection** (finch, docker,
-  podman), used only when no runtime is configured. It moves into
+- **Kept, existing: container runtime autodetection**, used only when
+  no runtime is configured; its order changes from `main`'s finch,
+  docker, podman to finch, podman, docker (Behaviour 21), and `warden
+  doctor` detects the same way (*r4, CI repair, Jeff 2026-11-22: doctor detects as the build does, plus the slow hint*). It moves into
   `driver/container`. A build detects once and writes the result to its
   state file; `attach` and `reap` use that, so a later command never
   falls through to another runtime because the build's stopped answering.
@@ -7022,7 +7056,11 @@ differs per platform, so it adds one job (Decision 20):
   running only the version query, and `doctor` is blocked; the version
   query of each runtime against fakes that answer, fail, hang or print
   an empty server version; detection passing over a runtime that is
-  not up; `doctor`'s timeout, shortened in the test. The tests and the
+  not up; `doctor`'s timeout, shortened in the test. *r4, CI repair, Jeff 2026-11-22: doctor detects as the build does, plus the slow hint*:
+  `doctor` and `run` choose docker with podman slower than 3 s and docker
+  fast; with only a slow podman, `run` refuses it and `doctor` is blocked
+  with the slow hint naming podman; with every runtime down, `doctor`
+  gives the start hint; no runtime is asked more than twice. The tests and the
   conformance suite's `TestStaticContainer` use fake runtimes, never
   the host's (TEST-04).
   Through `warden build` with the binary (in `cmd/warden`'s end-to-end
@@ -8562,6 +8600,14 @@ as `ab35e8e`. No decision changes here.
 runtime's server-version query replaces `info`, the probe only looks a
 named runtime up on `PATH`, the build's first engine call and `doctor`
 (10 s) ask the engine, and detection asks each candidate (3 s).
+*r4, CI repair, Jeff 2026-11-22: doctor detects as the build does, plus the slow hint*: `doctor` asks a named runtime with 10 s and detects as the build
+does, 3 s per candidate, not asking the chosen runtime again; when
+detection finds none up, it re-asks each installed candidate with 10 s
+and gives the slow hint for the first that answers, else detection's
+error. Its worst case is 39 s (three queries of 3 s, three of 10 s).
+Decision 26, Behaviour 20, a28's note, the `runtime` and named-runtime
+rows of **Defaults and overrides**, a new row for the slow hint, and
+**What does not change** (autodetection's order) say so.
 
 *r4, Jeff 2026-11-22: prefer podman over docker (open source)*: detection's order becomes finch, podman, docker, where `main`'s was
 finch, docker, podman (Behaviour 21, a new **Defaults and overrides** row).
