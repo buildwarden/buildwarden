@@ -274,6 +274,33 @@ func TestDoctorGivesTheSlowHint(t *testing.T) {
 	}
 }
 
+// With two slow runtimes, finch and podman, and docker absent or down,
+// doctor names the first in detection's order that answers the re-ask,
+// finch, not the last that answers, podman (Decision 26, r4).
+func TestDoctorNamesTheFirstSlowRuntime(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		replies map[string]reply
+	}{
+		{"docker absent", map[string]reply{"finch": slow, "podman": slow}},
+		{"docker down", map[string]reply{"finch": slow, "podman": slow,
+			"docker": fails}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeRuntimes(t, tc.replies)
+			slowTimeouts(t)
+			_, err := doctorSays(t)
+			want := "container runtime finch is running but answered after " +
+				"more than 1 s, so builds skip it"
+			var fe *driver.FixableError
+			if !errors.As(err, &fe) || fe.Msg != want ||
+				!strings.Contains(fe.Fix, "--runtime finch") {
+				t.Fatalf("doctor = %v; want %q naming finch", err, want)
+			}
+		})
+	}
+}
+
 // With every installed runtime down, doctor's re-asks find none, and it
 // keeps detection's error and the start hint.
 func TestDoctorGivesTheStartHintWhenNoneIsUp(t *testing.T) {
