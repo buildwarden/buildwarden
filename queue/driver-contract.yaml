@@ -60,8 +60,8 @@ steps:
       - f6-consolidate
       - f6-consolidate-r2
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: host:windows-hyperv/20261122T190754Z
+      expires: 2026-11-23T15:07:58.9688064Z
     note: Blocking native validation (design Validation plan, a7, a20; FLOW-09), on the branch after consolidation; where a case says "as main", capture main's output first. hyperv stays linked; StartRelay hands its session and claim to warden. (1) warden doctor --driver hyperv, elevated and not, prints what main prints; --network is honoured. (2) elevated warden setup --driver hyperv --slots 2 is idempotent. (3) a non-elevated durable build and an elevated ephemeral build succeed and verify; [driver.hyperv] network is honoured and --network overrides it; the old name [vm] network is honoured too, with one warning line that names the new key; with [driver] image_refresh_after set low, the detached image prepare --driver hyperv starts and logs, and with [driver.hyperv] image_refresh_after = "30d" beside it in the same file, it does not. (4) with the service installed, a service-delegated build succeeds. (5) a build whose script powers the VM off without completing fails with the build-VM-off error about 10 s after the VM stops (the grace was 5 s); (r4, c81892d) the error is fixable and its fix names the build's build-output.log. (6) Ctrl-C mid-build removes both VMs and the switch; record the time from Ctrl-C to exit, to judge the 60 s default of the teardown wait ([build] teardown_timeout) against a real teardown before K2 applies it to Hyper-V (a20). (7) --keep-vms leaves both VMs; warden clean --driver hyperv then removes them and leaves a running build's. Evidence under native/windows-hyperv/<date>/.
   - id: f6-validate-qemu-any
     phase: 6
@@ -93,8 +93,8 @@ steps:
       - f6-consolidate
       - f6-consolidate-r2
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: host:container-any/20261122T190754Z
+      expires: 2026-11-23T15:07:59.0278716Z
     note: 'Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation, on the Windows host with its container runtime. Added in r2: the exec transport on Windows, and the container driver''s clean where keep_ids is the only liveness signal (the process scan finds nothing on Windows), are exercised with a real runtime only here. (1) warden driver list shows warden-driver-container.exe; warden doctor reports the runtime and ok. (2) a default build succeeds, its ledger verifies, driver.json is written. (3) Ctrl-C mid-build tears down; with the driver killed warden reaps; with warden killed the driver tears down on the end of its input. (4) warden clean leaves a running build and removes a build whose warden and driver were both killed, from its record. (5) a warden-driver-container.bat beside warden or on PATH is not taken for the driver; a warden-driver-container.exe in a PATH directory ahead of warden''s replaces the one beside warden. (6) both tiers of the driver suite pass against warden-driver-container.exe. Evidence under native/container-any/<date>/.'
   - id: f1-design-r2
     phase: 1
@@ -296,8 +296,8 @@ budget:
     runs: 5
     steps: 30
   spent:
-    runs: 12
-    steps: 35
+    runs: 13
+    steps: 37
 questions:
   - id: a16
     kind: assumed
@@ -1038,3 +1038,9 @@ history:
   - at: 2026-11-22T19:07:34Z
     by: host:macos-finch/macbook.attended-20261122T190734Z
     event: claimed f6-validate-macos-finch until 2026-11-23T15:07:34Z
+  - at: 2026-11-22T19:07:58Z
+    by: host:windows-hyperv/20261122T190754Z
+    event: claimed f6-validate-windows-hyperv until 2026-11-23T15:07:58Z
+  - at: 2026-11-22T19:07:59Z
+    by: host:container-any/20261122T190754Z
+    event: claimed f6-validate-container-any until 2026-11-23T15:07:59Z

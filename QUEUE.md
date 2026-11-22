@@ -36,7 +36,7 @@ None.
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | config-lookup-test-symlinked-tmp | fix (follows project-config-trust) | - | buildwarden/buildwarden | cli, designs | 8 close | f8-close (cloud) | - | [#134](https://github.com/buildwarden/buildwarden/pull/134) | 10 / 7 |
-| 2 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 6 publish | f6-validate-windows-hyperv (host:windows-hyperv), f6-validate-qemu-any (host:qemu-any), f6-validate-macos-finch (host:macos-finch, leased to host:macos-finch/macbook.attended-20261122T190734Z), f6-validate-container-any (host:container-any), f6-validate-macos-vz-r2 (host:macos-vz) | - | - | 35 / 30 |
+| 2 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 6 publish | f6-validate-windows-hyperv (host:windows-hyperv, leased to host:windows-hyperv/20261122T190754Z), f6-validate-qemu-any (host:qemu-any), f6-validate-macos-finch (host:macos-finch, leased to host:macos-finch/macbook.attended-20261122T190734Z), f6-validate-container-any (host:container-any, leased to host:container-any/20261122T190754Z), f6-validate-macos-vz-r2 (host:macos-vz) | - | - | 37 / 30 |
 | 5 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 6 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
 | 7 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 2 / 9 |
