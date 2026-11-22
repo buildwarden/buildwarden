@@ -334,9 +334,13 @@ func (s *State) unattendedHold(f *Feature, st *Step) (why string, red bool) {
 		return "", false
 	}
 	for _, repo := range s.ReposOf(f) {
-		m := s.MainOf(repo)
+		m := s.TrunkRecord(repo, f)
 		if m == nil || m.CI != "red" || m.Followup == f.Feature {
 			continue
+		}
+		if s.OnProgramTrunk(repo, f) {
+			return fmt.Sprintf("the program trunk of %s is red at %s: no refresh "+
+				"until it is green (FLOW-10, FLOW-20)", repo, m.SHA), true
 		}
 		if repo == s.Config.Repository || repo == "" {
 			return fmt.Sprintf("main is red at %s: no refresh until it is green "+

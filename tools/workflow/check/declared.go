@@ -110,6 +110,9 @@ func (c *checker) queueDiffers(fm *Front, all bool) []string {
 	if !sameSet(fm.ruleIDs(), f.RulesChanged) {
 		differ("rules_changed", fm.ruleIDs(), f.RulesChanged)
 	}
+	if d := fm.IsProgram(); !f.IsProcess() && d != f.Program {
+		differ("program (FLOW-20: related lists componentization.md)", d, f.Program)
+	}
 	if !all {
 		return out
 	}

@@ -73,6 +73,12 @@ type RepositoryEntry struct {
 	// Profile is the path of the repository's profile file in it. Empty,
 	// the repository has not adopted the contract (LOOP-08).
 	Profile string `yaml:"profile,omitempty"`
+	// ProgramTrunk is the repository's program trunk while FLOW-20 stands,
+	// program/componentization: a program item works against it, and the
+	// loop merges into it (FLOW-20). It is not a trunk: Trunk stays what
+	// the profile is compared with (LOOP-01). Empty, the repository has
+	// none.
+	ProgramTrunk string `yaml:"program_trunk,omitempty"`
 }
 
 // Entry returns repo's repositories entry, or nil when it has none.
@@ -143,6 +149,13 @@ type Feature struct {
 	// records it (wf state-step); Seed adds it as x4-state when the item
 	// enters Close, and x4-close waits for it (FLOW-03).
 	StateStep string `yaml:"state_step,omitempty"`
+	// Program marks a program item: its design lists componentization.md in
+	// related, which wf checks at Design's done-when (FLOW-20).
+	Program bool `yaml:"program,omitempty"`
+	// Trunk is the branch the item works against in its home, recorded at
+	// Branch setup or its first wf declare (TrunkFor). Empty, none is
+	// recorded yet.
+	Trunk string `yaml:"trunk,omitempty"`
 	// Lead is the host name, host:<name>, whose machines take a feature's
 	// cloud steps of phases 0 to 5 (FLOW-04, FLOW-09). Empty, the item is
 	// not led. Any worker may set or clear it (SetLead); each change is a
@@ -218,6 +231,9 @@ type Work struct {
 	// Merged is the merge commit the loop confirmed on the repository's
 	// trunk.
 	Merged string `yaml:"merged,omitempty"`
+	// Trunk is the branch the item works against in this repository,
+	// recorded as Feature.Trunk is (TrunkFor).
+	Trunk string `yaml:"trunk,omitempty"`
 }
 
 // Adopts is what a reconciliation item adopts: a release of a consumable
@@ -321,6 +337,9 @@ type State struct {
 	// Main is main.yaml, what a session last recorded about main; the file
 	// is optional. Nil, main's CI is not known, which is not read as green.
 	Main *Main
+	// ProgramMain is program.yaml, the same record for the program trunk
+	// (FLOW-20); optional as main.yaml is.
+	ProgramMain *Main
 	// doneDir records that queue/done/ exists: done items are written there
 	// and carry no number (queue-positions, Decision 8).
 	doneDir bool
@@ -384,9 +403,19 @@ var shaRe = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
 // (-gates) stays when a later reading for the same commit is green, and goes
 // with another head. The follow-up is recorded once while main is red.
 func (s *State) RecordMain(r MainReading) error {
+	return s.record(&s.Main, "main.yaml", r)
+}
+
+// RecordProgram is RecordMain for the program trunk, in program.yaml: the
+// red-trunk hold is per trunk (FLOW-10, FLOW-20).
+func (s *State) RecordProgram(r MainReading) error {
+	return s.record(&s.ProgramMain, programFile, r)
+}
+
+func (s *State) record(into **Main, file string, r MainReading) error {
 	m := Main{}
-	if s.Main != nil {
-		m = *s.Main
+	if *into != nil {
+		m = **into
 	}
 	if r.CI != "" || r.SHA != "" {
 		if !shaRe.MatchString(r.SHA) {
@@ -410,8 +439,8 @@ func (s *State) RecordMain(r MainReading) error {
 		}
 		m.UpToDate = r.UpToDate
 	}
-	s.Main = &m
-	return s.SaveMain()
+	*into = &m
+	return s.saveRecord(m, file)
 }
 
 // followup records the item filed to fix a red main, once.
@@ -455,16 +484,20 @@ func (m *Main) reading(r MainReading) {
 
 // SaveMain writes main.yaml.
 func (s *State) SaveMain() error {
+	return s.saveRecord(*s.Main, "main.yaml")
+}
+
+func (s *State) saveRecord(m Main, file string) error {
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
-	if err := enc.Encode(s.Main); err != nil {
+	if err := enc.Encode(m); err != nil {
 		return err
 	}
 	if err := s.mkdir(); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(s.Dir, "main.yaml"), buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(s.Dir, file), buf.Bytes(), 0o644); err != nil {
 		return err
 	}
 	if s.summaryDir != "" {
@@ -555,13 +588,23 @@ func (s *State) loadItems() error {
 
 // loadMain reads the optional main.yaml.
 func (s *State) loadMain() error {
-	p := filepath.Join(s.Dir, "main.yaml")
-	if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
-		return nil
+	for file, m := range map[string]**Main{"main.yaml": &s.Main,
+		programFile: &s.ProgramMain} {
+		p := filepath.Join(s.Dir, file)
+		if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		*m = &Main{}
+		if err := readYAML(p, *m); err != nil {
+			return err
+		}
 	}
-	s.Main = &Main{}
-	return readYAML(p, s.Main)
+	return nil
 }
+
+// programFile is the record of the program trunk, beside main.yaml, with the
+// same fields (FLOW-10, FLOW-20).
+const programFile = "program.yaml"
 
 // sortFeatures puts s.Features in FLOW-05 order, a stable starting order for
 // code that walks them; readers that need the current order use Ordered.
@@ -1129,6 +1172,11 @@ func (s *State) validateRepositories() []error {
 			errs = append(errs, fmt.Errorf("config: repositories %s has no trunk",
 				who))
 		}
+		if e.ProgramTrunk != "" && e.ProgramTrunk == e.Trunk {
+			errs = append(errs, fmt.Errorf("config: repositories %s: program_trunk "+
+				"is its trunk %s; a program trunk is not a trunk (FLOW-20)", who,
+				e.Trunk))
+		}
 	}
 	if r := s.Config.Repository; r != "" && !seen[r] {
 		errs = append(errs, fmt.Errorf("config: repositories has no entry for %s, the "+
@@ -1198,6 +1246,13 @@ func (s *State) Problems(f *Feature) []error {
 		bad("pr.head %q is not a commit id", f.PR.Head)
 	}
 	validateWork(f, bad)
+	if f.Program && f.IsProcess() {
+		bad("program is for a feature: a process item keeps the trunk (FLOW-20)")
+	}
+	if flips := s.trunkFlips(f); flips != "" {
+		bad("its declaration would change the trunk it recorded (%s): back to Design "+
+			"to split it (FLOW-06, FLOW-20)", flips)
+	}
 	return errs
 }
 

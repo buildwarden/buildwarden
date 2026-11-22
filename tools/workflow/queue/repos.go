@@ -56,6 +56,20 @@ func (s *State) MainOf(repo string) *Main {
 	return v.Main
 }
 
+// TrunkRecord is what the session last recorded about the branch the item
+// works against in repo: program.yaml for a program trunk, main.yaml for the
+// trunk; nil when nothing is recorded (FLOW-10, FLOW-20).
+func (s *State) TrunkRecord(repo string, f *Feature) *Main {
+	v, err := s.ForRepository(repo)
+	if err != nil {
+		return nil
+	}
+	if s.OnProgramTrunk(repo, f) {
+		return v.ProgramMain
+	}
+	return v.Main
+}
+
 // mkdir makes the view's directory before a file is written there.
 func (s *State) mkdir() error {
 	return os.MkdirAll(s.Dir, 0o755)

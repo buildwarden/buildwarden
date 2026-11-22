@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -872,9 +873,20 @@ type Front struct {
 	// rule (FLOW-14).
 	RuleChanges []RuleChange `yaml:"rule_changes"`
 	Concepts    []string     `yaml:"concepts"`
-	present     map[string]bool
+	// Related names the designs this one relates to; one that lists
+	// componentization.md makes the item a program item (FLOW-20).
+	Related []string `yaml:"related"`
+	present map[string]bool
 	// raw is the front-matter as parsed, for the values a profile checks.
 	raw map[string]any
+}
+
+// IsProgram reports whether the design makes its item a program item: its
+// related lists componentization.md (FLOW-20).
+func (fm *Front) IsProgram() bool {
+	return slices.ContainsFunc(fm.Related, func(r string) bool {
+		return path.Base(r) == "componentization.md"
+	})
 }
 
 // loopKeys are the front-matter keys every design carries, whatever its

@@ -18,6 +18,10 @@ type repoAt struct {
 	work  *queue.Work
 	dir   string
 	trunk string
+	// against is the branch the item works against here, its trunk or,
+	// for a program item, the program trunk (queue.State.TrunkFor,
+	// FLOW-20). trunk stays what the profile is compared with (LOOP-01).
+	against string
 	// profilePath is the entry's profile; empty, the repository has not
 	// adopted the contract and has no fast gate, reference documents or
 	// rule paths (LOOP-08).
@@ -61,6 +65,9 @@ func (c *checker) resolve(name string, w *queue.Work) *repoAt {
 	}
 	s := c.state()
 	if r.trunk, r.err = s.Config.Trunk(name); r.err != nil {
+		return r
+	}
+	if r.against, r.err = s.TrunkFor(name, c.f); r.err != nil {
 		return r
 	}
 	r.profilePath = s.Config.Entry(name).Profile
@@ -112,9 +119,9 @@ func Clone(env Env, repo string) (string, error) {
 	return (&checker{env: env, f: &queue.Feature{}}).clone(repo)
 }
 
-// trunk is the remote-tracking ref of the trunk of the repository being
-// checked.
-func (c *checker) trunk() string { return "origin/" + c.at.trunk }
+// trunk is the remote-tracking ref of the branch the item works against in
+// the repository being checked: its trunk, or its program trunk (FLOW-20).
+func (c *checker) trunk() string { return "origin/" + c.at.against }
 
 // dir is the checkout of the repository being checked.
 func (c *checker) dir() string {

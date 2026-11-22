@@ -19,8 +19,9 @@
 //	            -estimate-steps N -estimate-runs N [-source S] [-follows ITEM]
 //	            [-kind process -holds PATTERN,...] [-hold WHY -resumes WHEN]
 //	            [-repos OWNER/NAME,...] [-areas AREA,...] [-seams SEAM,...]
-//	            [-adopts CONSUMABLE@VERSION] [-urgent] [-lead host:NAME]
+//	            [-adopts CONSUMABLE@VERSION] [-urgent] [-lead host:NAME] [-program]
 //	wf hold     -state DIR -worker W -feature F -why TEXT -resumes WHEN
+//	wf trunk    -state DIR -feature F [-repository OWNER/NAME]
 //	wf move     -state DIR -worker human/NAME -feature F -to N [-why TEXT]
 //	wf urgent   -state DIR -worker human/NAME -feature F [-clear]
 //	wf state-step -state DIR -worker human/NAME -feature F (-note TEXT | -clear)
@@ -31,7 +32,8 @@
 //	wf stale    -state DIR -repo DIR -worker W
 //	wf commit   -state DIR -worker W -m MESSAGE [-claimed FEATURE/STEP]
 //	            [-renewed FEATURE/STEP] [PATH...]
-//	wf main     -state DIR [-sha SHA -ci green|red|pending [-gates] [-run URL]]
+//	wf main     -state DIR [-trunk BRANCH]
+//	            [-sha SHA -ci green|red|pending [-gates] [-run URL]]
 //	            [-followup ITEM] [-up-to-date required|not-required]
 //	wf digest   -state DIR
 //	wf areas    -state DIR -list
@@ -79,6 +81,18 @@
 // cannot read from its design; for an item homed here wf declare copies
 // them. new -adopts marks a reconciliation item, which FLOW-05 classes with
 // the fixes (LOOP-07).
+//
+// new -program marks a program item, whose design lists componentization.md
+// in related; wf checks the mark against the design (FLOW-20). Such an item,
+// unless it is a process item or its areas reach the loop's machinery,
+// .github/ or .goreleaser.yaml, works against its repository's program trunk
+// where config.yaml's entry records one: the trunk is recorded on the item
+// at Branch setup or its first declare, and a later declaration that would
+// change it is refused. trunk prints the branch an item works against; main
+// -trunk records the program trunk's reading in program.yaml beside
+// main.yaml, and a refresh waits while the item's own trunk is red. stale
+// compares each item with its own trunk, and areas -rev defaults to the
+// program trunk while a program item works against it.
 //
 // new -lead, and lead for an item already queued or in progress, name the
 // host name whose machines take a feature's cloud steps of Branch setup
@@ -255,7 +269,7 @@ import (
 
 const usage = "usage: wf " +
 	"validate|status|next|claim|renew|release|check|done|answer|back|new|hold|move|urgent|" +
-	"lead|" +
+	"lead|trunk|" +
 	"state-step|declare|" +
 	"relate|relations|stale|commit|main|digest|areas|gate|budget|migrate|drops [flags]"
 
@@ -270,7 +284,7 @@ type opts struct {
 	lead, host, session, current, renewed                     string
 	repos, areas, seams, adopts, with, message, claimed       string
 	rev, edges, repository                                    string
-	urgent, clear, check, list, clones, prepare               bool
+	urgent, clear, check, list, clones, prepare, program      bool
 	// given holds the names of the flags the command line set, for a flag
 	// whose empty value means something.
 	given                                      map[string]bool
@@ -330,6 +344,8 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.source, "source", "", "new: where the item came from")
 	fs.StringVar(&o.kind, "kind", "", "new: feature (default) or process")
 	fs.StringVar(&o.follows, "follows", "", "new: the item this one fixes or finishes")
+	fs.BoolVar(&o.program, "program", false,
+		"new: a program item, whose design lists componentization.md in related (FLOW-20)")
 	fs.StringVar(&o.holds, "holds", "",
 		"new: process only, comma-separated affinity patterns it holds")
 	fs.StringVar(&o.hold, "hold", "",
@@ -413,7 +429,7 @@ func run(cmd string, args []string, now time.Time) error {
 	cmds := map[string]func(*queue.State, opts) error{
 		"validate": validate, "status": status, "next": next, "check": checkPhase,
 		"answer": answer, "back": back, "new": newFeature, "move": move, "urgent": urgent,
-		"lead": lead, "state-step": stateStep, "hold": hold,
+		"lead": lead, "state-step": stateStep, "hold": hold, "trunk": trunkCmd,
 		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
 		"declare": declareItem, "relate": relate, "relations": relations,
 		"digest": digest, "areas": areasCmd, "native": native,
@@ -451,12 +467,15 @@ func commitCmd(o opts, paths []string) error {
 // main.yaml under repos/. Its flags are its own, since its -run is a URL.
 func mainCmd(args []string) error {
 	var r queue.MainReading
-	var state, repository string
+	var state, repository, trunk string
 	fs := flag.NewFlagSet("main", flag.ExitOnError)
 	fs.StringVar(&state, "state", ".", "checkout of the workflow branch")
 	fs.StringVar(&repository, "repository", "",
 		"owner/name: record that repository's trunk in repos/<owner>/<name>/main.yaml; "+
 			"absent, the queue's own in main.yaml")
+	fs.StringVar(&trunk, "trunk", "",
+		"the branch read: the repository's trunk (main.yaml, the default) or its "+
+			"program trunk (program.yaml beside it, FLOW-20)")
 	fs.StringVar(&r.SHA, "sha", "", "the head of main the session saw")
 	fs.StringVar(&r.CI, "ci", "", "the result of its check runs: green, red or pending")
 	fs.BoolVar(&r.Gates, "gates", false, "the red is the session's own gates' on the commit")
@@ -476,7 +495,43 @@ func mainCmd(args []string) error {
 	if err != nil {
 		return err
 	}
-	return v.RecordMain(r)
+	if trunk == "" {
+		return v.RecordMain(r)
+	}
+	repo := v.Config.Repository
+	switch t, _ := s.Config.Trunk(repo); {
+	case trunk == t:
+		return v.RecordMain(r)
+	case trunk == s.Config.ProgramTrunkOf(repo):
+		return v.RecordProgram(r)
+	}
+	return fmt.Errorf("main: -trunk %s is neither the trunk nor the program trunk "+
+		"config.yaml records for %s", trunk, repo)
+}
+
+// trunkCmd is wf trunk: the branch the item works against in a repository,
+// its home by default, for agents to fork, merge, refresh and open the PR
+// against (FLOW-20). With no program trunk recorded for the repository it
+// says so beside the trunk.
+func trunkCmd(s *queue.State, o opts) error {
+	f, err := s.Find(o.feature)
+	if err != nil {
+		return err
+	}
+	repo := o.repository
+	if repo == "" {
+		repo = s.ReposOf(f)[0]
+	}
+	t, err := s.TrunkFor(repo, f)
+	if err != nil {
+		return err
+	}
+	if s.Config.ProgramTrunkOf(repo) == "" {
+		fmt.Printf("%s\t(%s has no program trunk)\n", t, repo)
+		return nil
+	}
+	fmt.Println(t)
+	return nil
 }
 
 // digest is wf digest: it builds each day's page from the day's run files.
@@ -702,6 +757,11 @@ func finish(s *queue.State, f *queue.Feature, st *queue.Step, o opts) error {
 		recordMerges(s, f, o)
 	}
 	queue.Complete(f, st, o.worker, o.now)
+	if f.Phase > 0 && f.Round == "feature" {
+		// Branch setup forked the branch from the item's trunk: from now on
+		// it is checked against that one (FLOW-20).
+		return s.PinTrunks(f, o.worker, o.now)
+	}
 	return nil
 }
 
@@ -804,7 +864,7 @@ func newFeature(s *queue.State, o opts) error {
 	}
 	f := &queue.Feature{
 		Feature: o.feature, Title: o.title, Priority: o.priority, Source: o.source,
-		Kind: kind, Holds: holds, Follows: o.follows, Lead: o.lead,
+		Kind: kind, Holds: holds, Follows: o.follows, Lead: o.lead, Program: o.program,
 		Design: "docs/design/" + o.feature + ".md", Branch: "feat/" + o.feature,
 		Budget: queue.Budget{Estimate: queue.Count{Runs: o.estRuns, Steps: o.estSteps}},
 	}
@@ -952,6 +1012,13 @@ func areasFor(s *queue.State, o opts) (*queue.State, opts, error) {
 	}
 	if !o.given["rev"] {
 		o.rev = o.trunkRev
+		repo := o.repository
+		if repo == "" {
+			repo = s.Config.Repository
+		}
+		if pt := programInFlight(s, repo); pt != "" {
+			o.rev = pt
+		}
 	}
 	return v, o, nil
 }
@@ -959,6 +1026,37 @@ func areasFor(s *queue.State, o opts) (*queue.State, opts, error) {
 // queueTrunk is the queue repository's trunk ref, origin/<trunk> from its
 // config.yaml entry. With no queue repository set, as in a state before
 // config.yaml named one, it is origin/main, as before.
+// itemTrunk is origin/<the branch the item works against in repo>: its
+// trunk, or its program trunk (FLOW-20). With no queue repository set, as in
+// a state before repositories entries, it is origin/main.
+func itemTrunk(s *queue.State, f *queue.Feature, repo string) (string, error) {
+	if repo == "" {
+		return "origin/main", nil
+	}
+	t, err := s.TrunkFor(repo, f)
+	if err != nil {
+		return "", err
+	}
+	return "origin/" + t, nil
+}
+
+// programInFlight returns origin/<program trunk> of repo while an open
+// program item works against it there, or "": wf areas -rev and wf drops
+// -base default to it then (FLOW-20).
+func programInFlight(s *queue.State, repo string) string {
+	pt := s.Config.ProgramTrunkOf(repo)
+	if pt == "" {
+		return ""
+	}
+	for _, f := range s.Features {
+		if f.Status != "done" && slices.Contains(s.ReposOf(f), repo) &&
+			s.OnProgramTrunk(repo, f) {
+			return "origin/" + pt
+		}
+	}
+	return ""
+}
+
 func queueTrunk(s *queue.State) (string, error) {
 	if s.Config.Repository == "" {
 		return "origin/main", nil
@@ -1231,7 +1329,7 @@ func staleSeed(s *queue.State, f *queue.Feature, head string, o opts) (string, b
 	if f.PendingRefresh() != nil || (!waits && !f.MergedMainInPublish()) {
 		return "", false, nil
 	}
-	trunk, err := queueTrunk(s)
+	trunk, err := itemTrunk(s, f, s.ReposOf(f)[0])
 	if err != nil {
 		return "", false, err
 	}
@@ -1308,7 +1406,7 @@ func staleWork(s *queue.State, f *queue.Feature, o opts, waits bool) ([]string, 
 		if err != nil {
 			return nil, err
 		}
-		trunk, err := s.Config.Trunk(w.Repo)
+		trunk, err := itemTrunk(s, f, w.Repo)
 		if err != nil {
 			return nil, err
 		}
@@ -1323,7 +1421,7 @@ func staleWork(s *queue.State, f *queue.Feature, o opts, waits bool) ([]string, 
 		if waits && w.PR != nil && w.PR.Number > 0 {
 			pr = w.PR
 		}
-		note, err := staleNote(dir, "origin/"+trunk, w.Branch, head, pr)
+		note, err := staleNote(dir, trunk, w.Branch, head, pr)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", w.Repo, err)
 		}
