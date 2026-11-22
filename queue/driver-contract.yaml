@@ -82,8 +82,8 @@ steps:
       - f6-consolidate
       - f6-consolidate-r2
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: host:macos-finch/macbook.attended-20261122T190734Z
+      expires: 2026-11-23T15:07:34.504956Z
     note: 'Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation. The container driver is a separate binary, warden-driver-container, run through the driver commands. (1) warden driver list shows container at the built warden-driver-container, found beside warden and marked as selected, and the four linked drivers; warden doctor prints container runtime: finch and ok. (2) a default build succeeds and its ledger verifies; driver.json names the driver binary and its digest; inputs/ holds Containerfile and build.sh. (3) warden shell opens a shell and passes its exit code through. (4) [driver.container] relay_image = "dev" builds the relay from source, and so does the old name [runtime] relay_image = "dev", with one warning line that names the new key; a warden.toml that sets both is refused before anything is created; WARDEN_IMAGE=<ref> pulls that image; an unpullable reference fails without trying the default. (5) Ctrl-C mid-build tears down and leaves nothing; SIGTERM mid-build does the same and exits 1; with the driver killed mid-build warden fails the build and reaps; with warden killed (SIGKILL) mid-build the driver tears down by itself and no container of the build is left. (6) with warden and the driver both killed, the build''s containers are still running; warden clean, run with another --tmpdir than the build''s and after the build''s warden.toml was deleted, removes that build''s containers, network, work directory, stage directory, lock and record, and leaves a running build''s; a running build started with another HOME, whose lock is elsewhere, is left alone too. (r4, Decision 25) Before warden clean, record ps -A -ww -o pid,ppid,args: the killed build''s finch container wait warden-build-<id> waiter, when still there, has lost its driver parent and does not keep it; the other HOME''s waiter runs under its live warden-driver-container and keeps it. (7) WARDEN_CTR_CLI and --runtime select the runtime; (r4, Decision 26) a named runtime that is not installed (WARDEN_CTR_CLI=podman, --runtime docker, [driver.container] cli = "podman") is refused, each naming its source, with a fixable error and no output directory, and so is --runtime finch with finch''s VM stopped (finch vm stop); warden doctor with WARDEN_CTR_CLI=podman is blocked with the same error; --network x is refused by warden as an unknown flag for the container driver; [runtime] cli = 5 in warden.toml is refused by the driver, naming the file, and leaves no output directory, and so is [driver.container] cli = 5. (8) with nothing customized, a build''s driver.json has found: beside-warden and nothing shadowed; a copy of warden-driver-container placed in a directory that comes before warden''s on PATH runs in place of the one beside warden: warden driver list shows it and the copy it shadows, and the build''s driver.json has found: PATH, its digest and the bundled copy under shadowed; the same copy in a directory after warden''s on PATH does not run and is listed as shadowed; [runtime] driver = "./x" in the project''s warden.toml is refused. (9) make driver-conformance DRIVER=dist/warden-driver-container passes both tiers on finch. Evidence under native/macos-finch/<date>/.'
   - id: f6-validate-container-any
     phase: 6
@@ -296,8 +296,8 @@ budget:
     runs: 5
     steps: 30
   spent:
-    runs: 11
-    steps: 34
+    runs: 12
+    steps: 35
 questions:
   - id: a16
     kind: assumed
@@ -1035,3 +1035,6 @@ history:
   - at: 2026-11-22T18:49:13Z
     by: cloud/20261122T180143Z
     event: done f6-consolidate-r2
+  - at: 2026-11-22T19:07:34Z
+    by: host:macos-finch/macbook.attended-20261122T190734Z
+    event: claimed f6-validate-macos-finch until 2026-11-23T15:07:34Z
