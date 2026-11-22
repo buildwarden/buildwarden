@@ -26,7 +26,7 @@ func TestLifecycleFake(t *testing.T) {
 	hermetic(t)
 	s := fakeSuite(t)
 	for _, r := range s.Lifecycle(LifecycleOptions{StubRelay: true,
-		Teardown: 20 * time.Second}) {
+		Teardown: 20 * time.Second, CaseDeadline: 2 * time.Minute}) {
 		if r.Failure != "" {
 			t.Errorf("%s (%s): %s", r.Check, strings.Join(r.Requirements, ", "),
 				r.Failure)
@@ -58,12 +58,43 @@ func TestLifecycleSelfTest(t *testing.T) {
 				}
 			}
 			for _, r := range s.Lifecycle(LifecycleOptions{StubRelay: true, Skip: skip,
-				Teardown: 3 * time.Second}) {
+				Teardown: 3 * time.Second, CaseDeadline: time.Minute}) {
 				if r.Check == check && r.Failure == "" {
 					t.Errorf("%s passed under fault %s", check, fault)
 				}
 			}
 		})
+	}
+}
+
+// A case that passes its deadline is reported as hung, and the drivers of
+// the builds it holds are killed, rather than the tier waiting on it.
+func TestRunCaseDeadline(t *testing.T) {
+	block := make(chan struct{})
+	defer close(block)
+	l := &lifecycle{o: LifecycleOptions{CaseDeadline: 50 * time.Millisecond},
+		held: map[string]*buildRun{}}
+	for _, tc := range []struct {
+		name     string
+		run      func(*lifecycle) (string, string)
+		finished bool
+		failure  string
+	}{
+		{"finishes", func(*lifecycle) (string, string) { return "", "a failure" }, true,
+			"a failure"},
+		{"hangs", func(*lifecycle) (string, string) { <-block; return "", "" }, false, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := lifecycleCase{name: tc.name, run: tc.run}
+			_, failure, finished := l.runCase(c)
+			if finished != tc.finished || failure != tc.failure {
+				t.Errorf("runCase = %q, finished %v; want %q, %v", failure,
+					finished, tc.failure, tc.finished)
+			}
+		})
+	}
+	if got := l.killHeld(); got != "it held no build" {
+		t.Errorf("killHeld with no build = %q", got)
 	}
 }
 

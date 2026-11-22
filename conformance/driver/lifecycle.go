@@ -44,6 +44,10 @@ type LifecycleOptions struct {
 	// Teardown bounds each wait for the driver to stop; 0 is 60 s, the
 	// orchestrator's default teardown wait (DRV-52).
 	Teardown time.Duration
+	// CaseDeadline bounds each case; 0 is 30 min. A case still running then
+	// fails as hung, the drivers of its builds are killed, and the cases
+	// after it are not run.
+	CaseDeadline time.Duration
 }
 
 // lifecycleCase is one case of the lifecycle tier.
@@ -99,22 +103,72 @@ func (s *Suite) Lifecycle(o LifecycleOptions) []Result {
 	if o.Teardown == 0 {
 		o.Teardown = 60 * time.Second
 	}
+	if o.CaseDeadline == 0 {
+		o.CaseDeadline = 30 * time.Minute
+	}
 	l := &lifecycle{s: s, o: o, dir: filepath.Join(s.scratch, "context"),
 		held: map[string]*buildRun{}}
 	var out []Result
 	if err := l.prepare(); err != nil {
 		return []Result{{Check: "setup", Failure: err.Error()}}
 	}
+	hung := ""
 	for _, c := range lifecycleCases {
 		r := Result{Check: c.name, Requirements: c.reqs}
-		if slices.Contains(o.Skip, c.name) {
+		switch {
+		case slices.Contains(o.Skip, c.name):
 			r.Skipped = "skipped with --skip"
-		} else {
-			r.Skipped, r.Failure = c.run(l)
+		case hung != "":
+			r.Failure = "not run: the " + hung + " case hung"
+		default:
+			var finished bool
+			if r.Skipped, r.Failure, finished = l.runCase(c); !finished {
+				hung = c.name
+				r.Failure = fmt.Sprintf("the case did not finish within %s: "+
+					"it hung; %s", o.CaseDeadline, l.killHeld())
+			}
 		}
 		out = append(out, r)
 	}
 	return out
+}
+
+// runCase runs c, or gives up on it at the case deadline with finished
+// false: a case that hangs is reported as one rather than holding the whole
+// tier, and its goroutine is left behind.
+func (l *lifecycle) runCase(c lifecycleCase) (skipped, failure string, finished bool) {
+	type result struct{ skipped, failure string }
+	done := make(chan result, 1)
+	go func() {
+		s, f := c.run(l)
+		done <- result{s, f}
+	}()
+	select {
+	case r := <-done:
+		return r.skipped, r.failure, true
+	case <-time.After(l.o.CaseDeadline):
+		return "", "", false
+	}
+}
+
+// killHeld kills the drivers of the builds the suite still holds, which a
+// hung case may be waiting on, and describes them.
+func (l *lifecycle) killHeld() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if len(l.held) == 0 {
+		return "it held no build"
+	}
+	var held []string
+	for id, b := range l.held {
+		if b.proc != nil {
+			_ = b.proc.Kill()
+		}
+		held = append(held, fmt.Sprintf("build %s, whose driver was killed; its log:\n%s",
+			id, b.log()))
+	}
+	slices.Sort(held)
+	return "it held " + strings.Join(held, "\n")
 }
 
 // The marker the scripts print, and the file they read from the context.
@@ -160,6 +214,7 @@ type buildRun struct {
 	token      string
 	lock       *heldLock
 	cmd        *exec.Cmd
+	proc       *os.Process // cmd's, once started; under l.mu
 	stdin      io.WriteCloser
 	stdout     io.ReadCloser
 	stderr     io.ReadCloser
@@ -169,9 +224,17 @@ type buildRun struct {
 	lines  []string
 	defect string
 	errLog bytes.Buffer
-	exited chan struct{}
-	tunnel io.Closer
+	state  *os.ProcessState // the driver's exit, once exited is closed
+	// outDone and errDone are closed when the driver's stdout and stderr end;
+	// exited when the driver has exited and its output ended, or did not end
+	// within drainWait of the exit.
+	outDone, errDone, exited chan struct{}
+	tunnel                   io.Closer
 }
+
+// drainWait bounds the wait for a driver's output to end after its exit: a
+// process the driver started may hold it open.
+const drainWait = 5 * time.Second
 
 // newID is a build ID: 8 characters of [a-z0-9] (DRV-40's form).
 func newID() string {
@@ -187,6 +250,7 @@ func newID() string {
 // start starts a build with body as its script, in mode, with keep.
 func (l *lifecycle) start(body, mode string, keep bool) (*buildRun, error) {
 	b := &buildRun{l: l, id: newID(), token: newID() + newID(), exited: make(chan struct{}),
+		outDone: make(chan struct{}), errDone: make(chan struct{}),
 		msgs: make(chan map[string]any, 16)}
 	b.work = filepath.Join(l.s.scratch, "builds", b.id)
 	b.diag, b.out = filepath.Join(b.work, "diagnostics"), filepath.Join(b.work, "out")
@@ -279,8 +343,16 @@ func (b *buildRun) run(msg map[string]any) error {
 	if err := b.cmd.Start(); err != nil {
 		return err
 	}
+	b.l.mu.Lock()
+	b.proc = b.cmd.Process
+	b.l.mu.Unlock()
 	go b.read()
-	go func() { _, _ = io.Copy(&lockedWriter{mu: &b.mu, w: &b.errLog}, b.stderr) }()
+	go func() {
+		_, _ = io.Copy(&lockedWriter{mu: &b.mu, w: &b.errLog}, b.stderr)
+		_ = b.stderr.Close()
+		close(b.errDone)
+	}()
+	go b.wait()
 	return b.send(msg)
 }
 
@@ -295,7 +367,7 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 	return l.w.Write(p)
 }
 
-// read reads the driver's messages until its stdout ends, then waits for it.
+// read reads the driver's messages until its stdout ends.
 func (b *buildRun) read() {
 	sc := bufio.NewScanner(b.stdout)
 	sc.Buffer(make([]byte, 64<<10), 1<<20+1)
@@ -314,9 +386,61 @@ func (b *buildRun) read() {
 			b.msgs <- m
 		}
 	}
-	_ = b.cmd.Wait()
+	_ = b.stdout.Close()
 	close(b.msgs)
+	close(b.outDone)
+}
+
+// wait waits for the driver's exit, then for its output to end, for
+// drainWait at most.
+//
+// It does not use cmd.Wait, which closes the suite's ends of the pipes as
+// soon as the process exits, while read and the stderr copy may still be
+// reading them (os/exec's StdoutPipe says not to). On Windows, where the
+// pipes are synchronous, os.File.Close cancels a read in progress and then
+// waits for the reader to let go; a reader that had not yet entered its read
+// when the cancel came is not woken, and Close waits on it for as long as
+// some process still holds the write end. Each reader closes its own end
+// when its stream ends instead, and a stream that never ends is left to its
+// reader.
+func (b *buildRun) wait() {
+	state, _ := b.cmd.Process.Wait()
+	drained := time.After(drainWait)
+	defect := ""
+	select {
+	case <-b.outDone:
+	case <-drained:
+		defect = fmt.Sprintf("the driver exited, but its stdout did not end within "+
+			"%s: a process it started holds it", drainWait)
+	}
+	select {
+	case <-b.errDone:
+	case <-drained:
+	}
+	b.mu.Lock()
+	b.state = state
+	if defect != "" && b.defect == "" {
+		b.defect = defect
+	}
+	b.mu.Unlock()
 	close(b.exited)
+}
+
+// exitCode is the driver's exit code, after exited; -1 when unknown.
+func (b *buildRun) exitCode() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.state.ExitCode()
+}
+
+// exitText says how the driver ended, waiting for drainWait at most.
+func (b *buildRun) exitText() string {
+	select {
+	case <-b.exited:
+		return fmt.Sprintf("exit %d", b.exitCode())
+	case <-time.After(drainWait):
+		return "still running"
+	}
 }
 
 func (b *buildRun) send(m map[string]any) error {
@@ -334,8 +458,8 @@ func (b *buildRun) next(d time.Duration) (map[string]any, error) {
 	select {
 	case m, ok := <-b.msgs:
 		if !ok {
-			return nil, fmt.Errorf("the driver's output ended (exit %d); its log:\n%s",
-				b.cmd.ProcessState.ExitCode(), b.log())
+			return nil, fmt.Errorf("the driver's output ended (%s); its log:\n%s",
+				b.exitText(), b.log())
 		}
 		return m, nil
 	case <-time.After(d):
@@ -469,14 +593,14 @@ func (b *buildRun) waitExit(code int) error {
 	if defect != "" {
 		return errors.New(defect)
 	}
-	if got := b.cmd.ProcessState.ExitCode(); got != code {
+	if got := b.exitCode(); got != code {
 		return fmt.Errorf("the driver exited %d, not %d; its log:\n%s", got, code, b.log())
 	}
 	return nil
 }
 
-// end releases what the suite holds of b: its tunnel, collector and lock;
-// a driver still running is killed and reaped.
+// end releases what the suite holds of b: its input, tunnel, collector and
+// lock; a driver still running is killed and reaped.
 func (b *buildRun) end() {
 	select {
 	case <-b.exited:
@@ -485,6 +609,7 @@ func (b *buildRun) end() {
 		<-b.exited
 		_, _ = b.l.reap(b)
 	}
+	_ = b.stdin.Close()
 	if b.tunnel != nil {
 		_ = b.tunnel.Close()
 	}
@@ -578,8 +703,11 @@ func (l *lifecycle) caseSequence() (string, string) {
 	if failure != "" {
 		return "", failure
 	}
+	b.mu.Lock()
+	lines := slices.Clone(b.lines)
+	b.mu.Unlock()
 	var types []string
-	for _, line := range b.lines {
+	for _, line := range lines {
 		var m map[string]any
 		_ = json.Unmarshal([]byte(line), &m)
 		if t, _ := m["type"].(string); t != "exited" {
@@ -711,8 +839,7 @@ func (l *lifecycle) caseOrphaned() (string, string) {
 	return "", l.atEachPoint(func(b *buildRun) string {
 		// Output first: a driver that tears down on the end of its input
 		// meets its closed output, as when warden was killed.
-		_ = b.stdout.Close()
-		_ = b.stderr.Close()
+		b.closeOutput()
 		_ = b.stdin.Close()
 		select {
 		case <-b.exited:
@@ -722,6 +849,45 @@ func (l *lifecycle) caseOrphaned() (string, string) {
 		}
 		return l.reapNothing(b)
 	})
+}
+
+// Bounds on closeOutput: settle lets the readers block in their reads first,
+// and closeWait is how long a close is waited on before the input is closed
+// all the same.
+const (
+	settle    = 200 * time.Millisecond
+	closeWait = 2 * time.Second
+)
+
+// closeOutput closes the suite's ends of the driver's stdout and stderr, as a
+// killed orchestrator's are closed, while read and the stderr copy read them.
+//
+// On POSIX the close wakes the readers. On Windows the pipes are synchronous:
+// os.File.Close cancels a ReadFile in progress (CancelIoEx) and then waits
+// for the reader to let go of the file. A reader that was about to enter its
+// read when the cancel came, as one is just after the message that brought
+// the build to its point, misses it; its read then ends only when the driver
+// writes or exits, so a Close waited on before the input closes waits for a
+// driver that is waiting for the end of its input. So the readers are first
+// given settle to enter their reads, where the cancel reaches them, and each
+// close runs on its own and is waited on for closeWait at most. A close that
+// missed still ends once the driver's teardown writes to the stream or the
+// driver exits: the driver then meets its closed output on its next write.
+func (b *buildRun) closeOutput() {
+	time.Sleep(settle)
+	var wg sync.WaitGroup
+	for _, f := range []io.Closer{b.stdout, b.stderr} {
+		wg.Go(func() { _ = f.Close() })
+	}
+	closed := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(closeWait):
+	}
 }
 
 func (l *lifecycle) caseKill() (string, string) {
@@ -952,6 +1118,9 @@ func (s *Suite) attach(req []byte, input string) *outcome {
 	cmd.Env = append(s.environ(), "WARDEN_DRIVER_REQUEST="+reqFile,
 		"WARDEN_DRIVER_RESULT="+result)
 	cmd.Stdin = strings.NewReader(input)
+	// A process attach starts may hold its stderr past its exit; Wait gives
+	// up on it after this, rather than waiting for it to end.
+	cmd.WaitDelay = 2 * time.Second
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	err := cmd.Run()
