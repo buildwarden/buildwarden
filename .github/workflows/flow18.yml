@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: [main, 'program/**']
   schedule:
-    - cron: '17 12 * * *'
+    - cron: '35 12 * * *'
   workflow_dispatch:
 
 permissions:
@@ -19,4 +19,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: tools/workflow/flow18-check.sh origin
+      - name: .entire/settings.json names the private sessions repository
+        run: |
+          want="github:buildwarden/buildwarden-sessions"
+          if [ ! -f .entire/settings.json ]; then
+            echo "FLOW-18: .entire/settings.json is missing" >&2
+            exit 1
+          fi
+          got=$(jq -r '.strategy_options.checkpoint_remote | "\(.provider):\(.repo)"' .entire/settings.json)
+          if [ "$got" != "$want" ]; then
+            echo "FLOW-18: .entire/settings.json checkpoint_remote is '$got', want '$want'" >&2
+            exit 1
+          fi
+      - name: origin carries no entire/ ref
+        run: |
+          refs=$(git ls-remote origin)
+          leaked=$(printf '%s\n' "$refs" | awk '{print $2}' | grep -E '^refs/(entire/|heads/entire/|tags/entire/)' || true)
+          if [ -n "$leaked" ]; then
+            echo "FLOW-18: origin carries entire/ refs; deleting them is the human's call (FLOW-16):" >&2
+            printf '%s\n' "$leaked" | sed 's/^/  /' >&2
+            exit 1
+          fi
+          echo "FLOW-18: ok"
