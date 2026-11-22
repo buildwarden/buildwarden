@@ -1,0 +1,2 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-vz-main-plain)

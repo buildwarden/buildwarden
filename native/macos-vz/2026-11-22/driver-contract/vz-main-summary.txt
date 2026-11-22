@@ -1,0 +1,19 @@
+### main (d67da9dd The config lookup tests change directory the way a )
+1 doctor rc=0
+1 image list rc=0
+./vz.sh: line 9: /Users/jeff/src/buildwarden-native/.scratch/out-vz-main-plain/driver.json: No such file or directory
+2 plain build rc=0 relay.log=yes driver.json=
+ SIGNATURES: ✅ All 11 signatures valid
+ COMPLETENESS: ✅ All channels closed
+2 containerfile build rc=0 inputs/=absent
+3 exit-3 script: warden rc=3
+3 timeout 30s: warden rc=124 warden: build FAILED: timed out after 30s (--timeout)
+4 SIGINT mid-build: warden rc=130; during: workdirs=1 relays=1; after: workdirs=0 (before 0) relays=0
+Interrupted, cleaning up... (press ctrl+c again to force)|warden: build interrupted|
+./vz.sh: line 13: 29288 Terminated: 15          ( cd $S/dcp/sleep && exec "$B" build --driver vz -q --script ./build.sh -o $S/out-vz-$w-sig$sig . > $E/sig$sig.log 2>&1 )
+4 SIGTERM mid-build: warden rc=143; during: workdirs=1 relays=1; after: workdirs=1 (before 0) relays=1
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply|
+5 --runtime docker rc=0 
+5 --network x rc=1 [warden] ERROR: --network is only used by --driver hyperv
+5 [runtime] cli = 5 build rc=1 [warden] ERROR: parsing /Users/jeff/src/buildwarden-native/.scratch/dcp/cfg5/warden.toml: toml: line 2 (last key "runtime.cli"): incompatible types: TOML value has type int64; destination has type string
+5 clean --driver vz (no runtime on PATH) rc=1: [warden] ERROR: no container runtime found (tried finch, docker, podman)|  To fix: install Finch (brew install --cask finch && finch vm init), Docker or Podman, or use a VM driver (--driver qemu or vz)|

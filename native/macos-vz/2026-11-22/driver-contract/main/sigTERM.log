@@ -1,0 +1,1 @@
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply

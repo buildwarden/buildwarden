@@ -1,0 +1,17 @@
+### dc (190b092d hyperv setup: name [driver.hyperv] network in its h)
+1 doctor rc=0
+1 image list rc=0
+2 plain build rc=0 relay.log=yes driver.json={"name":"vz","version":"dev","contract":1,"path":"/Users/jeff/src/buildwarden-native/.scratch/dc/dist/warden","sha256":"82fce7b72e1833e31ecf99b713b0c0bdf8b10e9766378a3e08489057e913d8ed","found":"linke
+ SIGNATURES: ✅ All 11 signatures valid
+ COMPLETENESS: ✅ All channels closed
+2 containerfile build rc=0 inputs/=absent
+3 exit-3 script: warden rc=3
+3 timeout 30s: warden rc=124 warden: build FAILED: timed out after 30s (--timeout)
+4 SIGINT mid-build: warden rc=130; during: workdirs=1 relays=1; after: workdirs=0 (before 0) relays=0
+Interrupted, cleaning up... (press ctrl+c again to force)|warden: build interrupted|
+4 SIGTERM mid-build: warden rc=1; during: workdirs=1 relays=1; after: workdirs=0 (before 0) relays=0
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply|warden: build terminated (SIGTERM)|
+5 --runtime docker rc=1 [warden] ERROR: unknown flag --runtime for driver "vz"
+5 --network x rc=1 [warden] ERROR: unknown flag --network for driver "vz"
+5 [runtime] cli = 5 build rc=0 warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-vz-dc-cfg5)
+5 clean --driver vz (no runtime on PATH) rc=0: Kept the cache (85411 MB, /Users/jeff/Library/Caches/warden); --cache removes it|Nothing to clean.|
