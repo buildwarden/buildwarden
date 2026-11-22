@@ -23,15 +23,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261122T180143Z
+      expires: 2026-11-22T21:13:31.451887889Z
 budget:
   estimate:
     runs: 2
     steps: 12
   spent:
-    runs: 0
-    steps: 1
+    runs: 1
+    steps: 2
 questions: []
 history:
   - at: 2026-11-21T19:26:09Z
@@ -55,3 +55,6 @@ history:
   - at: 2026-11-22T19:13:29Z
     by: human/jeff
     event: 'estimate raised from 5 steps, 1 run to 12 steps, 2 runs on Jeff''s word: the approved design''s Implementation plan estimates 11 steps plus the state step over two runs; Implement started attended'
+  - at: 2026-11-22T19:13:31Z
+    by: cloud/20261122T180143Z
+    event: claimed x2-implement until 2026-11-22T21:13:31Z
