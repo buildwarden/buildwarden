@@ -41,8 +41,8 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261122T180143Z
+      expires: 2026-11-22T23:41:04.761174515Z
     note: 'main at 136be78: 1 commit since the branch merged it; both change .github/workflows/main.yml, .github/workflows/release.yml, .goreleaser.yaml, AGENTS.md, CONTRIBUTING.md, docs/development/loop-profile.md, docs/development/orchestrator.md, docs/development/ux-cli-config.md, specs/README.md, specs/specs_test.go, tools/tier1/rules.yaml'
 budget:
   estimate:
@@ -89,3 +89,6 @@ history:
   - at: 2026-11-22T21:39:29Z
     by: cloud/20261122T180143Z
     event: 'seeded x2-refresh: main at 136be78: 1 commit since the branch merged it; both change .github/workflows/main.yml, .github/workflows/release.yml, .goreleaser.yaml, AGENTS.md, CONTRIBUTING.md, docs/development/loop-profile.md, docs/development/orchestrator.md, docs/development/ux-cli-config.md, specs/README.md, specs/specs_test.go, tools/tier1/rules.yaml'
+  - at: 2026-11-22T21:41:04Z
+    by: cloud/20261122T180143Z
+    event: claimed x2-refresh until 2026-11-22T23:41:04Z
