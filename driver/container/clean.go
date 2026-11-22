@@ -175,37 +175,61 @@ const driverProgram = "warden-driver-container"
 // runtime's helpers (finch's limactl, its ssh to nerdctl) run under the
 // runtime, not the driver.
 //
-// Arguments are split at blanks, as ps prints them: a driver or runtime
-// whose path holds a space is not recognised, which only ever leaves a build
-// to keep_ids.
+// ps prints arguments joined by blanks, so a driver whose path holds one is
+// also recognised by its whole command line less warden's trailing " run"
+// (isDriver). The waiter's runtime is always a bare name (the runtime
+// setting refuses a path), so its arguments are split at blanks.
 func liveBuilds(listing string) map[string]bool {
 	type proc struct {
 		ppid string
-		args []string
+		args string // the command line as ps prints it
 	}
 	procs := make(map[string]proc)
 	var order []string
 	for _, line := range strings.Split(listing, "\n") {
-		f := strings.Fields(line)
-		if len(f) < 3 {
+		pid, rest := cutField(line)
+		ppid, args := cutField(rest)
+		args = strings.TrimSpace(args)
+		if args == "" {
 			continue
 		}
-		procs[f[0]] = proc{ppid: f[1], args: f[2:]}
-		order = append(order, f[0])
+		procs[pid] = proc{ppid: ppid, args: args}
+		order = append(order, pid)
 	}
 	ids := make(map[string]bool)
 	for _, pid := range order {
 		p := procs[pid]
-		id, ok := waiterBuild(p.args)
+		id, ok := waiterBuild(strings.Fields(p.args))
 		if !ok {
 			continue
 		}
 		parent, ok := procs[p.ppid]
-		if ok && p.ppid != pid && path.Base(parent.args[0]) == driverProgram {
+		if ok && p.ppid != pid && isDriver(parent.args) {
 			ids[id] = true
 		}
 	}
 	return ids
+}
+
+// cutField returns s's first blank-separated field and what follows it.
+func cutField(s string) (field, rest string) {
+	s = strings.TrimLeft(s, " \t")
+	if i := strings.IndexAny(s, " \t"); i >= 0 {
+		return s[:i], s[i:]
+	}
+	return s, ""
+}
+
+// isDriver reports whether the command line args, as ps prints it, is a
+// warden-driver-container: its first argument's base name is driverProgram,
+// or, for a path that holds a blank, the whole line less the " run" warden
+// starts it with has that base name.
+func isDriver(args string) bool {
+	if path.Base(strings.Fields(args)[0]) == driverProgram {
+		return true
+	}
+	bin, ok := strings.CutSuffix(args, " run")
+	return ok && path.Base(bin) == driverProgram
 }
 
 // waiterBuild is the build ID that args wait on, when args are a waiter's:

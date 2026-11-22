@@ -45,6 +45,14 @@ func TestLiveBuilds(t *testing.T) {
   200    90 warden-driver-container run
   201   200 docker container wait warden-build-k3v9x2ab
 `, true},
+		{"the driver by a path that holds a blank", `
+  200     1 /opt/my tools/warden-driver-container run
+  201   200 docker container wait warden-build-k3v9x2ab
+`, true},
+		{"another program by a path that holds a blank", `
+  200     1 /opt/my tools/warden-driver-container.bak run
+  201   200 docker container wait warden-build-k3v9x2ab
+`, false},
 		{"finch's waiter by path, its helpers beneath it", `
     1     0 /sbin/launchd
   200     1 /usr/local/bin/warden-driver-container run
