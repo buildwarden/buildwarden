@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.yaml.in/yaml/v3"
 )
 
 // The branch wf commit pushes, and the only one.
@@ -207,15 +209,19 @@ func (r CommitRequest) ref() (*claimRef, error) {
 }
 
 // refuseMapChange refuses a change to areas.yaml from a worker that is not
-// human: the map is the human's word (FLOW-05). It looks at the session's
-// paths and at the unpushed commits the push would carry with them. A hand
-// push is not stopped.
+// human: the map is the human's word (FLOW-05). While a program trunk is
+// configured (FLOW-20) the loop may change it as a reviewed or
+// umbrella-passed program design names, or to bring reaches in line with the
+// dependency edges, and records each change: the commit then passes when
+// the records it carries to origin add at least one area-map record for each
+// map change it carries. It looks at the session's paths and at the
+// unpushed commits the push would carry with them. A hand push is not
+// stopped.
 func (g stateGit) refuseMapChange(r CommitRequest) error {
 	if Kind(r.Worker) == "human" {
 		return nil
 	}
-	refused := fmt.Sprintf("%s may not commit a change to areas.yaml: the area "+
-		"map is changed on the human's word, by a human worker (FLOW-05)", r.Worker)
+	session := false
 	if len(r.Paths) > 0 {
 		changed, err := g.lines(append([]string{"status", "--porcelain", "--"},
 			r.Paths...)...)
@@ -224,7 +230,7 @@ func (g stateGit) refuseMapChange(r CommitRequest) error {
 		}
 		for _, l := range changed {
 			if len(l) > 3 && l[3:] == "areas.yaml" {
-				return errors.New(refused)
+				session = true
 			}
 		}
 	}
@@ -236,11 +242,84 @@ func (g stateGit) refuseMapChange(r CommitRequest) error {
 	if err != nil {
 		return err
 	}
-	if len(unpushed) > 0 {
+	changes := len(unpushed)
+	if session {
+		changes++
+	}
+	if changes == 0 {
+		return nil
+	}
+	var cfg Config
+	if err := readYAML(filepath.Join(g.dir, "config.yaml"), &cfg); err != nil {
+		return err
+	}
+	if cfg.HasProgramTrunk() {
+		return g.mapChangesRecorded(r, changes)
+	}
+	refused := fmt.Sprintf("%s may not commit a change to areas.yaml: the area "+
+		"map is changed on the human's word, by a human worker (FLOW-05)", r.Worker)
+	if !session {
 		return fmt.Errorf("%s, and the push would carry the unpushed commit %s, "+
 			"which changes it", refused, strings.Join(unpushed, "; "))
 	}
+	return errors.New(refused)
+}
+
+// mapChangesRecorded passes a loop's area-map changes while a program trunk
+// is configured (FLOW-05, FLOW-20, a16 (a)) when the records the push would
+// carry add an area-map record for each of them: the working tree's
+// records when the session commits program/records.yaml, else HEAD's,
+// against origin's.
+func (g stateGit) mapChangesRecorded(r CommitRequest, changes int) error {
+	ref := "HEAD:" + RecordsFile
+	if slices.Contains(r.Paths, RecordsFile) {
+		ref = ""
+	}
+	carried, err := g.areaMapRecords(ref)
+	if err != nil {
+		return err
+	}
+	pushed, err := g.areaMapRecords("origin/" + workflowBranch + ":" + RecordsFile)
+	if err != nil {
+		return err
+	}
+	if carried-pushed < changes {
+		return fmt.Errorf("%s may commit a change to areas.yaml only as a reviewed or "+
+			"umbrella-passed program design names it, or to bring reaches in line "+
+			"with the dependency edges, each recorded: the push carries %d map "+
+			"change(s) and %d new area-map record(s) (wf record -kind area-map, "+
+			"committed with %s; FLOW-05, FLOW-20)", r.Worker, changes, carried-pushed,
+			RecordsFile)
+	}
 	return nil
+}
+
+// areaMapRecords counts the area-map records in the records file at a
+// revision, REV:PATH, or in the working tree for "". A missing file has
+// none.
+func (g stateGit) areaMapRecords(ref string) (int, error) {
+	var rs []Record
+	if ref == "" {
+		var err error
+		if rs, err = LoadRecords(g.dir); err != nil {
+			return 0, err
+		}
+	} else {
+		data, err := g.run("show", ref)
+		if err != nil {
+			return 0, nil
+		}
+		if err := yaml.Unmarshal([]byte(data), &rs); err != nil {
+			return 0, fmt.Errorf("%s: %w", ref, err)
+		}
+	}
+	n := 0
+	for _, r := range rs {
+		if r.Kind == "area-map" {
+			n++
+		}
+	}
+	return n, nil
 }
 
 // pairDone adds to each named queue/F.yaml its counterpart queue/done/F.yaml,

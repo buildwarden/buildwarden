@@ -77,8 +77,20 @@ other items. Each repository's trunk is the one its `config.yaml`
 `repositories` entry gives; `wf` reads it from there only (LOOP-01).
 
 Keep any `limit:` lines `wf validate` prints for the digest (step 2.5
-and step 4). The tick never edits `.dev/workflow/areas.yaml`: the
-area map changes only on Jeff's word (FLOW-05).
+and step 4). The tick edits `.dev/workflow/areas.yaml` only while
+`config.yaml` records a program trunk (FLOW-20), and then only for a change
+that a program item's design, reviewed by Jeff or passed by the umbrella
+test, names (a new repository's map, an area a move creates or empties, a
+split, a mode), or that brings `reaches` in line with the dependency edges
+(`tools/tier1/area-edges.sh | dist/wf areas -state .dev/workflow -check
+-edges -`). Check the candidate map first with `dist/wf validate -state
+.dev/workflow -areas <candidate> -repo <checkout>`, then
+record each change, `dist/wf record -state .dev/workflow -worker $W -kind
+area-map -ref <docs/design/<name>.md | area-edges> [-repository R] -note
+"<the change and why>"`, and commit `areas.yaml` with
+`program/records.yaml`: `wf commit` refuses a map change the push carries
+without a new `area-map` record for it. With no program trunk configured,
+the area map changes only on Jeff's word (FLOW-05).
 
 `entire doctor --force` installs Entire's git hooks, which a fresh clone lacks;
 `entire status` must name `buildwarden/buildwarden-sessions` as the

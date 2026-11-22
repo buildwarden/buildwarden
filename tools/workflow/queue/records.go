@@ -57,6 +57,12 @@ const (
 	SecurityNoteDiff   = "diff"
 )
 
+// AreaMapEdges is the ref of an area-map record whose change brings the
+// map's reaches in line with the repository's dependency edges
+// (tools/tier1/area-edges.sh); any other area-map record names, as its ref,
+// the program design that names the change (FLOW-05, FLOW-20, a16 (a)).
+const AreaMapEdges = "area-edges"
+
 // firstKinds are listed first under Decided for you: a departure from a
 // decision of the human's, a return to Design past the second, and a
 // re-estimate (FLOW-20).
@@ -92,14 +98,9 @@ func AppendRecord(dir string, r Record) error {
 		return errors.New("a record names who decided (-worker)")
 	case r.Kind == "security-ack" && Kind(r.By) != "human":
 		return errors.New("only the human acknowledges a security note (FLOW-08)")
-	case r.Kind == "security-note" && r.Ref != SecurityNoteDesign &&
-		r.Ref != SecurityNoteDiff:
-		return fmt.Errorf("a security-note record says what was read: -ref %s (U4 or "+
-			"the design review) or -ref %s (Review, on the head)", SecurityNoteDesign,
-			SecurityNoteDiff)
-	case r.Kind == "security-note" && r.Ref == SecurityNoteDiff && len(r.Head) < 7:
-		return errors.New("a security-note -ref diff record names the head Review read " +
-			"(-head)")
+	}
+	if err := r.refValid(); err != nil {
+		return err
 	}
 	rs, err := LoadRecords(dir)
 	if err != nil {
@@ -118,6 +119,26 @@ func AppendRecord(dir string, r Record) error {
 		return err
 	}
 	return os.WriteFile(p, buf.Bytes(), 0o644)
+}
+
+// refValid checks the ref of the kinds a gate reads it on: a security-note's
+// (merge gate point 7) and an area-map's (wf commit).
+func (r Record) refValid() error {
+	switch {
+	case r.Kind == "security-note" && r.Ref != SecurityNoteDesign &&
+		r.Ref != SecurityNoteDiff:
+		return fmt.Errorf("a security-note record says what was read: -ref %s (U4 or "+
+			"the design review) or -ref %s (Review, on the head)", SecurityNoteDesign,
+			SecurityNoteDiff)
+	case r.Kind == "security-note" && r.Ref == SecurityNoteDiff && len(r.Head) < 7:
+		return errors.New("a security-note -ref diff record names the head Review read " +
+			"(-head)")
+	case r.Kind == "area-map" && r.Ref != AreaMapEdges && !strings.Contains(r.Ref, ".md"):
+		return fmt.Errorf("an area-map record says why the map changes: -ref %s, or "+
+			"-ref the program design that names it (docs/design/<name>.md)",
+			AreaMapEdges)
+	}
+	return nil
 }
 
 // DecidedForYou orders records for the digest's and QUEUE.md's Decided for

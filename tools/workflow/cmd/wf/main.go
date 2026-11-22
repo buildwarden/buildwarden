@@ -276,7 +276,11 @@
 // refused on the new state, and the worker asks next again. Exit 5: settle it
 // by hand (a conflict, a new Validate error, another session's uncommitted
 // files, three rejections). A change to areas.yaml is committed for a human
-// worker only (FLOW-05). It never force-pushes and pushes only workflow.
+// worker only (FLOW-05), except that while a program trunk is configured
+// (FLOW-20) another worker commits one when the push also carries a new
+// area-map record (record -kind area-map -ref area-edges, or -ref the program
+// design that names it) for each map change. It never force-pushes and
+// pushes only workflow.
 //
 // main records in main.yaml what the session read about main: the head it
 // saw and its check runs' result (green only when every run succeeded), a
