@@ -8,6 +8,22 @@ import (
 	"github.com/lesiw/ctrctl"
 )
 
+// A dev relay image is recognised as docker and finch list it and as podman
+// does, under localhost/; an image of another name is not.
+func TestDevRelayImageID(t *testing.T) {
+	for img, want := range map[string]string{
+		"warden-relay:abc12345":           "abc12345",
+		"localhost/warden-relay:abc12345": "abc12345",
+		"docker.io/library/alpine:3.20":   "",
+		"example.com/warden-relay:abc":    "",
+	} {
+		id, ok := devRelayImageID(img)
+		if ok != (want != "") || ok && id != want {
+			t.Errorf("devRelayImageID(%q) = %q, %v; want %q", img, id, ok, want)
+		}
+	}
+}
+
 // A build's containers are removed build first and holder last: podman
 // refuses to remove a holder whose namespace the build container still
 // joins, and the network stays while the holder does.

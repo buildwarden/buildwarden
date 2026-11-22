@@ -87,13 +87,20 @@ func removeResources(w io.Writer, dead func(id string) bool) (int, error) {
 		return removed, err
 	}
 	for _, img := range images {
-		if id, ok := strings.CutPrefix(img, "warden-relay:"); ok && dead(id) {
+		if id, ok := devRelayImageID(img); ok && dead(id) {
 			fmt.Fprintf(w, "Removing image: %s\n", img)
 			_, _ = ctrctl.ImageRm(nil, img)
 			removed++
 		}
 	}
 	return removed, nil
+}
+
+// devRelayImageID is the build ID of a dev build's relay image as the
+// runtime lists it: warden-relay:<id>, which podman lists under its default
+// registry as localhost/warden-relay:<id>.
+func devRelayImageID(img string) (string, bool) {
+	return strings.CutPrefix(strings.TrimPrefix(img, "localhost/"), "warden-relay:")
 }
 
 // removalOrder is names in the order a build's containers can be removed:
