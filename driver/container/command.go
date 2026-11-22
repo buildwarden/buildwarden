@@ -44,10 +44,24 @@ type state struct {
 
 // preflight is the probe of run: it refuses a relay image that is not one,
 // and resolves the runtime (the setting, else detection), refusing one that
-// is not supported or does not answer, before anything is created.
+// is not supported, is not installed or does not answer, before anything is
+// created (Behaviour 20).
 func preflight(_ context.Context, start *driver.Start) error {
-	_, err := buildRunner(start.Settings)
+	_, err := checkedRunner(start.Settings)
 	return err
+}
+
+// checkedRunner is buildRunner with the runtime set names, when it names
+// one, checked as installed and answering: the probe's and doctor's checks.
+func checkedRunner(set driver.Settings) (*runner, error) {
+	d, err := buildRunner(set)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkNamedRuntime(d.runtime, set); err != nil {
+		return nil, err
+	}
+	return d, nil
 }
 
 // buildRunner checks set's relay image and resolves its runtime.
@@ -127,10 +141,11 @@ func reap(_ context.Context, req *drivercmd.ReapRequest) (int, error) {
 }
 
 // doctor checks what a build checks before it creates anything: the relay
-// image's shape and the runtime, which it names (DRV-25). warden prints ok
+// image's shape and the runtime, which it names (DRV-25); a runtime the
+// probe refuses blocks it with the probe's error (a28). warden prints ok
 // after it when nothing blocks.
 func doctor(_ context.Context, req *drivercmd.DoctorRequest) (bool, error) {
-	d, err := buildRunner(req.Settings)
+	d, err := checkedRunner(req.Settings)
 	if err != nil {
 		return false, err
 	}

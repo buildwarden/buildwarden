@@ -491,3 +491,43 @@ func TestE2ENoisyDriver(t *testing.T) {
 	}
 	e.noLeftovers(0)
 }
+
+// A container runtime that is named but not installed is refused by the
+// container driver's probe, with a fixable error that names where it was
+// named, before the output directory is created; doctor is blocked by the
+// same error and prints no ok (Behaviour 20, a28, UX-09).
+func TestE2ENamedRuntimeNotInstalled(t *testing.T) {
+	e := newE2E(t)
+	// With only warden's directory on PATH, no runtime is installed.
+	path := "PATH=" + e.bin
+	build := []string{"build", "--driver", "container", "--tmpdir", e.tmp, "--output",
+		e.out()}
+	for _, tc := range []struct {
+		name, setting string
+		env, args     []string
+	}{
+		{"--runtime", "--runtime", nil, []string{"--runtime", "podman"}},
+		{"WARDEN_CTR_CLI", "WARDEN_CTR_CLI", []string{"WARDEN_CTR_CLI=podman"}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := append([]string{path}, tc.env...)
+			args := append(append(append([]string{}, build...), tc.args...), e.ctx)
+			_, stderr, code := e.run("", env, args...)
+			wantExit(t, code, 1, stderr)
+			wantIn(t, "stderr", stderr, "[warden] ERROR: "+tc.setting+
+				" names the container runtime podman, which is not installed",
+				"To fix: install Podman")
+			if _, err := os.Stat(e.out()); !errors.Is(err, fs.ErrNotExist) {
+				t.Errorf("the output directory was created: %v", err)
+			}
+			doctor := append([]string{"doctor", "--driver", "container"}, tc.args...)
+			stdout, stderr, code := e.run("", env, doctor...)
+			wantExit(t, code, 1, stderr)
+			wantIn(t, "doctor's stderr", stderr, tc.setting+
+				" names the container runtime podman, which is not installed")
+			if strings.Contains("\n"+stdout, "\nok\n") {
+				t.Errorf("doctor printed ok:\n%s", stdout)
+			}
+		})
+	}
+}

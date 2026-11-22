@@ -73,6 +73,54 @@ func resolveRuntime(set driver.Settings) (string, error) {
 	return "", unsupportedRuntime(v, set.Source("runtime"))
 }
 
+// checkNamedRuntime refuses the runtime rt that set names, when it does,
+// unless it is on PATH and answers `<rt> info` within 3 s: a value the user
+// provided that cannot be used is an error before any work, never replaced
+// by detection (Decision 26, Behaviour 20). A runtime set does not name was
+// detected, and detection has made the same checks. run's probe and doctor
+// call it; the build itself resolves as resolveRuntime does.
+func checkNamedRuntime(rt string, set driver.Settings) error {
+	if v, _ := set.String("runtime"); v == "" {
+		return nil
+	}
+	setting, other := namedRuntimeFix(set.Source("runtime"))
+	if _, err := exec.LookPath(rt); err != nil {
+		return driver.Fixable(runtimeInstallHint(rt)+", "+other,
+			"%s names the container runtime %s, which is not installed "+
+				"(not found on PATH)", setting, rt)
+	}
+	if !runtimeAnswers(rt) {
+		return driver.Fixable(runtimeStartHint(rt)+", "+other,
+			"%s names the container runtime %s, which is installed but not running "+
+				"(`%s info` failed)", setting, rt, rt)
+	}
+	return nil
+}
+
+// namedRuntimeFix words where the runtime was named, as checkNamedRuntime's
+// message puts it, and the fix that names another there.
+func namedRuntimeFix(source string) (setting, other string) {
+	switch source {
+	case cliFromFlag:
+		return cliFromFlag, "or pass --runtime another runtime, or leave it out"
+	case cliFromEnv:
+		return cliFromEnv, "or set WARDEN_CTR_CLI to another runtime, or unset it"
+	}
+	return keyInFile(source), "or set it to another runtime, or remove it"
+}
+
+// runtimeInstallHint is how to install the runtime name.
+func runtimeInstallHint(name string) string {
+	switch name {
+	case "finch":
+		return "install Finch (brew install --cask finch && finch vm init)"
+	case "podman":
+		return "install Podman"
+	default:
+		return "install Docker"
+	}
+}
+
 // unsupportedRuntime is the error for a runtime in effect that is not one of
 // runtimes. It names the level that set the value and gives the fix for that
 // level. The value is printed once, quoted: it may come from a file someone
