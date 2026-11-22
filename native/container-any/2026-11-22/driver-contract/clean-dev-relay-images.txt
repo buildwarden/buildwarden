@@ -1,0 +1,6 @@
+### warden clean with dev relay images left by builds that hung or were killed on 2026-11-20 (podman lists them as localhost/warden-relay:<id>)
+before: 21
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+Kept the cache (17190 MB, C:\Users\jeff\AppData\Local\warden); --cache removes it
+Removed 21 resource(s).
+after: 0
