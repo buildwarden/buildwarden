@@ -500,6 +500,24 @@ says where the value was set and what to change:
 No other value is tried in its place: neither a lower level's nor a detected
 runtime.
 
+### A runtime that is not installed or not running
+
+`warden build` and `warden shell` also refuse a runtime that a level names
+but that is not on `PATH`, or that does not answer `<runtime> info` within
+3 seconds (its VM or daemon is stopped). The container driver refuses it
+before the build starts: no output directory, container or network is made,
+and `warden` exits 1. The message names where the runtime was named, and the
+fix is to install or start it, or to name another:
+
+```
+[warden] ERROR: WARDEN_CTR_CLI names the container runtime podman, which is not installed (not found on PATH)
+  To fix: install Podman, or set WARDEN_CTR_CLI to another runtime, or unset it
+```
+
+`warden doctor` reports the same error and is blocked: it exits 1 and prints
+no `ok`. Detection is not tried in its place. When no level names a
+runtime, detection's own error says that none answered.
+
 <!-- TRANSITIONAL(runtime-former-values): this subsection is removed with
      driver/container/runtime_former.go, in the change that prepares 1.0. -->
 ### A path, or another runtime

@@ -186,6 +186,9 @@ records its bytes.
 resolve the runtime (--runtime, WARDEN_CTR_CLI, [driver.container] cli, else
     the first of finch, docker, podman that answers; any other value is
     refused before anything is run) and write it to the state file
+    probe (and doctor): a named runtime not on PATH, or not answering
+    `<runtime> info` within 3 s -> fixable error naming where it was named,
+    before any output directory exists; detection is not tried in its place
 resolve the relay image (driver/relaysource) and verify it
 start the relay container on a per-build network; report relay-started
 
@@ -207,8 +210,15 @@ start:
     start build                              # warden-io initialize runs as PID 1
 
 watch:
+    <runtime> container wait warden-build-<id>   # by name, a child of the driver
     wait for the session's completion, or the container exiting without one
 ```
+
+`clean` keeps a build whose lock is held, or whose waiter, `<runtime> container
+wait warden-build-<id>` in one `ps -A -ww -o pid=,ppid=,args=` listing, runs
+under a live `warden-driver-container`. A waiter whose driver was killed is
+orphaned and keeps nothing; no other process that names the build counts. With
+no `ps` (Windows), only the locks keep a build.
 
 The image's own `ENTRYPOINT` never runs, and nothing from the image exists
 until the network is already isolated. The holder and sidecar images are
