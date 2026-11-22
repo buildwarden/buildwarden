@@ -1,6 +1,6 @@
 ---
 name: wf-publish
-description: Workflow phases 0 and 6. Branch setup (phase 0); in Publish, merging main, the consolidation pass, archiving the design on the branch, and opening the PR with bounded CI repair. Process items' Implement opens its PR the same way.
+description: Workflow phases 0 and 6, and the loop's merges into a program trunk. Branch setup (phase 0); in Publish, merging the item's trunk, the consolidation pass, archiving the design on the branch, and opening the PR with bounded CI repair; f7-merge and the program sync on a program trunk (FLOW-20). Process items' Implement opens its PR the same way.
 ---
 
 You do the branch mechanics of FLOW-03 for one feature. Rules: FLOW-05,
@@ -9,18 +9,25 @@ FLOW-08, FLOW-10, FLOW-11, FLOW-12, FLOW-15, FLOW-16, FLOW-17, FLOW-18.
 An item whose queue file has `work` has a branch of the same name in each
 repository an entry names, worked in its clone at
 `.dev/checkouts/<owner>/<name>` (FLOW-03, FLOW-17). Each step below is done
-in each of them against that repository's trunk (its `config.yaml` entry),
-with the fast gate its profile file names (LOOP-01; here `make lint` and
-`make test`; none in a repository with no profile), and pushed there.
+in each of them against the item's trunk in that repository, with the fast
+gate its profile file names (LOOP-01; here `make lint` and `make test`;
+none in a repository with no profile), and pushed there. The item's trunk
+is `dist/wf trunk -state <workflow checkout> -feature F [-repository R]`:
+the repository's trunk (its `config.yaml` entry), or, for a program item
+while FLOW-20 stands, its program trunk, `program/componentization`.
+Below, "the item's trunk" is that branch, and `origin/<trunk>` its
+remote-tracking ref; run `make enforcement TIER1_BASE=origin/<trunk>` and
+`make tier1 TIER1_BASE=origin/<trunk>` against it too.
 
-- `f0-branch-setup`: create the queue's `branch` from current `origin/main`
-  and push it, and each work entry's from its repository's trunk.
+- `f0-branch-setup`: create the queue's `branch` from the item's current
+  `origin/<trunk>` and push it, and each work entry's from the item's trunk
+  in its repository.
 - `f6-merge-main`: the PR slot is free when the tick hands you this step
-  (FLOW-05). Merge current `origin/main` into the branch with conflict-only
+  (FLOW-05). Merge the item's current `origin/<trunk>` into the branch with conflict-only
   fixes (a merge commit, never a rebase of pushed history), run `make lint`
   and `make test`, push.
 - `f6-consolidate`: fill the design's Consolidation section against everything
-  that landed on `main` since the fork (FLOW-10) and run the FLOW-15 sweep
+  that landed on the item's trunk since the fork (FLOW-10) and run the FLOW-15 sweep
   (`make deadcode`, duplication, `docs/book/src/concepts/overview.md`). A
   design that declares `seams` and has no **Specification changes** section
   gets it here, from what the branch changed (LOOP-02). Fix
@@ -35,10 +42,12 @@ with the fast gate its profile file names (LOOP-01; here `make lint` and
   follow-up by the `workflow-intake` skill's follow-up path (FLOW-09) and name
   it in the step's evidence. Never write into
   `.claude/` or `tools/workflow/` outside `check/` on a feature branch.
+  A program item's regression its program trunk has is filed the same way.
 - `f6-open-pr`: set the design's `status: archived` and fill its Archive
   summary (FLOW-12): what was built, decisions taken and rejected, and what a
   future design touching its `concepts` needs to know. Commit, push, and open
-  the PR to `main` without asking (FLOW-08), and one in each repository
+  the PR to the item's trunk without asking (FLOW-08, `gh pr create --base
+  <trunk>`), and one in each repository
   whose branch has commits beyond its trunk (`gh pr create -R
   <owner>/<name>`), recorded in that work entry's `pr`; each body lists the
   tier-2 MUST findings in its repository and the item's other pull
@@ -56,22 +65,23 @@ with the fast gate its profile file names (LOOP-01; here `make lint` and
   already records a PR (the item was sent back and is published again),
   push to it and mark it ready (`gh pr ready`); open no second one. Then repair CI:
   at most three attempts per distinct failure, then add a `human` step and
-  stop (FLOW-11). A failure that does not reproduce is a flaky test:
+  stop (FLOW-11), for a program item too: its escalation, as FLOW-11 has it. A failure that does not reproduce is a flaky test:
   quarantine and file it per TEST-04, never retry until green. Set `pr.ci:
   green` only from a green check run on the PR's head, and wherever you set
   `pr.ci`, set `pr.head` to the commit the result is for (FLOW-08), for each
   pull request the item has.
   On any later push (review comments), refresh the Archive summary so it still matches the PR.
 - `f6-refresh` and `x2-refresh` (any `-r<n>`): bring the branch up to date
-  with `main` (FLOW-08, FLOW-10). Merge `origin/main` (a merge commit,
+  with the item's trunk (FLOW-08, FLOW-10). Merge `origin/<trunk>` (a merge commit,
   conflict-only fixes, never a rebase), run `make lint`, `make test` and
   `make deadcode`, and write the consolidation pass over what landed since
-  the branch last merged `main`, with the FLOW-15 sweep, as a dated entry in
-  the Consolidation section naming the `main` commit merged (a process item:
+  the branch last merged its trunk, with the FLOW-15 sweep, as a dated entry in
+  the Consolidation section naming the trunk commit merged (a process item:
   no review, FLOW-10). Refresh the Archive summary if the PR's content
-  changed and run `tools/workflow/flow18-check.sh`. A gate failure `main`
-  has too is not this branch's work: record it with
-  `dist/wf main -state <workflow checkout> -sha <merged main> -ci red -gates`,
+  changed and run `tools/workflow/flow18-check.sh`. A gate failure the
+  item's trunk has too is not this branch's work: record it with
+  `dist/wf main -state <workflow checkout> [-trunk <program trunk>] -sha
+  <merged trunk commit> -ci red -gates`,
   file the fix as the item's follow-up (FLOW-09) unless `main.yaml` already
   names one, record it with `-followup`, and return the step released.
   Work beyond conflict fixes and wording goes back as in `f6-consolidate`;
@@ -86,11 +96,46 @@ with the fast gate its profile file names (LOOP-01; here `make lint` and
   is not open yet only pushes: `f6-open-pr` follows.
 - `x2-implement` on a process item: after the implementation (by
   `wf-implement`), archive the design on the branch and open the PR as in
-  `f6-open-pr`.
+  `f6-open-pr`. A process item's PR always goes to `main` (LOOP-09).
+- `f7-merge`, and an `f6-merged-<n>` whose work entry is on a program
+  trunk (FLOW-08, FLOW-20): `wf next` offers them only while the merge gate
+  passes. For each work entry the step covers (at `f7-merge` each one not
+  yet merged, in turn; at `f6-merged-<n>` that entry's), run `dist/wf check
+  -state <workflow checkout> -repo <code checkout> -checkouts .dev/checkouts
+  -feature F -step S -repository <owner>/<name>`; on a pass, `gh pr merge
+  <n> --merge --match-head-commit <pr.head> -R <owner>/<name>`, then `git
+  fetch origin <program trunk> <branch>` in that repository's checkout, so
+  the merge proof reads the merged program trunk and not the ref from
+  before the merge. Return to the tick, which runs `dist/wf done` and
+  `dist/wf record -kind merge` for each merge. On a refusal from GitHub,
+  run the check again and stop. A point 5 failure on a protected finding
+  (GLOBAL-06, a SEC rule, RELAY-01 to RELAY-03, RELAY-05, or what FLOW-20
+  says never breaks) returns `back-to-design` with the finding, recorded
+  `-kind protected`; one on a posture change (point 7) waits for Jeff's
+  `security-ack` record.
+- `sync` (the program sync, FLOW-20; no queue item): `dist/wf sync-program
+  -state <workflow checkout> -repo <code checkout> -checkouts .dev/checkouts
+  -repository R` names the branch `sync/program-<main sha>`. Cut it from
+  `origin/<program trunk>`, merge `origin/<trunk>` into it (a merge commit,
+  conflict-only fixes), run the fast gate, push it and open its PR to the
+  program trunk. Once `dist/wf check -state <workflow checkout> -repo <code
+  checkout> -sync -repository R -pr N` passes, and when the merge had
+  conflicts once a tier-2 review of the resolution diff for that head has
+  no open MUST finding (the resolution recorded `-kind sync-resolution`),
+  merge it with `gh pr merge N --merge --match-head-commit <head> -R R`
+  and fetch. A conflict you cannot resolve escalates (FLOW-20): close the
+  sync PR if one opened, delete nothing on the remote but the sync branch
+  GitHub has not deleted, `dist/wf new -program -escalate "<the conflicting
+  paths and both sides' commits>"` the item `program-sync-<main sha>`, and
+  record both.
 
-Never merge, approve, or enable auto-merge (FLOW-08, LINT-03). Never push
-`main`, force-push, or delete a remote branch (FLOW-17); GitHub deletes the
-branch on merge. Before any push, run `tools/workflow/flow18-check.sh` and stop
+Approve or enable auto-merge on no PR (FLOW-08, LINT-03). Merge one only at
+`f7-merge`, an `f6-merged-<n>` on a program trunk, or the program sync,
+into a program trunk, with `--merge --match-head-commit`, after `wf check`
+passes; never into a trunk, never a squash or rebase, never with
+`--admin`, and never dismiss a finding. Never push `main` or a program
+trunk, force-push, or delete a remote branch or a tag (FLOW-17); GitHub
+deletes the branch on merge. Before any push, run `tools/workflow/flow18-check.sh` and stop
 if it fails (FLOW-18).
 
 On a native machine (a led step, FLOW-04), a branch is pushed only with

@@ -1,6 +1,6 @@
 ---
 name: wf-review
-description: Workflow phase 4. Runs the behavioral linter on a feature diff - tier 1 deterministic, tier 2 judgment in report-only mode - and writes the report to the workflow branch. Never approves or merges.
+description: Workflow phase 4. Runs the behavioral linter on a feature diff - tier 1 deterministic, tier 2 judgment in report-only mode - and writes the report to the workflow branch. Also takes FLOW-20's umbrella test (f2-umbrella) and process test (x2-process-test) in a fresh session. Never approves or merges.
 ---
 
 You are the behavioral linter for one feature diff, per
@@ -56,7 +56,84 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
    (LINT-04).
 5. Fixing findings is not your job. Return the counts; the tick sends MUST
    findings back to `wf-implement` and records the rest for the PR body, where the human acknowledges them at merge
-   (FLOW-08).
+   (FLOW-08). Each MUST and SHOULD finding names the head it was found on.
+   On a program item's PR into its program trunk (FLOW-20): a MUST finding
+   still open after one fix round is deferred, recorded with `dist/wf record
+   -kind deferred -feature F -ref <finding id> -head <head> -note "<why>"`;
+   a MUST finding under GLOBAL-06, a SEC rule, RELAY-01 to RELAY-03 or
+   RELAY-05, or on what FLOW-20 says never breaks, is never deferred: return
+   `back-to-design` with it, recorded `-kind protected`. Never dismiss one.
+
+## The umbrella test (`f2-umbrella`, FLOW-20)
+
+You did not write the design; if you did, stop and say so. Read the design
+on the item's branch against `docs/design/componentization.md` and the
+program records (`program/records.yaml` on the workflow checkout), and judge
+each point with its evidence:
+
+- U1: `related` lists `componentization.md`, and the design implements the
+  components, seams and boundaries the program's design names for one phase
+  row (P, S, K or M), or a filed split, follow-up or re-sequencing of them,
+  within that row's Work and Done when; one that adds a component, moves a
+  boundary or a component's ownership, or adds a seam the program does not
+  name, fails.
+- U2: no blocking question and no flagged assumed question, which on a
+  program item only component design, setup or privileged work may be;
+  each recommendation cites the umbrella decision or recorded answer of
+  Jeff's it follows, or says it settles a question of strategy. Confirm each
+  assumed question of strategy (record `-kind assumed`).
+- U3: `rule_changes` is empty and `areas` reach no rule or machinery path of
+  the profile.
+- U4: `security_boundary` is `none`, or the only trip is GLOBAL-06's relay
+  clause and the Security note shows no boundary's posture changes (read
+  it; record `-kind security-note`).
+- U5: each interface break is one FLOW-20's Interfaces bullet allows.
+- U6: `repos` and `areas` declared; where they are fewer than intake
+  recorded, or intake recorded none, check them against the area map and
+  `tools/tier1/area-edges.sh | dist/wf areas -state <workflow checkout>
+  -check -edges -`, and record the check.
+- U7: you agree, point by point.
+
+A pass: add the Design review entry `r<N>, <date>: umbrella test passed at
+<sha> (FLOW-20)` with each point's evidence, commit and push the branch,
+record `-kind umbrella`, and return; the tick runs `dist/wf done`, which
+checks the line. A failed U1 to U5: set the design's `design_review:
+required`, commit and push, run `dist/wf review-human -state <workflow
+checkout> -worker <W> -feature F -why "<the failed point>"`, which seeds
+Jeff's review, and record it. A failed U6, or a disagreement on anything
+but U1 to U5: return `back-to-design` with the finding, recorded.
+
+## The process test (`x2-process-test`, FLOW-20)
+
+You did not write the design; if you did, stop and say so. Judge:
+
+- P1: the **Program payoff** section shows, with figures and how they were
+  reached, the interactions it removes that decide nothing, per week, or the
+  program time it saves over its own cost.
+- P2: no rule FLOW-20 reserves to Jeff is touched. Read the change by its
+  effect, not by the files it names, against the design's list of every
+  rule, machinery path and configuration key it reaches. Reserved: any
+  change that lets the loop take without him a step, merge, push, tag,
+  filing or decision it could not before; removes or narrows a gate of his;
+  loosens the umbrella test or the process test; relaxes or removes a check
+  that stops the loop; raises a limit, budget or permission (`config.yaml`'s
+  limits, budgets and `runaway_factor`, the allow lists of
+  `.claude/settings*.json`); and any change to a rule about security
+  (GLOBAL-06, the SEC rules, RELAY-01 to RELAY-03, RELAY-05, RELAY-08, the
+  BOOT rules), merging (FLOW-08, LINT-03, the merge gate), pushing (FLOW-16,
+  FLOW-17) or tags and releases (FLOW-17's tag clause, LOOP-07.5, FLOW-20's
+  Pre-releases bullet, the release workflows). P2 fails closed: a doubt is
+  a failure.
+- P3: you agree on P1 and P2, point by point.
+
+A pass: add `r<N>, <date>: process test passed at <sha> (FLOW-20)` with each
+point's evidence to the Design review section, commit and push, record
+`-kind process-test`, and return. A failed or doubted P2, or any
+disagreement touching it: set `design_review: required`, commit and push,
+and `dist/wf review-human ... -why "<P2's finding>"` (Jeff's review). A
+failed P1, or a disagreement on P1 alone: `dist/wf hold -state <workflow
+checkout> -worker <W> -feature F -why "<P1's finding>" -resumes
+program-end`, recorded, and release the step.
 
 On a native machine (a led step, FLOW-04), a branch is pushed only with
 `tools/workflow/native/native-push.sh <name>`, or `native-push.sh <name>

@@ -32,13 +32,16 @@ Arguments:
 
 ## Never (unattended)
 
-The `workflow-tick` skill's Never list applies unchanged: no merge, approval or
-auto-merge; no push to `main`, force-push or remote branch delete; no edits to
+The `workflow-tick` skill's Never list applies, without its loop merges: no
+merge of any PR, into a trunk or a program trunk, no approval or
+auto-merge (`settings.native.json` denies `gh pr merge`); no push to `main`
+or a program trunk, no tag, force-push or remote branch delete; no edits to
 `docs/development/`, `.claude/` or `tools/workflow/`, except a rule change the
 feature's design review approved, in its `paths` (FLOW-14), and never a loop
 rule or its enforcement (LOOP-09); no secrets in prompts; no change to a
-trunk's protection (on GitHub, its branch protection rule and the rulesets
-that apply to it, FLOW-08); no urgent mark on an item (FLOW-05).
+trunk's or a program trunk's protection (on GitHub, its branch protection
+rule and the rulesets that apply to it, FLOW-08); no urgent mark on an item
+(FLOW-05).
 
 Also: never take `human` or `cloud` steps, never ask a question and wait (record
 it in the queue and the digest instead), and never change anything on the
@@ -127,8 +130,10 @@ for steps and file order for the backlog. Queue steps come before the backlog.
 
 ## Work
 
-Validation steps and backlog entries: test in one sitting, `main` first, then
-each waiting branch (FLOW-09), using the commands each design's Validation
+Validation steps and backlog entries: test in one sitting, `main` first,
+then each program trunk (`program/componentization`, while FLOW-20 stands),
+then each waiting branch (FLOW-09), each against its own trunk (`dist/wf
+trunk -feature F`), using the commands each design's Validation
 plan names and `make deadcode` where the backlog asks for it.
 
 Led steps (Branch setup through Guide of an item this host leads) and any
@@ -203,8 +208,8 @@ Clean up test images, VMs, containers and scratch output outside the documented
 caches (FLOW-16); a led item's `.scratch/<item>` worktree stays while the item
 is open, and the wrapper removes it once the item is done or its branch is
 gone (FLOW-16). Switch the checkout back to `main`. Push the workflow
-branch with `dist/wf commit`; never push `main` or merge anything (FLOW-08,
-FLOW-17).
+branch with `dist/wf commit`; never push `main` or a program trunk, or merge
+anything (FLOW-08, FLOW-17).
 
 Attended: release every lease the session still holds with
 `dist/wf release -state .dev/workflow -session <machine>.attended-<UTC> -why

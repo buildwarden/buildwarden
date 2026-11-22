@@ -39,8 +39,20 @@ FLOW-20.
    A process item also lists the
    workers it holds while in progress (`cloud`, `host:*`, `host:<name>`), or
    none when it disrupts no running work (FLOW-05). While FLOW-20 stands,
-   agree too whether the item is a program item; one that is not is filed as
-   FLOW-20's freeze says, with `-hold "<why>"`, unless it is exempt there.
+   agree too whether the item is a program item (its design will list
+   `componentization.md` in `related`): one is filed with `-program`, placed
+   above every released item of its class that is not a program item, and
+   declares its repositories and areas where the program's design gives
+   them. An item that is neither a program item nor a process item is held,
+   a security or regression fix included, unless Jeff releases it: file it
+   with `-hold "<why>" -resumes "<when>"`, `program-end` unless Jeff names
+   another point (FLOW-20). Never held: the fix for a failing `main` or
+   program trunk, and a fix that `follows` a program item; a non-program
+   follow-up of a held item takes that item's resume point. A process item
+   filed while FLOW-20 stands carries a **Program payoff** section in its
+   design; its Design is `cloud`, `wf-design` creates its branch (step 6's
+   "create `feat/<slug>`" holds only once FLOW-20 is retired), and it takes
+   the process test unless it touches a rule FLOW-20 reserves to Jeff.
    Then agree on
    a kebab-case slug, a one-line title, the position (show
    `dist/wf status`, which lists FLOW-05's order with each open item's
@@ -54,12 +66,12 @@ FLOW-20.
    new feature will not start until an item clears; a fix with `-follows`
    will, and so will a security fix Jeff marks urgent; and the number is
    Jeff's to change (FLOW-05).
-   Judge whether the item is a security fix, as you judge FLOW-20's
-   exemption for one. When it is one and follows no item, offer `-urgent`,
+   Judge whether the item is a security fix. When it is one and follows no
+   item, offer `-urgent`,
    whatever the count is that day, and pass it only on Jeff's word. Do not
    offer it for anything else, and decline it when asked for anything
    else, saying that the mark is for a security fix and that the limit is
-   his to raise (FLOW-05, FLOW-20).
+   his to raise (FLOW-05). The mark does not release a hold (FLOW-20).
    Size guide: small 7 to 9 steps, one run; medium 12 to 18; large 25 or more;
    a process item 4 steps, one run, plus 1 step for each expected state step
    (`x4-state`).
@@ -73,7 +85,8 @@ FLOW-20.
      -source "<where it came from>" [-follows <item>] \
      [-repos <home>,<other>] [-areas <a>,<b>] [-seams <s>] \
      [-adopts <consumable>@<version>] [-urgent] [-lead host:<name>] \
-     [-kind process -holds cloud,host:*] [-hold "<why it is held>"]
+     [-kind process -holds cloud,host:*] [-program] \
+     [-hold "<why it is held>" -resumes "<when it resumes>"]
    dist/wf validate -state .dev/workflow
    dist/wf relations -state .dev/workflow -feature <slug>
    ```
@@ -83,7 +96,11 @@ FLOW-20.
    and why (FLOW-05).
 
    `-hold` files the item with an open blocking question `q1` that only Jeff
-   answers (FLOW-20, FLOW-07); `dist/wf answer -question q1` resumes it.
+   answers, naming when it resumes (`-resumes`, which `-hold` needs); a held
+   item counts toward no limit and is listed once under **Held** (FLOW-20,
+   FLOW-07, FLOW-05). `dist/wf answer -question q1` resumes it. An item
+   already queued or in progress is held with `dist/wf hold -feature F -why
+   "<why>" -resumes "<when>"`.
    After a `-hold`, `dist/wf status` must show the item's
    `blocking question q1`, and after `-urgent` its `urgent:` line: `wf` stops reading flags at the first word that
    is not one, such as the second word of an unquoted value, and says
@@ -106,8 +123,8 @@ FLOW-20.
    (rules, skills, agents, the template), with no `tools/workflow/` code, no
    state step and no `holds`; its review fits the sitting's ask cap
    (`workflow-human` item 3); and, while FLOW-20 stands, it is a program
-   item, exempt, or filed on hold and its `q1` answered by Jeff in this
-   sitting to let it go ahead. Otherwise do not offer it. When it holds,
+   item, or filed on hold and its `q1` answered by Jeff in this sitting to
+   let it go ahead. Otherwise do not offer it. When it holds,
    offer to draft the design and review it now, and on Jeff's yes: create
    `feat/<slug>` from `main` and push it (a process item has no
    branch-setup step); draft the design there from the template (Problem,
@@ -117,6 +134,18 @@ FLOW-20.
    hold `workflow-human` item 3 on it in this session. Its asks count
    toward the sitting's cap. LOOP-09's owner review and owner merge, and
    every rule-change ask, stay as they are.
+
+## The loop's own filings (FLOW-20)
+
+While FLOW-20 stands the loop files, unattended, with its own worker
+(`-worker $W`) and recorded with `dist/wf record`: the items of a phase row
+of the program's design once the gate before its wave is met (`-program`,
+placed by the phase order), a reconciliation item that adopts a
+pre-release on a program trunk (`-adopts`, LOOP-07), the relations between
+items their designs name, and `program-sync-<main sha>` for a program sync
+whose conflict it cannot resolve (`-program -escalate "<the conflicting
+paths and both sides' commits>"`, whose first step is the escalation).
+Steps 1, 2 and 4 apply; Jeff may call any back (FLOW-20).
 
 ## A regression's follow-up
 
