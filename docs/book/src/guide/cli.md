@@ -255,7 +255,11 @@ With the container driver, a runtime in effect that is not `finch`, `docker`
 or `podman` fails doctor with the error a build would get
 ([Configuration](configuration.md#the-container-runtime)), and so does a
 relay image that is not shaped like an image reference
-([Configuration](configuration.md#relay-image)).
+([Configuration](configuration.md#relay-image)). Doctor is also the
+runtime's health check: it asks the runtime it would use, named or
+detected, for its engine's version (`docker version --format '{{.Server.Version}}'`, `podman version --format '{{.Server.Version}}'` or `finch version`) and waits up to 10
+seconds. A runtime that is not on `PATH`, or whose engine is down or does
+not answer in that time, fails doctor with the fix to install or start it.
 
 With upstream CA paths configured (`WARDEN_UPSTREAM_CA_CERTS`, else `[relay]
 upstream_ca_certs`), every driver's doctor reads them as a build would and

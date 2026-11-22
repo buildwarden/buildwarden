@@ -464,8 +464,12 @@ runtime installed outside `PATH` needs its directory added to `PATH`.
 ### Detection
 
 When no level names a runtime, BuildWarden probes `finch`, then `docker`,
-then `podman`. The first one that answers `<runtime> info` within 3 seconds
-is used.
+then `podman`. The first one that answers its engine-version query within
+3 seconds is used: `finch version` (which asks nerdctl in finch's VM, and
+fails when the VM is stopped), and `docker version --format
+'{{.Server.Version}}'` and the same for `podman` (on Linux, where podman
+has no server, it answers with its own version). A query that fails or
+prints no version means the runtime is not running.
 
 ### Which commands check the value
 
@@ -503,20 +507,32 @@ runtime.
 ### A runtime that is not installed or not running
 
 `warden build` and `warden shell` also refuse a runtime that a level names
-but that is not on `PATH`, or that does not answer `<runtime> info` within
-3 seconds (its VM or daemon is stopped). The container driver refuses it
-before the build starts: no output directory, container or network is made,
-and `warden` exits 1. The message names where the runtime was named, and the
-fix is to install or start it, or to name another:
+but that is not on `PATH`. The container driver refuses it before the build
+starts: no output directory, container or network is made, and `warden`
+exits 1. The message names where the runtime was named, and the fix is to
+install it, or to name another:
 
 ```
 [warden] ERROR: WARDEN_CTR_CLI names the container runtime podman, which is not installed (not found on PATH)
   To fix: install Podman, or set WARDEN_CTR_CLI to another runtime, or unset it
 ```
 
-`warden doctor` reports the same error and is blocked: it exits 1 and prints
-no `ok`. Detection is not tried in its place. When no level names a
-runtime, detection's own error says that none answered.
+A named runtime that is on `PATH` but not running (its VM or daemon is
+stopped) is not checked before the build: the build's first call to it, the
+engine-version query above with up to 10 seconds, fails, and `warden` exits
+1 with the fix to start it. The output directory is left, as after any
+failed build:
+
+```
+[warden] ERROR: container runtime finch is installed but not running (`finch version` failed)
+  To fix: start its VM: finch vm start (or finch vm init the first time); warden doctor checks it
+```
+
+`warden doctor` asks the same query, named runtime or detected, and waits up
+to 10 seconds. A runtime that is not installed or not running blocks it with
+the errors above: it exits 1 and prints no `ok`. Detection is not tried in
+its place. When no level names a runtime, detection's own error says that
+none answered.
 
 <!-- TRANSITIONAL(runtime-former-values): this subsection is removed with
      driver/container/runtime_former.go, in the change that prepares 1.0. -->

@@ -37,9 +37,11 @@ stops before it runs anything, and the error says where the value is set and
 what to change. When it is set in the `warden.toml` of a repository you
 cloned, `--runtime` with one of the three builds it without editing the
 file. A runtime you name must also be installed and running: one that is
-not on `PATH`, or whose VM or daemon is stopped, stops the build before it
-makes an output directory, and `warden` does not pick another in its place.
-Start it, or name another; `warden doctor` reports the same error.
+not on `PATH` stops the build before it makes an output directory, and one
+whose VM or daemon is stopped fails the build at its first call to the
+runtime, which leaves the output directory as any failed build does.
+`warden` does not pick another in its place. Start it, or name another;
+`warden doctor` checks that the runtime answers.
 [The container runtime](../guide/configuration.md#the-container-runtime)
 has the rules and the errors.
 

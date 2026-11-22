@@ -186,9 +186,15 @@ records its bytes.
 resolve the runtime (--runtime, WARDEN_CTR_CLI, [driver.container] cli, else
     the first of finch, docker, podman that answers; any other value is
     refused before anything is run) and write it to the state file
-    probe (and doctor): a named runtime not on PATH, or not answering
-    `<runtime> info` within 3 s -> fixable error naming where it was named,
-    before any output directory exists; detection is not tried in its place
+    detection asks each candidate its engine-version query (docker/podman
+    `version --format {{.Server.Version}}`, `finch version`), 3 s each
+    probe: a named runtime not on PATH -> fixable error naming where it was
+    named, before any output directory exists; no engine call; detection
+    is not tried in its place
+    build: a named runtime's first engine call is that query (10 s); it
+    fails -> fixable "installed but not running", start hint, warden doctor
+    doctor: that query (10 s) on the named or detected runtime; not on PATH,
+    failing or not answering -> blocked with the fix
 resolve the relay image (driver/relaysource) and verify it
 start the relay container on a per-build network; report relay-started
 

@@ -125,10 +125,13 @@ what to change. A project's `warden.toml` can choose among the three, and
 `--runtime` or `WARDEN_CTR_CLI` replaces its choice with yours.
 
 A runtime you name is used, or the command stops: one that is not on
-`PATH`, or that does not answer (its VM or daemon is stopped), stops
-`build` and `shell` before any output directory exists, and blocks
-`doctor`. `warden` does not fall back to detection, so start the runtime or
-name another.
+`PATH` stops `build` and `shell` before any output directory exists. One
+whose VM or daemon is stopped fails `build` and `shell` at their first call
+to the runtime, its version query, with an error that says to start it and
+to check with `warden doctor`; the output directory is left, as after any
+failed build. `doctor` asks the runtime for its engine's version, waiting
+up to 10 seconds, and is blocked by either. `warden` does not fall back to
+detection, so start the runtime or name another.
 
 The setting belongs to the container driver. A build with a VM driver does
 not read it, so one `warden.toml` can hold `cli` beside the VM drivers'
