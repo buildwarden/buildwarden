@@ -1,0 +1,12 @@
+### Ctrl-Break mid-build
+started
+CTRLC: sent CTRL_BREAK
+
+Interrupted, cleaning up... (press ctrl+c again to force)
+[warden] Tearing down environment...
+warden: build interrupted
+CTRLC: exit exit status 130 after 2.8s
+containers left:
+networks left:
+work dirs left:
+driver processes:

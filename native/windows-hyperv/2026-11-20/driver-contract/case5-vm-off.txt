@@ -1,0 +1,30 @@
+### main: build whose script powers the VM off
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+warden: build VM "warden-build-l1b91m4o" COM1 -> \\.\pipe\warden-build-l1b91m4o (attach a serial reader to observe guest boot)
+powering off
+warden: build FAILED
+[warden] ERROR: runBuild: build VM "warden-build-l1b91m4o" powered off without reporting an exit code
+  To fix: see .scratch\val\hv-off-out-main\build-output.log for the last thing the guest printed
+exit=1
+warden exited  s after the build VM was seen Off
+### dc: build whose script powers the VM off
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+warden: build VM "warden-build-22b1bgi5" COM1 -> \\.\pipe\warden-build-22b1bgi5 (attach a serial reader to observe guest boot)
+powering off
+warden: build FAILED
+[warden] ERROR: the build environment exited before the build completed: build VM "warden-build-22b1bgi5" powered off without reporting an exit code; see C:\Users\jeff\buildwarden\.scratch\val\hv-off-out-dc\build-output.log for the last thing the guest printed
+  If this is unexpected, please file a bug:
+exit=1
+warden exited  s after the build VM was seen Off
+### dc (fixable exited error): build whose script powers the VM off
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+warden: build VM "warden-build-yjnaqtaf" COM1 -> \\.\pipe\warden-build-yjnaqtaf (attach a serial reader to observe guest boot)
+powering off
+warden: build FAILED
+[warden] ERROR: the build environment exited before the build completed: build VM "warden-build-yjnaqtaf" powered off without reporting an exit code; see C:\Users\jeff\buildwarden\.scratch\val\hv-off-out-dc\build-output.log for the last thing the guest printed
+  To fix: see C:\Users\jeff\buildwarden\.scratch\val\hv-off-out-dc\build-output.log for the last thing the build printed
+exit=1
+warden exited 26.1 s after the build VM was seen Off (polled every ~1 s)
+### main (timed): build whose script powers the VM off
+exit=1
+warden exited 20 s after the build VM was seen Off

@@ -1,0 +1,8 @@
+### warden-killed: warden.exe pid 76972 (service pid excluded)
+SUCCESS: The process with PID 76972 has been terminated.
+driver exited 3s after warden was killed
+containers left:
+networks left:
+work dirs:
+log tail:
+started

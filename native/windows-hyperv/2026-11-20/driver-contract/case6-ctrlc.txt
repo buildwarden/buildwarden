@@ -1,0 +1,26 @@
+### main: Ctrl-Break mid-build
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+warden: build VM "warden-build-st346w6j" COM1 -> \\.\pipe\warden-build-st346w6j (attach a serial reader to observe guest boot)
+sleeping
+CTRLC: sent CTRL_BREAK
+Interrupted, cleaning up... (press ctrl+c again to force)
+warden: build interrupted
+CTRLC: exit exit status 130 after 3.1s
+VMs left:
+switches left:
+warden-dev-nat Internal
+warden-dev-0 Private
+warden-dev-1 Private
+### dc: Ctrl-Break mid-build
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+warden: build VM "warden-build-7d8i1dhc" COM1 -> \\.\pipe\warden-build-7d8i1dhc (attach a serial reader to observe guest boot)
+sleeping
+CTRLC: sent CTRL_BREAK
+Interrupted, cleaning up... (press ctrl+c again to force)
+warden: build interrupted
+CTRLC: exit exit status 130 after 3.1s
+VMs left:
+switches left:
+warden-dev-nat Internal
+warden-dev-0 Private
+warden-dev-1 Private

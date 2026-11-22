@@ -1,0 +1,20 @@
+﻿warden.exe : [warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+At C:\Users\jeff\buildwarden\.scratch\val\hv-elevated-2.ps1:9 char:28
++ ... -dc-2.txt { & $W setup --driver hyperv --slots 2 --nat-prefix 192.168 ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([warden] config... defaults apply:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Durable dev network ready.
+  NAT switch (Internal) .... warden-dev-nat  (192.168.250.0/24, host 192.168.250.1)
+  build switches (Private)  warden-dev-0 (present), warden-dev-1 (present)
+
+This durable network is for NON-elevated builds (Hyper-V Administrators), up to 2 at a time:
+  warden build --driver hyperv --network warden-dev
+  (or set network = "warden-dev" under [vm] in warden.toml)
+Elevated builds stand up a fresh build switch per build and use this NAT.
+warden-dev-nat Internal
+warden-dev-0 Private
+warden-dev-1 Private
+nat warden-dev-nat 192.168.250.0/24
+exit=0

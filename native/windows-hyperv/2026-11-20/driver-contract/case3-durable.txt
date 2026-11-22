@@ -1,0 +1,56 @@
+### durable, --network
+$ warden build --network warden-dev
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+warden: build VM "warden-build-xedflmn4" COM1 -> \\.\pipe\warden-build-xedflmn4 (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: .scratch/val/hvd1)
+exit=0
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
+config net.toml:
+[driver.hyperv]
+network = "warden-dev"
+### durable, net.toml
+$ warden build --config .scratch\val\hvcfg\net.toml
+[warden] config: C:\Users\jeff\buildwarden\.scratch\val\hvcfg\net.toml (--config)
+warden: build VM "warden-build-ihzbmn9q" COM1 -> \\.\pipe\warden-build-ihzbmn9q (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: .scratch/val/hvd-net)
+exit=0
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
+config net-old.toml:
+[vm]
+network = "warden-dev"
+### durable, net-old.toml
+$ warden build --config .scratch\val\hvcfg\net-old.toml
+[warden] config: C:\Users\jeff\buildwarden\.scratch\val\hvcfg\net-old.toml (--config)
+[warden] warning: C:\Users\jeff\buildwarden\.scratch\val\hvcfg\net-old.toml: [vm] network is deprecated; use [driver.hyperv] network
+warden: build VM "warden-build-4gpcqa2i" COM1 -> \\.\pipe\warden-build-4gpcqa2i (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: .scratch/val/hvd-net-old)
+exit=0
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
+config net-nope.toml:
+[driver.hyperv]
+network = "warden-nope"
+### durable, net-nope.toml with --network overriding
+$ warden build --config .scratch\val\hvcfg\net-nope.toml --network warden-dev
+[warden] config: C:\Users\jeff\buildwarden\.scratch\val\hvcfg\net-nope.toml (--config)
+warden: build VM "warden-build-gnej06rf" COM1 -> \\.\pipe\warden-build-gnej06rf (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: .scratch/val/hvd-ovr)
+exit=0
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
+### net-nope.toml alone (the config value is used: expect a refusal naming warden-nope)
+$ warden build --config .scratch\val\hvcfg\net-nope.toml
+[warden] config: C:\Users\jeff\buildwarden\.scratch\val\hvcfg\net-nope.toml (--config)
+[warden] ERROR: hyperv build: no network path: run `warden setup --driver hyperv` (elevated) for a reusable switch, run this build from an elevated shell for a fresh per-build network, or start the installed privileged service: from an elevated shell, run `Start-Service WardenHyperV` (or `sc start WardenHyperV`)
+  To fix: see `warden doctor --driver hyperv` for each capability and its fix
+exit=1

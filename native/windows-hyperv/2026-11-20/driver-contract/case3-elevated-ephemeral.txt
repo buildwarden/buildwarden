@@ -1,0 +1,24 @@
+﻿Stopped
+warden.exe : [warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+At C:\Users\jeff\buildwarden\.scratch\val\hv-elevated.ps1:25 char:71
++ ... rV).Status; & $W build --driver hyperv --guest-os windows -o "$V\hv-e ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([warden] config... defaults apply:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+warden: build VM "warden-build-7d7izuyg" COM1 -> \\.\pipe\warden-build-7d7izuyg (attach a serial reader to observe 
+guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: C:\Users\jeff\buildwarden\.scratch\val\hv-eph)
+
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  Γ£à
+  SIGNATURES: Γ£à All 11 signatures valid
+  COMPLETENESS: Γ£à All channels closed
+warden-dev-nat Internal
+warden-dev-0 Private
+warden-dev-1 Private
+nat warden-dev-nat 192.168.250.0/24
+
+
+exit=0

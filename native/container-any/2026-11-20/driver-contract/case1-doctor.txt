@@ -1,0 +1,15 @@
+### main be13847: warden doctor
+config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+container runtime: podman
+ok
+### branch: warden driver list
+NAME            RUNS                                                                    FOUND
+container    *  C:\Users\jeff\buildwarden\.scratch\dc\dist\warden-driver-container.exe  beside warden
+qemu            (linked into warden)                                                    linked
+vz              (linked into warden)                                                    linked
+hyperv          (linked into warden)                                                    linked
+firecracker     (linked into warden)                                                    linked
+### branch: warden doctor
+config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+container runtime: podman
+ok

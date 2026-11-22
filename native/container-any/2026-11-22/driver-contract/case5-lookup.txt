@@ -1,0 +1,16 @@
+### (a) only a .bat beside warden
+NAME            RUNS                  FOUND
+container    *  -                     not found
+### (b) a .bat in a PATH directory ahead of warden's, the .exe beside warden
+NAME            RUNS                                                                    FOUND
+container    *  C:\Users\jeff\buildwarden\.scratch\dc\dist\warden-driver-container.exe  beside warden
+### (c) a .exe in a PATH directory ahead of warden's
+NAME            RUNS                                                                                              FOUND
+container    *  C:\Users\jeff\buildwarden\.scratch\val\c5\exepath\warden-driver-container.exe                     PATH
+                  shadows C:\Users\jeff\buildwarden\.scratch\dc\dist\warden-driver-container.exe (beside warden)  
+### (c) build with it
+warden: build SUCCEEDED (output: C:/Users/jeff/buildwarden/.scratch/val/out-c5)
+  "path": "C:\\Users\\jeff\\buildwarden\\.scratch\\val\\c5\\exepath\\warden-driver-container.exe",
+  "found": "PATH",
+      "path": "C:\\Users\\jeff\\buildwarden\\.scratch\\dc\\dist\\warden-driver-container.exe",
+      "found": "beside-warden"

@@ -1,0 +1,14 @@
+### [driver] image_refresh_after = 1m beside [driver.hyperv] image_refresh_after = 30d
+[driver]
+image_refresh_after = "1m"
+
+[driver.hyperv]
+image_refresh_after = "30d"
+[warden] config: C:\Users\jeff\buildwarden\.scratch\val\hvcfg\refresh-30d.toml (--config)
+warden: build VM "warden-build-v7p24qdq" COM1 -> \\.\pipe\warden-build-v7p24qdq (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: .scratch/val/hv-r30)
+exit=0
+prepare.log after:
+-rw-r--r-- 1 jeff 197611 1060 Nov 19 09:28 C:\Users\jeff\AppData\Local/warden/hyperv/prepare.log

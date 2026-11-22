@@ -1,0 +1,26 @@
+### main inspect
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  oci-image/v1  payload verified
+    docker.io/library/alpine:3.20 sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e (not the payload's own hash: the runtime re-serialized the manifest, or the digest names an index)
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT docker.io/library/alpine:3.20 (13064 bytes)[0m
+[1;32m✅ GET /bootstrap (42 bytes)[0m
+[1;32m✅ GET /build-script (88 bytes)[0m
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64/APKINDEX.tar.gz (473618 bytes)
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.20/community/x86_64/APKINDEX.tar.gz (1848338 bytes)
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64/ca-certificates-20261020-r0.apk (133903 bytes)
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64/brotli-libs-1.1.0-r2.apk (416151 bytes)
+### dc inspect
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  oci-image/v1  payload verified
+    docker.io/library/alpine:3.20 sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e (not the payload's own hash: the runtime re-serialized the manifest, or the digest names an index)
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT docker.io/library/alpine:3.20 (13064 bytes)[0m
+[1;32m✅ GET /bootstrap (42 bytes)[0m
+[1;32m✅ GET /build-script (88 bytes)[0m
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64/APKINDEX.tar.gz (473618 bytes)
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.20/community/x86_64/APKINDEX.tar.gz (1848338 bytes)
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64/ca-certificates-20261020-r0.apk (133903 bytes)
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64/brotli-libs-1.1.0-r2.apk (416151 bytes)

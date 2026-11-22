@@ -1,0 +1,15 @@
+﻿warden.exe : [warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+At C:\Users\jeff\buildwarden\.scratch\val\hv-elevated.ps1:20 char:25
++ Run case2-setup-2.txt { & $W setup --driver hyperv --slots 2; Switche ...
++                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([warden] config... defaults apply:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[warden] ERROR: the NAT warden-dev-nat already exists on 192.168.250.0/24, not --nat-prefix 192.168.240.0/20
+  To fix: remove it from an elevated shell (Remove-NetNat -Name warden-dev-nat), then re-run setup to make it on 
+192.168.240.0/20
+warden-dev-nat Internal
+warden-dev-0 Private
+warden-dev-1 Private
+nat warden-dev-nat 192.168.250.0/24
+exit=1

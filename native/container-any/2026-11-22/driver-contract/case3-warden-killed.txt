@@ -1,0 +1,7 @@
+### warden killed mid-build (by PID; the service is also warden.exe)
+SUCCESS: The process with PID 70600 has been terminated.
+driver exited 4s after warden was killed
+containers left:
+networks left:
+work dirs left:
+driver processes:

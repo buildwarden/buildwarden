@@ -1,0 +1,26 @@
+### main: service-delegated build
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+warden: build VM "warden-build-5q1gkb9p" COM1 -> \\.\pipe\warden-build-5q1gkb9p (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: .scratch/val/hv-out-main)
+real	1m33.314s
+user	0m0.000s
+sys	0m0.015s
+exit=0
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
+### dc: service-delegated build
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+warden: build VM "warden-build-wain0wiz" COM1 -> \\.\pipe\warden-build-wain0wiz (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: .scratch/val/hv-out-dc)
+real	0m41.135s
+user	0m0.000s
+sys	0m0.015s
+exit=0
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed

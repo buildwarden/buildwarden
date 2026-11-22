@@ -1,0 +1,29 @@
+### (a) only a .bat beside warden
+NAME            RUNS                  FOUND
+container    *  -                     not found
+qemu            (linked into warden)  linked
+### (b) a .bat in a PATH directory ahead of warden's, the .exe beside warden
+NAME            RUNS                                                                    FOUND
+container    *  C:\Users\jeff\buildwarden\.scratch\dc\dist\warden-driver-container.exe  beside warden
+qemu            (linked into warden)                                                    linked
+### (c) a .exe in a PATH directory ahead of warden's
+NAME            RUNS                                                                                              FOUND
+container    *  C:\Users\jeff\buildwarden\.scratch\val\c5\exepath\warden-driver-container.exe                     PATH
+                  shadows C:\Users\jeff\buildwarden\.scratch\dc\dist\warden-driver-container.exe (beside warden)  
+qemu            (linked into warden)                                                                              linked
+### (c) build with it
+warden: build SUCCEEDED (output: C:/Users/jeff/buildwarden/.scratch/val/out-c5)
+{
+  "name": "container",
+  "version": "dev",
+  "contract": 1,
+  "path": "C:\\Users\\jeff\\buildwarden\\.scratch\\val\\c5\\exepath\\warden-driver-container.exe",
+  "sha256": "1514fe3c8af42d6d5df6fc5f51da3387eb1eb78b0785ebda09c0f94dfd02513e",
+  "found": "PATH",
+  "shadowed": [
+    {
+      "path": "C:\\Users\\jeff\\buildwarden\\.scratch\\dc\\dist\\warden-driver-container.exe",
+      "found": "beside-warden"
+    }
+  ]
+}

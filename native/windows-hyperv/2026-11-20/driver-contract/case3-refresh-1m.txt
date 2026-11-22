@@ -1,0 +1,19 @@
+### [driver] image_refresh_after = 1m (durable, --network warden-dev)
+[driver]
+image_refresh_after = "1m"
+[warden] config: C:\Users\jeff\buildwarden\.scratch\val\hvcfg\refresh-1m.toml (--config)
+[warden] prepared base is 2.1d old; refreshing it in the background (log: C:\Users\jeff\AppData\Local\warden\hyperv\prepare.log)
+warden: build VM "warden-build-8o7ec172" COM1 -> \\.\pipe\warden-build-8o7ec172 (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: .scratch/val/hv-r1m)
+exit=0
+prepare.log after:
+-rw-r--r-- 1 jeff 197611 741 Nov 21 11:02 C:\Users\jeff\AppData\Local/warden/hyperv/prepare.log
+  guest: running:services
+  guest: running:scheduled-tasks
+  guest: running:defender
+  guest: running:reboot
+  guest: running:ngen
+prepare process:
+80748 C:\Users\jeff\buildwarden\.scratch\dc\dist\warden.exe --config C:\Users\jeff\buildwarden\.scratch\val\hvcfg\refresh-1m.toml image prepare --driver hyperv

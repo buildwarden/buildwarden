@@ -1,0 +1,41 @@
+go run ./conformance/driver/cmd/driver-conformance --driver dist/warden-driver-container.exe \
+	--driver-arg=--runtime=podman --base-image docker.io/library/alpine:3.20
+ok   static: describe (DRV-36)
+ok   static: declarations (DRV-1, DRV-3, DRV-23, DRV-C1, DRV-C4, DRV-C11)
+ok   static: capabilities (DRV-37)
+ok   static: undeclared argument (DRV-C2, DRV-30, DRV-68)
+ok   static: only the named file (DRV-C3)
+ok   static: tables it does not own (DRV-C4, DRV-C5)
+ok   static: config file and key refused (DRV-C6, DRV-C7, DRV-68)
+ok   static: a listed key in another letter case (DRV-C12, DRV-C7)
+ok   static: reap with its config file gone (DRV-C10)
+ok   static: probes (DRV-30, DRV-31)
+ok   static: unlisted commands (DRV-21, DRV-23)
+ok   static: contract version (DRV-69)
+ok   static: invalid request (DRV-70)
+ok   static: reap of an unknown build (DRV-24)
+ok   static: run with no start (DRV-50)
+ok   static: image-list and doctor (DRV-25, DRV-26)
+skip static: ext with no request (DRV-34): ext is not listed
+ok   lifecycle: probe (DRV-30, DRV-32, DRV-33)
+ok   lifecycle: sequence (DRV-16, DRV-20, DRV-39, DRV-42, DRV-45, DRV-46, DRV-47, DRV-49)
+ok   lifecycle: success (DRV-14, DRV-15, DRV-43, DRV-45)
+ok   lifecycle: inputs (DRV-45)
+ok   lifecycle: failure (DRV-45)
+ok   lifecycle: stop (DRV-24, DRV-49)
+ok   lifecycle: end of input (DRV-50, DRV-51)
+ok   lifecycle: orphaned (DRV-51)
+ok   lifecycle: kill (DRV-24, DRV-61, DRV-C10)
+ok   lifecycle: reap (DRV-24)
+ok   lifecycle: diagnostics (DRV-45)
+ok   lifecycle: two at once (DRV-45)
+ok   lifecycle: clean (DRV-27, DRV-55, DRV-58)
+skip lifecycle: keep (DRV-24, DRV-49): capabilities.keep is none
+ok   lifecycle: shell (DRV-28, DRV-53, DRV-65, DRV-66)
+ok   lifecycle: exited (DRV-48)
+ok   lifecycle: doctor (DRV-25)
+
+real	4m39.299s
+user	0m0.015s
+sys	0m0.000s
+exit=0
