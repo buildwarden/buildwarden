@@ -36,6 +36,10 @@ None.
 - **auto-tidy-pull-request** (queued, q1): FLOW-20 freeze: not a program item, and not exempt (not a fix for a regression on main under FLOW-09, nor a security fix; FLOW-20 names no CI or infrastructure exemption). Resume when Jeff says, or when the freeze ends.; resumes: program-end
 - **relay-exit-code-unreadable** (queued, q1): FLOW-20 freeze: not a program item and not exempt (not a fix for a regression on main under FLOW-09, nor a security fix). Resume when Jeff says, or when the freeze ends.; resumes: program-end
 
+## Decided for you
+
+Nothing in the last 7 days. Call any back with a blocking question or a follow-up item (FLOW-20).
+
 ## Active
 
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
