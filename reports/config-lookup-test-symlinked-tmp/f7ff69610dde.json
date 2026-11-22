@@ -1,0 +1,70 @@
+{
+  "feature": "config-lookup-test-symlinked-tmp",
+  "branch": "feat/config-lookup-test-symlinked-tmp",
+  "head": "f7ff69610dde",
+  "heads": {
+    "buildwarden/buildwarden": "f7ff69610dde"
+  },
+  "base": "be138478cd83",
+  "base_note": "merge base with origin/main, which is be138478cd83",
+  "round": "feature",
+  "step": "f4-review",
+  "worker": "cloud/20261122T105700Z",
+  "previous_report": null,
+  "scope": "git diff origin/main...feat/config-lookup-test-symlinked-tmp: 4 files, +357/-9, 5 commits (LINT-04). One repository. Code: cmd/warden/configfile_test.go (+34), configline_test.go (+1/-3), vmdns_test.go (+5/-6); the rest is the design, docs/design/config-lookup-test-symlinked-tmp.md (+317).",
+  "design": "docs/design/config-lookup-test-symlinked-tmp.md, approved at 8eb333d (r1); q1 confirmed (a); rule_changes: []",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": {
+    "source": "docs/development/*.md at f7ff69610dde (LINT-01; the branch changes no rule)",
+    "rules": 100,
+    "agent_judgment": 44,
+    "hybrid": 42,
+    "automated": 14
+  },
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass at f7ff696 (golangci-lint 0 issues x3; tier1 be138478cd83...f7ff69610dde: 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed)",
+    "make_test": "pass at f7ff696 (exit 0, no FAIL lines)",
+    "other_platform_lint": "not owed: no build-tagged file is touched (FLOW-17)",
+    "make_enforcement": "not run: the branch changes neither tools/tier1/ nor tools/workflow/check/ (FLOW-14)",
+    "wf_check_from_merge_base": "not run: same reason",
+    "dist_wf_check": "before this report (no -run): ok clean branch head f7ff69610dde; FAIL make lint/make test skipped (run separately above, green); FAIL report .md/.json missing (written by this report); ok rule changes cleared (FLOW-14): the branch changes no rule or its enforcement; ok queue records what the design declares (FLOW-03) as declared at 8eb333d; ok diff inside the declared areas: every changed path is in [cli designs]",
+    "trial_merge_flow10": "ok trial merge with workdir-in-context (a report, FLOW-10): clean; ok trial merge with relay-collector-failure-fails-open (a report, FLOW-10): clean",
+    "area_edges": "tools/tier1/area-edges.sh | dist/wf areas -state .dev/workflow -check -rev HEAD -edges -: no difference from HEAD at f7ff696, exit 0. Nothing outside the declared areas; nothing widened (FLOW-03)."
+  },
+  "findings": [],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 0
+  },
+  "suppressions": [],
+  "suppressions_note": "First report for this item; no previous report to carry suppressions from.",
+  "follow_ups": [],
+  "informational": [
+    {
+      "rule": "TEST-03",
+      "file": "docs/design/config-lookup-test-symlinked-tmp.md",
+      "line": 21,
+      "note": "The darwin/arm64 run (go test -count=1 ./cmd/warden on the macbook, and warden doctor under /var/folders naming /var/...) is the tracked, non-blocking qemu-any gap config-lookup-test-symlinked-tmp-darwin. Linux CI now carries the case through TestConfigLineNamesTheDirectoryAsEntered; the native run is still owed after merge."
+    },
+    {
+      "rule": "FLOW-09",
+      "file": "cmd/warden/config_test.go",
+      "line": 55,
+      "note": "TestResolvePath_Empty still enters its directory with os.Chdir (PWD not set). It is outside the diff, and it resolves its expected path with EvalSymlinks, so it holds on macOS (the design's Prior art). Not a finding and not a follow-up; it is a pattern to avoid copying into config-line tests."
+    }
+  ],
+  "judged_clean": [
+    "TEST-04: the new test is deterministic (temp dirs, one symlink, no time or ordering dependence); t.Chdir restores both directory and PWD, LIFO with inConfigFiles' own t.Chdir; no cmd/warden test calls t.Parallel, so t.Chdir cannot panic",
+    "TEST-01, TEST-02: the fix puts macOS's linked TMPDIR case in Linux tier 0; the commit message records the TMPDIR-as-link run failing before (at 1bfb3e3, cmd/ identical to be13847) and passing on the branch; the mutation check (configFile resolving links makes the new test fail) is recorded in 63f0d62",
+    "GLOBAL-07: the Windows skip matches selfLink's reason and is justified (symlink privilege; no PWD on Windows); the helper change is neutral on Windows, where os.Getwd does not consult PWD",
+    "GLOBAL-09, GLOBAL-10, GLOBAL-11 against Defaults and overrides ('None'): the diff adds no default, override, merge or fallback; it is test code only",
+    "UX-01, UX-07, FLOW-15: no product code, surface, reference doc or component flow changes; tier1's surface check is green",
+    "RELAY-08: no relay setting touched",
+    "FLOW-06: the code follows the approved design and plan task by task (inConfigFiles, TestConfigLineEscapesThePath, the new test as laid out; TestConfigFileLookupOrder unedited); the variable named real in the design is realDir in code (real is a Go builtin), not a deviation",
+    "FLOW-14: rule_changes: [] and the branch changes no rule or enforcement",
+    "LOOP-04: one repository, as declared"
+  ],
+  "resolved_findings": []
+}
