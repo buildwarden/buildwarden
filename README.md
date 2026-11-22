@@ -20,6 +20,8 @@ hand-edited when a `wf` command can make the change.
 | `config.yaml` | Loop settings: the repository, the `repositories` an item may name (each with its trunk and, once adopted, its profile file), the priority gate, run budget, FLOW-05 limits, lease length, runaway factor. |
 | `areas.yaml` | The area map of `config.yaml`'s `repository` (FLOW-05, PROFILE-01): its areas, their paths and modes, `reaches`, `implies` and `written_seams`. Changed only on Jeff's word, in an attended session (`wf validate -areas`, then `wf commit -worker human/<name>`, which refuses any other worker). Absent: the repository is one exclusive area. `wf areas -list` prints it; `wf areas -check` compares it with `main`. |
 | `main.yaml` | What a session last read about `main`, written by `wf main` and `wf areas -check`: the head, its CI (`green`, `red`, `pending`, `red_since`, a failing run, the follow-up filed for it), whether GitHub requires an up-to-date branch (`up_to_date`), and the map's comparison with that head. On a push conflict `wf commit` keeps the remote's file. |
+| `program.yaml` | The same record as `main.yaml` for the program trunk while FLOW-20 stands, written by `wf main -trunk program/componentization` (`repos/<owner>/<name>/program.yaml` for another repository). The red-trunk hold (FLOW-10) is per trunk. |
+| `program/records.yaml` | The program records (FLOW-20, Decision 13 of `program-north-star`): every decision the loop took in Jeff's place, appended by `wf record` and never hand-edited. Listed under **Decided for you** in `QUEUE.md` and the run's digest (`wf record -list`), and rendered into each landing PR's body by `wf program-body`. Created empty (`[]`) by program-north-star's state step; a missing file is no record. |
 | `repos/<owner>/<name>/areas.yaml`, `repos/<owner>/<name>/main.yaml` | The same two files for another repository in `repositories`: its area map (absent: one exclusive area) and its trunk as `wf main -repository <owner>/<name>` and `wf areas -check -repository <owner>/<name>` last recorded it. The queue's own repository keeps the top-level `areas.yaml` and `main.yaml`. |
 | `queue/<feature>.yaml` | One file per feature: its state, steps, budget, questions and history. |
 | `queue/done/<feature>.yaml` | Done items, without a priority, read for `follows` and `wf status -all`. Created by `wf migrate -done` (queue-positions). |
@@ -41,6 +43,8 @@ repositories:               # every repository an item may name (LOOP-01, PROFIL
   - name: buildwarden/buildwarden          # owner/name, listed once
     trunk: main                            # required; wf reads a trunk here only
     profile: docs/development/loop-profile.yaml  # the profile file, in that repository; absent: not adopted
+    program_trunk: program/componentization  # optional, while FLOW-20 stands: the branch a program
+                                           # item works against there and the loop merges into
   - name: buildwarden/buildwarden-specs    # not adopted: no profile
     trunk: main
 run_budget: {steps: 8}      # steps one run may take; calibrate against /usage
@@ -67,6 +71,16 @@ repository has merged, on Jeff's word. Until then the repository has no fast
 gate, no reference documents and no rule or machinery paths; its branch,
 area, trunk and pull-request checks still run. A profile file whose `trunk`
 differs from its entry's fails every check that reads it, naming both.
+
+`program_trunk` (FLOW-20) is set on Jeff's word by a process item's state
+step, in each repository the componentization program works in, and dropped
+by `program-land`'s. It is not a trunk: `trunk` stays what the profile is
+compared with (LOOP-01), and an entry whose `program_trunk` equals its
+`trunk` fails `wf validate`. While any entry has one, FLOW-20 stands:
+`design_review` may be `umbrella` or `process-test`, a process item's Design
+is `cloud`, and `wf commit` refuses a change to a `program_trunk` from a
+worker that is not `human/<name>`. Taking it off an entry puts every item
+there back on the trunk.
 
 ### The profile file
 
@@ -120,6 +134,12 @@ lead: host:windows-hyperv        # optional, a feature only (FLOW-04, FLOW-09): 
                                  #   wf new -lead), each change a history line
 urgent: human/jeff               # optional (FLOW-05): a security fix that follows no item, marked by a human
                                  #   (wf new -urgent, wf urgent [-clear]); it starts past the waiting limit
+program: true                    # optional, a feature only (FLOW-20): a program item, whose design lists
+                                 #   componentization.md in related (wf new -program; Design's check compares
+                                 #   them); a process item never has it
+trunk: program/componentization  # set by wf (FLOW-20): the branch the item works against in its home,
+                                 #   recorded at f0-branch-setup or its first wf declare where the
+                                 #   repository has a program_trunk, and read from then on (wf trunk)
 status: in_progress              # queued | in_progress | done
 round: feature                   # feature | process | tracked (FLOW-03); parallel and merge only
                                  #   on items finished before workflow-streamline
@@ -135,7 +155,8 @@ declared: 4c1d9e2                # the branch commit whose design wf declare las
 adopts: {consumable: buildwarden-relay, version: v0.3.0}  # optional: a reconciliation item (LOOP-07)
 collides_with: [other-item]      # optional: the human's word that they collide (wf relate, human only)
 alters_relationships: null       # null until Design decides (FLOW-02)
-design_review: required          # unset until Design decides: required | skip (FLOW-19)
+design_review: required          # unset until Design decides: required | skip (FLOW-19); while FLOW-20 stands
+                                 #   also umbrella (a program feature) or process-test (a process item)
 source: where the item came from
 pr: {number: 0, ci: pending, head: 0a1b2c3}  # set by Publish (f6-open-pr, x2-implement) and each refresh:
                                  #   ci pending | green | red, read for the commit head records
@@ -145,6 +166,7 @@ work:                            # optional: one entry per repository in repos a
     branch: feat/container-inputs  # the home's branch name
     first: true                  # in merge_first: merges in Publish, confirmed by f6-merged-<n>;
                                  #   absent: merges in Merge with the home's, confirmed by f7-merge
+    trunk: main                  # set by wf as the item's trunk is, for this repository (FLOW-20)
     pr: {number: 7, ci: green, head: 9f8e7d6}  # absent when its branch adds nothing to its trunk
     merged: 4c3b2a1              # the merge the loop confirmed
 steps:
@@ -168,6 +190,8 @@ questions:                       # FLOW-07; never GitHub issues
     options: [...]
     recommended: ...
     answer: set by the human
+    resumes: program-end         # optional, a blocking question only: makes it a hold (FLOW-20), naming
+                                 #   when the item resumes: program-end, or the point the human named
 history:                         # append-only
   - {at: 2026-10-29T09:55:00Z, by: cloud/20261029T095500Z, event: claimed f1-design}
 ```
@@ -250,6 +274,33 @@ reading flags at the first bare word, so an unquoted reason, or an unquoted
 multi-word value before `-hold`, drops the hold without an error; check the
 file `wf new` wrote before committing.
 
+**Holds (FLOW-20).** A hold is an open blocking question with `resumes`:
+`wf new ... -hold "<why>" -resumes "<when>"` files an item on hold, and
+`wf hold -feature F -why "<why>" -resumes "<when>"` holds one already queued
+(with no question) or in progress (the next free `q<N>`, which every pending
+gate of its phase waits for). `resumes` is `program-end`, the program's
+end, unless Jeff named another point. A held item holds no limit and does
+not wait on the human (FLOW-05); `QUEUE.md` lists it once, under **Held**,
+with its reason and `resumes`. `wf answer` releases it. At the program's
+end `program-land`'s Close resumes each `program-end` hold, recorded.
+
+**Program items (FLOW-20).** While a repository entry has a
+`program_trunk`, a program feature (`program: true`) whose declared areas
+reach no loop machinery, `.github/` or `.goreleaser.yaml` path works against
+the program trunk in each such repository; `wf declare` refuses a change that
+would flip a recorded trunk. Its design review is either Jeff's
+(`f2-design-review`) or, when Design records `design_review: umbrella`, the
+umbrella test: a `cloud` step `f2-umbrella` in its place, which Plan waits
+for, recorded as `umbrella test passed at <sha>`. A process item's Design
+is `cloud` while FLOW-20 stands; it records `design_review: process-test`
+or `required`, and phase 2 holds `x2-process-test` (cloud, the process
+test) or `x2-design-review` (human), which `x2-implement` needs; a failed
+test or a reserved rule change gives way to Jeff's review. A program item's
+merge step, `f7-merge` into a program trunk, is the loop's (`wf check -step
+f7-merge`, the merge gate), and so is the program sync (`wf sync-program`,
+`wf check -sync`); a program item escalates at its fifth return to Design,
+not its third.
+
 Design adds the steps it finds: `f1-answer-<q>` (human) for a blocking
 question, `f6-validate-<host>` (`host:<host>`) for blocking native validation.
 A return to Design (`wf back`, FLOW-06) re-seeds phase 1 with `-r<n>` ids, so
@@ -264,6 +315,30 @@ whose branch is on its remote. `wf validate` checks that `work` and `repos`
 agree once declared; an item declared before `loop-repository` has no `work`
 and behaves as before until it is declared again. A bare area name is the
 home's; `<owner>/<name>:<area>` names another repository's.
+
+## `program/records.yaml`
+
+```yaml
+- at: 2026-11-23T10:00:00Z
+  by: cloud/20261123T095500Z
+  kind: merge                    # merge | deferred | protected | umbrella | process-test | security-note |
+                                 #   assumed | departure | return | re-estimate | sync | sync-resolution |
+                                 #   filed | relation | area-map | tag | resumed | escalation | security-ack
+  feature: driver-split          # optional: the item it is about
+  repo: buildwarden/buildwarden  # optional: the repository, owner/name
+  head: 9f8e7d6                  # optional: the commit it was taken on
+  ref: '#141'                    # optional: a PR (#N), a finding, a tag, a question, an item
+  note: what was decided, and why, in a sentence
+```
+
+A list, appended to only by `wf record -worker W -kind K -note "<note>"
+[-feature F] [-repository R] [-head SHA] [-ref REF]` (and by `wf
+reestimate` for a program item), which refuses an unknown kind or an empty
+note; `security-ack` is the human's only. `wf record -list
+[-since T]` prints them in **Decided for you** order (a departure, a return
+past the second and a re-estimate first). The file lives until the program
+ends; `program-land`'s landing PRs carry it, one body per repository
+(`wf program-body -repository R`).
 
 ## `hosts.yaml`
 
@@ -380,6 +455,8 @@ what a candidate map does to the open items), `wf status [-all]` (open items;
 `-all` adds done ones), `wf check` (done-when without moving), `wf release`,
 `wf back` (FLOW-06), `wf answer` (human only, FLOW-07), `wf new` (intake),
 `wf urgent`, `wf relate`, `wf move` and `wf state-step -feature F (-note TEXT | -clear)` (human only), `wf lead`, `wf renew`, `wf release -session | -machine -stale`, `wf migrate -done` (once, at queue-positions' `x4-state`; refused once `queue/done/` exists), `wf declare`, `wf relations`,
-`wf stale`, `wf main` (records `main`'s CI and its up-to-date setting in
-`main.yaml`), `wf areas -list | -check [-rev REV] [-edges FILE|-]` (a report,
+`wf stale`, `wf main [-trunk T]` (records `main`'s CI and its up-to-date setting in
+`main.yaml`, or the program trunk's in `program.yaml`), `wf hold`, `wf trunk`,
+`wf record`, `wf program-body`, `wf sync-program`, `wf tag-next`, `wf reestimate`
+(FLOW-20), `wf areas -list | -check [-rev REV] [-edges FILE|-]` (a report,
 never a gate), `wf digest`, `wf commit`, `wf budget [-native]`.
