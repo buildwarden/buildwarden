@@ -25,7 +25,8 @@ feature's cloud steps.
   trunk is a loop merge too, under the same gate.
 - Push `main` or a program trunk, force-push, rewrite pushed history, or
   delete a remote branch or a tag (FLOW-16, FLOW-17). The tags this skill
-  pushes are the pre-releases `wf tag-next` names (FLOW-20). Opening a PR
+  pushes are the pre-releases `wf tag-next` names, `-dev.N` and `-rc.N`
+  (FLOW-20). Opening a PR
   needs no confirmation (FLOW-08): `f6-open-pr` and a process item's
   `x2-implement` open theirs.
 - Edit `docs/development/`, `.claude/`, or `tools/workflow/` anywhere but on
@@ -260,8 +261,16 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
      [-head <sha>] [-ref <ref>] -note "<what and why>"`, committed with
      `program/records.yaml` (FLOW-20).
    - After a loop merge on a program trunk: `dist/wf tag-next -state
-     .dev/workflow -repo . -checkouts .dev/checkouts -repository R`; for
-     each tag it prints, `git tag <tag> origin/<program trunk>` and `git
+     .dev/workflow -repo . -checkouts .dev/checkouts -repository R` names
+     the `-dev.N` tags. When the merged item is the component's last phase
+     in R (the last item of its phase row in `componentization.md` for that
+     component, with no later program item for R filed), run it again with
+     `-rc -feature F` too: it names the `-rc.N` once F's PR is in the
+     program trunk's head, no other program item in R is open, the head's
+     checks (its CI and conformance suites) passed, and every module R
+     consumes is pinned at the latest pre-release in its clone; a pin that
+     is behind is moved by a reconciliation item first (LOOP-07). For each
+     tag either prints, `git tag <tag> origin/<program trunk>` and `git
      push origin <tag>` in that repository, and `wf record -kind tag`. It
      prints `none` with the reason otherwise. Never move or delete a tag.
 6. If the step raised a new blocking question, notify the human now (the

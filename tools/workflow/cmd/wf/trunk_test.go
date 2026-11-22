@@ -126,3 +126,16 @@ func TestReestimateCommand(t *testing.T) {
 	refused(t, dir, "only a program item's first runaway", "reestimate", "-worker",
 		"cloud/run", "-feature", "p")
 }
+
+// TestTagNextRCFlags: tag-next -rc names the program item of the component's
+// last phase, which must work in the repository, and -feature without -rc
+// is refused (FLOW-20, a17 (a)).
+func TestTagNextRCFlags(t *testing.T) {
+	dir := stateDir(t, programHere)
+	queued(t, dir, "p", "1")
+	work := t.TempDir()
+	refused(t, dir, "names the last phase of an -rc", "tag-next", "-repo", work,
+		"-feature", "p")
+	refused(t, dir, "is not a program item", "tag-next", "-repo", work, "-rc",
+		"-feature", "p")
+}

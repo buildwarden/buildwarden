@@ -230,7 +230,8 @@ what the repository releases and `-rc.N` once a component's last phase has
 merged, where X.Y.Z is the next minor after the latest release without a
 suffix (`v0.1.0` when there is none). Each publishes as a GitHub
 pre-release that never becomes Latest and never moves the relay image's
-`latest`, and is never moved or deleted (`wf tag-next` names the next one).
+`latest`, and is never moved or deleted (`wf tag-next` names the next one,
+and `wf tag-next -rc -feature <last phase>` the next `-rc.N`).
 
 ## Security
 

@@ -32,7 +32,8 @@
 //	wf record   -state DIR -list [-since TIME]
 //	wf program-body -state DIR [-repository OWNER/NAME]
 //	wf reestimate -state DIR -worker W -feature F
-//	wf tag-next -state DIR -repo DIR [-repository OWNER/NAME]
+//	wf tag-next -state DIR -repo DIR [-checkouts DIR] [-repository OWNER/NAME]
+//	            [-rc -feature F]
 //	wf review-human -state DIR -worker W -feature F -why TEXT
 //	wf move     -state DIR -worker human/NAME -feature F -to N [-why TEXT]
 //	wf urgent   -state DIR -worker human/NAME -feature F [-clear]
@@ -157,6 +158,14 @@
 // (<directory>/vX.Y.Z-dev.N per changed specification, the harness first),
 // or "none" with why: the last merge changed no consumable, the head is
 // tagged or its checks are not green, or specs-prerelease-tags is not done.
+// tag-next -rc -feature F prints the release candidates, vX.Y.Z-rc.N (per
+// specification directory with a -dev tag of its next version, the harness
+// first), once F, the program item of the component's last phase, has
+// merged into the program trunk's head and no other program item in the
+// repository is open, the head's checks are green, and every module of
+// another configured repository a go.mod at the head requires is pinned at
+// that repository's latest tag, pre-releases included, read in its clone
+// under -checkouts (a17 (a)).
 //
 // new -lead, and lead for an item already queued or in progress, name the
 // host name whose machines take a feature's cloud steps of Branch setup
@@ -349,7 +358,7 @@ type opts struct {
 	repos, areas, seams, adopts, with, message, claimed       string
 	rev, edges, repository                                    string
 	urgent, clear, check, list, clones, prepare, program      bool
-	sync                                                      bool
+	sync, rc                                                  bool
 	pr                                                        int
 	escalate, ref, since                                      string
 	// given holds the names of the flags the command line set, for a flag
@@ -415,6 +424,8 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.BoolVar(&o.sync, "sync", false,
 		"check: the program sync's gate for -repository's PR -pr (FLOW-20)")
 	fs.IntVar(&o.pr, "pr", 0, "check -sync: the sync's pull request number")
+	fs.BoolVar(&o.rc, "rc", false, "tag-next: the release candidates, once -feature, "+
+		"the component's last phase, has merged (FLOW-20, a17)")
 	fs.StringVar(&o.ref, "ref", "",
 		"record: what the decision is about: a PR (#N), a finding's id, a tag, an item; "+
 			"for a security-note, design or diff")
@@ -1180,14 +1191,24 @@ func reviewHuman(s *queue.State, o opts) error {
 
 // tagNext is wf tag-next: the pre-release tags the loop may push on a
 // repository's program trunk head, one a line, or why there are none
-// (FLOW-20, Decision 15). The tick pushes each with git push origin <tag>
-// and records it.
+// (FLOW-20, Decision 15): the -dev tags, or with -rc the release candidates
+// once -feature, the component's last phase, has merged (a17 (a)). The tick
+// pushes each with git push origin <tag> and records it.
 func tagNext(s *queue.State, o opts) error {
 	repo := o.repository
 	if repo == "" {
 		repo = s.Config.Repository
 	}
-	tags, why, err := check.TagNext(env(s, o), repo)
+	if o.feature != "" && !o.rc {
+		return fmt.Errorf("tag-next -feature names the last phase of an -rc")
+	}
+	tagsFor := check.TagNext
+	if o.rc {
+		tagsFor = func(e check.Env, repo string) ([]string, string, error) {
+			return check.TagNextRC(e, repo, o.feature)
+		}
+	}
+	tags, why, err := tagsFor(env(s, o), repo)
 	if err != nil {
 		return err
 	}
