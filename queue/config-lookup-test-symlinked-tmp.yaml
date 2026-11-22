@@ -4,7 +4,7 @@ priority: 1
 follows: project-config-trust
 status: in_progress
 round: feature
-phase: 5
+phase: 6
 design: docs/design/config-lookup-test-symlinked-tmp.md
 branch: feat/config-lookup-test-symlinked-tmp
 areas:
@@ -62,10 +62,35 @@ steps:
   - id: f5-guide
     phase: 5
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261122T105700Z
-      expires: 2026-11-22T13:05:24.288723161Z
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-merge-main
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -154,3 +179,9 @@ history:
   - at: 2026-11-22T11:05:24Z
     by: cloud/20261122T105700Z
     event: claimed f5-guide until 2026-11-22T13:05:24Z
+  - at: 2026-11-22T11:05:27Z
+    by: cloud/20261122T105700Z
+    event: done f5-guide
+  - at: 2026-11-22T11:05:27Z
+    by: cloud/20261122T105700Z
+    event: entered phase 6 (publish)
