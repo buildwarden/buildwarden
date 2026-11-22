@@ -143,7 +143,7 @@ func (b *build) runHeld(ctx context.Context, host driver.Host) error {
 // and after setup the session ends when warden stops it (DRV-53). The waiter
 // returns once teardown removes the container.
 func (b *build) hold(ctx context.Context, host driver.Host) error {
-	go b.containerWait()
+	go containerWait(b.waitArgs())
 	wctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	stopped := make(chan struct{})
@@ -175,8 +175,9 @@ func (b *build) hold(ctx context.Context, host driver.Host) error {
 func (b *build) watchExit(host driver.Host) func() {
 	exited := make(chan struct{})
 	var code int
+	args := b.waitArgs()
 	go func() {
-		code = b.containerWait()
+		code = containerWait(args)
 		close(exited)
 	}()
 	return driver.WatchExit(host, driver.ExitedBuild, exited, func() string {
@@ -184,10 +185,11 @@ func (b *build) watchExit(host driver.Host) func() {
 	})
 }
 
-// containerWait blocks until the build container exits and returns its exit
-// code (-1 if the runtime does not report one).
-func (b *build) containerWait() int {
-	args := b.waitArgs()
+// containerWait runs the waiter's command line, args (waitArgs), and returns
+// the build container's exit code (-1 if the runtime does not report one).
+// Its caller builds args before starting it, so that the waiter's goroutine
+// does not read ctrctl.Cli.
+func containerWait(args []string) int {
 	out, err := exec.Command(args[0], args[1:]...).Output()
 	if err != nil {
 		return -1
