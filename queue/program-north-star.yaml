@@ -12,8 +12,8 @@ alters_relationships: null
 source: 'Filed on Jeff''s word, 2026-11-21 (workflow-human sitting), in his words: ''make this an explicit process override that basically states this large-scale refactor is effectively the north star project until it''s complete. All work prioritization is based on achieving that goal under maximum parallelization, even if it is temporarily incompatible or breaking with the existing interfaces. While the CLI, config, and ledger will largely be expected to keep mostly similar interfaces/specs, every delay increases overall development costs where-ever it could be prioritized and parallelized post-refactor.'' Context: he had just held relay-collector-failure-fails-open (a security fix) as a follow-up of the relay separation, and vm-from-host-path (a security fix), prebuilt-artifacts and workdir-in-context until the program completes, since there is no release before it ends and usage is low. The design amends FLOW-20 (its freeze exemptions for regression and security fixes; how intake files non-program work during the program), and weighs what ''maximum parallelization'' and ''temporarily breaking'' mean for FLOW-05''s limits and relations, UX-03''s deprecation windows and the rules that keep CLI, config and ledger compatibility, saying which stay as written (FLOW-08, FLOW-14, FLOW-18, FLOW-19, the ledger and key rules). Estimate from the process size row: 4 steps + 1 if the queue state needs a migration.'
 pr:
   number: 136
-  ci: pending
-  head: 0b5cbc05315c0db499539b5b2956eecca8522b3b
+  ci: green
+  head: e0f3fcd44eb9fb8fe4768258cefa3840eb1c21eb
 steps:
   - id: x1-design
     phase: 1
@@ -39,10 +39,10 @@ steps:
   - id: x2-refresh
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261122T180143Z
-      expires: 2026-11-22T23:41:04.761174515Z
+      claimed_by: ""
+      expires: null
     note: 'main at 136be78: 1 commit since the branch merged it; both change .github/workflows/main.yml, .github/workflows/release.yml, .goreleaser.yaml, AGENTS.md, CONTRIBUTING.md, docs/development/loop-profile.md, docs/development/orchestrator.md, docs/development/ux-cli-config.md, specs/README.md, specs/specs_test.go, tools/tier1/rules.yaml'
 budget:
   estimate:
@@ -92,3 +92,6 @@ history:
   - at: 2026-11-22T21:41:04Z
     by: cloud/20261122T180143Z
     event: claimed x2-refresh until 2026-11-22T23:41:04Z
+  - at: 2026-11-22T21:57:00Z
+    by: cloud/20261122T180143Z
+    event: done x2-refresh
