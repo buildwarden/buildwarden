@@ -96,6 +96,16 @@ Unit tests.
 
 func git(t *testing.T, dir string, args ...string) {
 	t.Helper()
+	cmd := gitCmd(dir, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+// gitCmd is the helper's git command, for a test that expects it to fail: it
+// carries the identity, so the command does not depend on the machine's git
+// configuration (CI has no user.name).
+func gitCmd(dir string, args ...string) *exec.Cmd {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
@@ -103,9 +113,7 @@ func git(t *testing.T, dir string, args ...string) {
 		// Tests edit checked-out files by their text, so the repositories must
 		// hold the bytes written whatever the machine's core.autocrlf says.
 		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=core.autocrlf", "GIT_CONFIG_VALUE_0=false")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
+	return cmd
 }
 
 // TestGitHelperIgnoresAutoCRLF: with core.autocrlf=true in the global config

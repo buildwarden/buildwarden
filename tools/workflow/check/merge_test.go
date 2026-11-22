@@ -3,7 +3,6 @@ package check
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -371,9 +370,8 @@ func syncFixture(t *testing.T, conflict bool) (Env, *fakeGitHub, string) {
 	branch := "sync/program-" + mainSHA[:12]
 	git(t, w, "checkout", "-q", "-b", branch, "origin/"+programTrunk)
 	if conflict {
-		cmd := exec.Command("git", "merge", "-q", "--no-edit", "origin/main")
-		cmd.Dir = w
-		_ = cmd.Run()
+		// The merge stops on the conflict; the commit below concludes it.
+		_ = gitCmd(w, "merge", "-q", "--no-edit", "origin/main").Run()
 		_ = os.WriteFile(filepath.Join(w, "both.txt"), []byte("p\nm\n"), 0o644)
 		git(t, w, "add", "both.txt")
 		git(t, w, "commit", "-q", "--no-edit")
