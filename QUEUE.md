@@ -46,7 +46,7 @@ None.
 | Machine | Host names | Last run | Leads | Holds |
 |---|---|---|---|---|
 | macbook | macos-vz, macos-qemu, macos-finch, qemu-any, container-any, macos-any | worked, 2026-11-20 22:40: claude exited 0 | - | - |
-| windows-desktop | windows-hyperv, container-any, linux-kvm, windows-any | worked, 2026-11-20 23:10: claude exited 0; skipped windows-hyperv (native.prepare failed) | - | - |
+| windows-desktop | windows-hyperv, container-any, linux-kvm, windows-any | idle, 2026-11-22 05:10: idle: 4 open gaps, nothing moved since 2026-11-21T23:10:08Z | - | - |
 
 ## Relations
 
