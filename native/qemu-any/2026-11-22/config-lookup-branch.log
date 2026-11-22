@@ -1,0 +1,27 @@
+host:qemu-any/macbook.20261122T124005Z, unattended, macbook (darwin/arm64), go1.26.5
+feat/config-lookup-test-symlinked-tmp ca55efb7 (PR #134), worktree .scratch/clt; main be138478
+
+$ go -C .scratch/clt test -count=1 ./cmd/warden
+ok  	github.com/buildwarden/buildwarden/cmd/warden	1.602s
+
+$ go -C .scratch/clt test -count=1 -v -run 'TestConfigFileLookupOrder|Symlink|Link' ./cmd/warden
+=== RUN   TestConfigFileLookupOrder
+=== RUN   TestConfigFileLookupOrder/the_flag_over_the_variable_and_./warden.toml
+=== RUN   TestConfigFileLookupOrder/the_variable_over_./warden.toml
+=== RUN   TestConfigFileLookupOrder/./warden.toml_when_nothing_names_a_file
+=== RUN   TestConfigFileLookupOrder/an_empty_variable_is_not_set
+=== RUN   TestConfigFileLookupOrder/no_file_at_all
+--- PASS: TestConfigFileLookupOrder (0.01s)
+(TestResolveBuildLink*, TestBadBuildLinkFailsAtLoad, TestBuildLink*: PASS)
+ok  	github.com/buildwarden/buildwarden/cmd/warden	0.200s
+
+$ make -C .scratch/clt build    (ad-hoc signed with the virtualization entitlement)
+
+$ make -C .scratch/clt-case doctor-varfolders
+  recipe: d=$(mktemp -d "${TMPDIR%/}/clt-case.XXXXXX"); printf 'output_dir = "out"\n' > "$d/warden.toml";
+          cd "$d" && ../clt/dist/warden doctor --driver container | head -3; rm -rf "$d"
+case dir: /var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/clt-case.XuGn10
+realpath: /private/var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/clt-case.XuGn10
+config: /var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/clt-case.XuGn10/warden.toml (found in the working directory)
+container runtime: finch
+ok

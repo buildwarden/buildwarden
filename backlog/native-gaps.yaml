@@ -1176,6 +1176,11 @@ gaps:
       worked, "claude exited 0") and pushed through wf commit, and this 12:40Z run started under launchd
       with the release stage and found work through wf gate. Still open: no led item, so native-push.sh is
       unexercised here, and no run with the private session remote unset.
+      2026-11-22 (host:macos-vz/macbook.20261122T124005Z, unattended, main be13847): this 12:40Z run started
+      under launchd and found work through wf gate. native/status/macbook.yaml still reads last_run
+      2026-11-20T22:40:36Z after the 2026-11-21T12:40Z run (which pushed its digest), as designed:
+      record_status does not push an unchanged outcome (native-tick.sh:140). Still open: no led
+      item, so native-push.sh is unexercised, and no run with the session remote unset.
   - id: loop-native-lead-windows-wrapper
     host: windows-hyperv
     status: open
@@ -1221,3 +1226,10 @@ gaps:
       branch, which is design-only (8eb333d, waiting on human step f2-design-review). On main
       `go test -count=1 -run TestConfigFileLookupOrder ./cmd/warden` still fails the same two cases (/private/var
       vs /var/folders). Logs: native/qemu-any/2026-11-21/cmd-warden-go-test.log.
+      2026-11-22 (host:qemu-any/macbook.20261122T124005Z, unattended, go1.26.5): branch half PASSES on
+      feat/config-lookup-test-symlinked-tmp ca55efb (PR #134). `go test -count=1 ./cmd/warden` ok, and with -v
+      TestConfigFileLookupOrder passes all five cases (TMPDIR under /var/folders). With `make build` from the
+      branch and the working directory a mktemp dir under /var/folders holding a warden.toml (realpath
+      /private/var/folders/...), `warden doctor --driver container`'s first line is "config:
+      /var/folders/.../warden.toml (found in the working directory)" (scratch Makefile .scratch/clt-case). Kept
+      open for the main half, after PR #134 merges. Log: native/qemu-any/2026-11-22/config-lookup-branch.log.
