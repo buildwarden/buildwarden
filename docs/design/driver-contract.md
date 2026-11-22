@@ -7049,6 +7049,21 @@ has moved since the branch last merged it; merging it is Implement's
 and Publish's, not Plan's, and a merge that changes what a task here
 assumes goes back to Design (FLOW-06).
 
+Re-planned on 2026-11-22 from the design as approved at `6357b90`
+(r4, the delta from `33a3563`, approved with nothing folded in; a28
+confirmed (i), Behaviour 7's change from `c81892d` kept). Tasks 1 to
+38 and 19a to 19c are done and are not renumbered. Design's step 9,
+tasks 39 to 42, is confirmed with its numbers: each carries out a part
+of Decisions 25 and 26 or a28 and names its tests and tier, and
+together they cover the r4 rows of **The operations, per driver**, the
+Clean case of **The conformance suite**, Behaviours 6 and 20, the r4
+cases of the **Validation plan**'s tier 0, and the reference and
+overview updates (UX-01, FLOW-15). a28's `doctor` check is task 40's.
+Behaviour 7's change and its test (`TestBuildSequenceExitGrace`) are
+Jeff's `c81892d` and `fa1d28d`, on the branch, and are not tasks. The
+delta changes no rule and no specification, so no task of step 9 is a
+rule change or comes before the code. Implement runs 39 to 42 in order.
+
 The tasks follow **Order of the work**; its step is named in brackets.
 Each task leaves `make test` and `make lint` green, and `GOOS=<os> make
 lint` for each platform whose build-tagged files it touches (FLOW-17).
@@ -7462,10 +7477,11 @@ r4).
     `WARDEN_CTR_CLI`, or the key and file as `keyInFile` words it) and
     the runtime, with `runtimeStartHint`'s fix when it is installed but
     does not answer, and one to install it or name another when it is
-    not found; `run` itself resolves as before. Tier 0: the probe's and
-    `doctor`'s cases from each source, and through `warden build`
-    the refusal with no output directory (GLOBAL-10, UX-04, UX-08,
-    UX-09, TEST-01).
+    not found; `run` itself resolves as before. `doctor` reports that
+    error as blocked, so `warden doctor` exits 1 with no `ok` line (a28,
+    confirmed (i) at `6357b90`). Tier 0: the probe's and `doctor`'s
+    cases from each source, and through `warden build` the refusal with
+    no output directory (GLOBAL-10, UX-04, UX-08, UX-09, TEST-01).
 41. Rework of tasks 14 and 25 (Decision 25): the suite's lifecycle Clean
     case (`conformance/driver/lifecycle.go`, `caseClean`) kills the dead
     build's driver alone, as it does, and says so in its comment and its
