@@ -1,0 +1,24 @@
+### dc (190b092d hyperv setup: name [driver.hyperv] network in its h)
+1 doctor rc=0
+-- 2
+direct rc=0 fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-q-dc-direct) 
+ SIGNATURES: ✅ All 11 signatures valid
+disk rc=0 3.21.0 fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-q-dc-disk) 
+ SIGNATURES: ✅ All 11 signatures valid
+df rc=0 3.21.0 from-dockerfile warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-q-dc-df) 
+ SIGNATURES: ✅ All 7 signatures valid
+   df inputs: Containerfile build.sh  disk: alpine_3_21.qcow2
+df-script rc=0 3.21.0 fetched 488103 bytes warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-q-dc-df-script) 
+ SIGNATURES: ✅ All 11 signatures valid
+   df+script inputs:  disk: alpine_3_21.qcow2
+-- 4
+to rc=124 warden: build FAILED: timed out after 30s (--timeout) 
+ SIGNATURES: ✅ All 7 signatures valid
+warden: build FAILED: timed out after 30s (--timeout)
+-- 3
+   INT (SIGINT ): rc=130 during: qemu=2 workdirs=1; after: qemu=0 workdirs=0 (before 0)
+Interrupted, cleaning up... (press ctrl+c again to force)|warden: build interrupted|
+   TERM (SIGTERM ): rc=1 during: qemu=2 workdirs=1; after: qemu=0 workdirs=0 (before 0)
+[warden] running...|warden: build terminated (SIGTERM)|
+   KEEP (SIGINT --keep-vms): rc=130 during: qemu=2 workdirs=1; after: qemu=0 workdirs=1 (before 0)
+[warden] --keep-vms: left /var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/warden-qemu-i9aus5dd-2820800589|warden: build interrupted|

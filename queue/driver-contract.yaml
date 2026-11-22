@@ -66,13 +66,13 @@ steps:
   - id: f6-validate-qemu-any
     phase: 6
     affinity: host:qemu-any
-    status: pending
+    status: done
     needs:
       - f6-consolidate
       - f6-consolidate-r2
     lease:
-      claimed_by: host:qemu-any/macbook.attended-20261122T190734Z
-      expires: 2026-11-23T15:29:07.854973Z
+      claimed_by: ""
+      expires: null
     note: Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation; where a case says "as main", capture main's output first. qemu stays linked; its build now runs through warden's build sequence, and its own SIGINT and SIGTERM handler is gone. (1) warden doctor --driver qemu prints what main prints. (2) a direct-boot build and a cloud-image build succeed and verify; a Dockerfile whose FROM names a prepared image boots that image, as on main, and still does when the build is given --script, as on main; inputs/ holds Containerfile and build.sh. (3) Ctrl-C mid-build leaves no qemu-system process and no work directory; SIGTERM mid-build does the same; --keep-vms leaves the work directory only. (4) --timeout 30s on a sleeping script exits 124. (5) warden clean --driver qemu reports nothing to clean with no container runtime running. (6) a second Ctrl-C during teardown ends warden; record what it leaves (design Behaviour 8). Evidence under native/qemu-any/<date>/.
   - id: f6-validate-macos-finch
     phase: 6
@@ -1062,3 +1062,6 @@ history:
   - at: 2026-11-22T19:29:07Z
     by: host:qemu-any/macbook.attended-20261122T190734Z
     event: claimed f6-validate-qemu-any until 2026-11-23T15:29:07Z
+  - at: 2026-11-22T19:38:38Z
+    by: host:qemu-any/macbook.attended-20261122T190734Z
+    event: done f6-validate-qemu-any
