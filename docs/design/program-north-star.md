@@ -7,13 +7,15 @@ surfaces: []             # `wf`, the skills and CI are the loop's tools, not a u
 repos: []                # only buildwarden/buildwarden; the specifications repository's own release
                          # workflow change is an item there against its main, filed by the state
                          # step and merged by Jeff in the one-time setup (Decision 16)
-areas: [rules, loop, designs, build, specs, book]
+areas: [rules, loop, designs, build, specs, book, tier1-config]
                          # rules: process.md, behavioral-linter.md, loop-contract.md, loop-profile.md,
                          # ux-cli-config.md, orchestrator.md; loop: tools/workflow and .claude/;
                          # designs: this design; build: .github/workflows/{main,flow18,release,relay-image}.yml
                          # and .goreleaser.yaml; specs: tools/conformance/{check-pins,pin-specs}.sh,
                          # specs/README.md's layout and specs/specs_test.go (the ledger's working
-                         # draft, a7); book: CONTRIBUTING.md's release and pin paragraphs
+                         # draft, a7); book: CONTRIBUTING.md's release and pin paragraphs;
+                         # tier1-config: FLOW-20's entry in tools/tier1/rules.yaml, which its
+                         # check, now automated + agent-judgment, needs (added in Implement)
 security_boundary: none  # no product boundary moves; what the loop may merge is the process's own gate (FLOW-08)
 alters_relationships: false  # no product component's role or interaction changes (FLOW-02)
 design_review: required  # a process item's design gets its review (FLOW-03, FLOW-19); this one

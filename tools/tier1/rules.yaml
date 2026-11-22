@@ -48,6 +48,7 @@ rules:
   FLOW-16: {owner: "wf (the merged-branch report)"}
   FLOW-18: {owner: "tools/workflow/flow18-check.sh"}
   FLOW-19: {owner: "wf (the design_review decision, skip criteria and approvals: tools/workflow/check)"}
+  FLOW-20: {owner: "wf (the trunk choice, the program mark, holds, the merge gate, the umbrella and process tests' approvals, the later escalations) and specs/specs_test.go (checkDrafts)"}
 
   RELAY-01: {check: [ledger-single-writer]}
   RELAY-02: {follow-up: "the round-trip test exists; a check that new serving paths use it does not"}
