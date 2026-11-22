@@ -105,7 +105,7 @@ warden build --runtime podman .
 ```
 
 ```toml
-[runtime]
+[driver.container]
 cli = "podman"
 ```
 
@@ -123,6 +123,12 @@ Any other value in effect stops `build`, `shell`, `doctor` and `clean`
 before anything is run, with an error that says where the value is set and
 what to change. A project's `warden.toml` can choose among the three, and
 `--runtime` or `WARDEN_CTR_CLI` replaces its choice with yours.
+
+A runtime you name is used, or the command stops: one that is not on
+`PATH`, or that does not answer (its VM or daemon is stopped), stops
+`build` and `shell` before any output directory exists, and blocks
+`doctor`. `warden` does not fall back to detection, so start the runtime or
+name another.
 
 The setting belongs to the container driver. A build with a VM driver does
 not read it, so one `warden.toml` can hold `cli` beside the VM drivers'

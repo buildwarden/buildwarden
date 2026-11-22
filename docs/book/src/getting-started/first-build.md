@@ -36,8 +36,12 @@ setting holds anything else (a path, a wrapper script, another runtime)
 stops before it runs anything, and the error says where the value is set and
 what to change. When it is set in the `warden.toml` of a repository you
 cloned, `--runtime` with one of the three builds it without editing the
-file. [The container runtime](../guide/configuration.md#the-container-runtime)
-has the rule and the error.
+file. A runtime you name must also be installed and running: one that is
+not on `PATH`, or whose VM or daemon is stopped, stops the build before it
+makes an output directory, and `warden` does not pick another in its place.
+Start it, or name another; `warden doctor` reports the same error.
+[The container runtime](../guide/configuration.md#the-container-runtime)
+has the rules and the errors.
 
 Built from its own directory, a repository's `warden.toml` is the config
 file, and it chooses more than the runtime: the driver, the relay image and
@@ -63,6 +67,12 @@ warden-io: running build.sh
 [warden] Build complete
 [warden] Output: warden-output
 ```
+
+If the build environment exits before the build completes (the script
+powers off a VM, or the container's init fails), `warden` waits 10 seconds
+for the completion, then fails with `the build environment exited before
+the build completed` and a `To fix:` line naming the build's
+`build-output.log`, which holds the last thing the build printed.
 
 ## Output directory
 
@@ -184,6 +194,10 @@ where it came from (`WellKnown, no DHCP lease from the relay`).
 warden shell .
 # Drops into isolated container — all traffic still audited
 ```
+
+`warden clean` leaves an open shell session alone, as it does a running
+build, while its `warden-driver-container` runs; see
+[warden clean](../guide/cli.md#warden-clean).
 
 ## Custom output location
 

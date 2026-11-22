@@ -108,7 +108,9 @@ and writes it here.
 
 The build's console output, streamed from the guest to the collector as the
 build runs. Written for every driver (suppressed from the terminal, but not
-from this file, by `-q/--quiet`).
+from this file, by `-q/--quiet`). When the build environment exits before
+the build completes, `warden`'s error points here for the last thing the
+build printed.
 
 ### relay.log
 
