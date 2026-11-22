@@ -57,7 +57,8 @@ integration-test:
 # The driver contract's conformance suite, both tiers, against the driver
 # binary DRIVER. The lifecycle tier runs real builds, so it needs a host the
 # driver runs on; DRIVER_CONFORMANCE_FLAGS are driver-conformance's flags for
-# that host (--driver-arg, --config-file, --base-image, --skip, ...).
+# that host (--driver-arg, --config-file, --base-image, --skip,
+# --case-deadline, ...).
 DRIVER ?= dist/warden-driver-container$(EXE)
 driver-conformance:
 	go run ./conformance/driver/cmd/driver-conformance --driver $(DRIVER) \

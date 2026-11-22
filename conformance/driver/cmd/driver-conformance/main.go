@@ -4,7 +4,7 @@
 //	driver-conformance --driver <path> [--tier static|lifecycle|all]
 //	    [--driver-arg <flag>]... [--config-file <file>]
 //	    [--base-image <ref>] [--image <image>] [--stub-relay]
-//	    [--skip <case>]... [--exit-script <file>]
+//	    [--skip <case>]... [--exit-script <file>] [--case-deadline <duration>]
 //
 // The static tier needs nothing of the host; the lifecycle tier runs real
 // builds, so it needs a host the driver runs on, and takes the driver's
@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	driverconformance "github.com/buildwarden/buildwarden/conformance/driver"
 )
@@ -43,6 +44,10 @@ func main() {
 	flag.Var(&skip, "skip", "a lifecycle case not to run on this host (repeated)")
 	exitScript := flag.String("exit-script", "", "a build script that ends the "+
 		"environment without completing, for the exited case")
+	flag.DurationVar(&o.CaseDeadline, "case-deadline", 0, "how long a lifecycle "+
+		"case may run before it fails as hung and the tier ends (default: the "+
+		"slowest case's worst path, "+
+		driverconformance.DefaultCaseDeadline(60*time.Second).String()+")")
 	flag.Parse()
 	if *path == "" {
 		fmt.Fprintln(os.Stderr, "driver-conformance: --driver is required")

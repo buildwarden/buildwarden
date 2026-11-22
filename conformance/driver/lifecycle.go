@@ -44,9 +44,10 @@ type LifecycleOptions struct {
 	// Teardown bounds each wait for the driver to stop; 0 is 60 s, the
 	// orchestrator's default teardown wait (DRV-52).
 	Teardown time.Duration
-	// CaseDeadline bounds each case; 0 is 30 min. A case still running then
-	// fails as hung, the drivers of its builds are killed, and the cases
-	// after it are not run.
+	// CaseDeadline bounds each case; 0 is DefaultCaseDeadline(Teardown),
+	// which no case that is still making progress reaches. A case still
+	// running then fails as hung, the drivers of its builds are killed and
+	// reaped, and the cases after it are not run.
 	CaseDeadline time.Duration
 }
 
@@ -104,7 +105,7 @@ func (s *Suite) Lifecycle(o LifecycleOptions) []Result {
 		o.Teardown = 60 * time.Second
 	}
 	if o.CaseDeadline == 0 {
-		o.CaseDeadline = 30 * time.Minute
+		o.CaseDeadline = DefaultCaseDeadline(o.Teardown)
 	}
 	l := &lifecycle{s: s, o: o, dir: filepath.Join(s.scratch, "context"),
 		held: map[string]*buildRun{}}
@@ -131,6 +132,25 @@ func (s *Suite) Lifecycle(o LifecycleOptions) []Result {
 		out = append(out, r)
 	}
 	return out
+}
+
+// DefaultCaseDeadline is the case deadline under the teardown wait
+// teardown: the slowest case's worst path, every one of its waits run out,
+// so only a case blocked outside its waits reaches it (r4, CI repair).
+//
+// The slowest is Kill with a config file: three variants at each of three
+// points, nine builds. One build to a point and its end is bounded by
+// upTo's fixed waits, 12 min (claim 2 min, environment-started 5 min, the
+// marker 5 min), and at most seven teardown waits (relay-started, stopped,
+// the exit, then two reaps of 2 x teardown each, the case's and end's);
+// another minute covers the small fixed waits (settle, closeWait,
+// drainWait, each run's WaitDelay) and starting the processes. So nine
+// builds of 13 min and seven teardown waits: 180 min under the default
+// 60 s teardown. Every other case runs fewer builds under the same waits;
+// Success, the slowest with one build, is 17 min and five teardown waits.
+func DefaultCaseDeadline(teardown time.Duration) time.Duration {
+	const builds = 9
+	return builds * (13*time.Minute + 7*teardown)
 }
 
 // runCase runs c, or gives up on it at the case deadline with finished

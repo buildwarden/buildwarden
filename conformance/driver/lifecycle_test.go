@@ -98,6 +98,20 @@ func TestRunCaseDeadline(t *testing.T) {
 	}
 }
 
+// The default case deadline is the slowest case's worst path, nine builds
+// of 13 min and seven teardown waits: 180 min under the default teardown,
+// and it grows with the teardown wait a slower host is given.
+func TestDefaultCaseDeadline(t *testing.T) {
+	for teardown, want := range map[time.Duration]time.Duration{
+		60 * time.Second: 180 * time.Minute,
+		5 * time.Minute:  432 * time.Minute,
+	} {
+		if got := DefaultCaseDeadline(teardown); got != want {
+			t.Errorf("DefaultCaseDeadline(%s) = %s, want %s", teardown, got, want)
+		}
+	}
+}
+
 // A build held by a case that passed its deadline is killed, reaped and
 // released: nothing of it is left on the host, and its lock is free
 // (DRV-52).

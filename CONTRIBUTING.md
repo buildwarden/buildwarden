@@ -61,8 +61,9 @@ make integration-test    # Real builds plus ledger checks; needs a container run
 make driver-conformance  # The driver suite's both tiers against DRIVER (default:
                          #   dist/warden-driver-container, .exe on Windows); the lifecycle tier runs
                          #   real builds; DRIVER_CONFORMANCE_FLAGS for the host;
-                         #   a case still running after 30 min fails as hung
-                         #   and ends the tier
+                         #   a case still running after the slowest case's
+                         #   worst path (3 h) fails as hung and ends the tier;
+                         #   --case-deadline <duration> changes it
 make integration-test-vz # VZ end to end; needs macOS/arm64 and a prepared image
 make clean               # Remove built binaries
 ```
