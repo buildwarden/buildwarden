@@ -8466,6 +8466,22 @@ acceptance; then the outcome.
   of a28, and of Behaviour 7's change; he records `approved at <sha>`,
   and Plan then confirms tasks 39 to 42.
 
+### r4, 2026-11-22: the delta approved
+
+- **r4, 2026-11-22: approved at `6357b90`** (Jeff, workflow-human,
+  FLOW-19), the design as read; nothing was folded in. Jeff had read the
+  delta before the sitting.
+- **Decisions.** a28 confirmed (i): `warden doctor` makes the probe's
+  check and reports the same `fixable` error as blocked. Behaviour 7's
+  change from `c81892d` kept: one `fixable` error on every driver whose
+  fix names `build-output.log`. `q3` and `q4` stand as worded in
+  Decisions 25 and 26. Repositories: none besides this one (LOOP-04);
+  areas stay undeclared. No rule change is in the delta, so none was
+  asked; the eleven rule changes of r2's approval stand.
+- **Next:** Plan re-enters and confirms tasks 39 to 42; Implement does
+  the rework.
+- sitting: 2026-11-22, asks: 3 (3 in one batch)
+
 ## Consolidation
 
 Filled at Publish, 2026-11-20, on the branch at `bc91149`, which contains
