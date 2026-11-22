@@ -242,11 +242,11 @@ func TestNextTakesImplementationFirst(t *testing.T) {
 	impl.Steps[len(impl.Steps)-1].Affinity = "cloud"
 
 	// A hold still stops a class-1 feature's cloud step.
-	rules := process("rules", 2, "in_progress", "cloud")
+	rules := implementing("rules", 2, "cloud")
 	s = state(rules, impl)
 	pick, blocked = s.Next("cloud", now)
-	if pick != nil || len(blocked) != 2 || blocked[0].Feature != "impl" ||
-		blocked[0].Reason != "held by process item rules" {
+	if pick != nil || len(blocked) != 2 ||
+		!slices.Contains(blocked, Blocked{"impl", "held by process item rules"}) {
 		t.Fatalf("next = %+v, %+v; want impl held by rules", pick, blocked)
 	}
 }
@@ -448,7 +448,7 @@ func held(t *testing.T, kind, why string) (*State, *Feature) {
 	if err := s.Add(f, now, "human/jeff"); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.PutOnHold(why, now, "human/jeff"); err != nil {
+	if err := f.PutOnHold(why, "program-end", now, "human/jeff"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Save(f); err != nil {
@@ -481,10 +481,14 @@ func TestPutOnHoldWrites(t *testing.T) {
 			t.Errorf("%q: steps %+v, want %v", kind, f.Steps, ids)
 		}
 		last := f.History[len(f.History)-1].Event
-		if last != "on hold (q1): "+why {
+		if last != "on hold (q1, resumes: program-end): "+why {
 			t.Errorf("%q: last history line %q", kind, last)
 		}
-		if md := Summary(s); !strings.Contains(md, "blocking question q1: "+why) {
+		if q[0].Resumes != "program-end" || !f.Held() {
+			t.Errorf("%q: resumes %q, held %v; want program-end, held", kind,
+				q[0].Resumes, f.Held())
+		}
+		if md := Summary(s); !strings.Contains(md, "q1): "+why+"; resumes: program-end") {
 			t.Errorf("%q: QUEUE.md does not list the hold:\n%s", kind, md)
 		}
 	}
@@ -538,18 +542,21 @@ func TestPutOnHoldRefusals(t *testing.T) {
 	asked.Questions = []Question{{ID: "q1", Kind: "blocking", Status: "open",
 		Question: "?", Options: []string{"a"}, Recommended: "a"}}
 	unseeded := &Feature{Feature: "c", Status: "queued", Round: "feature"}
+	gateless := feature("b", 2, "in_progress")
+	gateless.Steps[0].Status = "done"
 	for name, tc := range map[string]struct {
-		f   *Feature
-		why string
+		f            *Feature
+		why, resumes string
 	}{
-		"no reason":        {feature("a", 1, "queued"), " "},
-		"in progress":      {feature("b", 2, "in_progress"), "why"},
-		"has a question":   {asked, "why"},
-		"no step to gate":  {unseeded, "why"},
-		"already finished": {feature("d", 4, "done"), "why"},
+		"no reason":                {feature("a", 1, "queued"), " ", "program-end"},
+		"no resume point":          {feature("a", 1, "queued"), "why", " "},
+		"in progress with no gate": {gateless, "why", "program-end"},
+		"has a question":           {asked, "why", "program-end"},
+		"no step to gate":          {unseeded, "why", "program-end"},
+		"already finished":         {feature("d", 4, "done"), "why", "program-end"},
 	} {
 		before := len(tc.f.Steps)
-		if err := tc.f.PutOnHold(tc.why, now, "human/jeff"); err == nil {
+		if err := tc.f.PutOnHold(tc.why, tc.resumes, now, "human/jeff"); err == nil {
 			t.Errorf("%s: PutOnHold succeeded", name)
 		}
 		if len(tc.f.Steps) != before || len(tc.f.History) != 0 {

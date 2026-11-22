@@ -290,6 +290,11 @@ type Question struct {
 	Options     []string `yaml:"options"`
 	Recommended string   `yaml:"recommended"`
 	Answer      string   `yaml:"answer,omitempty"`
+	// Resumes, on a blocking question, makes it a hold (FLOW-20): it names
+	// when the item resumes, the program's end (program-end) unless the
+	// human named another point. An item with such a question open is held
+	// (Feature.Held).
+	Resumes string `yaml:"resumes,omitempty"`
 }
 
 // Event is one history entry.
@@ -828,29 +833,87 @@ func (s *State) Add(f *Feature, now time.Time, by string) error {
 	return nil
 }
 
-// PutOnHold files a queued item on hold (FLOW-20's freeze): an open blocking
-// question q1 whose text is why, and a human step <f0|x1>-answer-q1 that the
-// item's first step needs, so no worker is offered the item's work until the
-// human answers q1 (FLOW-07). wf answer completes that step. It is for an
-// item Add has just queued: holding one already in progress stays a
-// hand-edit, and one that already has a question is refused, never merged.
-func (f *Feature) PutOnHold(why string, now time.Time, by string) error {
-	if strings.TrimSpace(why) == "" {
+// PutOnHold puts an item on hold (FLOW-20): an open blocking question, the
+// next free q<N>, whose text is why and whose resumes names when the item
+// resumes, and a human step <phase>-answer-q<N> that the item waits for, so
+// no worker is offered its work until the human answers it (FLOW-07). wf
+// answer completes that step. On a newly queued item with no question the
+// item's first step needs the answer; on an item in progress every pending
+// gate of its current phase does. A queued item that already has a question
+// is refused, never merged into, and so is a done item or one with no step
+// to gate.
+func (f *Feature) PutOnHold(why, resumes string, now time.Time, by string) error {
+	switch {
+	case strings.TrimSpace(why) == "":
 		return fmt.Errorf(
 			"a hold needs its reason, the blocking question's text (FLOW-07)")
+	case strings.TrimSpace(resumes) == "":
+		return fmt.Errorf("a hold names when it resumes: program-end, or the point " +
+			"the human named (FLOW-20)")
 	}
-	if f.Status != "queued" || len(f.Steps) == 0 || len(f.Questions) > 0 {
-		return fmt.Errorf("%s: only a newly queued item with no question is put on hold",
-			f.Feature)
+	var gates []*Step
+	switch f.Status {
+	case "queued":
+		if len(f.Steps) > 0 && len(f.Questions) == 0 {
+			gates = []*Step{&f.Steps[0]}
+		}
+	case "in_progress":
+		for i := range f.Steps {
+			st := &f.Steps[i]
+			if st.Status == "pending" && st.Phase == f.Phase && IsGate(f, st) {
+				gates = append(gates, st)
+			}
+		}
 	}
+	if len(gates) == 0 {
+		return fmt.Errorf("%s: only a newly queued item with no question, or an item "+
+			"in progress with a pending gate, is put on hold", f.Feature)
+	}
+	id := f.nextQuestionID()
 	const resume = "resume it"
-	f.Questions = append(f.Questions, Question{ID: "q1", Kind: "blocking", Status: "open",
-		Question: why, Options: []string{resume}, Recommended: resume})
-	answer := Step{ID: StepID(f.Round, f.Phase, "answer-q1"), Phase: f.Phase,
+	answer := Step{ID: StepID(f.Round, f.Phase, "answer-"+id), Phase: f.Phase,
 		Affinity: "human", Status: "pending"}
-	f.Steps[0].Needs = addNeeds(f.Steps[0].Needs, answer.ID)
+	if f.hasStep(answer.ID) {
+		return fmt.Errorf("%s already has a step %s", f.Feature, answer.ID)
+	}
+	for _, g := range gates {
+		g.Needs = addNeeds(g.Needs, answer.ID)
+	}
+	f.Questions = append(f.Questions, Question{ID: id, Kind: "blocking", Status: "open",
+		Question: why, Options: []string{resume}, Recommended: resume, Resumes: resumes})
 	f.Steps = append([]Step{answer}, f.Steps...)
-	f.Log(now, by, "on hold (q1): %s", why)
+	f.Log(now, by, "on hold (%s, resumes: %s): %s", id, resumes, why)
+	return nil
+}
+
+// nextQuestionID is the first q<N> the item's questions do not use.
+func (f *Feature) nextQuestionID() string {
+	used := map[string]bool{}
+	for _, q := range f.Questions {
+		used[q.ID] = true
+	}
+	n := 1
+	for used[fmt.Sprintf("q%d", n)] {
+		n++
+	}
+	return fmt.Sprintf("q%d", n)
+}
+
+// Held reports whether the item is on hold: an open blocking question names
+// when it resumes (FLOW-20). A held item holds no limit and does not wait on
+// the human (FLOW-05).
+func (f *Feature) Held() bool {
+	return f.Hold() != nil
+}
+
+// Hold returns the item's open hold question, or nil.
+func (f *Feature) Hold() *Question {
+	for i := range f.Questions {
+		q := &f.Questions[i]
+		if q.Kind == "blocking" && q.Status == "open" && q.Resumes != "" {
+			return q
+		}
+	}
 	return nil
 }
 

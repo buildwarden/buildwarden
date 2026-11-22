@@ -17,9 +17,10 @@
 //	wf back     -state DIR -worker W -feature F -why FINDING [-to 1|3]
 //	wf new      -state DIR -worker W -feature F -title T -priority P
 //	            -estimate-steps N -estimate-runs N [-source S] [-follows ITEM]
-//	            [-kind process -holds PATTERN,...] [-hold WHY]
+//	            [-kind process -holds PATTERN,...] [-hold WHY -resumes WHEN]
 //	            [-repos OWNER/NAME,...] [-areas AREA,...] [-seams SEAM,...]
 //	            [-adopts CONSUMABLE@VERSION] [-urgent] [-lead host:NAME]
+//	wf hold     -state DIR -worker W -feature F -why TEXT -resumes WHEN
 //	wf move     -state DIR -worker human/NAME -feature F -to N [-why TEXT]
 //	wf urgent   -state DIR -worker human/NAME -feature F [-clear]
 //	wf state-step -state DIR -worker human/NAME -feature F (-note TEXT | -clear)
@@ -56,9 +57,15 @@
 //
 // new -follows ITEM queues a fix or follow-up of ITEM: FLOW-05 classes it
 // with the fixes, and wf next starts it only once ITEM is done. new -hold WHY
-// queues the item on hold (FLOW-20's freeze): WHY is the text of a blocking
-// question q1, and the item's first step waits for the human's answer to it
-// (wf answer -question q1). Without -hold the loop may take the item at once.
+// -resumes WHEN queues the item on hold (FLOW-20): WHY is the text of a
+// blocking question q1 whose resumes is WHEN (program-end unless the human
+// named another point), and the item's first step waits for the human's
+// answer to it (wf answer -question q1). Without -hold the loop may take the
+// item at once. hold puts an item already queued or in progress on hold the
+// same way, with the next free q<N>: on an item in progress every pending
+// gate of its current phase waits for the answer, as a failed process test's
+// P1 does (FLOW-20). A held item holds no limit and does not wait on the
+// human (FLOW-05).
 //
 // new -repos names the repositories the item works in, its home first; an
 // item homed in another repository than config.yaml's is tracked: wf seeds
@@ -247,7 +254,8 @@ import (
 )
 
 const usage = "usage: wf " +
-	"validate|status|next|claim|renew|release|check|done|answer|back|new|move|urgent|lead|" +
+	"validate|status|next|claim|renew|release|check|done|answer|back|new|hold|move|urgent|" +
+	"lead|" +
 	"state-step|declare|" +
 	"relate|relations|stale|commit|main|digest|areas|gate|budget|migrate|drops [flags]"
 
@@ -258,6 +266,7 @@ type opts struct {
 	state, repo, checkouts, worker, feature, step, why        string
 	question, answer, note                                    string
 	title, source, machine, stamp, kind, holds, follows, hold string
+	resumes                                                   string
 	lead, host, session, current, renewed                     string
 	repos, areas, seams, adopts, with, message, claimed       string
 	rev, edges, repository                                    string
@@ -325,6 +334,9 @@ func run(cmd string, args []string, now time.Time) error {
 		"new: process only, comma-separated affinity patterns it holds")
 	fs.StringVar(&o.hold, "hold", "",
 		"new: queue the item on hold; the reason is its blocking question q1 (FLOW-20)")
+	fs.StringVar(&o.resumes, "resumes", "",
+		"new -hold, hold: when the held item resumes, program-end unless the human "+
+			"named another point (FLOW-20)")
 	fs.StringVar(&o.repos, "repos", "",
 		"new: comma-separated repositories the item works in, its home first")
 	fs.StringVar(&o.areas, "areas", "",
@@ -401,7 +413,7 @@ func run(cmd string, args []string, now time.Time) error {
 	cmds := map[string]func(*queue.State, opts) error{
 		"validate": validate, "status": status, "next": next, "check": checkPhase,
 		"answer": answer, "back": back, "new": newFeature, "move": move, "urgent": urgent,
-		"lead": lead, "state-step": stateStep,
+		"lead": lead, "state-step": stateStep, "hold": hold,
 		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
 		"declare": declareItem, "relate": relate, "relations": relations,
 		"digest": digest, "areas": areasCmd, "native": native,
@@ -787,6 +799,9 @@ func newFeature(s *queue.State, o opts) error {
 	if err != nil {
 		return err
 	}
+	if o.given["resumes"] && !o.held {
+		return errors.New("-resumes needs -hold: it names when a held item resumes")
+	}
 	f := &queue.Feature{
 		Feature: o.feature, Title: o.title, Priority: o.priority, Source: o.source,
 		Kind: kind, Holds: holds, Follows: o.follows, Lead: o.lead,
@@ -807,7 +822,7 @@ func newFeature(s *queue.State, o opts) error {
 		return err
 	}
 	if o.held {
-		if err := f.PutOnHold(o.hold, o.now, o.worker); err != nil {
+		if err := f.PutOnHold(o.hold, o.resumes, o.now, o.worker); err != nil {
 			return fmt.Errorf("-hold: %w", err)
 		}
 	}
@@ -815,6 +830,27 @@ func newFeature(s *queue.State, o opts) error {
 		return err
 	}
 	fmt.Printf("queued\t%s\tposition %d\n", f.Feature, f.Priority)
+	return nil
+}
+
+// hold is wf hold: it puts an item already queued or in progress on hold,
+// with its reason and when it resumes (FLOW-20).
+func hold(s *queue.State, o opts) error {
+	f, err := s.Find(o.feature)
+	if err != nil {
+		return err
+	}
+	if o.worker == "" {
+		return errors.New("hold needs -worker")
+	}
+	if err := f.PutOnHold(o.why, o.resumes, o.now, o.worker); err != nil {
+		return err
+	}
+	if err := s.Save(f); err != nil {
+		return err
+	}
+	q := f.Hold()
+	fmt.Printf("held\t%s\t%s\tresumes: %s\n", f.Feature, q.ID, q.Resumes)
 	return nil
 }
 

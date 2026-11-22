@@ -154,7 +154,7 @@ func refreshClassOne(t *testing.T) {
 func refreshUnderHold(t *testing.T) {
 	a := openPR("a", 1, 7)
 	refresh(t, a)
-	s := state(a, process("x", 2, "in_progress", "cloud"))
+	s := state(a, implementing("x", 2, "cloud"))
 	const why = "held by process item x"
 	pick, blocked := s.Next("cloud/run", now)
 	if pick != nil || !slices.Contains(blocked, Blocked{"a", why}) {

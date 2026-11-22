@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/buildwarden/buildwarden/tools/workflow/queue"
 )
@@ -201,7 +202,12 @@ func commitClaimDropped(t *testing.T) {
 				"-priority", "9", "-estimate-steps", "4", "-kind", "process",
 				"-holds", "cloud")
 			claimStep(t, b, "human/jeff", "p", "x1-design")
-			pushed(t, b, "human/jeff", "p: claim", "queue/p.yaml")
+			// Its design done, the item holds from its Implement on (FLOW-20).
+			edit(t, b, "p", func(f *queue.Feature) {
+				queue.Complete(f, &f.Steps[0], "human/jeff", time.Now())
+			})
+			claimStep(t, b, "cloud/b", "p", "x2-implement")
+			pushed(t, b, "cloud/b", "p: implement", "queue/p.yaml")
 		}},
 		{"a blocking question", "blocking question q1", func(t *testing.T, b string) {
 			edit(t, b, "x", func(f *queue.Feature) {

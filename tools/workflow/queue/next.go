@@ -47,10 +47,14 @@ func MayComplete(worker string, st *Step) bool {
 func Kind(worker string) string { return strings.SplitN(worker, "/", 2)[0] }
 
 // Hold returns the in-progress process item, other than f, whose holds match
-// the worker, or "" when the worker may take new steps of f (FLOW-05).
+// the worker, or "" when the worker may take new steps of f (FLOW-05). A
+// process item still before Implement (in Design, or waiting for its design
+// review or process test) holds no worker, and nor does one on hold: neither
+// has started the work its holds guard (FLOW-20).
 func (s *State) Hold(f *Feature, worker string) string {
 	for _, o := range s.Features {
-		if o == f || !o.IsProcess() || o.Status != "in_progress" {
+		if o == f || !o.IsProcess() || o.Status != "in_progress" || o.Held() ||
+			o.beforeImplement() {
 			continue
 		}
 		for _, h := range o.Holds {
@@ -60,6 +64,23 @@ func (s *State) Hold(f *Feature, worker string) string {
 		}
 	}
 	return ""
+}
+
+// beforeImplement reports whether a process item has not reached its
+// implementing: it is in Design, or in phase 2 with its design review or
+// process test still pending.
+func (f *Feature) beforeImplement() bool {
+	if f.Phase < 2 {
+		return true
+	}
+	for i := range f.Steps {
+		st := &f.Steps[i]
+		if st.Phase == 2 && st.Status == "pending" &&
+			(IsDesignReview(st) || IsProcessTest(st)) {
+			return true
+		}
+	}
+	return false
 }
 
 // Offered reports whether the feature has reached the step's phase, so a

@@ -211,6 +211,14 @@ func IsDesignReview(st *Step) bool {
 	return ok && r.round == "feature" && r.phase == 2 && r.name == "design-review"
 }
 
+// IsProcessTest reports whether the step is a process item's process test,
+// x2-process-test, which settles its design in the human's place while
+// FLOW-20 stands.
+func IsProcessTest(st *Step) bool {
+	r, ok := stepTemplates(st.ID)
+	return ok && r.round == "process" && r.phase == 2 && r.name == "process-test"
+}
+
 // IsPlan reports whether the step is a feature's Plan step, in any of its
 // -r<n> forms: f2-plan, whose claim takes an alters_relationships slot
 // (FLOW-05). A process item has none.

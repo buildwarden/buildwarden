@@ -187,7 +187,8 @@ func (s *State) mapLine(m *Main) string {
 // writeNeedsHuman is Needs Jeff: what stops the loop, the count of the items
 // in progress that wait on the human beside the waiting limit (FLOW-05), the
 // open pull requests in two lists (FLOW-08), the reviews, questions and
-// escalations of the counted items, and then what the limit does not count.
+// escalations of the counted items, what the limit does not count, and the
+// items on hold, each once (FLOW-20).
 func (s *State) writeNeedsHuman(b *strings.Builder) {
 	fmt.Fprintf(b, "\n## Needs Jeff\n\n")
 	for _, l := range s.alerts() {
@@ -204,6 +205,22 @@ func (s *State) writeNeedsHuman(b *strings.Builder) {
 	subsection(b, "After a refresh", s.afterRefresh())
 	subsection(b, "Reviews, questions and escalations", s.reviews())
 	subsection(b, "Not counted: queued, tracked, or not yet due", s.notCounted())
+	subsection(b, "Held", s.held())
+}
+
+// held lists each item on hold once, with its reason and when it resumes: a
+// decided hold is not a question asked again on every run (FLOW-20). The
+// human releases one by answering its question.
+func (s *State) held() []string {
+	var out []string
+	for _, f := range s.Ordered() {
+		if q := f.Hold(); q != nil && f.Status != "done" {
+			status := strings.ReplaceAll(f.Status, "_", " ")
+			out = append(out, fmt.Sprintf("**%s** (%s, %s): %s; resumes: %s",
+				f.Feature, status, q.ID, q.Question, q.Resumes))
+		}
+	}
+	return out
 }
 
 // subsection writes a ### list; a line that ends in a newline is a paragraph
@@ -420,11 +437,12 @@ func (s *State) waitLines(f *Feature, add func(format string, a ...any)) {
 
 // notCounted lists the human's lines the waiting limit does not count: a
 // queued item's question or step, a tracked item's, and a human step of a phase its item
-// has not reached, with that phase.
+// has not reached, with that phase. An item on hold is listed under Held
+// instead.
 func (s *State) notCounted() []string {
 	var out []string
 	for _, f := range s.Ordered() {
-		if f.Status == "done" {
+		if f.Status == "done" || f.Held() {
 			continue
 		}
 		if f.Status == "queued" {

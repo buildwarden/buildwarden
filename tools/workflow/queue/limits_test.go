@@ -1014,7 +1014,7 @@ func waitingMarked(t *testing.T) {
 	// question.
 	m = queuedItem("m", 20)
 	m.Urgent = "human/jeff"
-	holder := process("holder", 1, "in_progress", "cloud")
+	holder := implementing("holder", 1, "cloud")
 	s = waitingState(t, 8, m, holder)
 	wantOffer(t, s, "m", "held by process item holder")
 	wantNext(t, s, "cloud/run", "none")
