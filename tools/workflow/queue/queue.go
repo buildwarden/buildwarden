@@ -358,6 +358,11 @@ type State struct {
 	// pull request in the repository (check.MergeReady); wf sets it. Nil,
 	// no loop merge is offered.
 	MergeGate func(f *Feature, repo string) bool
+	// MergeWaitsOnHuman reports whether a loop merge in the repository is
+	// held on the human: at merge gate point 7 on a posture change he has
+	// not acknowledged, or at point 5 on a protected finding
+	// (check.MergeWaitsOnHuman); wf sets it. Nil, no loop merge waits on him.
+	MergeWaitsOnHuman func(f *Feature, repo string) bool
 }
 
 // doneFolder is where done items live once wf migrate -done has created it.
@@ -1290,10 +1295,10 @@ func (s *State) Problems(f *Feature) []error {
 	if f.Program && f.IsProcess() {
 		bad("program is for a feature: a process item keeps the trunk (FLOW-20)")
 	}
-	if flips := s.trunkFlips(f); flips != "" {
-		bad("its declaration would change the trunk it recorded (%s): back to Design "+
-			"to split it (FLOW-06, FLOW-20)", flips)
-	}
+	// A trunk flip is refused where a declaration changes, in wf declare,
+	// and not here: the recorded trunk stays whatever the area map later
+	// says, and a map change or a done item must not make the whole state
+	// invalid (FLOW-06, FLOW-20).
 	return errs
 }
 

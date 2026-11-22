@@ -16,6 +16,7 @@
 //	            [-repository OWNER/NAME]
 //	wf check    -state DIR -repo DIR -sync -repository OWNER/NAME -pr N
 //	wf sync-program -state DIR -repo DIR [-repository OWNER/NAME]
+//	                [-worker W -head SHA]
 //	wf done     -state DIR -repo DIR -worker W -feature F -step S [-run]
 //	wf answer   -state DIR -worker W -feature F -question Q -answer TEXT
 //	wf back     -state DIR -worker W -feature F -why FINDING [-to 1|3]
@@ -54,7 +55,7 @@
 //	wf gate     -state DIR -repo DIR -machine M -stamp FILE [-sweep-days N] [-record]
 //	wf budget   -state DIR [-native]
 //	wf migrate  -state DIR -worker W [-done]
-//	wf drops    -repo DIR -base REV -main FILE -branch FILE [-head REV]
+//	wf drops    -repo DIR [-base REV | -state DIR] -main FILE -branch FILE [-head REV]
 //
 // An open item's priority is its position in FLOW-05's order, 1 for the
 // first; a done item has none once queue/done/ exists (FLOW-05). Every
@@ -124,8 +125,11 @@
 // merged-first PRs merged; and the rule changes are cleared. Every other
 // merge step is the human's, as before. sync-program prints whether the
 // trunk is ahead of the program trunk and, when it is, the sync branch
-// sync/program-<trunk sha>; it waits while a program-sync-<sha> item is open.
-// check -sync is the sync's gate (check.SyncReady). new -escalate files an
+// sync/program-<trunk sha>; it waits while a program-sync-<sha> item that
+// works in the repository is open. With -head, once the sync branch's merge
+// is made and before it is pushed, it checks that the head is that merge and
+// nothing more and records it (a sync record), the head the sync gate's
+// point 2 reads. check -sync is the sync's gate (check.SyncReady). new -escalate files an
 // item, such as program-sync-<sha>, whose first step is a human escalation
 // carrying TEXT.
 //
@@ -499,8 +503,10 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.BoolVar(&o.all, "all", false, "status: add done items, for a retrospective (FLOW-13)")
 	fs.BoolVar(&o.done, "done", false,
 		"migrate: move the done items to queue/done/, once (queue-positions)")
-	fs.StringVar(&o.base, "base", "origin/main", "drops: the diff's base")
-	fs.StringVar(&o.head, "head", "HEAD", "drops: the diff's head")
+	fs.StringVar(&o.base, "base", "origin/main", "drops: the diff's base; given -state "+
+		"and not -base, origin/<program trunk> while a program item is in flight")
+	fs.StringVar(&o.head, "head", "HEAD", "drops: the diff's head; sync-program: the "+
+		"sync head to record")
 	fs.StringVar(&o.mainReport, "main", "", "drops: the merge base's tier1 -json report")
 	fs.StringVar(&o.branchReport, "branch", "", "drops: the branch's tier1 -json report")
 	_ = fs.Parse(args)
@@ -510,6 +516,17 @@ func run(cmd string, args []string, now time.Time) error {
 	o.held = o.given["hold"]
 	switch cmd {
 	case "drops":
+		if !o.given["base"] && o.given["state"] {
+			// While a program item is in flight the diff's base is its
+			// program trunk, as for wf areas -rev (FLOW-20).
+			s, err := queue.Load(o.state)
+			if err != nil {
+				return err
+			}
+			if pt := programInFlight(s, s.Config.Repository); pt != "" {
+				o.base = pt
+			}
+		}
 		return drops(o)
 	case "commit":
 		return commitCmd(o, fs.Args())
@@ -519,9 +536,7 @@ func run(cmd string, args []string, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	s.MergeGate = func(f *queue.Feature, repo string) bool {
-		return check.OK(check.MergeReady(env(s, o), f, repo))
-	}
+	wire(s, o)
 	cmds := map[string]func(*queue.State, opts) error{
 		"validate": validate, "status": status, "next": next, "check": checkPhase,
 		"answer": answer, "back": back, "new": newFeature, "move": move, "urgent": urgent,
@@ -547,12 +562,24 @@ func run(cmd string, args []string, now time.Time) error {
 	return f(s, o)
 }
 
+// wire sets the merge gate's answers on the state: whether it passes for an
+// item's PR in a repository (check.MergeReady), and whether a loop merge it
+// holds waits on the human (check.MergeWaitsOnHuman).
+func wire(s *queue.State, o opts) {
+	s.MergeGate = func(f *queue.Feature, repo string) bool {
+		return check.OK(check.MergeReady(env(s, o), f, repo))
+	}
+	s.MergeWaitsOnHuman = func(f *queue.Feature, repo string) bool {
+		return check.MergeWaitsOnHuman(env(s, o), f, repo)
+	}
+}
+
 // commitCmd is wf commit: it pushes the session's paths with the generated
 // files, and on a rejected push replays the change or asks the claim again.
 func commitCmd(o opts, paths []string) error {
 	lines, err := queue.Commit(o.state, queue.CommitRequest{
 		Worker: o.worker, Message: o.message, Claimed: o.claimed, Renewed: o.renewed,
-		Paths: paths, Now: o.now,
+		Paths: paths, Now: o.now, Wire: func(s *queue.State) { wire(s, o) },
 	})
 	for _, l := range lines {
 		fmt.Println(l)
@@ -777,12 +804,21 @@ func checkMerge(s *queue.State, o opts, f *queue.Feature) error {
 		return fmt.Errorf("%s is not a merge into a program trunk: the human merges it "+
 			"(FLOW-08)", st.ID)
 	}
-	ok := true
-	for _, repo := range s.MergeRepos(f, st) {
+	repos := s.MergeRepos(f, st)
+	if o.repository != "" && !slices.Contains(repos, o.repository) {
+		return fmt.Errorf("%s covers %s, not %s: no gate ran, and nothing is merged "+
+			"there (FLOW-08)", st.ID, strings.Join(repos, ", "), o.repository)
+	}
+	ok, checked := true, 0
+	for _, repo := range repos {
 		if o.repository != "" && repo != o.repository {
 			continue
 		}
+		checked++
 		ok = printResults(check.MergeReady(env(s, o), f, repo)) && ok
+	}
+	if checked == 0 {
+		return fmt.Errorf("%s covers no repository: no gate ran (FLOW-08)", st.ID)
 	}
 	if !ok {
 		return fmt.Errorf("the merge gate does not pass for %s (FLOW-08)", st.ID)
@@ -794,7 +830,8 @@ func checkMerge(s *queue.State, o opts, f *queue.Feature) error {
 // program trunk and, when it is, the branch the sync is built on,
 // sync/program-<trunk sha>, cut from the program trunk with origin/<trunk>
 // merged into it (FLOW-20, Decision 14). It waits while a program-sync item
-// filed for an unresolved conflict is open.
+// filed for an unresolved conflict in repo is open. With -head it records the
+// sync head instead (recordSync).
 func syncProgram(s *queue.State, o opts) error {
 	repo := o.repository
 	if repo == "" {
@@ -804,12 +841,16 @@ func syncProgram(s *queue.State, o opts) error {
 	if pt == "" {
 		return fmt.Errorf("config.yaml records no program trunk for %s", repo)
 	}
+	if o.given["head"] {
+		return recordSync(s, o, repo)
+	}
 	trunk, err := s.Config.Trunk(repo)
 	if err != nil {
 		return err
 	}
 	for _, f := range s.Ordered() {
-		if strings.HasPrefix(f.Feature, "program-sync-") && f.Status != "done" {
+		if strings.HasPrefix(f.Feature, "program-sync-") && f.Status != "done" &&
+			slices.Contains(s.ReposOf(f), repo) {
 			fmt.Printf("waits\t%s\t%s is open: the next sync waits for it\n", repo,
 				f.Feature)
 			return nil
@@ -821,18 +862,82 @@ func syncProgram(s *queue.State, o opts) error {
 			return err
 		}
 	}
-	head, err := git(dir, "rev-parse", "origin/"+trunk)
+	head, err := git(dir, "rev-parse", "--verify", "origin/"+trunk+"^{commit}")
 	if err != nil {
 		return err
 	}
-	if _, err := git(dir, "merge-base", "--is-ancestor", "origin/"+trunk,
-		"origin/"+pt); err == nil {
+	if _, err := git(dir, "rev-parse", "--verify", "origin/"+pt+"^{commit}"); err != nil {
+		return fmt.Errorf("origin/%s does not resolve in %s: fetch it (%w)", pt, dir, err)
+	}
+	ahead, err := notAncestor(dir, "origin/"+trunk, "origin/"+pt)
+	if err != nil {
+		return err
+	}
+	if !ahead {
 		fmt.Printf("current\t%s\t%s contains origin/%s at %s\n", repo, pt, trunk,
 			short(head))
 		return nil
 	}
 	fmt.Printf("sync\t%s\tsync/program-%s\tmerge origin/%s (%s) into origin/%s\n", repo,
 		head[:12], trunk, short(head), pt)
+	return nil
+}
+
+// notAncestor runs git merge-base --is-ancestor: exit 1 is "not an
+// ancestor", and any other failure (a missing ref, a broken repository) is an
+// error, never read as one.
+func notAncestor(dir, a, b string) (bool, error) {
+	cmd := exec.Command("git", "merge-base", "--is-ancestor", a, b)
+	cmd.Dir = dir
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	var ee *exec.ExitError
+	switch {
+	case err == nil:
+		return false, nil
+	case errors.As(err, &ee) && ee.ExitCode() == 1:
+		return true, nil
+	}
+	return false, fmt.Errorf("git merge-base --is-ancestor %s %s: %w: %s", a, b, err,
+		strings.TrimSpace(stderr.String()))
+}
+
+// recordSync is wf sync-program -head: it checks that the head is the sync's
+// merge, its first parent origin/<program trunk> and its second a commit of
+// the trunk, carrying nothing else, and appends a sync record naming the
+// branch, sync/program-<second parent>, and the head (FLOW-20). The sync gate
+// passes only a PR whose head is the one recorded for its branch.
+func recordSync(s *queue.State, o opts, repo string) error {
+	if o.worker == "" {
+		return errors.New("sync-program -head needs -worker")
+	}
+	branch, clean, err := check.SyncHead(env(s, o), repo, o.head)
+	if err != nil {
+		return fmt.Errorf("%s is not a sync head: %w (FLOW-20)", o.head, err)
+	}
+	dir, err := check.Clone(env(s, o), repo)
+	if err != nil {
+		return err
+	}
+	full, err := git(dir, "rev-parse", "--verify", o.head+"^{commit}")
+	if err != nil {
+		return err
+	}
+	how := "a clean merge"
+	if !clean {
+		how = fmt.Sprintf("a conflict resolution, whose tier-2 report the gate reads "+
+			"at %s/%s.json", check.SyncReportDir, full[:12])
+	}
+	r := queue.Record{At: o.now, By: o.worker, Kind: "sync", Repo: repo, Ref: branch,
+		Head: full, Note: fmt.Sprintf("%s pushed at %s: %s", branch, full[:12], how)}
+	if err := queue.AppendRecord(o.state, r); err != nil {
+		return err
+	}
+	fmt.Printf("recorded\tsync\t%s\t%s\t%s\n", repo, branch, full[:12])
+	if !clean {
+		fmt.Printf("review\t%s\t%s/%s.json\n", repo, check.SyncReportDir, full[:12])
+	}
 	return nil
 }
 

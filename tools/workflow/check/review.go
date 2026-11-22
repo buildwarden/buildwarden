@@ -134,15 +134,24 @@ func (c *checker) reviewed() {
 		c.skipValid(d)
 		return
 	}
-	want := 1
-	if c.f.Round != "process" {
-		want = 0
-		for _, st := range c.f.Steps {
-			if strings.Contains(st.ID, "-design-review") || strings.Contains(st.ID,
-				"-umbrella") {
-				want++
-			}
+	// Each review gate seeded so far needs its own approval: a feature's
+	// design reviews and umbrella tests, a process item's process tests and
+	// design reviews (FLOW-20), so a return to Design needs a fresh pass. A
+	// process item with none seeded took the human's review in its Design.
+	gates := []string{"-design-review", "-umbrella"}
+	if c.f.Round == "process" {
+		gates = []string{"-design-review", "-process-test"}
+	}
+	want := 0
+	for _, st := range c.f.Steps {
+		if slices.ContainsFunc(gates, func(g string) bool {
+			return strings.Contains(st.ID, g)
+		}) {
+			want++
 		}
+	}
+	if c.f.Round == "process" && want == 0 {
+		want = 1
 	}
 	got := len(approvals(d, c.f.IsProcess()))
 	c.add("design reviewed (FLOW-19)", want > 0 && got >= want,

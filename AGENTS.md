@@ -21,7 +21,7 @@ tamper-evident ledger and streams all of its outputs to a host-side
 | The package layout | [`docs/book/src/contributing/structure.md`](docs/book/src/contributing/structure.md) |
 | The bootstrap model every driver follows | [`docs/development/bootstrap.md`](docs/development/bootstrap.md) |
 | Designs, past and in progress | [`docs/design/`](docs/design/); new ones start from [`TEMPLATE.md`](docs/design/TEMPLATE.md) |
-| The componentization program: where it ends, the seams, the phases and their order, and the freeze (FLOW-20) | [`docs/design/componentization.md`](docs/design/componentization.md) |
+| The componentization program: where it ends, the seams, the phases and their order, and the hold (FLOW-20) | [`docs/design/componentization.md`](docs/design/componentization.md) |
 | The feature loop: queue state, phase agents, entry points | the `workflow` branch's `README.md`; [`.claude/skills/`](.claude/skills/) (`workflow-tick`, `workflow-human`, `workflow-native`, `workflow-intake`) and [`.claude/agents/`](.claude/agents/) |
 | The seam specifications (the claim, the collector, the relay guest API, `initialize`, the bootstrap config), the version of each this repository pins, and their conformance suites | [`docs/book/src/concepts/seams.md`](docs/book/src/concepts/seams.md); the pins in `tools/conformance/<directory>/go.mod`, moved only by `make pin-specs` |
 | The ledger wire format and its metadata schemas | [`specs/`](specs/README.md): `build-ledger/v1.md`, and each schema's `v<N>.md` beside its `v<N>.schema.json` |

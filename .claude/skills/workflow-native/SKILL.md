@@ -133,7 +133,7 @@ for steps and file order for the backlog. Queue steps come before the backlog.
 Validation steps and backlog entries: test in one sitting, `main` first,
 then each program trunk (`program/componentization`, while FLOW-20 stands),
 then each waiting branch (FLOW-09), each against its own trunk (`dist/wf
-trunk -feature F`), using the commands each design's Validation
+trunk -state .dev/workflow -feature F`), using the commands each design's Validation
 plan names and `make deadcode` where the backlog asks for it.
 
 Led steps (Branch setup through Guide of an item this host leads) and any

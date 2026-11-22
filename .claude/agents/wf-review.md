@@ -54,12 +54,15 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
    read, `<owner>/<name>`, to the 12-character head of the item's branch
    there; Review's check passes only when they are the item's current heads
    (LINT-04).
-5. Fixing findings is not your job. Return the counts; the tick sends MUST
+5. Each finding in the JSON has a `status`: `open`, or `fixed`, `resolved`
+   or `suppressed` once it is; never leave it out. The merge gate reads a
+   finding with no status, or any other, as open (FLOW-08, point 5).
+   Fixing findings is not your job. Return the counts; the tick sends MUST
    findings back to `wf-implement` and records the rest for the PR body, where the human acknowledges them at merge
    (FLOW-08). Each MUST and SHOULD finding names the head it was found on.
    On a program item's PR into its program trunk (FLOW-20): a MUST finding
-   still open after one fix round is deferred, recorded with `dist/wf record
-   -kind deferred -feature F -ref <finding id> -head <head> -note "<why>"`;
+   still open after one fix round is deferred, a record of `-kind deferred
+   -feature F -ref <finding id> -head <head> -note "<why>"`;
    a MUST finding under GLOBAL-06, a SEC rule, RELAY-01 to RELAY-03 or
    RELAY-05, or on what FLOW-20 says never breaks, is never deferred: return
    `back-to-design` with it, recorded `-kind protected`. Never dismiss one.
@@ -67,11 +70,25 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
    the only trip is GLOBAL-06's relay clause (a `security-note -ref design`
    record, a14), judge whether the diff stays within it: no new listener or
    egress path, key, CA or trust-store handling, SSRF filter, netns or
-   iptables change, or socketpair topology change. If it does, record
-   `dist/wf record -kind security-note -ref diff -feature F -head <head>
-   -note "<why no posture changes>"` on each head you review, which merge
+   iptables change, or socketpair topology change. If it does, a record of
+   `-kind security-note -ref diff -feature F -head <head> -note "<why no
+   posture changes>"` on each head you review, which merge
    gate point 7 reads; if it does not, it is a posture change: a MUST
    finding under GLOBAL-06, never deferred.
+
+You write no program record yourself: "a record of" or "recorded" in this
+file means you return the record's kind, feature, repository, head, ref and
+note, and the tick writes it with `dist/wf record -state .dev/workflow
+-worker $W` (its step 5, FLOW-20) before the item's next step, so merge
+gate points 5 and 7 read it.
+
+A program sync's conflict resolution (the tick dispatches you with the sync
+head and `reports/sync/<head12>.json`): review only the resolution, the
+merge commit against its first parent where it differs from what `git
+merge-tree --write-tree <head>^1 <head>^2` merges, by steps 2 to 4, and
+write the report at that path, `head` the head's 12-character hash and
+every finding with its `status`. There is no feature, and a MUST finding
+there is never deferred: the sync waits until it is fixed or escalated.
 
 ## The umbrella test (`f2-umbrella`, FLOW-20)
 
@@ -90,12 +107,12 @@ each point with its evidence:
   program item only component design, setup or privileged work may be;
   each recommendation cites the umbrella decision or recorded answer of
   Jeff's it follows, or says it settles a question of strategy. Confirm each
-  assumed question of strategy (record `-kind assumed`).
+  assumed question of strategy (a record of `-kind assumed`).
 - U3: `rule_changes` is empty and `areas` reach no rule or machinery path of
   the profile.
 - U4: `security_boundary` is `none`, or the only trip is GLOBAL-06's relay
   clause and the Security note shows no boundary's posture changes (read
-  it; record `-kind security-note -ref design -feature F -head <sha>
+  it; a record of `-kind security-note -ref design -feature F -head <sha>
   -note "<why only the relay clause>"`, which point 7 of the merge gate
   reads).
 - U5: each interface break is one FLOW-20's Interfaces bullet allows.

@@ -411,9 +411,31 @@ func (s *State) waitsOnHuman(f *Feature) bool {
 			continue
 		}
 		// A pull request the loop merges into a program trunk waits on no
-		// one but the gate (FLOW-05, FLOW-20).
+		// one but the gate, unless the gate holds it on the human: a posture
+		// change at point 7 or a protected finding at point 5 (FLOW-05,
+		// FLOW-20).
 		human := (IsMerge(st) && f.hasPR()) || isMergedFirst(st)
-		if st.Affinity == "human" || (human && !s.LoopMerges(f, st)) {
+		if st.Affinity == "human" {
+			return true
+		}
+		if human && (!s.LoopMerges(f, st) || s.loopMergeWaitsOnHuman(f, st)) {
+			return true
+		}
+	}
+	return false
+}
+
+// loopMergeWaitsOnHuman reports whether a loop merge is held on the human in
+// a repository the step covers that has not merged yet.
+func (s *State) loopMergeWaitsOnHuman(f *Feature, st *Step) bool {
+	if s.MergeWaitsOnHuman == nil {
+		return false
+	}
+	for _, r := range s.MergeRepos(f, st) {
+		if w := s.workEntry(f, r); w != nil && w.Merged != "" {
+			continue
+		}
+		if s.MergeWaitsOnHuman(f, r) {
 			return true
 		}
 	}

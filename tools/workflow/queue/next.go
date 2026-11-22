@@ -47,14 +47,15 @@ func MayComplete(worker string, st *Step) bool {
 func Kind(worker string) string { return strings.SplitN(worker, "/", 2)[0] }
 
 // Hold returns the in-progress process item, other than f, whose holds match
-// the worker, or "" when the worker may take new steps of f (FLOW-05). A
-// process item still before Implement (in Design, or waiting for its design
-// review or process test) holds no worker, and nor does one on hold: neither
-// has started the work its holds guard (FLOW-20).
+// the worker, or "" when the worker may take new steps of f (FLOW-05). One on
+// hold holds no worker, and, while a program trunk is configured (when its
+// Design is a cloud step, FLOW-20), nor does one still before Implement (in
+// Design, or waiting for its design review or process test): neither has
+// started the work its holds guard.
 func (s *State) Hold(f *Feature, worker string) string {
 	for _, o := range s.Features {
 		if o == f || !o.IsProcess() || o.Status != "in_progress" || o.Held() ||
-			o.beforeImplement() {
+			(s.Config.HasProgramTrunk() && o.beforeImplement()) {
 			continue
 		}
 		for _, h := range o.Holds {

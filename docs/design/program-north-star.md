@@ -2710,6 +2710,32 @@ TEST-02), and ends with `make test` green.
     summary, and open the PR to `main` with CI green (FLOW-03 process phase
     2, FLOW-12). Jeff merges it.
 
+**Implementation departures** (found by the implementation's review; none
+changes a decision or an approved rule's wording):
+
+- After a loop merge the agent fetches `origin <program trunk>` only, not
+  `<program trunk> <branch>` as *The merge gate and the loop merge* has
+  it: GitHub deletes the branch on the merge, and a fetch naming a missing
+  ref fails whole.
+- A trunk flip is refused in `wf declare` only, not also by `Validate`
+  (step 2): an area-map change the loop now records, or a done item, must
+  not make the whole state invalid and stop every `wf commit`.
+- The sync's recorded head (point 2): `wf sync-program -head <sha>` checks
+  that the head is a merge of `origin/<program trunk>` and a trunk commit,
+  carrying nothing else, and appends a `sync` record naming
+  `sync/program-<that commit>` and the head; `SyncReady` passes only that
+  head, and on a merge whose tree is not git's clean merge reads the
+  resolution's tier-2 report at `reports/sync/<head12>.json` (point 5).
+- `waitsOnHuman` asks `check.MergeWaitsOnHuman` whether a loop merge is
+  held at point 7 or on a `protected` record on its head, as the
+  `queue/limits.go` bullet says; wf sets both callbacks on every state it
+  loads, `wf commit`'s included, so a claim asked again after a lost push
+  race reads the merge gate too.
+- A process item before Implement holds no worker only while a program
+  trunk is configured, as the cloud `x1-design` it follows from.
+- `wf drops` defaults `-base` to the program trunk in flight only when
+  given `-state`; `enforcement-check.sh` passes `-base` itself.
+
 **State step** (`x4-state`, recorded at review with `wf state-step`;
 Jeff's, after the merge, in one attended sitting, the setup of kind 1):
 

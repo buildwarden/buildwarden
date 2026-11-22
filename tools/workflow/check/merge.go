@@ -105,8 +105,11 @@ func (e Env) github() GitHub {
 
 // protectedRe matches the rules a tier-2 MUST finding is never deferred on
 // and never merged over (Decision 10 of the program-north-star design):
-// GLOBAL-06, the SEC rules, RELAY-01 to RELAY-03 and RELAY-05.
-var protectedRe = regexp.MustCompile(`^(GLOBAL-06|SEC-[0-9]+|RELAY-0[1235])$`)
+// GLOBAL-06, the SEC rules, RELAY-01 to RELAY-03 and RELAY-05, and FLOW-20,
+// whose never-break list (the ledger wire format v1, the reader's support for
+// every released ledger, a written schema $id, every security boundary) a
+// finding cites by FLOW-20 where RELAY-05 or GLOBAL-06 does not cover it.
+var protectedRe = regexp.MustCompile(`^(GLOBAL-06|SEC-[0-9]+|RELAY-0[1235]|FLOW-20)$`)
 
 // MergeReady is the merge gate of a pull request into a program trunk
 // (FLOW-08, FLOW-20): it checks the item's pull request in repo against
@@ -140,6 +143,75 @@ func MergeReady(env Env, f *queue.Feature, repo string) []Result {
 	c.ruleClearance()
 	c.at = c.home
 	return c.out
+}
+
+// MergeWaitsOnHuman reports whether the item's loop merge in repo is held on
+// the human, read on its recorded pr.head: at point 7 on a posture change he
+// has not acknowledged (no security-ack, and not the relay clause's two
+// security-note records), or at point 5 on a protected finding recorded on
+// that head, which only he may dismiss (FLOW-05, FLOW-20, Decision 10). Such a
+// merge counts toward the waiting limit and shows under Needs Jeff.
+func MergeWaitsOnHuman(env Env, f *queue.Feature, repo string) bool {
+	c := newChecker(env, f)
+	if !c.ready() {
+		return false
+	}
+	r := c.repoNamed(repo)
+	if r == nil || r.err != nil {
+		return false
+	}
+	c.at = r
+	head, ok := c.recordedHead()
+	if !ok {
+		return false
+	}
+	records, err := queue.LoadRecords(env.Workflow)
+	if err != nil {
+		return false
+	}
+	atHead := func(r queue.Record) bool {
+		return r.Feature == f.Feature && len(r.Head) >= 7 &&
+			strings.HasPrefix(head, r.Head)
+	}
+	if slices.ContainsFunc(records, func(r queue.Record) bool {
+		return r.Kind == "protected" && atHead(r)
+	}) {
+		return true
+	}
+	return c.postureWaits(records, atHead, head)
+}
+
+// recordedHead is the PR's recorded pr.head in the repository being
+// checked, resolved to the full commit where the checkout has it.
+func (c *checker) recordedHead() (string, bool) {
+	pr := c.pr()
+	if pr == nil || len(pr.Head) < 7 {
+		return "", false
+	}
+	if full, err := c.git("rev-parse", "--verify", "-q", pr.Head+"^{commit}"); err == nil {
+		return full, true
+	}
+	return pr.Head, true
+}
+
+// postureWaits reports whether point 7 holds the merge on the human: the
+// security boundary is not none, he has not acknowledged its note on the
+// head, and the relay clause's two security-note records are not both there.
+func (c *checker) postureWaits(records []queue.Record, atHead func(queue.Record) bool,
+	head string) bool {
+	at := c.at
+	c.at = c.home
+	d, err := c.loadDesign(c.f.Branch)
+	c.at = at
+	if err != nil || d.Front.SecurityBoundary == "none" {
+		return false
+	}
+	if slices.ContainsFunc(records, func(rec queue.Record) bool {
+		return securityAck(rec, c.at.name) && atHead(rec)
+	}) {
+		return false
+	}
+	return len(c.relayClauseOnly(records, atHead, head)) > 0
 }
 
 // repoNamed is the item's repository of that name, the home for "".
@@ -233,8 +305,9 @@ func (c *checker) gateContains(head string) {
 }
 
 // gateReport checks point 5: the tier-2 report is for the head, and no MUST
-// finding is open but one the records defer; a protected one is never
-// deferred, and sends the item back to Design (Decision 10).
+// finding is open but one the records defer; a protected one, by its rule or
+// by a protected record, is never deferred, and sends the item back to
+// Design (Decision 10).
 func (c *checker) gateReport(head string) {
 	const name = "merge gate 5: tier-2 report, no open MUST (FLOW-08, LINT-03)"
 	at := c.at
@@ -246,22 +319,9 @@ func (c *checker) gateReport(head string) {
 		return
 	}
 	p := filepath.Join(c.env.Workflow, "reports", c.f.Feature, home+".json")
-	var rep struct {
-		Head     string            `json:"head"`
-		Heads    map[string]string `json:"heads"`
-		Findings []struct {
-			ID       any    `json:"id"`
-			Rule     string `json:"rule"`
-			Severity string `json:"severity"`
-			Status   string `json:"status"`
-		} `json:"findings"`
-	}
-	data, err := os.ReadFile(p)
-	if err == nil {
-		err = json.Unmarshal(data, &rep)
-	}
+	rep, err := readReport(p)
 	if err != nil {
-		c.add(name, false, "%s: %v", p, err)
+		c.add(name, false, "%v", err)
 		return
 	}
 	got := rep.Heads[c.at.name]
@@ -277,23 +337,73 @@ func (c *checker) gateReport(head string) {
 		c.add(name, false, "%v", err)
 		return
 	}
+	open := rep.openMust(records, c.f.Feature, head)
+	c.add(name, len(open) == 0, "%s", orText(strings.Join(open, "; "),
+		"no open MUST finding but those deferred, in "+p))
+}
+
+// tier2Report is what the merge gate reads of a tier-2 report.
+type tier2Report struct {
+	Head     string            `json:"head"`
+	Heads    map[string]string `json:"heads"`
+	Findings []struct {
+		ID       any    `json:"id"`
+		Rule     string `json:"rule"`
+		Severity string `json:"severity"`
+		Status   string `json:"status"`
+	} `json:"findings"`
+}
+
+// readReport reads the tier-2 report at p.
+func readReport(p string) (tier2Report, error) {
+	var rep tier2Report
+	data, err := os.ReadFile(p)
+	if err == nil {
+		err = json.Unmarshal(data, &rep)
+	}
+	if err != nil {
+		return rep, fmt.Errorf("%s: %w", p, err)
+	}
+	return rep, nil
+}
+
+// resolved are the statuses that close a finding; any other, or none, leaves
+// it open: point 5 fails closed.
+var resolved = []string{"fixed", "resolved", "suppressed"}
+
+// openMust lists the report's MUST findings (a severity starting MUST, in
+// any case, so MUST-review too) that are open, by any status but a resolved
+// one, and that the records do not defer on the head. One under a protected
+// rule, or with a protected record for the item, is never deferred.
+func (rep tier2Report) openMust(records []queue.Record, feature, head string) []string {
 	var open []string
 	for _, f := range rep.Findings {
-		if f.Severity != "MUST" || !strings.HasPrefix(f.Status, "open") {
+		if !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(f.Severity)), "MUST") {
+			continue
+		}
+		word, _, _ := strings.Cut(strings.ToLower(strings.TrimSpace(f.Status)), " ")
+		if slices.Contains(resolved, strings.TrimRight(word, ".,;:")) {
 			continue
 		}
 		id := fmt.Sprint(f.ID)
 		switch {
-		case protectedRe.MatchString(f.Rule):
+		case protectedRe.MatchString(f.Rule) || isProtected(records, feature, id):
 			open = append(open, fmt.Sprintf("%s (%s) is protected: back to Design "+
 				"(FLOW-06)", id, f.Rule))
-		case !deferred(records, c.f.Feature, id, head):
+		case !deferred(records, feature, id, head):
 			open = append(open, fmt.Sprintf("%s (%s) open and not deferred", id,
 				f.Rule))
 		}
 	}
-	c.add(name, len(open) == 0, "%s", orText(strings.Join(open, "; "),
-		"no open MUST finding but those deferred, in "+p))
+	return open
+}
+
+// isProtected reports whether a protected record names the item's finding:
+// no deferred record lets it merge then (Decision 10).
+func isProtected(rs []queue.Record, feature, id string) bool {
+	return slices.ContainsFunc(rs, func(r queue.Record) bool {
+		return r.Kind == "protected" && r.Feature == feature && r.Ref == id
+	})
 }
 
 // deferred reports whether the records defer the finding on the head.
@@ -355,7 +465,7 @@ func (c *checker) gateSecurity(head string) {
 			strings.HasPrefix(head, r.Head)
 	}
 	if slices.ContainsFunc(records, func(r queue.Record) bool {
-		return r.Kind == "security-ack" && atHead(r)
+		return securityAck(r, c.at.name) && atHead(r)
 	}) {
 		c.add(name, true, "security_boundary: %s: the human acknowledged the security "+
 			"note at %s", b, short(head))
@@ -371,6 +481,14 @@ func (c *checker) gateSecurity(head string) {
 	c.add(name, false, "security_boundary: %s: %s; a posture change waits on the "+
 		"human's acknowledgment of the security note at %s (kind 2)", orNone(b),
 		strings.Join(missing, "; "), short(head))
+}
+
+// securityAck reports whether r is the human's acknowledgment of a security
+// note in repo: written by a human worker, for the repository or none named.
+// The records are a plain file, so who wrote one is checked here too.
+func securityAck(r queue.Record, repo string) bool {
+	return r.Kind == "security-ack" && queue.Kind(r.By) == "human" &&
+		(r.Repo == "" || r.Repo == repo)
 }
 
 // relayClauseOnly lists what is missing for point 7's relay-clause case
@@ -411,13 +529,86 @@ func (c *checker) gateMergedFirst() {
 
 // syncBranchRe is the program sync's branch, sync/program-<main sha>, as wf
 // sync-program names it.
-var syncBranchRe = regexp.MustCompile(`^sync/program-[0-9a-f]{7,40}$`)
+var syncBranchRe = regexp.MustCompile(`^sync/program-([0-9a-f]{7,40})$`)
 
-// SyncReady is the program sync's gate (FLOW-20, Decision 14): the pull
-// request's base is repo's program trunk; its head branch is the one wf
-// sync-program names and its head is that branch's on the remote; every
-// check on it passed or was skipped and the ruleset's required ones passed;
-// and the head contains both the trunk's and the program trunk's heads.
+// SyncReportDir is where the tier-2 report of a program sync's conflict
+// resolution is written on the workflow branch: reports/sync/<head12>.json,
+// <head12> the sync head's 12-character short hash.
+const SyncReportDir = "reports/sync"
+
+// SyncHead is the program sync's head as wf sync-program -head checks it
+// before recording it: a merge commit whose first parent is
+// origin/<program trunk>, whose second is a commit of the trunk, and that
+// carries nothing else. It returns the branch the head names,
+// sync/program-<second parent, 12>, and whether the merge's tree is the clean
+// merge's, or why the head is not a sync head.
+func SyncHead(env Env, repo, head string) (branch string, clean bool, err error) {
+	c := newChecker(env, &queue.Feature{Repos: []string{repo}})
+	if !c.ready() {
+		return "", false, errors.New(c.out[0].Info)
+	}
+	main, clean, err := c.syncHead(head)
+	if err != nil {
+		return "", false, err
+	}
+	return "sync/program-" + main[:12], clean, nil
+}
+
+// syncHead returns the trunk commit the sync head merges, its second
+// parent, and whether the merge is clean, or why it is not a sync head.
+func (c *checker) syncHead(head string) (string, bool, error) {
+	pt := c.state().Config.ProgramTrunkOf(c.at.name)
+	if pt == "" {
+		return "", false, fmt.Errorf("config.yaml records no program trunk for %s",
+			c.at.name)
+	}
+	parents, err := c.git("rev-list", "--parents", "-n", "1", head)
+	if err != nil {
+		return "", false, err
+	}
+	ps := strings.Fields(parents)
+	if len(ps) != 3 {
+		return "", false, fmt.Errorf("%s is not a merge of two commits", short(head))
+	}
+	ptHead, err := c.git("rev-parse", "origin/"+pt)
+	if err != nil {
+		return "", false, err
+	}
+	if ps[1] != ptHead {
+		return "", false, fmt.Errorf("%s's first parent %s is not origin/%s %s: the "+
+			"head carries more than the sync's merge, or the program trunk moved",
+			short(head), short(ps[1]), pt, short(ptHead))
+	}
+	_, err = c.git("merge-base", "--is-ancestor", ps[2], "origin/"+c.at.trunk)
+	if err != nil {
+		return "", false, fmt.Errorf("%s's second parent %s is not in origin/%s",
+			short(head), short(ps[2]), c.at.trunk)
+	}
+	return ps[2], c.cleanMerge(head, ps[1], ps[2]), nil
+}
+
+// cleanMerge reports whether head's tree is the one git's own merge of the
+// two parents writes, with no conflict: a merge with no resolution in it. A
+// git that cannot say is read as a resolution, which needs its review.
+func (c *checker) cleanMerge(head, a, b string) bool {
+	tree, err := c.git("merge-tree", "--write-tree", a, b)
+	if err != nil {
+		return false
+	}
+	own, err := c.git("rev-parse", head+"^{tree}")
+	return err == nil && strings.Fields(tree)[0] == own
+}
+
+// SyncReady is the program sync's gate (FLOW-08, FLOW-20, Decision 14): the
+// pull request's base is repo's program trunk; its head branch is
+// sync/program-<sha> and its head the branch's on the remote and the one wf
+// sync-program -head recorded for that branch (a sync record); the head is
+// a merge of origin/<program trunk> and the trunk's commit <sha>, carrying
+// nothing else; every check on it passed or was skipped and the ruleset's
+// required ones passed; the head contains both the trunk's and the program
+// trunk's heads; and, when the merge's tree is not git's clean merge (a
+// conflict resolution), the tier-2 report of the head, under SyncReportDir,
+// has no open MUST finding (point 5, read as the merge gate reads it).
 func SyncReady(env Env, repo string, number int) []Result {
 	f := &queue.Feature{Repos: []string{repo}}
 	c := newChecker(env, f)
@@ -433,16 +624,97 @@ func SyncReady(env Env, repo string, number int) []Result {
 	}
 	c.add("sync gate 1: base is the program trunk (FLOW-20)", pt != "" && view.Base == pt,
 		"PR #%d's base %s, program trunk %s", number, view.Base, orNone(pt))
-	remote := c.remoteHead(view.Branch)
-	c.add("sync gate 2: a sync branch, at its remote head (FLOW-20)",
-		syncBranchRe.MatchString(view.Branch) && remote == view.Head,
-		"PR head %s on %s, origin/%s %s", short(view.Head), view.Branch, view.Branch,
-		orNone(short(remote)))
+	c.syncRecorded(view)
+	clean := c.syncMerge(view)
 	c.gateChecks(view.Head)
 	for _, ref := range []string{"origin/" + c.at.trunk, "origin/" + pt} {
 		_, err := c.git("merge-base", "--is-ancestor", ref, view.Head)
 		c.add("sync gate 4: the head contains "+ref+" (FLOW-20)", err == nil,
 			"%s is an ancestor of %s", ref, short(view.Head))
 	}
+	if !clean {
+		c.syncReport(view.Head)
+	}
 	return c.out
+}
+
+// syncRecorded checks point 2 for the sync: the head branch is a sync
+// branch, its head is the remote's, and it is the head wf sync-program
+// recorded for that branch, the last sync record naming it.
+func (c *checker) syncRecorded(view PRView) {
+	const name = "sync gate 2: the recorded sync head, at its remote head (FLOW-20)"
+	remote := c.remoteHead(view.Branch)
+	if !syncBranchRe.MatchString(view.Branch) || remote != view.Head {
+		c.add(name, false, "PR head %s on %s, origin/%s %s", short(view.Head),
+			view.Branch, view.Branch, orNone(short(remote)))
+		return
+	}
+	records, err := queue.LoadRecords(c.env.Workflow)
+	if err != nil {
+		c.add(name, false, "%v", err)
+		return
+	}
+	recorded := ""
+	for _, r := range records {
+		if r.Kind == "sync" && r.Ref == view.Branch &&
+			(r.Repo == "" || r.Repo == c.at.name) {
+			recorded = r.Head
+		}
+	}
+	c.add(name, len(recorded) >= 7 && strings.HasPrefix(view.Head, recorded),
+		"PR head %s on %s; recorded %s (wf sync-program -head)", short(view.Head),
+		view.Branch, orNone(recorded))
+}
+
+// syncMerge checks that the head is the sync's merge and nothing more, and
+// that its branch names the trunk commit it merges; it returns whether the
+// merge is git's clean one.
+func (c *checker) syncMerge(view PRView) bool {
+	const name = "sync gate 2: a merge of the program trunk and the named trunk " +
+		"commit, nothing else (FLOW-20)"
+	main, clean, err := c.syncHead(view.Head)
+	if err != nil {
+		c.add(name, false, "%v", err)
+		return false
+	}
+	m := syncBranchRe.FindStringSubmatch(view.Branch)
+	ok := m != nil && strings.HasPrefix(main, m[1])
+	c.add(name, ok, "%s merges %s; the PR's branch %s", short(view.Head), short(main),
+		view.Branch)
+	return clean
+}
+
+// syncReport checks point 5 on a sync whose merge resolved a conflict: the
+// tier-2 report of the head has no open MUST finding.
+func (c *checker) syncReport(head string) {
+	const name = "sync gate 5: the conflict resolution's tier-2 report, no open MUST " +
+		"(FLOW-08, FLOW-20)"
+	p := filepath.Join(c.env.Workflow, filepath.FromSlash(SyncReportDir),
+		short12(head)+".json")
+	rep, err := readReport(p)
+	if err != nil {
+		c.add(name, false, "%v", err)
+		return
+	}
+	if len(rep.Head) < 7 || !strings.HasPrefix(head, rep.Head) {
+		c.add(name, false, "%s read %s, not the PR head %s", p, orNone(rep.Head),
+			short(head))
+		return
+	}
+	records, err := queue.LoadRecords(c.env.Workflow)
+	if err != nil {
+		c.add(name, false, "%v", err)
+		return
+	}
+	open := rep.openMust(records, "", head)
+	c.add(name, len(open) == 0, "%s", orText(strings.Join(open, "; "),
+		"no open MUST finding, in "+p))
+}
+
+// short12 is a commit's 12-character short hash, as reports are named.
+func short12(sha string) string {
+	if len(sha) > 12 {
+		return sha[:12]
+	}
+	return sha
 }

@@ -104,10 +104,12 @@ remote-tracking ref; run `make enforcement TIER1_BASE=origin/<trunk>` and
   -state <workflow checkout> -repo <code checkout> -checkouts .dev/checkouts
   -feature F -step S -repository <owner>/<name>`; on a pass, `gh pr merge
   <n> --merge --match-head-commit <pr.head> -R <owner>/<name>`, then `git
-  fetch origin <program trunk> <branch>` in that repository's checkout, so
-  the merge proof reads the merged program trunk and not the ref from
-  before the merge. Return to the tick, which runs `dist/wf done` and
-  `dist/wf record -kind merge` for each merge. On a refusal from GitHub,
+  fetch origin <program trunk>` in that repository's checkout (never
+  naming the branch, which GitHub deleted on the merge: a fetch of a
+  missing ref fails whole), so the merge proof reads the merged program
+  trunk and not the ref from before the merge. `wf check -step` refuses a
+  `-repository` the step does not cover. Return to the tick, which runs
+  `dist/wf done` and `dist/wf record -kind merge` for each merge. On a refusal from GitHub,
   run the check again and stop. A point 5 failure on a protected finding
   (GLOBAL-06, a SEC rule, RELAY-01 to RELAY-03, RELAY-05, or what FLOW-20
   says never breaks) returns `back-to-design` with the finding, recorded
@@ -117,19 +119,36 @@ remote-tracking ref; run `make enforcement TIER1_BASE=origin/<trunk>` and
   waits for Jeff's `security-ack` record.
 - `sync` (the program sync, FLOW-20; no queue item): `dist/wf sync-program
   -state <workflow checkout> -repo <code checkout> -checkouts .dev/checkouts
-  -repository R` names the branch `sync/program-<main sha>`. Cut it from
-  `origin/<program trunk>`, merge `origin/<trunk>` into it (a merge commit,
-  conflict-only fixes), run the fast gate, push it and open its PR to the
-  program trunk. Once `dist/wf check -state <workflow checkout> -repo <code
-  checkout> -sync -repository R -pr N` passes, and when the merge had
-  conflicts once a tier-2 review of the resolution diff for that head has
-  no open MUST finding (the resolution recorded `-kind sync-resolution`),
-  merge it with `gh pr merge N --merge --match-head-commit <head> -R R`
-  and fetch. A conflict you cannot resolve escalates (FLOW-20): close the
-  sync PR if one opened, delete nothing on the remote but the sync branch
-  GitHub has not deleted, `dist/wf new -program -escalate "<the conflicting
-  paths and both sides' commits>"` the item `program-sync-<main sha>`, and
-  record both.
+  -repository R` names the branch `sync/program-<main sha>`. Cut it locally
+  from `origin/<program trunk>` and merge `origin/<trunk>` into it (a merge
+  commit, conflict-only fixes, nothing else on the branch). Only once the
+  merge and any conflict resolution succeed locally: run the fast gate,
+  record the head with `dist/wf sync-program -state <workflow checkout>
+  -repo <code checkout> -checkouts .dev/checkouts -repository R -worker <W>
+  -head <the merge commit>` (it refuses a head that is not that merge and
+  nothing more, and prints `review` with the report path when the merge
+  resolved a conflict), then push the branch and open its PR to the
+  program trunk. A clean merge: once `dist/wf check -state <workflow
+  checkout> -repo <code checkout> -checkouts .dev/checkouts -sync
+  -repository R -pr N` passes, merge it with `gh pr merge N --merge
+  --match-head-commit <head> -R R` and `git fetch origin <program trunk>`.
+  A resolved conflict: return `review` with the head and the report path
+  `wf sync-program` printed (`reports/sync/<head12>.json`); the tick has
+  `wf-review` review the resolution and dispatches you again to merge.
+  Dispatched to merge, merge only once `wf check -sync` passes, which
+  reads that report and fails while it is missing or has an open MUST
+  finding; otherwise stop and return. A conflict you cannot resolve
+  escalates (FLOW-20): push nothing, so no sync branch is left on the
+  remote; close the sync PR if one opened (`gh pr close N`, never
+  `--delete-branch`), and if a `sync/program-<main sha>` branch is on the
+  remote all the same, delete nothing: put the exact `git push origin
+  --delete sync/program-<main sha>` command (`git -C
+  .dev/checkouts/<owner>/<name> ...` for another repository) in the
+  escalation's text for Jeff to run. File the item with
+  `dist/wf new -state <workflow checkout> -worker <W> -feature
+  program-sync-<main sha> -program -repos R -escalate "<the conflicting
+  paths and both sides' commits>"` (and the title, priority and estimate
+  `wf new` asks), and return both for the tick to record.
 
 Approve or enable auto-merge on no PR (FLOW-08, LINT-03). Merge one only at
 `f7-merge`, an `f6-merged-<n>` on a program trunk, or the program sync,

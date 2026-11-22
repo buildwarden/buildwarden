@@ -83,3 +83,30 @@ func TestProcessTestDelta(t *testing.T) {
 		t.Fatalf("x2-implement after rule_changes changed: %q", got)
 	}
 }
+
+// TestProcessTestAfterReturn: after a return to Design, a process item's
+// new process test needs a pass of its own: the first one's line does not
+// finish x2-process-test-r2 (FLOW-19, FLOW-20).
+func TestProcessTestAfterReturn(t *testing.T) {
+	work := repo(t, ruled)
+	env := here(work)
+	env.State.Config.Repositories[0].ProgramTrunk = "program/componentization"
+	p := demo(2)
+	p.Kind, p.Round, p.DesignReview = "process", "process", "process-test"
+	p.Steps = []queue.Step{{ID: "x2-process-test", Phase: 2, Status: "done"},
+		{ID: "x2-process-test-r2", Phase: 2, Status: "pending"}}
+	tested := strings.Replace(ruled, "design_review: required",
+		"design_review: process-test", 1)
+	first := commit(t, work, tested)
+	review := "\n## Design review\n\n- r1, 2026-11-22: process test passed at `" + first +
+		"` (FLOW-20).\n"
+	second := commit(t, work, tested+review)
+	if rs := Review(env, p); OK(rs) {
+		t.Fatal("x2-process-test-r2 finished on the first pass alone")
+	}
+	review += "- r2, 2026-11-23: process test passed at `" + second + "` (FLOW-20).\n"
+	commit(t, work, tested+review)
+	if rs := Review(env, p); !OK(rs) {
+		t.Fatalf("x2-process-test-r2 with its own pass: %s", failures(rs))
+	}
+}

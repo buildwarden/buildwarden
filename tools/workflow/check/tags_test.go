@@ -70,10 +70,14 @@ func TestNextDev(t *testing.T) {
 	if got := nextPre(tags, "relay-claim/", "dev"); got != "relay-claim/v0.2.0-dev.4" {
 		t.Errorf("a specification: %s", got)
 	}
+	modules := func(dir string) bool {
+		return dir == "relay-claim" || dir == "conformance" || dir == ".github"
+	}
 	got := consumables(specsRepo, []string{"relay-claim/spec.go", "conformance/x.go",
-		"README.md"})
+		"README.md", ".github/workflows/ci.yml", "tools/lint.sh", "scripts/x.sh"}, modules)
 	if strings.Join(got, " ") != "conformance/ relay-claim/" {
-		t.Errorf("consumables = %v, want the harness first", got)
+		t.Errorf("consumables = %v, want the harness first and no CI or tooling "+
+			"directory", got)
 	}
 }
 

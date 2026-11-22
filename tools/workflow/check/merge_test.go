@@ -3,6 +3,7 @@ package check
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -114,6 +115,32 @@ func TestMergeReady(t *testing.T) {
 			report(t, g.env.Workflow, g.head, openMust("GLOBAL-06"))
 			deferIt(t, g)
 		}},
+		"a MUST under FLOW-20's never-break list, deferred": {"merge gate 5",
+			func(t *testing.T, g *gated) {
+				report(t, g.env.Workflow, g.head, openMust("FLOW-20"))
+				deferIt(t, g)
+			}},
+		"a MUST Review recorded protected, deferred": {"merge gate 5",
+			func(t *testing.T, g *gated) {
+				report(t, g.env.Workflow, g.head, openMust("ORCH-02"))
+				protect(t, g, "breaks a written schema $id")
+				deferIt(t, g)
+			}},
+		"a MUST with no status": {"merge gate 5", func(t *testing.T, g *gated) {
+			report(t, g.env.Workflow, g.head, []map[string]any{{"id": 7,
+				"rule": "ORCH-02", "severity": "MUST"}})
+		}},
+		"a MUST-review": {"merge gate 5", func(t *testing.T, g *gated) {
+			report(t, g.env.Workflow, g.head, []map[string]any{{"id": 7,
+				"rule": "ORCH-02", "severity": "MUST-review",
+				"status": "open (MUST-review, for the human at merge)"}})
+		}},
+		"a security-ack not the human's": {"merge gate 7", func(t *testing.T, g *gated) {
+			*g = *gateFixture(t, strings.Replace(design, "security_boundary: none",
+				"security_boundary: env-relay", 1), nil)
+			rawRecords(t, g.env.Workflow, "- by: cloud/run\n  kind: security-ack\n"+
+				"  feature: demo\n  head: "+g.head+"\n  note: acknowledged\n")
+		}},
 		"a pending human step": {"merge gate 6", func(_ *testing.T, g *gated) {
 			g.f.Questions = []queue.Question{{ID: "q1", Kind: "blocking",
 				Status: "open", Question: "?", Options: []string{"a"},
@@ -152,6 +179,13 @@ func TestMergeReady(t *testing.T) {
 		}
 	}
 
+	// A MUST fixed, in any wording that starts so, does not stop the merge.
+	g = gateFixture(t, design, nil)
+	report(t, g.env.Workflow, g.head, []map[string]any{{"id": 7, "rule": "ORCH-02",
+		"severity": "MUST", "status": "fixed in r2"}})
+	if rs := MergeReady(g.env, g.f, hereRepo); !OK(rs) {
+		t.Fatalf("a fixed MUST: %s", failures(rs))
+	}
 	// A MUST the records defer on the head no longer stops the merge.
 	g = gateFixture(t, design, nil)
 	report(t, g.env.Workflow, g.head, openMust("ORCH-02"))
@@ -220,6 +254,56 @@ func TestMergeReadyRelayClause(t *testing.T) {
 	}
 }
 
+// rawRecords writes the program records file as given, as a hand edit
+// would, past AppendRecord's checks.
+func rawRecords(t *testing.T, wf, text string) {
+	t.Helper()
+	p := filepath.Join(wf, filepath.FromSlash(queue.RecordsFile))
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestMergeWaitsOnHuman: a loop merge waits on the human when the gate holds
+// it at point 7 on a posture change he has not acknowledged, or at point 5 on
+// a protected finding recorded on its head; not with security_boundary none,
+// nor once he acknowledged it (FLOW-05, FLOW-20).
+func TestMergeWaitsOnHuman(t *testing.T) {
+	posture := strings.Replace(design, "security_boundary: none",
+		"security_boundary: env-relay", 1)
+	g := gateFixture(t, design, nil)
+	if MergeWaitsOnHuman(g.env, g.f, hereRepo) {
+		t.Error("security_boundary none waits on the human")
+	}
+	protect(t, g, "asked Jeff to dismiss it")
+	if !MergeWaitsOnHuman(g.env, g.f, hereRepo) {
+		t.Error("a protected finding on the head does not wait on the human")
+	}
+	g = gateFixture(t, posture, nil)
+	if !MergeWaitsOnHuman(g.env, g.f, hereRepo) {
+		t.Error("a posture change does not wait on the human")
+	}
+	if err := queue.AppendRecord(g.env.Workflow, queue.Record{By: "human/jeff",
+		Kind: "security-ack", Feature: "demo", Head: g.head,
+		Note: "security note read"}); err != nil {
+		t.Fatal(err)
+	}
+	if MergeWaitsOnHuman(g.env, g.f, hereRepo) {
+		t.Error("an acknowledged posture change still waits on the human")
+	}
+}
+
+// protect records finding 7 of the head as protected.
+func protect(t *testing.T, g *gated, note string) {
+	t.Helper()
+	if err := queue.AppendRecord(g.env.Workflow, queue.Record{By: "cloud/run",
+		Kind: "protected", Feature: "demo", Ref: "7", Head: g.head,
+		Note: note}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // deferIt records finding 7 of the head as deferred.
 func deferIt(t *testing.T, g *gated) {
 	t.Helper()
@@ -260,54 +344,137 @@ func TestLoopMergeProof(t *testing.T) {
 	}
 }
 
-// TestSyncReady: the sync gate passes a sync head that merges origin/main
-// into the program trunk, and fails one whose head is main's own commit, a
-// moved head, or a failed required check (FLOW-20, Decision 14).
-func TestSyncReady(t *testing.T) {
-	setup := func(t *testing.T) (Env, *fakeGitHub, string) {
-		g := gateFixture(t, design, nil)
-		w := g.work
-		// main moves past the program trunk; the sync branch merges it in.
-		git(t, w, "checkout", "-q", "main")
-		_ = os.WriteFile(filepath.Join(w, "main.txt"), []byte("m\n"), 0o644)
-		git(t, w, "add", "main.txt")
-		git(t, w, "commit", "-q", "-m", "process item")
-		git(t, w, "push", "-q", "origin", "main")
-		git(t, w, "checkout", "-q", "-b", "pt2", "origin/"+programTrunk)
-		_ = os.WriteFile(filepath.Join(w, "prog.txt"), []byte("p\n"), 0o644)
-		git(t, w, "add", "prog.txt")
-		git(t, w, "commit", "-q", "-m", "program item")
-		git(t, w, "push", "-q", "origin", "pt2:"+programTrunk)
-		git(t, w, "fetch", "-q", "origin")
-		mainSHA := fullHead(t, w, "origin/main")
-		branch := "sync/program-" + mainSHA[:12]
-		git(t, w, "checkout", "-q", "-b", branch, "origin/"+programTrunk)
-		git(t, w, "merge", "-q", "--no-edit", "origin/main")
-		git(t, w, "push", "-q", "origin", branch)
-		git(t, w, "fetch", "-q", "origin")
-		g.gh.view = PRView{Base: programTrunk, Head: fullHead(t, w, branch),
-			Branch: branch}
-		return g.env, g.gh, mainSHA
+// syncFixture is a program sync ready to merge: main moved past the program
+// trunk, the program trunk moved too, and the sync branch merges main into
+// it with the head recorded. conflict makes both sides change one file, and
+// the sync's merge resolve it.
+func syncFixture(t *testing.T, conflict bool) (Env, *fakeGitHub, string) {
+	t.Helper()
+	g := gateFixture(t, design, nil)
+	w := g.work
+	mainFile, progFile := "main.txt", "prog.txt"
+	if conflict {
+		mainFile, progFile = "both.txt", "both.txt"
 	}
-	env, _, _ := setup(t)
+	git(t, w, "checkout", "-q", "main")
+	_ = os.WriteFile(filepath.Join(w, mainFile), []byte("m\n"), 0o644)
+	git(t, w, "add", mainFile)
+	git(t, w, "commit", "-q", "-m", "process item")
+	git(t, w, "push", "-q", "origin", "main")
+	git(t, w, "checkout", "-q", "-b", "pt2", "origin/"+programTrunk)
+	_ = os.WriteFile(filepath.Join(w, progFile), []byte("p\n"), 0o644)
+	git(t, w, "add", progFile)
+	git(t, w, "commit", "-q", "-m", "program item")
+	git(t, w, "push", "-q", "origin", "pt2:"+programTrunk)
+	git(t, w, "fetch", "-q", "origin")
+	mainSHA := fullHead(t, w, "origin/main")
+	branch := "sync/program-" + mainSHA[:12]
+	git(t, w, "checkout", "-q", "-b", branch, "origin/"+programTrunk)
+	if conflict {
+		cmd := exec.Command("git", "merge", "-q", "--no-edit", "origin/main")
+		cmd.Dir = w
+		_ = cmd.Run()
+		_ = os.WriteFile(filepath.Join(w, "both.txt"), []byte("p\nm\n"), 0o644)
+		git(t, w, "add", "both.txt")
+		git(t, w, "commit", "-q", "--no-edit")
+	} else {
+		git(t, w, "merge", "-q", "--no-edit", "origin/main")
+	}
+	git(t, w, "push", "-q", "origin", branch)
+	git(t, w, "fetch", "-q", "origin")
+	head := fullHead(t, w, branch)
+	g.gh.view = PRView{Base: programTrunk, Head: head, Branch: branch}
+	recordSync(t, g.env, branch, head)
+	return g.env, g.gh, mainSHA
+}
+
+// recordSync records the sync head of the branch, as wf sync-program -head
+// does.
+func recordSync(t *testing.T, env Env, branch, head string) {
+	t.Helper()
+	if err := queue.AppendRecord(env.Workflow, queue.Record{By: "cloud/run",
+		Kind: "sync", Repo: hereRepo, Ref: branch, Head: head,
+		Note: "sync pushed"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestSyncReady: the sync gate passes a recorded sync head that merges
+// origin/main into the program trunk and nothing more, and fails one whose
+// head is main's own commit, a moved head, a failed required check, an
+// unrecorded head, a head with a commit beyond the merge, or a branch naming
+// another main commit (FLOW-20, Decision 14).
+func TestSyncReady(t *testing.T) {
+	env, _, _ := syncFixture(t, false)
 	if rs := SyncReady(env, hereRepo, 7); !OK(rs) {
 		t.Fatalf("a sync head: %s", failures(rs))
 	}
-	for name, change := range map[string]func(gh *fakeGitHub, mainSHA string){
-		"main's own commit": func(gh *fakeGitHub, mainSHA string) {
+	for name, change := range map[string]func(t *testing.T, env Env, gh *fakeGitHub,
+		mainSHA string){
+		"main's own commit": func(_ *testing.T, _ Env, gh *fakeGitHub, mainSHA string) {
 			gh.view.Head, gh.view.Branch = mainSHA, "main"
 		},
-		"a moved head": func(gh *fakeGitHub, _ string) {
+		"a moved head": func(_ *testing.T, _ Env, gh *fakeGitHub, _ string) {
 			gh.view.Head = strings.Repeat("b", 40)
 		},
-		"a failed required check": func(gh *fakeGitHub, _ string) {
+		"a failed required check": func(_ *testing.T, _ Env, gh *fakeGitHub, _ string) {
 			gh.runs[0].Conclusion = "failure"
 		},
+		"an unrecorded head": func(t *testing.T, env Env, _ *fakeGitHub, _ string) {
+			p := filepath.Join(env.Workflow, filepath.FromSlash(queue.RecordsFile))
+			_ = os.Remove(p)
+		},
+		"a commit beyond the merge": func(t *testing.T, env Env, gh *fakeGitHub,
+			_ string) {
+			w := env.Repo
+			_ = os.WriteFile(filepath.Join(w, "extra.txt"), []byte("x\n"), 0o644)
+			git(t, w, "add", "extra.txt")
+			git(t, w, "commit", "-q", "-m", "extra")
+			git(t, w, "push", "-q", "origin", gh.view.Branch)
+			git(t, w, "fetch", "-q", "origin")
+			gh.view.Head = fullHead(t, w, gh.view.Branch)
+			recordSync(t, env, gh.view.Branch, gh.view.Head)
+		},
+		"a branch naming another commit": func(t *testing.T, env Env, gh *fakeGitHub,
+			_ string) {
+			other := "sync/program-" + strings.Repeat("c", 12)
+			git(t, env.Repo, "push", "-q", "origin", gh.view.Head+":refs/heads/"+other)
+			gh.view.Branch = other
+			recordSync(t, env, other, gh.view.Head)
+		},
 	} {
-		env, gh, mainSHA := setup(t)
-		change(gh, mainSHA)
+		env, gh, mainSHA := syncFixture(t, false)
+		change(t, env, gh, mainSHA)
 		if rs := SyncReady(env, hereRepo, 7); OK(rs) {
 			t.Errorf("%s: the sync gate passed", name)
 		}
+	}
+}
+
+// TestSyncReadyResolution: a sync whose merge resolved a conflict passes
+// only once the tier-2 report of its head has no open MUST finding (point 5,
+// FLOW-08, FLOW-20).
+func TestSyncReadyResolution(t *testing.T) {
+	env, gh, _ := syncFixture(t, true)
+	if got := failures(SyncReady(env, hereRepo, 7)); !strings.Contains(got, "sync gate 5") {
+		t.Fatalf("a resolution with no report: %q", got)
+	}
+	write := func(findings []map[string]any) {
+		data, _ := json.Marshal(map[string]any{"head": gh.view.Head[:12],
+			"findings": findings})
+		dir := filepath.Join(env.Workflow, filepath.FromSlash(SyncReportDir))
+		_ = os.MkdirAll(dir, 0o755)
+		if err := os.WriteFile(filepath.Join(dir, gh.view.Head[:12]+".json"), data,
+			0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(openMust("ORCH-02"))
+	if got := failures(SyncReady(env, hereRepo, 7)); !strings.Contains(got, "sync gate 5") {
+		t.Fatalf("a resolution with an open MUST: %q", got)
+	}
+	write(nil)
+	if rs := SyncReady(env, hereRepo, 7); !OK(rs) {
+		t.Fatalf("a reviewed resolution: %s", failures(rs))
 	}
 }

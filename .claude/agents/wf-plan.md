@@ -8,8 +8,10 @@ FLOW-06, FLOW-19, and the rules the design's front-matter lists (FLOW-14: cite, 
 restate).
 
 1. Read the design and the code it reaches. Plan starts from the design as
-   its review approved it (the newest review entry's `approved at <sha>`), or as Design left
-   it when the review was validly skipped (FLOW-19). Edit only the design's
+   its review approved it (the newest review entry's `approved at <sha>`,
+   or, on a program item while FLOW-20 stands, its `umbrella test passed at
+   <sha>` entry), or as Design left it when the review was validly skipped
+   (FLOW-19, FLOW-20). Edit only the design's
    Implementation plan section.
 2. Fill the design's "Implementation plan" with a numbered list. Every task
    cites the rule IDs it must satisfy (the done-when check rejects a task
@@ -40,7 +42,8 @@ restate).
 
 Return the task count and anything that needs Design. When the review is
 required, `f2-design-review` precedes `f2-plan` and is done before Plan is
-dispatched; the tick's `wf done` on `f2-plan` is the phase's gate (FLOW-03,
+dispatched; on a program item that took the umbrella test, `f2-umbrella`
+precedes it in the design review's place (FLOW-20); the tick's `wf done` on `f2-plan` is the phase's gate (FLOW-03,
 FLOW-19).
 
 On a native machine (a led step, FLOW-04), a branch is pushed only with

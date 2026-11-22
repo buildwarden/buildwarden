@@ -46,7 +46,10 @@ func TagNext(env Env, repo string) (tags []string, why string, err error) {
 	if err != nil {
 		return nil, "", err
 	}
-	dirs := consumables(repo, changed)
+	dirs := consumables(repo, changed, func(dir string) bool {
+		_, err := c.git("cat-file", "-e", head+":"+dir+"/go.mod")
+		return err == nil
+	})
 	if len(dirs) == 0 {
 		return nil, "the last merge on " + pt + " changed no consumable", nil
 	}
@@ -349,8 +352,11 @@ func (c *checker) mergeChanges(head string) ([]string, error) {
 // consumables returns the tag prefixes the changed paths make consumable:
 // "" for a repository released as a whole, or each specification directory
 // changed in the specifications repository, the harness first. Docs and
-// Markdown files change no consumable.
-func consumables(repo string, changed []string) []string {
+// Markdown files change no consumable. In the specifications repository a
+// directory is a specification, or the harness, only when it is a module
+// (isModule: a go.mod at <dir>/go.mod at the head) and not a dot-directory,
+// so a CI or tooling change (.github/, tools/, scripts/) proposes no tag.
+func consumables(repo string, changed []string, isModule func(dir string) bool) []string {
 	var out []string
 	for _, p := range changed {
 		if strings.HasPrefix(p, "docs/") || path.Ext(p) == ".md" {
@@ -359,7 +365,7 @@ func consumables(repo string, changed []string) []string {
 		prefix := ""
 		if repo == specsRepo {
 			dir, _, ok := strings.Cut(p, "/")
-			if !ok {
+			if !ok || strings.HasPrefix(dir, ".") || !isModule(dir) {
 				continue
 			}
 			prefix = dir + "/"

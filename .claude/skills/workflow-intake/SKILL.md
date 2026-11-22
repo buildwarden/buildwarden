@@ -122,9 +122,12 @@ FLOW-20.
    when Jeff states the exact edit at intake; the change is text only
    (rules, skills, agents, the template), with no `tools/workflow/` code, no
    state step and no `holds`; its review fits the sitting's ask cap
-   (`workflow-human` item 3); and, while FLOW-20 stands, it is a program
-   item, or filed on hold and its `q1` answered by Jeff in this sitting to
-   let it go ahead. Otherwise do not offer it. When it holds,
+   (`workflow-human` item 3); and FLOW-20 does not stand. While FLOW-20
+   stands the lane is not offered: the item's Design is `cloud`, and its
+   process test, or `x2-design-review` when it touches a rule FLOW-20
+   reserves to Jeff, takes the lane's place; Jeff can drive its Design
+   himself through `/workflow-tick attended <slug>`. Otherwise do not
+   offer it. When it holds,
    offer to draft the design and review it now, and on Jeff's yes: create
    `feat/<slug>` from `main` and push it (a process item has no
    branch-setup step); draft the design there from the template (Problem,

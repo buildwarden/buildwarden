@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,6 +48,18 @@ type CommitRequest struct {
 	// Nothing else but the generated files is staged.
 	Paths []string
 	Now   time.Time
+	// Wire sets, on each state wf commit loads, what wf sets on its own: the
+	// merge gate a claim asked again checks (MergeGate) and whether a loop
+	// merge waits on the human (MergeWaitsOnHuman), which QUEUE.md shows.
+	// Nil, they stay unset: no loop merge is claimed again.
+	Wire func(*State)
+}
+
+// wire sets on s what r.Wire sets.
+func (r CommitRequest) wire(s *State) {
+	if r.Wire != nil {
+		r.Wire(s)
+	}
 }
 
 // MayClaim says why the worker may not claim the step: it is not pending, its
@@ -237,6 +250,13 @@ func (g stateGit) refuseMapChange(r CommitRequest) error {
 	if _, err := g.run("fetch", "-q", "origin", workflowBranch); err != nil {
 		return err
 	}
+	origin, err := g.configAt("origin/" + workflowBranch + ":config.yaml")
+	if err != nil {
+		return err
+	}
+	if err := g.refuseProgramTrunkChange(r, origin); err != nil {
+		return err
+	}
 	unpushed, err := g.lines("log", "--format=%h %s", "origin/"+workflowBranch+"..HEAD",
 		"--", "areas.yaml")
 	if err != nil {
@@ -249,11 +269,9 @@ func (g stateGit) refuseMapChange(r CommitRequest) error {
 	if changes == 0 {
 		return nil
 	}
-	var cfg Config
-	if err := readYAML(filepath.Join(g.dir, "config.yaml"), &cfg); err != nil {
-		return err
-	}
-	if cfg.HasProgramTrunk() {
+	// Whether the loop may change the map is read from the pushed
+	// config.yaml, never the session's copy (FLOW-20).
+	if origin.HasProgramTrunk() {
 		return g.mapChangesRecorded(r, changes)
 	}
 	refused := fmt.Sprintf("%s may not commit a change to areas.yaml: the area "+
@@ -263,6 +281,56 @@ func (g stateGit) refuseMapChange(r CommitRequest) error {
 			"which changes it", refused, strings.Join(unpushed, "; "))
 	}
 	return errors.New(refused)
+}
+
+// configAt reads config.yaml at a revision, REV:PATH, or in the working
+// tree for "". A revision with none is an empty config.
+func (g stateGit) configAt(ref string) (Config, error) {
+	var cfg Config
+	if ref == "" {
+		return cfg, readYAML(filepath.Join(g.dir, "config.yaml"), &cfg)
+	}
+	data, err := g.run("show", ref)
+	if err != nil {
+		return cfg, nil
+	}
+	if err := yaml.Unmarshal([]byte(data), &cfg); err != nil {
+		return cfg, fmt.Errorf("%s: %w", ref, err)
+	}
+	return cfg, nil
+}
+
+// programTrunks maps each repository entry to its program trunk.
+func programTrunks(c Config) map[string]string {
+	out := map[string]string{}
+	for _, r := range c.Repositories {
+		if r.ProgramTrunk != "" {
+			out[r.Name] = r.ProgramTrunk
+		}
+	}
+	return out
+}
+
+// refuseProgramTrunkChange refuses, from a worker that is not human, a push
+// that adds, changes or removes a program_trunk in config.yaml: the session's
+// copy when it commits config.yaml, else HEAD's, against origin's. A program
+// trunk is what turns on the loop's merges, map changes and tests, and is
+// configured by the human's state step (FLOW-20).
+func (g stateGit) refuseProgramTrunkChange(r CommitRequest, origin Config) error {
+	ref := "HEAD:config.yaml"
+	if slices.Contains(r.Paths, "config.yaml") {
+		ref = ""
+	}
+	carried, err := g.configAt(ref)
+	if err != nil {
+		return err
+	}
+	if maps.Equal(programTrunks(carried), programTrunks(origin)) {
+		return nil
+	}
+	return fmt.Errorf("%s may not commit a change to a program_trunk in config.yaml: "+
+		"a program trunk is configured by the human's state step, by a human worker "+
+		"(FLOW-20)", r.Worker)
 }
 
 // mapChangesRecorded passes a loop's area-map changes while a program trunk
@@ -372,7 +440,7 @@ func (g stateGit) known(p string) (bool, error) {
 // commitOnce regenerates the generated files and commits them with the
 // session's paths. made is false when there was nothing to commit.
 func (g stateGit) commitOnce(r CommitRequest) (lines []string, made bool, err error) {
-	generated, err := g.generate(r.Paths)
+	generated, err := g.generate(r)
 	if err != nil {
 		return nil, false, err
 	}
@@ -403,11 +471,13 @@ func (g stateGit) commitOnce(r CommitRequest) (lines []string, made bool, err er
 // change is its priority line, and a done item an old wf left in queue/ is
 // moved to queue/done/ when its file has no other uncommitted change; a file
 // with other uncommitted changes is left alone, as --only leaves it.
-func (g stateGit) generate(paths []string) ([]string, error) {
+func (g stateGit) generate(r CommitRequest) ([]string, error) {
+	paths := r.Paths
 	s, err := Load(g.dir)
 	if err != nil {
 		return nil, err
 	}
+	r.wire(s)
 	s.Renumber()
 	var extra []string
 	for _, f := range s.Ordered() {
@@ -573,6 +643,7 @@ func (g stateGit) claimAgain(r CommitRequest, c *claimRef) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	r.wire(s)
 	refuse := func(why string) error {
 		return &CommitError{4, fmt.Sprintf("the claim of %s/%s is refused on the new "+
 			"state: %s; ask wf next again", c.feature, c.step, why)}

@@ -73,8 +73,9 @@ func TestHeldCountsTowardNoLimit(t *testing.T) {
 	}
 }
 
-// TestProcessHoldsOnlyFromImplement: a process item in Design, at its
-// process test, or on hold holds no worker its holds name (FLOW-20).
+// TestProcessHoldsOnlyFromImplement: while a program trunk is configured, a
+// process item in Design, at its process test, or on hold holds no worker
+// its holds name; with none configured, only one on hold is spared (FLOW-20).
 func TestProcessHoldsOnlyFromImplement(t *testing.T) {
 	a := feature("a", 9, "in_progress")
 	design := process("design", 1, "in_progress", "cloud")
@@ -86,9 +87,19 @@ func TestProcessHoldsOnlyFromImplement(t *testing.T) {
 		Question: "payoff", Options: []string{"resume it"}, Recommended: "resume it",
 		Resumes: "program-end"}}
 	for _, p := range []*Feature{design, tested, onHold} {
-		if h := state(a, p).Hold(a, "cloud/run"); h != "" {
+		if h := programState(t, a, p).Hold(a, "cloud/run"); h != "" {
 			t.Errorf("%s holds the cloud", h)
 		}
+	}
+	// No program trunk: the loop is as before the program, and a process
+	// item holds from its Design on.
+	for _, p := range []*Feature{design, tested} {
+		if h := mapped(t, a, p).Hold(a, "cloud/run"); h != p.Feature {
+			t.Errorf("no program trunk: %s does not hold the cloud (%q)", p.Feature, h)
+		}
+	}
+	if h := mapped(t, a, onHold).Hold(a, "cloud/run"); h != "" {
+		t.Errorf("no program trunk: %s on hold holds the cloud", h)
 	}
 	if h := state(a, implementing("impl", 1, "cloud")).Hold(a, "cloud/run"); h != "impl" {
 		t.Errorf("an implementing process item does not hold: %q", h)

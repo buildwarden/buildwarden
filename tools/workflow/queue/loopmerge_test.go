@@ -1,8 +1,12 @@
 package queue
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 )
 
 // loopMerging is a program item at its merge step with its PR into the
@@ -111,6 +115,60 @@ func TestLoopMergeTwoRepositories(t *testing.T) {
 	for _, st := range f.Steps {
 		if st.Status == "pending" && st.Affinity == "human" {
 			t.Fatalf("a human step: %s", st.ID)
+		}
+	}
+}
+
+// TestLoopMergeWaitsOnHuman: a loop merge the gate holds on the human, at
+// point 7 on a posture change or at point 5 on a protected finding, counts
+// as waiting on him; one held on anything else waits on no one (FLOW-05,
+// FLOW-20).
+func TestLoopMergeWaitsOnHuman(t *testing.T) {
+	for name, held := range map[string]bool{"held on the human": true,
+		"held on the gate alone": false} {
+		s, _ := loopMerging(t, false)
+		s.MergeWaitsOnHuman = func(*Feature, string) bool { return held }
+		if got := len(s.WaitsOnHuman()) == 1; got != held {
+			t.Errorf("%s: waits on the human = %v", name, got)
+		}
+	}
+}
+
+// TestLoopMergeClaimedAgain: a loop merge's claim that lost a push race is
+// asked again on the reloaded state with the merge gate wf commit wires on
+// it, so it stands while the gate passes; with none wired it is refused
+// (FLOW-04, FLOW-08).
+func TestLoopMergeClaimedAgain(t *testing.T) {
+	for name, wired := range map[string]bool{"wired": true, "not wired": false} {
+		s, f := loopMerging(t, true)
+		s.Dir = t.TempDir()
+		_ = os.MkdirAll(filepath.Join(s.Dir, "queue"), 0o755)
+		cfg, err := yaml.Marshal(s.Config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		areas, err := os.ReadFile(filepath.Join("testdata", "areas.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = os.WriteFile(filepath.Join(s.Dir, "config.yaml"), cfg, 0o644)
+		_ = os.WriteFile(filepath.Join(s.Dir, "areas.yaml"), areas, 0o644)
+		if err := s.Save(f); err != nil {
+			t.Fatal(err)
+		}
+		r := CommitRequest{Worker: "cloud/run", Now: now}
+		if wired {
+			r.Wire = func(s *State) {
+				s.MergeGate = func(*Feature, string) bool { return true }
+			}
+		}
+		_, err = stateGit{s.Dir}.claimAgain(r, &claimRef{feature: f.Feature,
+			step: "f7-merge"})
+		if wired && err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+		if !wired && err == nil {
+			t.Errorf("%s: claimed again with no merge gate", name)
 		}
 	}
 }

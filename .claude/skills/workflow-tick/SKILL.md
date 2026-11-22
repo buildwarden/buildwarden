@@ -30,7 +30,8 @@ feature's cloud steps.
   needs no confirmation (FLOW-08): `f6-open-pr` and a process item's
   `x2-implement` open theirs.
 - Edit `docs/development/`, `.claude/`, or `tools/workflow/` anywhere but on
-  a process item's branch after its design review (FLOW-14). The one
+  a process item's branch after its design review or, while FLOW-20
+  stands, its process test (FLOW-14, FLOW-20). The one
   exception: a rule change a feature's design review approved by name, made
   on that feature's branch in its approved `paths` (never `.claude/` or
   `tools/workflow/` outside `check/`, and never a loop rule or its
@@ -169,9 +170,18 @@ item its own trunk has moved past, in any repository it has a branch in
 `docs/design/program-north-star.md`): for each repository with a program
 trunk, `dist/wf sync-program -state .dev/workflow -repo . -checkouts
 .dev/checkouts -repository <owner>/<name>`; on `sync`, dispatch `wf-publish`
-with step `sync`, the repository and the branch it names. The sync spends a
-step of the budget and has no queue item; its merge, its conflict
-resolution or its escalation is recorded with `wf record`.
+with step `sync`, the repository, the branch it names and the worker `$W`.
+When `wf-publish` returns `review` (the merge resolved a conflict), dispatch
+`wf-review` on the resolution diff, the sync's merge commit against its
+first parent, for that head, writing its tier-2 report to
+`reports/sync/<head12>.json` on the workflow checkout, the path `wf
+sync-program` printed and `wf check -sync` reads; then dispatch
+`wf-publish` again to merge, which it does only when that report has no
+open MUST finding. The sync spends a step of the budget and has no queue
+item; its push is recorded by `wf sync-program -head` (a `sync` record),
+and its merge (`-kind merge -repository R -ref #N`), its conflict
+resolution (`-kind sync-resolution`) or its escalation (`-kind escalation`
+and the filed item, `-kind filed`) with `wf record`.
 Push what moved with `wf commit` (below): the `main.yaml` files and the
 `queue/` files these wrote.
 
@@ -241,10 +251,11 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
    the workflow checkout path. In Review, a red tier 1 goes to `wf-implement`
    for the fix and back to `wf-review`, inside the same step.
    At a loop merge (`f7-merge`, or an `f6-merged-<n>` on a program trunk)
-   the agent runs `git fetch origin <program trunk> <branch>` in each
-   repository it merged in, between `gh pr merge` and `dist/wf done`, so the
-   merge proof reads the merged program trunk and not the ref from before
-   the merge.
+   the agent runs `git fetch origin <program trunk>` in each repository it
+   merged in, between `gh pr merge` and `dist/wf done`, so the merge proof
+   reads the merged program trunk and not the ref from before the merge.
+   It never names the branch: GitHub deleted it on the merge, and a fetch
+   of a missing ref fails whole.
 5. Finish the step on the workflow checkout:
    - The agent returned `merged meanwhile` (Jeff merged the PR while a
      refresh ran, FLOW-10): end the step with the merge confirmation above
@@ -268,7 +279,9 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
      or protected finding, an umbrella or process test, a security note
      read, a question settled as assumed, a departure from a decision of
      his on strategy, a return to Design past the second, a sync, a filed
-     item, relation or area-map change, a tag): `dist/wf record -state
+     item, relation or area-map change, a tag), and each record the agent
+     returned (the agents write none themselves, but the sync record
+     `wf sync-program -head` writes, which is committed here too): `dist/wf record -state
      .dev/workflow -worker $W -kind <kind> [-feature F] [-repository R]
      [-head <sha>] [-ref <ref>] -note "<what and why>"`, committed with
      `program/records.yaml` (FLOW-20).

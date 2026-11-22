@@ -73,13 +73,17 @@ LOOP-04, LOOP-09; from `origin/main` when the branch predates it),
    - Settle a question from the umbrella design or a recorded answer of
      Jeff's before raising it, citing the source, and record "settled by
      <ref>, not asked". A question of strategy, however hard, is assumed,
-     never blocking, on your recommendation (`dist/wf record -kind
-     assumed`); only component design (a seam's change the program's design
+     never blocking, on your recommendation (a record of `-kind assumed`);
+     only component design (a seam's change the program's design
      does not name for the item's phase, a component's boundary or
      ownership, a contract, a security posture), setup or privileged work is
      blocking or flagged (FLOW-07, FLOW-19). Follow Jeff's recorded
      decisions; a departure from one on strategy is recorded (`-kind
      departure`), and one on component design flags its question.
+   - You write no program record yourself: return each one's kind,
+     feature, repository, head, ref and note, and the tick writes it with
+     `dist/wf record -state .dev/workflow -worker $W` (its step 5,
+     FLOW-20).
    - Judge the umbrella test's points U1 to U6 yourself (`wf-review`'s
      **The umbrella test**). When they hold, write `design_review: umbrella`,
      with the points' evidence under **Design**; otherwise `required`.

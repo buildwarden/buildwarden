@@ -82,6 +82,45 @@ func TestSyncProgram(t *testing.T) {
 	}
 }
 
+// TestSyncProgramChecks: a program-sync item of another repository does not
+// stop this one's sync; a program trunk that does not resolve is an error,
+// not a sync; and -head records only a head that is the sync's merge and
+// nothing more (FLOW-20, Decision 14).
+func TestSyncProgramChecks(t *testing.T) {
+	work := codeRepo(t)
+	dir := stateDir(t, programHere+"  - {name: o/specs, trunk: main}\n")
+	refused(t, dir, "does not resolve", "sync-program", "-repo", work)
+
+	gitT(t, work, "push", "-q", "origin", "main:refs/heads/program/componentization")
+	moveMain(t, work, "process item", "rules.txt")
+	gitT(t, work, "fetch", "-q", "origin")
+	head := gitT(t, work, "rev-parse", "origin/main")
+	queued(t, dir, "program-sync-0123456789ab", "1", "-repos", "o/specs", "-escalate",
+		"a conflict in o/specs")
+	got := must(t, dir, "sync-program", "-repo", work)
+	if !strings.HasPrefix(got, "sync\to/here\tsync/program-"+head[:12]+"\t") {
+		t.Fatalf("wf sync-program with another repository's sync open = %q", got)
+	}
+
+	branch := "sync/program-" + head[:12]
+	gitT(t, work, "checkout", "-q", "-b", branch, "origin/program/componentization")
+	gitT(t, work, "merge", "-q", "--no-ff", "--no-edit", "origin/main")
+	sync := gitT(t, work, "rev-parse", "HEAD")
+	change(t, work, "more", "more", "more.txt")
+	refused(t, dir, "is not a sync head", "sync-program", "-repo", work, "-worker",
+		"cloud/run", "-head", "HEAD")
+	refused(t, dir, "needs -worker", "sync-program", "-repo", work, "-head", sync)
+	got = must(t, dir, "sync-program", "-repo", work, "-worker", "cloud/run", "-head", sync)
+	if got != "recorded\tsync\to/here\t"+branch+"\t"+sync[:12]+"\n" {
+		t.Fatalf("wf sync-program -head = %q", got)
+	}
+	rs, err := queue.LoadRecords(dir)
+	if err != nil || len(rs) != 1 || rs[0].Kind != "sync" || rs[0].Ref != branch ||
+		rs[0].Head != sync {
+		t.Fatalf("records %+v, %v", rs, err)
+	}
+}
+
 // TestRecordCommands: wf record appends to program/records.yaml, record
 // -list prints in Decided for you order, and program-body renders a
 // repository's records (FLOW-20, Decision 13).

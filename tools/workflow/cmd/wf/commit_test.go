@@ -437,3 +437,27 @@ func TestCommitAreasProgram(t *testing.T) {
 		t.Fatalf("no program trunk: exit %d, want the human-only refusal:\n%s", code, out)
 	}
 }
+
+// TestCommitProgramTrunkHumanOnly: a worker that is not human may neither
+// push a config.yaml that adds a program trunk, nor turn on the loop's map
+// changes by adding one to its own uncommitted config.yaml: whether they are
+// on is read from origin (FLOW-20).
+func TestCommitProgramTrunkHumanOnly(t *testing.T) {
+	a, _ := stateRepos(t, here)
+	write(t, a, "config.yaml", "run_budget: {steps: 8}\n"+programHere)
+	out, code := commit(t, a, "cloud/run", "config: program trunk", "config.yaml")
+	if code == 0 || !strings.Contains(out, "program_trunk") {
+		t.Fatalf("a loop's program trunk: exit %d, want a refusal:\n%s", code, out)
+	}
+	write(t, a, "areas.yaml", areasYAML("o/here", "a/"))
+	if err := queue.AppendRecord(a, queue.Record{By: "cloud/run", Kind: "area-map",
+		Ref: queue.AreaMapEdges, Note: "edges"}); err != nil {
+		t.Fatal(err)
+	}
+	out, code = commit(t, a, "cloud/run", "areas: a", "areas.yaml", queue.RecordsFile)
+	if code == 0 || !strings.Contains(out, "human's word") {
+		t.Fatalf("a local program trunk: exit %d, want the human-only refusal:\n%s", code,
+			out)
+	}
+	pushed(t, a, "human/jeff", "config: program trunk", "config.yaml")
+}

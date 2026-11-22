@@ -172,8 +172,8 @@ Read the latest file in `.dev/workflow/digest/`.
    on a protected finding the loop asks him to dismiss. A process item at
    its merge shows its process-test line, if it took the test, and its
    proposed state step, which Jeff records here (`dist/wf state-step`).
-   List the records since the last sitting (`dist/wf record -list -since
-   <last sitting>`). Record `main`'s CI and its ruleset as `workflow-tick`
+   List the records since the last sitting (`dist/wf record -state .dev/workflow
+   -list -since <last sitting>`). Record `main`'s CI and its ruleset as `workflow-tick`
    step 2 does (`dist/wf main`), then run
    `dist/wf stale -state .dev/workflow -repo . -checkouts .dev/checkouts -worker $W`, which skips a PR
    Jeff has already merged. List the PRs that are ready to merge apart from
@@ -194,7 +194,8 @@ Read the latest file in `.dev/workflow/digest/`.
 6. **The program's landing**, once `program-land` resumes (FLOW-20): walk
    Jeff through each landing PR, one per repository from
    `program/componentization` to its trunk, specifications first, with the
-   body `dist/wf program-body -repository <owner>/<name>` renders, its
+   body `dist/wf program-body -state .dev/workflow -repository <owner>/<name>`
+   renders, its
    deferred findings and security notes first. He squash-merges each.
 7. **Retrospective**, only when Jeff asks for one, by name or by asking how
    done items went (FLOW-13): run `dist/wf status -all` and read the done

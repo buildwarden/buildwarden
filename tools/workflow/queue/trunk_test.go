@@ -56,8 +56,9 @@ func TestTrunkFor(t *testing.T) {
 }
 
 // TestTrunkPinned: the trunk is recorded at the first declare and returned
-// from then on; a declaration that would flip it is refused, and Validate
-// fails a hand-edit that would (FLOW-06, FLOW-20).
+// from then on; a declaration that would flip it is refused, and a later
+// change elsewhere that would choose another trunk leaves the recorded one in
+// force and the state valid, so it locks no push (FLOW-06, FLOW-20).
 func TestTrunkPinned(t *testing.T) {
 	f := programItem("p", 1, "relay")
 	s := programState(t, f)
@@ -68,9 +69,11 @@ func TestTrunkPinned(t *testing.T) {
 	wantUndeclared(t, s, f, declaration("relay", "build"), "cloud/run",
 		"would change the trunk the item recorded")
 	f.Program = false
-	if errs := s.Validate(); len(errs) == 0 ||
-		!strings.Contains(errs[0].Error(), "would change the trunk it recorded") {
-		t.Fatalf("Validate = %v, want the flip refused", errs)
+	if errs := s.Validate(); len(errs) != 0 {
+		t.Fatalf("Validate = %v: a flip found outside wf declare fails the state", errs)
+	}
+	if got, _ := s.TrunkFor(s.Config.Repository, f); got != programTrunk {
+		t.Fatalf("TrunkFor = %q after the flip, want the recorded %s", got, programTrunk)
 	}
 	f.Program = true
 
