@@ -1035,6 +1035,8 @@ gaps:
       2026-11-21 (host:container-any/windows-desktop.20261121T231002Z, unattended, main be13847): not run.
       feat/prebuilt-artifacts is still 49b513a (design only), and q1 is now the FLOW-20 hold (Jeff,
       2026-11-21): held until the componentization program completes, then back to Design for the delta.
+      2026-11-22 (host:container-any/windows-desktop.20261122T111001Z, unattended, main be13847): not run,
+      nothing changed. feat/prebuilt-artifacts is still 49b513a (design only), under the FLOW-20 hold.
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: open
@@ -1139,6 +1141,8 @@ gaps:
       2026-11-21 (host:container-any/windows-desktop.20261121T231002Z, unattended, main be13847): not run.
       feat/workdir-in-context is still 24376c0 (design only), and q1 is now the FLOW-20 hold (Jeff,
       2026-11-21): held until the componentization program completes, then back to Design for the delta.
+      2026-11-22 (host:container-any/windows-desktop.20261122T111001Z, unattended, main be13847): not run,
+      nothing changed. feat/workdir-in-context is still 24376c0 (design only), under the FLOW-20 hold.
   - id: workdir-in-context-macos
     host: macos-finch
     status: open
