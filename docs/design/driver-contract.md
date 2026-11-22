@@ -620,6 +620,45 @@ and a driver's `run` during one build.
     by the driver's default with no message, which GLOBAL-10 rules
     out). The dropped fallback: `main`'s reading of the seven keys in
     any letter case, which nothing documented.
+25. **`clean`'s sign of a live container build is its driver's waiter,
+    while the driver lives.** New in r4, on the return from Implement of
+    2026-11-21 (`f6-validate-macos-finch` case 6), decided by Jeff at
+    the escalation `f1-escalate-3` (2026-11-21), option (a), as `q3`
+    records. The container driver's `run` waits on the build container
+    by its name (`<runtime> container wait warden-build-<id>`). Its
+    `clean` keeps a build that is not in `keep_ids` only when the
+    process listing shows that waiter and the waiter's parent is a live
+    `warden-driver-container`. A waiter whose driver was killed is
+    orphaned and is not a sign of life; nor is a process of the runtime
+    that names the build (podman's `conmon -n warden-build-<id>`), nor
+    `warden-relay-<id>` in any command line. On Windows there is no
+    `ps` and `keep_ids` is the only sign, as before. The scan is what
+    keeps another user's running build, whose lock this user's `warden`
+    cannot see (DRV-27). Alternatives: (b) tie the waiter to the
+    driver's life (`Pdeathsig` on Linux, a poll of the parent on macOS),
+    so that a waiter alone means a live build: two mechanisms per host
+    for the same answer, and the scan still has to tell the waiter from
+    `conmon`; (c) drop the scan and keep `keep_ids` only: another user's
+    running build is then torn down by this user's `warden clean`, which
+    DRV-27's SHOULD exists to prevent. The dropped fallback: `main`'s
+    scan, which counted `warden-build-<id>` or `warden-relay-<id>`
+    anywhere in any command line, so `conmon` kept a dead build for as
+    long as its container ran, while on docker and finch, whose waiter
+    named the container's 64-hex ID, it found nothing (Behaviour 6).
+26. **A container runtime that is named but cannot be used is refused
+    in the probe.** New in r4, from `f6-validate-macos-finch` case 7,
+    decided by Jeff at `f1-escalate-3`, as `q4` records. A runtime
+    named by `--runtime`, `WARDEN_CTR_CLI` or the key (`[driver.container]
+    cli`, or its old name `[runtime] cli`) that is not found on `PATH`,
+    or does not answer `<runtime> info` within 3 s, is refused by the
+    container driver's probe of `run` with a `fixable` error that names
+    that source and the runtime, before any output directory exists
+    (Behaviour 20). Alternatives: `main`'s late failure (the runtime's
+    `exec` error from the first command that runs it, after the output
+    directory is written), which the design's `run` row had already
+    ruled out but attributed to `newDriver` as if `main` did it; and
+    detection tried in its place, a fallback rejected because a value
+    the user provided would be replaced silently (GLOBAL-10).
 
 ## Questions
 
@@ -704,6 +743,47 @@ sees or what the contract asks of every driver:
   tasks 19a to 19c. Rejected: (a), matching without regard to letter
   case, and (c), another spelling read as another key and ignored. The
   details the answer leaves to the design are assumed in a27.
+
+The return from Implement of 2026-11-21 (r4) put two more to Jeff, at
+the escalation `f1-escalate-3` (the design's third return, FLOW-06);
+he answered both there, on 2026-11-21, and neither is open:
+
+- **q3. What `clean` takes as a sign of a live container build.** The
+  design's `clean` row said the process scan finds the driver's
+  `container wait warden-build-<id>` child; the driver waits on the
+  64-hex container ID, on every runtime, as `main` does, so on docker
+  and finch only `keep_ids` protected a running build (finch's case 6
+  tore down another `HOME`'s running build). Naming the container in the
+  waiter alone would keep a build whose driver alone was killed (its
+  waiter is orphaned), failing the suite's Clean case and case 6's
+  first half; and podman's `conmon` holds `-n warden-build-<id>` for the
+  whole run on Linux. Options: (a) a waiter counts only while its
+  parent is a live `warden-driver-container`; (b) tie the waiter to the
+  driver's life (`Pdeathsig` on Linux, polling on macOS); (c) drop the
+  scan, `keep_ids` only.
+  **Answered 2026-11-21 (Jeff, `f1-escalate-3`): (a).** In the queue's
+  words: "the container driver's waiter waits on the container by name
+  (container wait warden-build-<id>), and the scan counts a waiter only
+  while its parent process is a live warden-driver-container (ps -o
+  pid,ppid,args); an orphaned waiter (driver killed) is not live; conmon
+  and other runtime processes are not counted; Windows has no ps and the
+  scan finds nothing, as before". Folded in by r4 as Decision 25, the
+  `clean` row under **The operations, per driver**, Behaviour 6, the
+  suite's Clean case, a row of **Defaults and overrides**, the
+  **Validation plan** (the parse test and case 6) and task 39.
+- **q4. A named runtime that is missing or does not answer.** The `run`
+  row said the probe refuses "a missing or stopped one, as `newDriver`
+  does today"; `main` refuses neither a missing nor a stopped runtime
+  that is named, and fails late, after the output directory exists
+  (finch's case 7). Options: confirm the refusal in the probe, or keep
+  `main`'s late failure. **Answered 2026-11-21 (Jeff, `f1-escalate-3`):**
+  "the probe refuses a named runtime (--runtime, WARDEN_CTR_CLI or the
+  key) that is missing or does not answer, as a fixable error naming its
+  source, before any output directory exists; reword 'as newDriver does
+  today'; list it as a new Behaviour difference (20)". Folded in by r4 as
+  Decision 26, the `run` row, Behaviour 20, a row of **Defaults and
+  overrides**, the **Validation plan** (the probe's cases and case 7)
+  and task 40.
 
 One hold follows from Decision 23 and is not a question about the
 design: Plan waits for `project-config-trust` to merge. In the queue it
@@ -1724,6 +1804,24 @@ once more before the design is approved.
   is the narrowest that keeps GLOBAL-10 (nothing provided is silently
   replaced by a default) and leaves a driver on any TOML library able to
   meet it with ASCII folding of a decoded tree.
+
+- **a28. Does `warden doctor` report a named runtime that cannot be
+  used?** New in r4, 2026-11-22, from `q4`'s answer. Jeff's answer puts
+  the refusal in the probe of `run`, so `warden build` and `warden
+  shell` refuse it. `warden doctor` does not probe `run`: its container
+  part resolves the runtime and prints `container runtime: <rt>`, and on
+  `main` and on the branch it prints `container runtime: podman` and
+  `ok` for a podman that is not installed (finch's evidence, case 7).
+  Options: (i) the container driver's `doctor` makes the same check and
+  reports the same `fixable` error as blocked, so `warden doctor` exits
+  1 with no `ok` (UX-09), as it already does when detection finds no
+  runtime; (ii) `doctor` as on `main`, reporting the name without
+  checking it. Recommended, and proceeded with: (i). A doctor that says
+  `ok` for a build that its probe then refuses fails UX-04's purpose for
+  it, and the check is the one function the probe calls. Part of
+  Behaviour 20. Not flagged: it touches no seam (`doctor`'s result has
+  `blocked` already, DRV-25) and no security boundary, and departs from
+  no decision of Jeff's.
 
 ### Retired
 
@@ -3710,11 +3808,11 @@ sequence in K1.
 | Command | From | Notes |
 |---|---|---|
 | `describe` | `newDriver`'s container arm; `isVMDriver` | `vm: false`, `shell: true`, `keep: none`, `containerfile: translate`, `guest_os: ["linux"]`; the flag `runtime`; the keys `driver.container.cli` and `driver.container.relay_image`, with their old names `runtime.cli` and `runtime.relay_image`; no common key; `reserved_ranges` its base range |
-| `run` | `StartBuild` and `Exec`'s setup | Its probe reads its settings and resolves the runtime (the `runtime` setting, else detection) and refuses a missing or stopped one, as `newDriver` does today before any work. The build resolves it once more and writes it to the state file, then starts the relay container, then on `claimed` the holder, the iptables sidecar, the build container, the executor copy and the start. `mode: shell` starts it held and waits for `/etc/warden/shell.env`, as `waitHeld` does. Its isolation, delivery and start code stays in `driver/container/container.go`, so BOOT-07's surface list does not change |
+| `run` | `StartBuild` and `Exec`'s setup | Its probe reads its settings and resolves the runtime (the `runtime` setting, else detection) and refuses one it cannot use, before any work: a runtime named by `--runtime`, `WARDEN_CTR_CLI` or the key (under either name) that is not found on `PATH` or does not answer `<runtime> info` within 3 s is a `fixable` error that names that source and the runtime, and no output directory is left (Behaviour 20); with none named, detection that finds none answering is the error it is today. *Changed in r4 (Decision 26, `q4`):* this said "refuses a missing or stopped one, as `newDriver` does today", but `main` refuses neither when the runtime is named, and fails late (`f6-validate-macos-finch` case 7). The build resolves it once more and writes it to the state file, then starts the relay container, then on `claimed` the holder, the iptables sidecar, the build container, the executor copy and the start. `mode: shell` starts it held and waits for `/etc/warden/shell.env`, as `waitHeld` does. Its isolation, delivery and start code stays in `driver/container/container.go`, so BOOT-07's surface list does not change |
 | `attach` | The second half of `Exec` | `<runtime> container exec -i -t <build> sh -c ...` on the inherited terminal; the exit code from `/.warden/shell-exit`. The runtime is the one in the build's state file |
 | `reap` | New; `teardown`'s removals by name | Containers, network, dev relay image and work directory of one build ID, in the runtime the state file names and under the record's `tmpdir`. With a state file it reads no config file, so a deleted checkout does not stop it. With no state file it uses the `runtime` setting as it resolves now from the record's flags and the recorded files that still exist, else detection. A runtime that does not answer is exit 1 with the fixable error, never "nothing to remove" |
 | `doctor` | `doctorCmd`'s container arm; `resolveRuntime`, `DetectRuntime`, `runtimeStartHint` in `config.go` | Prints `container runtime: <rt>`; `warden` prints the `ok` after it, only when neither its own part nor the driver's result is blocked (UX-09; DRV-25 does not say who prints it) |
-| `clean` | `listResources`, `isOrphan`, `findLiveWardenProcesses` in `clean.go` | Removes `warden-*` containers and networks and `warden-relay:*` images of every build that is neither in `keep_ids` nor shown alive by the process scan. The scan (`ps aux`, for `warden-relay-<id>` and `warden-build-<id>` in a command line) stays: the driver's `container wait warden-build-<id>` child still exists in `run`, and the scan sees every user's processes, which `keep_ids` cannot (a runtime daemon is shared between users; a lock directory is not). On Windows there is no `ps`, the scan finds nothing, as today, and `keep_ids` is the only signal |
+| `clean` | `listResources`, `isOrphan`, `findLiveWardenProcesses` in `clean.go` | Removes `warden-*` containers and networks and `warden-relay:*` images of every build that is neither in `keep_ids` nor shown alive by the process scan. *Rewritten in r4 (Decision 25, `q3`):* the scan lists every user's processes once (`ps -A -ww -o pid=,ppid=,args=`) and counts a build as alive only by its waiter: a process whose arguments are `<runtime> container wait warden-build-<id>`, the runtime by name or path, whose parent in the same listing is a live `warden-driver-container` (the base name of its first argument). `run` starts that waiter by the build container's name, where it waited on the 64-hex ID the runtime returned, as `main` does. A waiter whose driver was killed is orphaned (its parent is then init or a subreaper) and does not count, so a build whose `warden` and driver are both dead is removed while its container still runs; nor does any other process that names the build (podman's `conmon -n warden-build-<id>`, a runtime's helper, `warden-relay-<id>` in any command line). The scan sees every user's processes, which `keep_ids` cannot (a runtime daemon is shared between users; a lock directory is not). On Windows there is no `ps`, the scan finds nothing, as today, and `keep_ids` is the only signal. *Was:* `ps aux` searched for `warden-relay-<id>` and `warden-build-<id>` anywhere in a command line, on the claim that the driver's `container wait warden-build-<id>` child existed in `run`; it waited on the ID, so on docker and finch only `keep_ids` protected a running build (`f6-validate-macos-finch` case 6) |
 
 `driver.ContainerBaseCIDR`, `WardenBaseNet` and `AllocateNetwork` stay in
 the kit's `driver` package in K1, since `warden` checks the build link
@@ -4081,7 +4179,7 @@ runtime's name, Hyper-V's network), passed on as `args` and as
 | Reap | `reap` of an ID that never existed exits 0 with `removed: 0`, twice | ORCH-04 |
 | Diagnostics | After a build, `diagnostics_dir` holds no name but `relay.log` and `console.log` | ORCH-02 |
 | Two at once | Two builds with different IDs both succeed (optional per host) | ORCH-04 |
-| Clean | With the running build's ID in `keep_ids`, `clean` removes nothing of it; with a killed build's ID absent, `clean` removes it (when `clean` is listed) | ORCH-04 |
+| Clean | With the running build's ID in `keep_ids`, `clean` removes nothing of it; with a killed build's ID absent, `clean` removes it (when `clean` is listed). *r4 (Decision 25):* the killed build's driver is killed alone (SIGKILL to its process, never its group), so a child it started, such as the container driver's waiter, is orphaned and may still run when `clean` runs; `clean` removes the build all the same, and the failure names the likely cause, a process whose driver is gone taken for a sign of life. The fake gains a fault switch that leaves such a child and counts it as alive, and the self-test sees the case fail against it | ORCH-04 |
 | Keep | With `keep`, what `capabilities.keep` names is listed in `kept` and exists; `reap` then removes it (when not `none`) | ORCH-04 |
 | Shell | `mode: shell`, then `attach` running `exit 7` on a pseudo-terminal exits 7 with no error in its result; `attach` of an ID that does not exist writes an `error` (when `shell`) | UX-09 |
 | Exited | A build script that ends the environment without completing (it powers the machine off, or kills the environment's first process; `--exit-script` supplies one for a guest where neither works): the driver sends `exited` with `which: build` (when `capabilities.exited`) | |
@@ -4185,7 +4283,11 @@ the redraft's fifteen, none goes; 1, 3, 4, 8, 10, 12 and 13 change, and
 again. r3 (2026-11-18, `q2` answered (b)) adds 19 and changes one
 clause of 18, so there are now nineteen; the eighteen of a5's answer are
 as accepted, and 19 is accepted by Jeff's answer to `q2` and goes to the
-review of r3's delta with the rest. The list is against `main` as `project-config-trust` and
+review of r3's delta with the rest. r4 (2026-11-22, after the
+escalation `f1-escalate-3`) adds 20 and changes 6 and 7, so there are
+now twenty: 20 and the change to 6 follow from Jeff's answers to `q4`
+and `q3`, and the change to 7 from his commit `c81892d`; all three go to
+the review of r4's delta. The list is against `main` as `project-config-trust` and
 `runtime-cli-project-path` leave it: that the user-level file is no
 longer read, `--config`, `WARDEN_CONFIG`, and the runtime's limit to
 three names are those items' changes, not K1's.
@@ -4257,12 +4359,32 @@ three names are those items' changes, not K1's.
    `Removing ...` line for each and counts them in its total. Then it
    runs the driver's `clean` as before. The container driver's `clean`
    keeps today's process scan and adds the held locks, so it removes
-   nothing it would have kept. *Stands.*
+   nothing it would have kept. *Changed in r4 (Decision 25, `q3`):* the
+   scan is narrowed to the driver's waiter while its driver lives, so
+   the last clause no longer holds. A build whose `warden` and driver
+   are both dead, which `main` kept for as long as any process named it
+   (podman's `conmon` on Linux names the container for its whole life),
+   is removed while its container still runs; and a running build of
+   another user on docker or finch, which `main`'s scan could not see
+   (its waiter named the container's ID), is now kept. What it removes
+   is what is not running.
 7. **A build may complete up to 10 s after its environment exits, on
    every driver.** It was 5 s on container and Hyper-V
    (`completionGrace`, `vmOffGrace`), 10 s on firecracker, and qemu and vz
    did not watch. A build that fails this way takes 5 s longer to say so
-   on those two. *Stands.*
+   on those two. *Changed in r4 (Jeff's `c81892d`, from
+   `f6-validate-windows-hyperv` case 5):* such a failure is one `fixable`
+   error from `warden` on every driver, `the build environment exited
+   before the build completed: <the driver's detail>`, whose fix names
+   the build's `build-output.log` ("for the last thing the build
+   printed"). On `main` Hyper-V's was `fixable` with that fix (`build VM
+   ... powered off without reporting an exit code`); container's
+   (`build environment failed before the build ran (warden-io exited
+   with code <n>):` and the console's last lines, which the detail
+   still carries) and firecracker's (`the build VM stopped before the
+   build completed`) were not, and printed the request to file a bug.
+   The approved design did not say which; the branch had made all of
+   them unexpected errors, which lost Hyper-V's fix.
 8. **A second Ctrl-C.** Today it kills `warden` on container, vz and
    hyperv and leaves whatever the driver had not yet torn down, and is
    ignored on qemu and firecracker, which hold their own handler. After
@@ -4371,6 +4493,21 @@ three names are those items' changes, not K1's.
     a config fails once, on its first run with the owning driver after
     the upgrade, and runs once rewritten as the message says. *New, r3
     (q2, answered (b); Decision 24, a27).*
+20. **A container runtime that is named but cannot be used is refused
+    before anything is created.** On `main` a runtime named by
+    `--runtime`, `WARDEN_CTR_CLI` or `[runtime] cli` that is not
+    installed fails late, after the output directory exists, with the
+    runtime's own `exec` error (`error building relay image: exec:
+    "podman": executable file not found in $PATH`), and one that is
+    installed but not running fails at its first command likewise. Now
+    the container driver's probe of `run` (`warden build`, `warden
+    shell`) refuses either with a `fixable` error that names where the
+    runtime was named (`--runtime`, `WARDEN_CTR_CLI`, or the key and its
+    file) and the runtime, with the fix to install or start it or to
+    name another, and no output directory is left. `warden doctor`
+    reports the same error and is blocked, where `main` prints
+    `container runtime: podman` and `ok` (a28). Detection, when nothing
+    names a runtime, is unchanged. *New, r4 (`q4`; Decision 26, a28).*
 
 What does not change, although the code behind it moves:
 
@@ -4380,7 +4517,9 @@ What does not change, although the code behind it moves:
   `doctor` for the four VM drivers: their code does not move in K1.
 - `warden hyperv service ...`.
 - The container driver's progress and error lines keep their text; they
-  now come from the driver's stderr.
+  now come from the driver's stderr. Two are exceptions: the failure
+  after the grace, now `warden`'s (7, r4), and a named runtime's
+  refusal, now made in the probe (20, r4).
 - Every driver flag keeps its name, its two spellings (`--runtime docker`
   and `--runtime=docker`) and the commands it is accepted on, and every
   driver key keeps its name and meaning and is still read in the table
@@ -4404,7 +4543,8 @@ refused (2), which GLOBAL-10 asks for and for which UX-03 would give a
 window; no window is given (a5, answered (a)). A driver's key spelt in
 another letter case, which `main` read and no reference documented, is
 refused with the key to write (19); it has no window either (`q2`
-answered (b), a27).
+answered (b), a27). A named container runtime that cannot be used, which
+`main` let fail late, is refused before anything is created (20, r4).
 
 ### What guards behaviour
 
@@ -5076,6 +5216,12 @@ tests there (GLOBAL-07, ORCH-05).
   stable needs a new contract version. And the rename prints a warning
   for every existing config that sets one of the seven (Behaviour 18,
   a25).
+- **What Decision 25 relies on** (r4). The scan reads `ps`'s text: a
+  host whose `ps` lacks `-A`, `-ww` or `-o` (BusyBox) finds nothing, so
+  only `keep_ids` protects a build there, as on Windows; and a waiter's
+  parent PID reused by another `warden-driver-container` would keep a
+  dead build until the next `clean`, which leaves a build behind and
+  never removes a live one.
 
 ### The overview (FLOW-15)
 
@@ -5184,7 +5330,8 @@ not listed is unchanged and `warden`'s.
 | `describe` answers within 10 s, a probe within 30 s | **New** (a20) | `describe` does no host work; a probe makes the driver's preflight, and the slowest today is the container runtime detection (three runtimes at 3 s each) | Nothing; a slower driver is reported as a defect |
 | `reap`, `attach` and `warden clean` use the values in the build's record and state file, not the current invocation's | **New** (Decision 18, a20) | They must look where the build put things. The state file is authoritative: a recorded config file that has gone or changed does not fail `reap` or `attach` (C10) | Nothing. `warden clean --driver <path>` chooses the binary that reaps, when the recorded one is gone |
 | `warden clean` runs `reap` for every build of the selected driver whose lock nobody holds, and removes the lock only when `reap` succeeds | **New** (a20) | No `warden` holds the lock, so the build is dead for this user. `reap` must be safe beside a driver that is still tearing down by itself | Nothing; a held lock's build is never touched |
-| What `clean` treats as live: the held locks (`keep_ids`) and, for the container driver, its process scan as today | **Changed**: the locks are added | Either sign is enough to keep a build | Nothing |
+| What `clean` treats as live: the held locks (`keep_ids`) and, for the container driver, its process scan, which since r4 counts only the driver's `container wait warden-build-<id>` waiter whose parent is a live `warden-driver-container` | **Changed**: the locks are added; *r4 (Decision 25):* the scan no longer counts any process that names a build (`conmon`, `warden-relay-<id>`), and finds the waiter it could not find before | Either sign is enough to keep a build; a process whose driver is gone is not a sign | Nothing. The dropped fallback, `main`'s scan of any command line, is a rejected alternative in Decision 25 |
+| A container runtime named by `--runtime`, `WARDEN_CTR_CLI` or the key that is not on `PATH` or does not answer `<runtime> info` within 3 s | **Changed** in r4 (Behaviour 20, Decision 26, a28): refused in the probe of `run` and by `doctor`, where `main` failed late | A provided value that cannot be used is an error before any work (GLOBAL-10, UX-08) | Nothing: install or start it, or name another. Detection is not tried in its place (rejected in Decision 26) |
 | `--timeout` counts from the start of `run` | **Changed** slightly (Behaviour 14) | One clock for every driver | `--timeout` |
 | A driver setting nobody set | Unchanged per setting: the driver applies its own default (`network`: `warden-dev`; `slots`: 4 for hyperv, 16 for firecracker; `nat-prefix`: `192.168.240.0/20`; `host-ip`: `192.168.240.1`; `name`: `windows-server-2025`; `arch`: the host's; the two ages: `winguest`'s; `runtime`: the first of finch, docker, podman that answers `info`, found once per build and kept in its state file). **Changed reader** (a21): the driver resolves it, through the kit, where `cmd/warden` did | These are the values `cmd/warden` and the drivers apply today | The flag, else the setting's environment variable (the two that exist), else the config file: the order `main` has once `project-config-trust` has merged, applied by the kit to the `args` and `config_file` `warden` passes on. In the file a common key is read in the driver's own table and then in `[driver]` (the row on a common key, below). The first place that sets it is the value; it is not merged with a lower one, and a value that does not parse or cannot be used is an error naming where it came from, reported by the driver in its probe (UX-08) |
 | Which config file a driver reads: the one `warden` names in `config_file`, and no other | **New** (a21); one file since 2026-11-15 (Decision 23) | `warden` and the driver must read the same file, and a driver that searched by itself, in the working directory or through `WARDEN_CONFIG`, could find another | Nothing for the driver: which file it is, `warden` decides from `--config`, `WARDEN_CONFIG` and the working directory (`project-config-trust`). A driver started with no request, such as a service, reads none and uses its defaults |
@@ -5306,7 +5453,7 @@ What differs:
 
 | Driver | In K1 | Transport after K1 | What changes in its build |
 |---|---|---|---|
-| container | A binary, `warden-driver-container`, with `describe`, `run` (and its probe), `reap`, `doctor`, `clean`, `attach`; its code leaves `cmd/warden`; its relay goes through the relay source | exec | `Exec` is split into a held `run` and `attach`. It no longer translates the Containerfile itself: the script and `base_image` come from `warden`. `completionGrace` (5 s) goes; it reports `exited` from `container wait`. It writes the runtime it chose to the state file. `clean` takes `keep_ids` beside its process scan. Its teardown must survive closed stdout and stderr |
+| container | A binary, `warden-driver-container`, with `describe`, `run` (and its probe), `reap`, `doctor`, `clean`, `attach`; its code leaves `cmd/warden`; its relay goes through the relay source | exec | `Exec` is split into a held `run` and `attach`. It no longer translates the Containerfile itself: the script and `base_image` come from `warden`. `completionGrace` (5 s) goes; it reports `exited` from `container wait`. It writes the runtime it chose to the state file. `clean` takes `keep_ids` beside its process scan. Its teardown must survive closed stdout and stderr. *r4:* its waiter names the container, the scan counts it only under a live driver (Decision 25), and its probe and `doctor` refuse a named runtime that cannot be used (Decision 26) |
 | qemu | `Driver()` with `Describe`, `Preflight` and `Run` | linked | `linuxguest.ContainerfileImage` is replaced by `start.base_image`, which carries the Containerfile's `FROM` with `--script` too. It never watched its VMs' exit and still does not (`capabilities.exited: false`). Its SIGINT and SIGTERM handler goes: a second Ctrl-C now ends `warden` and leaves its VMs (Behaviour 8) |
 | vz | `Driver()` with `Describe`, `Preflight` and `Run`; `New` stops resolving the cache directory | linked | `containerfile: ignore`: `warden` drops the Containerfile before staging, as the driver did. It reports `guest_os: darwin`. It takes the build ID from `start` for its work directory and relay child, where it made none. `relay.log` is still written by the relay child into `diagnostics_dir`. SIGTERM now tears it down |
 | hyperv | `Driver()` with `Describe`, `Preflight` and `Run` | linked | `StartRelay` keeps creating and starting the relay VM and gives its `StartSession` and `ClaimRelay` calls to `warden`. `watchBuildVM` reports `exited`; `vmOffGrace` (5 s) goes. Its own `hyperv-build-<id>` lock stays, taken with `warden`'s build ID |
@@ -5394,6 +5541,16 @@ another letter case**, **The answer**. Contract version
 1 has not been released or pinned (a17), so this is a change to the
 draft and needs no new version. It is made first in Implement, as task
 19a, before the kit and the suite change (LOOP-02).
+
+*r4 (2026-11-22):* no requirement of `v1.md` changes, and no other
+specification. DRV-27 already has `clean` remove every build not in
+`keep_ids` and lets a driver whose resources are shared keep a liveness
+check of its own; Decision 25 is the container driver's check, and the
+suite's Clean case, rewritten to kill the driver alone, tests the
+requirement as written (a build whose driver is gone is not alive).
+Decision 26 is the container driver's probe making the check DRV-C7 and
+the **Probe** paragraph already ask of it. The fix of `c81892d` is
+`warden`'s message, which the contract does not word.
 
 ## Bootstrap comparison
 
@@ -6799,6 +6956,33 @@ differs per platform, so it adds one job (Decision 20):
   refused every time, `./rt` and `sh` refused before the runtime's check
   so nothing is run), with the same spellings added for
   `[driver.container] cli`.
+- *(r4, Decision 25)* In `driver/container`, a parse test of the
+  scan over fixed `ps -A -ww -o pid=,ppid=,args=` listings, in docker's
+  shape (`docker container wait warden-build-<id>` under
+  `/usr/local/bin/warden-driver-container run`) and finch's
+  (`/usr/local/bin/finch container wait warden-build-<id>` under the
+  driver, with finch's own `limactl` and `ssh ... nerdctl container wait
+  warden-build-<id>` children beneath it): each counts the build; the
+  same waiter with parent PID 1, or whose parent is gone from the
+  listing, or under a parent that is not the driver (a shell, `finch`
+  itself) does not (the orphan); a waiter on the 64-hex ID does not; nor
+  does `conmon ... -n warden-build-<id>` or any line holding
+  `warden-relay-<id>`; a driver given by path and by bare name both
+  count. And a test that `run`'s waiter names the container: the
+  arguments it is started with end in `warden-build-<id>`. On Windows
+  the scan returns nothing (GLOBAL-04, ORCH-04, TEST-01).
+- *(r4, Decision 26, a28)* In `driver/container`, the probe of `run`
+  with a named runtime not on `PATH`, and with one whose `info` fails
+  (a stub runtime on a temporary `PATH`), from each source:
+  `--runtime`, `WARDEN_CTR_CLI`, `[driver.container] cli`, `[runtime]
+  cli`; each a `fixable` error naming that source and the runtime, with
+  nothing run past `info`; and `doctor` blocked with the same error.
+  Through `warden build` with the binary (in `cmd/warden`'s end-to-end
+  tests): the refusal and no output directory (GLOBAL-10, UX-04,
+  UX-08, UX-09, TEST-01).
+- *(r4, `c81892d`)* `TestBuildSequenceExitGrace` checks that the
+  failure after the grace is `fixable` and that its fix names
+  `build-output.log` (TEST-01).
 
 **Tier 1** (the `integration` workflow, Docker): `make integration-test` as
 today, now through `warden-driver-container`, and the suite's lifecycle
@@ -6826,10 +7010,10 @@ is, and the workflow file is the list.
 
 | Host | Cases |
 |---|---|
-| macos-finch | (1) `warden driver list` shows `container` at the built `warden-driver-container`, found beside `warden` and marked as selected, and the four linked drivers; `warden doctor` prints `container runtime: finch` and `ok`. (2) A default build succeeds and its ledger verifies; `driver.json` names the driver binary and its digest; `inputs/` holds `Containerfile` and `build.sh`. (3) `warden shell` opens a shell and passes its exit code through. (4) `[driver.container] relay_image = "dev"` builds the relay from source, and so does the old name `[runtime] relay_image = "dev"`, with one warning line that names the new key; a `warden.toml` that sets both is refused before anything is created; `WARDEN_IMAGE=<ref>` pulls that image; an unpullable reference fails without trying the default. (5) Ctrl-C mid-build tears down and leaves nothing; SIGTERM mid-build does the same and exits 1; with the driver killed mid-build `warden` fails the build and reaps; with `warden` killed (SIGKILL) mid-build the driver tears down by itself and no container of the build is left. (6) With `warden` and the driver both killed, the build's containers are still running; `warden clean`, run with another `--tmpdir` than the build's and after the build's `warden.toml` was deleted, removes that build's containers, network, work directory, stage directory, lock and record, and leaves a running build's; a running build started with another `HOME`, whose lock is elsewhere, is left alone too. (7) `WARDEN_CTR_CLI` and `--runtime` select the runtime; a missing one gives the fixable error and leaves no output directory; `--network x` is refused by `warden` as an unknown flag for the container driver; `[runtime] cli = 5` in `warden.toml` is refused by the driver, naming the file, and leaves no output directory, and so is `[driver.container] cli = 5`. (8) With nothing customized, a build's `driver.json` has `found: beside-warden` and nothing shadowed. A copy of `warden-driver-container` placed in a directory that comes before `warden`'s on `PATH` runs in place of the one beside `warden`: `warden driver list` shows it and the copy it shadows, and the build's `driver.json` has `found: PATH`, its digest and the bundled copy under `shadowed`; the same copy in a directory after `warden`'s on `PATH` does not run and is listed as shadowed; `[runtime] driver = "./x"` in the project's `warden.toml` is refused. (9) `make driver-conformance DRIVER=dist/warden-driver-container` passes both tiers on finch |
+| macos-finch | (1) `warden driver list` shows `container` at the built `warden-driver-container`, found beside `warden` and marked as selected, and the four linked drivers; `warden doctor` prints `container runtime: finch` and `ok`. (2) A default build succeeds and its ledger verifies; `driver.json` names the driver binary and its digest; `inputs/` holds `Containerfile` and `build.sh`. (3) `warden shell` opens a shell and passes its exit code through. (4) `[driver.container] relay_image = "dev"` builds the relay from source, and so does the old name `[runtime] relay_image = "dev"`, with one warning line that names the new key; a `warden.toml` that sets both is refused before anything is created; `WARDEN_IMAGE=<ref>` pulls that image; an unpullable reference fails without trying the default. (5) Ctrl-C mid-build tears down and leaves nothing; SIGTERM mid-build does the same and exits 1; with the driver killed mid-build `warden` fails the build and reaps; with `warden` killed (SIGKILL) mid-build the driver tears down by itself and no container of the build is left. (6) With `warden` and the driver both killed, the build's containers are still running; `warden clean`, run with another `--tmpdir` than the build's and after the build's `warden.toml` was deleted, removes that build's containers, network, work directory, stage directory, lock and record, and leaves a running build's; a running build started with another `HOME`, whose lock is elsewhere, is left alone too. *(r4, Decision 25)* Before `warden clean`, `ps -A -ww -o pid,ppid,args` is recorded: the killed build's `finch container wait warden-build-<id>` waiter, when still there, has lost its driver parent and does not keep it; the other `HOME`'s waiter runs under its live `warden-driver-container` and keeps it. (7) `WARDEN_CTR_CLI` and `--runtime` select the runtime; *(r4, Decision 26)* a named runtime that is not installed (`WARDEN_CTR_CLI=podman`, `--runtime docker`, `[driver.container] cli = "podman"`) is refused, each naming its source, with a fixable error and no output directory, and so is `--runtime finch` with finch's VM stopped (`finch vm stop`); `warden doctor` with `WARDEN_CTR_CLI=podman` is blocked with the same error; `--network x` is refused by `warden` as an unknown flag for the container driver; `[runtime] cli = 5` in `warden.toml` is refused by the driver, naming the file, and leaves no output directory, and so is `[driver.container] cli = 5`. (8) With nothing customized, a build's `driver.json` has `found: beside-warden` and nothing shadowed. A copy of `warden-driver-container` placed in a directory that comes before `warden`'s on `PATH` runs in place of the one beside `warden`: `warden driver list` shows it and the copy it shadows, and the build's `driver.json` has `found: PATH`, its digest and the bundled copy under `shadowed`; the same copy in a directory after `warden`'s on `PATH` does not run and is listed as shadowed; `[runtime] driver = "./x"` in the project's `warden.toml` is refused. (9) `make driver-conformance DRIVER=dist/warden-driver-container` passes both tiers on finch |
 | container-any | On the Windows host, with its container runtime: (1) `warden driver list` shows `warden-driver-container.exe`; `warden doctor` reports the runtime and `ok`. (2) A default build succeeds, its ledger verifies, `driver.json` is written. (3) Ctrl-C mid-build tears down; with the driver killed `warden` reaps; with `warden` killed the driver tears down on the end of its input. (4) `warden clean` leaves a running build and removes a build whose `warden` and driver were both killed, from its record. (5) A `warden-driver-container.bat` beside `warden` or on `PATH` is not taken for the driver; a `warden-driver-container.exe` in a `PATH` directory ahead of `warden`'s replaces the one beside `warden`. (6) Both tiers of the suite pass against `warden-driver-container.exe` |
 | macos-vz | (1) `warden doctor --driver vz` and `warden image list` print what `main` prints. (2) A vz build succeeds, its ledger verifies, `relay.log` is written, `driver.json` says `linked`; with a Containerfile in the context, it is ignored and `inputs/` is absent, as on `main`. (3) A script that exits 3 makes `warden` exit 3; `--timeout 30s` on a sleeping script exits 124. (4) Ctrl-C mid-build leaves no relay process and no work directory; SIGTERM mid-build does the same and exits 1, where on `main` it kills `warden`. (5) `--runtime docker` and `--network x` with `--driver vz` are each refused as an unknown flag for driver `vz`; `[runtime] cli = 5` in `warden.toml` does not stop a vz build (Behaviour 13); `warden clean --driver vz` reports nothing to clean and needs no container runtime |
-| windows-hyperv | (1) `warden doctor --driver hyperv`, elevated and not, prints what `main` prints; `--network` is honoured. (2) Elevated `warden setup --driver hyperv --slots 2` is idempotent. (3) A non-elevated durable build and an elevated ephemeral build succeed and verify; `[driver.hyperv] network` is honoured and `--network` overrides it; the old name `[vm] network` is honoured too, with one warning line that names the new key; with `[driver] image_refresh_after` set low, the detached `image prepare --driver hyperv` starts and logs, and with `[driver.hyperv] image_refresh_after = "30d"` beside it in the same file, it does not. (4) With the service installed, a service-delegated build succeeds. (5) A build whose script powers the VM off without completing fails with the build-VM-off error about 10 s after the VM stops. (6) Ctrl-C mid-build removes both VMs and the switch; the time from Ctrl-C to exit is recorded, to judge the 60 s default of the teardown wait against a real teardown before K2 applies it to Hyper-V (a20). (7) `--keep-vms` leaves both VMs; `warden clean --driver hyperv` then removes them and leaves a running build's |
+| windows-hyperv | (1) `warden doctor --driver hyperv`, elevated and not, prints what `main` prints; `--network` is honoured. (2) Elevated `warden setup --driver hyperv --slots 2` is idempotent. (3) A non-elevated durable build and an elevated ephemeral build succeed and verify; `[driver.hyperv] network` is honoured and `--network` overrides it; the old name `[vm] network` is honoured too, with one warning line that names the new key; with `[driver] image_refresh_after` set low, the detached `image prepare --driver hyperv` starts and logs, and with `[driver.hyperv] image_refresh_after = "30d"` beside it in the same file, it does not. (4) With the service installed, a service-delegated build succeeds. (5) A build whose script powers the VM off without completing fails with the build-VM-off error about 10 s after the VM stops; *(r4, `c81892d`)* the error is fixable, and its fix names the build's `build-output.log`. (6) Ctrl-C mid-build removes both VMs and the switch; the time from Ctrl-C to exit is recorded, to judge the 60 s default of the teardown wait against a real teardown before K2 applies it to Hyper-V (a20). (7) `--keep-vms` leaves both VMs; `warden clean --driver hyperv` then removes them and leaves a running build's |
 | qemu-any | (1) `warden doctor --driver qemu` prints what `main` prints. (2) A direct-boot build and a cloud-image build succeed and verify; a Dockerfile whose `FROM` names a prepared image boots that image, as on `main`, and still does when the build is given `--script`, as on `main`; `inputs/` holds `Containerfile` and `build.sh`. (3) Ctrl-C mid-build leaves no `qemu-system` process and no work directory; SIGTERM mid-build does the same; `--keep-vms` leaves the work directory only. (4) `--timeout 30s` on a sleeping script exits 124. (5) `warden clean --driver qemu` reports nothing to clean with no container runtime running. (6) A second Ctrl-C during teardown ends `warden`; what it leaves is recorded (Behaviour 8) |
 
 Evidence goes under `native/<host>/<date>/` on the `workflow` branch.
@@ -7242,6 +7426,64 @@ Nothing in `process.md` or any other loop rule is edited (LOOP-09).
     item through `workflow-intake`, to exist before M6 adopts a
     release, as a11 was answered; nothing in the queue holds it yet
     (FLOW-20, FLOW-12).
+
+**Step 9 (r4): rework after `f6-validate-macos-finch`** (FLOW-06)
+
+Added by Design in r4, 2026-11-22, from Jeff's answers to `q3` and
+`q4` at `f1-escalate-3` and the assumption a28. Tasks 1 to 38 are done
+(Publish had begun) and keep their numbers; these rework code they
+wrote, as explicit tasks, numbered after them so that no cited number
+moves. Plan, on re-entry, confirms or renumbers them; Implement runs
+them in order, after the review of r4's delta approves it. No
+specification changes (**Specification changes**, r4), so none comes
+first. Two fixes since the return are Jeff's and are done, not tasks:
+`6590782` (the suite's case 9 findings: stop before the claim, `clean`'s
+work directories, the inputs) and `c81892d` with `fa1d28d` (the failure
+after the grace is `fixable` and names `build-output.log`; Behaviour 7,
+r4).
+
+39. Rework of tasks 12 and 22 (Decision 25, `q3`):
+    `driver/container/container.go`'s `containerWait` waits on the build
+    container by its name, `warden-build-<id>`, where it waited on the ID
+    `create` returned (the other commands may keep the ID); and
+    `driver/container/clean.go`'s `liveProcessBuilds` becomes a parse
+    of one `ps -A -ww -o pid=,ppid=,args=` listing that counts a build
+    only by `<runtime> container wait warden-build-<id>` whose parent in
+    the listing is a `warden-driver-container`, the parse a pure function
+    over the listing's text. `ps` missing or failing, and Windows, find
+    nothing, as before. Tier 0: the parse test and the waiter's
+    arguments, as the **Validation plan** (r4) lists them, run on three
+    platforms by the `driver-contract` job (GLOBAL-04, ORCH-04,
+    TEST-01, TEST-04).
+40. Rework of task 22 (Decision 26, `q4`; a28): the container driver's
+    probe of `run`, and its `doctor`, check a named runtime with
+    `exec.LookPath` and `runtimeAnswers` after `resolveRuntime` and
+    refuse it with a `fixable` error that names the source (`--runtime`,
+    `WARDEN_CTR_CLI`, or the key and file as `keyInFile` words it) and
+    the runtime, with `runtimeStartHint`'s fix when it is installed but
+    does not answer, and one to install it or name another when it is
+    not found; `run` itself resolves as before. Tier 0: the probe's and
+    `doctor`'s cases from each source, and through `warden build`
+    the refusal with no output directory (GLOBAL-10, UX-04, UX-08,
+    UX-09, TEST-01).
+41. Rework of tasks 14 and 25 (Decision 25): the suite's lifecycle Clean
+    case (`conformance/driver/lifecycle.go`, `caseClean`) kills the dead
+    build's driver alone, as it does, and says so in its comment and its
+    failure message; the fake (`warden-driver-fake`) gains a fault
+    switch under which its `run` leaves a child that names the build
+    and its `clean` counts that child as alive, and the suite's
+    self-test sees the Clean case fail against it. Tier 0 (TEST-05,
+    TEST-01, LOOP-03).
+42. Rework of tasks 35 and 36 (UX-01, FLOW-15): `guide/cli.md`'s
+    `warden clean` paragraph for the container driver (a running build
+    of another user is left while its `warden-driver-container` runs; a
+    build whose `warden` and driver were killed is removed though its
+    containers still run); `guide/configuration.md`'s **The container
+    runtime** (a named runtime that is not installed or does not answer
+    is refused before the build starts, and by `warden doctor`);
+    `concepts/overview.md`'s container pseudocode (the resolve step's
+    refusal, and the waiter by name under **watch**). Behaviour 7's
+    message needs no reference change: no page quotes it.
 
 Native validation is the six `f6-validate-<host>` steps Design added;
 their notes carry the **Validation plan**'s cases unchanged, and each
@@ -8151,6 +8393,78 @@ acceptance; then the outcome.
 - **Next:** Plan re-enters, confirms tasks 19a to 19c, and Implement
   runs them first, the specification first (LOOP-02).
 - sitting: 19:25-19:42 UTC, asks: 7 (0 in batches)
+
+### r4, 2026-11-22: returned from Implement, escalated, decided by Jeff; review of the delta pending
+
+- **The finding.** `f6-validate-macos-finch` failed on `a0934b5`
+  (evidence `native/macos-finch/2026-11-20/driver-contract/` on the
+  `workflow` branch). Case 6: `warden clean` tore down a running build
+  of another `HOME`, because the driver's waiter is `finch container
+  wait <64-hex ID>` and the scan, looking for `warden-build-<id>`,
+  protects nothing on docker or finch; the design's `clean` row said
+  otherwise. Case 7: a named runtime that is not installed failed late,
+  with the runtime's `exec` error, leaving an output directory, as
+  `main` does; the design's `run` row said the probe refuses it "as
+  `newDriver` does today". Case 9: the suite's lifecycle tier failed on
+  finch; Jeff fixed it in `6590782`, and finch re-runs it at Publish.
+  `f3-implement-r2` returned the first two to Design (the third return,
+  so `wf back` escalated, FLOW-06).
+- **Jeff's decisions at `f1-escalate-3`** (2026-11-20 sitting,
+  recorded 2026-11-21 19:00 UTC), recorded here as `q3` and `q4`, both
+  answered: (1) `q3`, option (a): the waiter waits on the container by
+  name, and the scan counts it only while its parent is a live
+  `warden-driver-container`; an orphaned waiter is not live; `conmon`
+  and other runtime processes are not counted; Windows as before. (2)
+  `q4`: the probe refuses a named runtime that is missing or does not
+  answer, as a `fixable` error naming its source, before any output
+  directory exists, listed as Behaviour 20.
+- **What changed since the approval at `33a3563`** (each place marked
+  *r4*): Decisions 25 and 26, new, each with its alternatives and its
+  dropped fallback; **Questions**: `q3` and `q4`, answered, and a28,
+  new, assumed, not flagged, proceeding with (i) (`warden doctor` is
+  blocked by the same refusal); **The operations, per driver**: the
+  `run` row reworded (no longer "as `newDriver` does today") and the
+  `clean` row rewritten; **The conformance suite**: the Clean case;
+  **Behaviour**: 6 and 7 changed, 20 new, and the two closing lists;
+  **Defaults and overrides**: the `clean` row, and a row for a named
+  runtime that cannot be used; **Cross-driver impact**: the container
+  row; **Specification changes**: an r4 paragraph, saying that no
+  requirement of `v1.md` changes; **Validation plan**: the parse test,
+  the probe's cases, the grace check, and the `macos-finch` (6) and (7)
+  and `windows-hyperv` (5) cases; **Implementation plan**: step 9,
+  tasks 39 to 42, the rework of tasks 12, 14, 22, 25, 35 and 36.
+- **Jeff's `c81892d` and `fa1d28d`, reconciled.** Pushed after the
+  return, they make the failure after the build-exit grace a `fixable`
+  error whose fix names `build-output.log`, on every driver, from
+  `f6-validate-windows-hyperv` case 5. The approved design did not word
+  that failure, and its **Behaviour** said the container driver's error
+  lines keep their text; against `main` the message changes for
+  container and firecracker and becomes fixable there, and Hyper-V's
+  keeps its fix under `warden`'s wording. It is listed as a change to
+  Behaviour 7 and in the closing list, and *flagged for this review*:
+  it changes what a user sees beyond the approved design.
+- **What did not change.** No requirement of a specification
+  (`v1.md` and its schema stand; DRV-27 is tested as written), no rule
+  change (`rule_changes` and the eleven rules approved at `a6c8f0b` and
+  their wording are as approved), no impact field (`drivers`, `seams`,
+  `surfaces`, `security_boundary`, `alters_relationships`) and no
+  `native_validation` entry; `repos` and `areas` stay undeclared. The
+  queue's pending `f6-validate-*` steps are kept: `macos-finch`'s note
+  gains the r4 wording of cases 6 and 7, `windows-hyperv`'s case 5
+  gains the fix line; `container-any`, `qemu-any` and `macos-vz-r2` are
+  unchanged (Windows has no `ps`, and neither VM host is touched by r4).
+- **`design_review: required`.** A skip of a re-review needs, from the
+  approved commit, unchanged impact fields, `repos` and `areas`, no open
+  question and no rule changed (FLOW-19). The first three hold; the
+  fourth does not, since the branch has changed rules in
+  `docs/development/` since `33a3563` (the eleven approved rule
+  changes, tasks 26 to 33, and `main`'s merge `78a4a6e`). The delta
+  also changes what a user sees beyond what was approved (Behaviour 6's
+  last clause, 7's message, 20, a28), one part of which, `c81892d`,
+  was never decided as a design change. Jeff took the substance of `q3`
+  and `q4` at the escalation, so the review is of their wording here,
+  of a28, and of Behaviour 7's change; he records `approved at <sha>`,
+  and Plan then confirms tasks 39 to 42.
 
 ## Consolidation
 
