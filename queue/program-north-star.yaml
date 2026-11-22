@@ -5,7 +5,7 @@ kind: process
 state_step: 'Jeff''s setup, after the merge (program-north-star, Implementation plan, State step and What only Jeff can do, once): (1) config.yaml program_trunk: program/componentization on buildwarden/buildwarden, buildwarden/buildwarden-specs and each program repository he created, with hosts.yaml lines; (2) create each program trunk at main''s head on his word, in a new repository only once its CI and flow18 are on main and required (a18); (3) resumes: on each open hold; (4) program: true on driver-contract and relay-release-forms-spec; (5) file program-land (held) and specs-prerelease-tags; (6) program/records.yaml and the README schema; (7) wf status, QUEUE.md, wf commit. Outside the repository: create the program repositories (private, CI and flow18 on main, App, auto-delete head branches), merge specs-prerelease-tags, set program-trunk and tag rulesets, confirm the App may merge, change the nightly prompt''s ''Never merge''.'
 status: in_progress
 round: process
-phase: 3
+phase: 4
 design: docs/design/program-north-star.md
 branch: feat/program-north-star
 alters_relationships: null
@@ -32,7 +32,7 @@ steps:
   - id: x3-merge
     phase: 3
     affinity: cloud
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -44,6 +44,23 @@ steps:
       claimed_by: ""
       expires: null
     note: 'main at 136be78: 1 commit since the branch merged it; both change .github/workflows/main.yml, .github/workflows/release.yml, .goreleaser.yaml, AGENTS.md, CONTRIBUTING.md, docs/development/loop-profile.md, docs/development/orchestrator.md, docs/development/ux-cli-config.md, specs/README.md, specs/specs_test.go, tools/tier1/rules.yaml'
+  - id: x4-state
+    phase: 4
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Jeff''s setup, after the merge (program-north-star, Implementation plan, State step and What only Jeff can do, once): (1) config.yaml program_trunk: program/componentization on buildwarden/buildwarden, buildwarden/buildwarden-specs and each program repository he created, with hosts.yaml lines; (2) create each program trunk at main''s head on his word, in a new repository only once its CI and flow18 are on main and required (a18); (3) resumes: on each open hold; (4) program: true on driver-contract and relay-release-forms-spec; (5) file program-land (held) and specs-prerelease-tags; (6) program/records.yaml and the README schema; (7) wf status, QUEUE.md, wf commit. Outside the repository: create the program repositories (private, CI and flow18 on main, App, auto-delete head branches), merge specs-prerelease-tags, set program-trunk and tag rulesets, confirm the App may merge, change the nightly prompt''s ''Never merge''.'
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: pending
+    needs:
+      - x4-state
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -95,3 +112,9 @@ history:
   - at: 2026-11-22T21:57:00Z
     by: cloud/20261122T180143Z
     event: done x2-refresh
+  - at: 2026-11-22T21:58:31Z
+    by: cloud/20261122T180143Z
+    event: done x3-merge
+  - at: 2026-11-22T21:58:31Z
+    by: cloud/20261122T180143Z
+    event: entered phase 4 (close)
