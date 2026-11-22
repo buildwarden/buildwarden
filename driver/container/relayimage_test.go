@@ -49,6 +49,10 @@ func TestRelayImageShape(t *testing.T) {
 		for _, v := range passes {
 			t.Run(k.label+" passes "+v, func(t *testing.T) {
 				r := newRuntimeTest(t)
+				// Detection finds nothing, on any host: a real runtime's
+				// `info`, killed at its timeout, can leave a child holding
+				// the test's directory (windows-latest).
+				t.Setenv("PATH", t.TempDir())
 				r.configure(relayImageFile(k.table, v))
 				err := runtimeCommands[0].call(r)
 				if err != nil && !isRuntimeError(err) {
