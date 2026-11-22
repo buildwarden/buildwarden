@@ -104,7 +104,7 @@ func TestRuleChangeApprovalIsNotADesignApproval(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := approvals(d); len(got) != 0 {
+	if got := approvals(d, false); len(got) != 0 {
 		t.Fatalf("approvals = %v, want none", got)
 	}
 	m := ruleApprovedRe.FindAllStringSubmatch(d.Sections["Design review"], -1)

@@ -875,6 +875,15 @@ func (s *State) Add(f *Feature, now time.Time, by string) error {
 		f.Round, f.Phase = "tracked", 1
 	}
 	Seed(f)
+	if f.IsProcess() && s.Config.HasProgramTrunk() {
+		// While FLOW-20 stands a process item's Design is the cloud's; its
+		// review follows in phase 2 (the process test or the human's).
+		for i := range f.Steps {
+			if f.Steps[i].ID == StepID(f.Round, 1, "design") {
+				f.Steps[i].Affinity = "cloud"
+			}
+		}
+	}
 	want := f.Priority
 	s.Features = append(s.Features, f)
 	at := s.place(f, want)
@@ -1277,6 +1286,7 @@ func (s *State) Problems(f *Feature) []error {
 		bad("pr.head %q is not a commit id", f.PR.Head)
 	}
 	validateWork(f, bad)
+	s.validateReview(f, bad)
 	if f.Program && f.IsProcess() {
 		bad("program is for a feature: a process item keeps the trunk (FLOW-20)")
 	}
@@ -1459,8 +1469,9 @@ func (f *Feature) validate(bad func(string, ...any), tracked, homedHere bool) {
 		bad("status %q is not queued, in_progress or done", f.Status)
 	}
 	f.validateKind(bad, tracked, homedHere)
-	if !oneOf(f.DesignReview, "", "required", "skip") {
-		bad("design_review %q is not required or skip", f.DesignReview)
+	if !oneOf(f.DesignReview, "", "required", "skip", "umbrella", "process-test") {
+		bad("design_review %q is not required, skip, umbrella or process-test",
+			f.DesignReview)
 	}
 	if f.Phase < 0 || f.Phase > 8 {
 		bad("phase %d is outside 0..8", f.Phase)
@@ -1569,9 +1580,39 @@ func (f *Feature) OpenBlocking() []Question {
 	return out
 }
 
-// Runaway reports whether an open item has spent its runaway budget: the
-// runaway factor times its step estimate (FLOW-13). A done item never is.
-func (s *State) Runaway(f *Feature) bool {
+// validateReview checks the FLOW-20 values of design_review: umbrella only
+// on a program feature, process-test only on a process item, and either
+// only while a repository entry has a program trunk (FLOW-19, FLOW-20).
+func (s *State) validateReview(f *Feature, bad func(string, ...any)) {
+	switch {
+	case !oneOf(f.DesignReview, "umbrella", "process-test") || f.Status == "done":
+	case !s.Config.HasProgramTrunk():
+		bad("design_review %s is for FLOW-20, and no repository has a program trunk",
+			f.DesignReview)
+	case f.DesignReview == "umbrella" && (!f.Program || f.IsProcess()):
+		bad("design_review umbrella is for a program feature (FLOW-20)")
+	case f.DesignReview == "process-test" && !f.IsProcess():
+		bad("design_review process-test is for a process item (FLOW-20)")
+	}
+}
+
+// reestimated is the history line wf reestimate writes.
+const reestimated = "re-estimated (FLOW-13)"
+
+// Reestimates counts the item's re-estimates by wf reestimate.
+func (f *Feature) Reestimates() int {
+	n := 0
+	for _, e := range f.History {
+		if strings.HasPrefix(e.Event, reestimated) {
+			n++
+		}
+	}
+	return n
+}
+
+// spentBudget reports whether an open item has spent its runaway budget: the
+// runaway factor times its step estimate (FLOW-13).
+func (s *State) spentBudget(f *Feature) bool {
 	if f.Status == "done" {
 		return false
 	}
@@ -1581,6 +1622,41 @@ func (s *State) Runaway(f *Feature) bool {
 	}
 	est := f.Budget.Estimate.Steps
 	return est > 0 && float64(f.Budget.Spent.Steps) >= factor*float64(est)
+}
+
+// Runaway reports whether an open item is a runaway that escalates to the
+// human (FLOW-13): it has spent its runaway budget, and it is not a program
+// item that has not been re-estimated yet, whose first runaway the loop
+// answers with wf reestimate (FLOW-20). A done item never is.
+func (s *State) Runaway(f *Feature) bool {
+	return s.spentBudget(f) && !s.NeedsReestimate(f)
+}
+
+// NeedsReestimate reports whether a program item has spent its runaway
+// budget for the first time: the tick raises its estimate with wf
+// reestimate before it claims anything else, and it waits on no one
+// (FLOW-13, FLOW-20).
+func (s *State) NeedsReestimate(f *Feature) bool {
+	return f.Program && s.spentBudget(f) && f.Reestimates() == 0
+}
+
+// Reestimate raises the item's step estimate to its spend so far and logs
+// it (wf reestimate). A cloud worker may only answer a program item's first
+// runaway; any other re-estimate is the human's (FLOW-13, FLOW-20).
+func (s *State) Reestimate(f *Feature, worker string, now time.Time) error {
+	human := Kind(worker) == "human"
+	switch {
+	case !human && !s.NeedsReestimate(f):
+		return fmt.Errorf("%s: only a program item's first runaway is re-estimated by "+
+			"the loop; any other is the human's (FLOW-13, FLOW-20)", f.Feature)
+	case f.Status == "done":
+		return fmt.Errorf("%s is done", f.Feature)
+	}
+	was := f.Budget.Estimate.Steps
+	f.Budget.Estimate.Steps = f.Budget.Spent.Steps
+	f.Log(now, worker, "%s: estimate raised from %d to %d steps, its spend so far",
+		reestimated, was, f.Budget.Estimate.Steps)
+	return nil
 }
 
 // Step returns the feature's step with the given id.

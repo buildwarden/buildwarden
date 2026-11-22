@@ -31,6 +31,8 @@
 //	            [-repository OWNER/NAME] [-head SHA] [-ref REF]
 //	wf record   -state DIR -list [-since TIME]
 //	wf program-body -state DIR [-repository OWNER/NAME]
+//	wf reestimate -state DIR -worker W -feature F
+//	wf review-human -state DIR -worker W -feature F -why TEXT
 //	wf move     -state DIR -worker human/NAME -feature F -to N [-why TEXT]
 //	wf urgent   -state DIR -worker human/NAME -feature F [-clear]
 //	wf state-step -state DIR -worker human/NAME -feature F (-note TEXT | -clear)
@@ -132,6 +134,19 @@
 // merge; QUEUE.md lists the last week's under Decided for you, and record
 // -list prints them for the run's digest. program-body renders a repository's
 // records as the body of the pull request that lands its program trunk.
+//
+// While a repository entry has a program trunk (FLOW-20), Design records
+// design_review: umbrella for a program feature it judges to pass the
+// umbrella test, which seeds the cloud step f2-umbrella in place of the
+// human's f2-design-review, and a process item's Design, which is cloud,
+// records process-test or required, which seeds x2-process-test (cloud) or
+// x2-design-review (human) for x2-implement to wait for. done on any of them
+// requires the approval line: "approved at", "umbrella test passed at" or,
+// on a process item, "process test passed at". review-human sends a pending
+// umbrella test or process test to the human's design review. A program
+// item escalates at its fifth return to Design, and its first runaway is
+// answered by reestimate, which raises its estimate to its spend so far and
+// is the cloud's only then; status names an item that needs it.
 //
 // new -lead, and lead for an item already queued or in progress, name the
 // host name whose machines take a feature's cloud steps of Branch setup
@@ -486,6 +501,7 @@ func run(cmd string, args []string, now time.Time) error {
 		"answer": answer, "back": back, "new": newFeature, "move": move, "urgent": urgent,
 		"lead": lead, "state-step": stateStep, "hold": hold, "trunk": trunkCmd,
 		"sync-program": syncProgram, "record": record, "program-body": programBody,
+		"reestimate": reestimate, "review-human": reviewHuman,
 		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
 		"declare": declareItem, "relate": relate, "relations": relations,
 		"digest": digest, "areas": areasCmd, "native": native,
@@ -658,6 +674,9 @@ func status(s *queue.State, o opts) error {
 		}
 		if f.Lead != "" {
 			fmt.Printf("\t  lead: %s\n", f.Lead)
+		}
+		if s.NeedsReestimate(f) {
+			fmt.Printf("\t  first runaway: wf reestimate (FLOW-13, FLOW-20)\n")
 		}
 		for _, q := range f.Questions {
 			if q.Status == "open" {
@@ -877,8 +896,8 @@ func finish(s *queue.State, f *queue.Feature, st *queue.Step, o opts) error {
 	if err := queue.Early(f, st); err != nil {
 		return err
 	}
-	if queue.IsDesignReview(st) && !printResults(check.Review(env(s, o), f)) {
-		return fmt.Errorf("%s has no recorded approval (FLOW-19)", st.ID)
+	if queue.IsReviewGate(st) && !printResults(check.Review(env(s, o), f)) {
+		return fmt.Errorf("%s has no recorded approval (FLOW-19, FLOW-20)", st.ID)
 	}
 	if queue.IsGate(f, st) && !runChecks(s, o, f) {
 		return fmt.Errorf("%s done-when not met; phase stays %d (FLOW-03)", st.ID,
@@ -1102,6 +1121,50 @@ func record(s *queue.State, o opts) error {
 	}
 	fmt.Printf("recorded\t%s\t%s\n", r.Kind, orDash(r.Feature))
 	return nil
+}
+
+// reestimate is wf reestimate: a program item's first runaway raises its
+// estimate to its spend so far, recorded; any other re-estimate is the
+// human's (FLOW-13, FLOW-20).
+func reestimate(s *queue.State, o opts) error {
+	f, err := s.Find(o.feature)
+	if err != nil {
+		return err
+	}
+	if o.worker == "" {
+		return errors.New("reestimate needs -worker")
+	}
+	if err := s.Reestimate(f, o.worker, o.now); err != nil {
+		return err
+	}
+	if err := s.Save(f); err != nil {
+		return err
+	}
+	if f.Program {
+		if err := queue.AppendRecord(o.state, queue.Record{At: o.now, By: o.worker,
+			Kind: "re-estimate", Feature: f.Feature,
+			Note: f.History[len(f.History)-1].Event}); err != nil {
+			return err
+		}
+	}
+	fmt.Printf("reestimated\t%s\t%d steps\n", f.Feature, f.Budget.Estimate.Steps)
+	return nil
+}
+
+// reviewHuman is wf review-human: a design the umbrella test or the process
+// test did not settle goes to the human's design review (FLOW-19, FLOW-20).
+func reviewHuman(s *queue.State, o opts) error {
+	f, err := s.Find(o.feature)
+	if err != nil {
+		return err
+	}
+	if o.worker == "" {
+		return errors.New("review-human needs -worker")
+	}
+	if err := queue.ToHumanReview(f, o.why, o.worker, o.now); err != nil {
+		return err
+	}
+	return s.Save(f)
 }
 
 // programBody is wf program-body: the program records of a repository as

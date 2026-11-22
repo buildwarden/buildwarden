@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/buildwarden/buildwarden/tools/workflow/queue"
 )
 
 // programHere is config.yaml with o/here's program trunk recorded.
@@ -102,4 +104,25 @@ func TestRecordCommands(t *testing.T) {
 	if !strings.Contains(body, "### merge (1)") || !strings.Contains(body, "### return (1)") {
 		t.Fatalf("wf program-body = %q", body)
 	}
+}
+
+// TestReestimateCommand: wf reestimate answers a program item's first
+// runaway for the cloud and records it; a second is refused to the cloud
+// (FLOW-13, FLOW-20).
+func TestReestimateCommand(t *testing.T) {
+	dir := stateDir(t, programHere)
+	queued(t, dir, "p", "1", "-program")
+	refused(t, dir, "only a program item's first runaway", "reestimate", "-worker",
+		"cloud/run", "-feature", "p")
+	edit(t, dir, "p", func(f *queue.Feature) { f.Budget.Spent.Steps = 18 })
+	if got := must(t, dir, "reestimate", "-worker", "cloud/run", "-feature", "p"); got !=
+		"reestimated\tp\t18 steps\n" {
+		t.Fatalf("wf reestimate = %q", got)
+	}
+	if got := must(t, dir, "record", "-list"); !strings.Contains(got, "re-estimate **p**") {
+		t.Fatalf("records = %q", got)
+	}
+	edit(t, dir, "p", func(f *queue.Feature) { f.Budget.Spent.Steps = 36 })
+	refused(t, dir, "only a program item's first runaway", "reestimate", "-worker",
+		"cloud/run", "-feature", "p")
 }

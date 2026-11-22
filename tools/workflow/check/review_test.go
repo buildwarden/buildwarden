@@ -61,10 +61,10 @@ func TestApprovalsAreEntryScoped(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := approvals(d); !slices.Equal(got, tc.want) {
+		if got := approvals(d, false); !slices.Equal(got, tc.want) {
 			t.Errorf("%s: approvals = %v, want %v", tc.name, got, tc.want)
 		}
-		last, ok := lastApproval(d)
+		last, ok := lastApproval(d, false)
 		if want := len(tc.want) > 0; ok != want ||
 			(ok && last != tc.want[len(tc.want)-1]) {
 			t.Errorf("%s: lastApproval = %q, %v", tc.name, last, ok)

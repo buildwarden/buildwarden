@@ -232,9 +232,15 @@ func (s *State) target(f *Feature, d Declaration) Declaration {
 	if !f.IsProcess() {
 		return d
 	}
+	review := f.DesignReview
+	if s.Config.HasProgramTrunk() {
+		// While FLOW-20 stands a process item's Design records which review
+		// settles it: the process test or the human's (FLOW-20).
+		review = d.DesignReview
+	}
 	return Declaration{Repos: d.Repos, Areas: f.Areas, Seams: f.Seams,
 		RulesChanged: f.RulesChanged, Alters: f.AltersRelationships,
-		DesignReview: f.DesignReview, MergeFirst: d.MergeFirst, Live: d.Live}
+		DesignReview: review, MergeFirst: d.MergeFirst, Live: d.Live}
 }
 
 // declarable applies the rule for where the item is and who asks. For an

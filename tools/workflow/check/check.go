@@ -227,14 +227,25 @@ func (c *checker) consolidationNamesMain() {
 // reviewed, x2 archived on the pushed branch with its PR green (the FLOW-14
 // clearance reports it exempt), x3 merged by a human, x4 closed.
 func (c *checker) process() {
+	flow20 := c.state().Config.HasProgramTrunk() || c.f.DesignReview == "process-test"
 	switch c.f.Phase {
 	case 1:
 		_, err := c.git("cat-file", "-e", "refs/heads/"+c.f.Branch+":"+c.f.Design)
 		c.add("design present (FLOW-01)", err == nil, "%s on %s", c.f.Design, c.f.Branch)
+		if flow20 {
+			c.processReviewDecided()
+			break
+		}
 		c.reviewed()
 	case 2:
 		if c.mergedEarly() {
 			break
+		}
+		if c.f.DesignReview == "process-test" || c.f.DesignReview == "required" {
+			// Implement starts from what the process test or the human
+			// approved: a later change to rule_changes, repos or areas
+			// needs a new pass (FLOW-19, FLOW-20).
+			c.approvalDelta()
 		}
 		c.pushed()
 		c.each(c.ruleClearance)
@@ -245,6 +256,23 @@ func (c *checker) process() {
 	case 4:
 		c.closed()
 	}
+}
+
+// processReviewDecided is a process item's Design done-when while FLOW-20
+// stands: the design records whether the process test or the human's design
+// review settles it, and the queue records the same (FLOW-03, FLOW-20).
+func (c *checker) processReviewDecided() {
+	d, err := c.loadDesign(c.f.Branch)
+	if err != nil {
+		c.add("design_review decided (FLOW-19, FLOW-20)", false, "%v", err)
+		return
+	}
+	dr := d.Front.DesignReview
+	c.add("design_review decided (FLOW-19, FLOW-20)",
+		dr == "process-test" || dr == "required",
+		"design_review %q: process-test, or required for the human's review", dr)
+	c.add("design_review recorded in queue", dr != "" && dr == c.f.DesignReview,
+		"design %q, queue %q", dr, c.f.DesignReview)
 }
 
 // OK reports whether every result passed.

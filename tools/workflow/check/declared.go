@@ -74,7 +74,7 @@ func Declarations(env Env, f *queue.Feature) (queue.Declaration, error) {
 		return queue.Within{Areas: fm.Areas, Drivers: fm.Drivers, Surfaces: fm.Surfaces,
 			RulePaths: fm.rulePaths()}
 	}
-	switch base, ok := lastApproval(d); {
+	switch base, ok := lastApproval(d, f.IsProcess()); {
 	case ok:
 		prev, err := c.loadDesign(base)
 		if err != nil {

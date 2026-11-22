@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -56,9 +57,12 @@ var templates = map[string][][]template{
 		{{"branch-setup", "cloud", nil, false}},
 		{{"design", "cloud", nil, false}},
 		// The design review is seeded unless Design recorded a valid skip
-		// (FLOW-19); see seeded. Plan waits for its approval.
+		// (FLOW-19), and the umbrella test in its place for a program item
+		// whose Design recorded umbrella (FLOW-20); see seeded. Plan waits
+		// for the approval.
 		{{"design-review", "human", nil, false},
-			{"plan", "cloud", []string{"design-review"}, false}},
+			{"umbrella", "cloud", nil, false},
+			{"plan", "cloud", []string{"design-review", "umbrella"}, false}},
 		{{"implement", "cloud", nil, false}},
 		{{"review", "cloud", nil, false}},
 		{{"guide", "cloud", nil, false}},
@@ -74,11 +78,16 @@ var templates = map[string][][]template{
 	},
 	// A process item changes the rules the loops run under. Its design is
 	// the human's (the design review, FLOW-19); after that the loop works on
-	// the branch, and the human's merge is the sign-off (FLOW-14).
+	// the branch, and the human's merge is the sign-off (FLOW-14). While
+	// FLOW-20 stands its Design is the cloud's, and phase 2 seeds the process
+	// test or the human's design review, as Design recorded, which
+	// x2-implement waits for; see seeded and processAffinity.
 	"process": {
 		nil,
 		{{"design", "human", nil, false}},
-		{{"implement", "cloud", nil, false}},
+		{{"process-test", "cloud", nil, false},
+			{"design-review", "human", nil, false},
+			{"implement", "cloud", []string{"process-test", "design-review"}, false}},
 		{{"merge", "cloud", nil, false}},
 		{{"close", "cloud", nil, true}},
 	},
@@ -92,10 +101,38 @@ var templates = map[string][][]template{
 	},
 }
 
-// seeded reports whether the template step belongs in the feature's phase:
-// every step but a design review that Design recorded as skipped.
+// seeded reports whether the template step belongs in the item's phase. A
+// feature's design review is seeded unless Design recorded skip or umbrella,
+// and its umbrella test only for umbrella. A process item's process test is
+// seeded for process-test and its phase-2 design review for required, both
+// recorded by its Design while FLOW-20 stands; with neither, phase 2 is
+// x2-implement alone, as before FLOW-20. The choice is made when the phase
+// is entered, after Design has recorded it.
 func seeded(f *Feature, t template) bool {
-	return t.name != "design-review" || f.DesignReview != "skip"
+	switch {
+	case f.Round == "process" && t.name == "process-test":
+		return f.DesignReview == "process-test"
+	case f.Round == "process" && t.name == "design-review":
+		return f.DesignReview == "required"
+	case t.name == "design-review":
+		return f.DesignReview != "skip" && f.DesignReview != "umbrella"
+	case t.name == "umbrella":
+		return f.DesignReview == "umbrella"
+	}
+	return true
+}
+
+// processAffinity is a process item's x1-design affinity: cloud once its
+// Design recorded the FLOW-20 route (process-test, or required for the
+// human's review in phase 2), so a design entered again stays the cloud's;
+// otherwise the template's. Add sets it cloud for a new item while a program
+// trunk is configured.
+func processAffinity(f *Feature, t template) string {
+	if f.Round == "process" && t.name == "design" &&
+		(f.DesignReview == "process-test" || f.DesignReview == "required") {
+		return "cloud"
+	}
+	return t.affinity
 }
 
 // roundLetters prefix step ids: f1-design, f6-open-pr, x3-merge, t1-work. The
@@ -204,11 +241,26 @@ func IsGate(f *Feature, st *Step) bool {
 	return true
 }
 
-// IsDesignReview reports whether the step is a feature's design review
-// (FLOW-19), seeded in phase 2 from the template.
+// IsDesignReview reports whether the step is a design review seeded in phase
+// 2 from the template (FLOW-19): a feature's, or a process item's while
+// FLOW-20 stands.
 func IsDesignReview(st *Step) bool {
 	r, ok := stepTemplates(st.ID)
-	return ok && r.round == "feature" && r.phase == 2 && r.name == "design-review"
+	return ok && (r.round == "feature" || r.round == "process") && r.phase == 2 &&
+		r.name == "design-review"
+}
+
+// IsUmbrella reports whether the step is a program feature's umbrella test,
+// f2-umbrella, which takes its design review in the human's place (FLOW-20).
+func IsUmbrella(st *Step) bool {
+	r, ok := stepTemplates(st.ID)
+	return ok && r.round == "feature" && r.phase == 2 && r.name == "umbrella"
+}
+
+// IsReviewGate reports whether wf done runs the design's approval check on
+// the step: a design review, an umbrella test or a process test.
+func IsReviewGate(st *Step) bool {
+	return IsDesignReview(st) || IsUmbrella(st) || IsProcessTest(st)
 }
 
 // IsProcessTest reports whether the step is a process item's process test,
@@ -463,7 +515,7 @@ func Seed(f *Feature) {
 			continue
 		}
 		st := Step{ID: StepID(f.Round, f.Phase, t.name) + suffix, Phase: f.Phase,
-			Affinity: f.leads(f.Phase, t.affinity), Status: "pending"}
+			Affinity: f.leads(f.Phase, processAffinity(f, t)), Status: "pending"}
 		for _, n := range t.needs {
 			if in[n] {
 				st.Needs = append(st.Needs, StepID(f.Round, f.Phase, n)+suffix)
@@ -554,6 +606,40 @@ func (f *Feature) hasStep(id string) bool {
 	return err == nil
 }
 
+// ToHumanReview sends a design the umbrella test or the process test did not
+// settle to the human's review: a failed component-design point (U1 to U5)
+// or a failed or doubted P2 (FLOW-20). The pending f2-umbrella or
+// x2-process-test gives way to a human design review with the same id
+// suffix, which the phase's gate needs in its place, and design_review
+// becomes required. The design's own front matter is changed to match by
+// the session, so the queue and the design agree (FLOW-03).
+func ToHumanReview(f *Feature, why, by string, now time.Time) error {
+	if strings.TrimSpace(why) == "" {
+		return errors.New("say which point failed and why (FLOW-20)")
+	}
+	for i := range f.Steps {
+		st := &f.Steps[i]
+		if st.Status != "pending" || (!IsUmbrella(st) && !IsProcessTest(st)) {
+			continue
+		}
+		r, _ := stepTemplates(st.ID)
+		old := st.ID
+		st.ID = StepID(f.Round, 2, "design-review") + r.suffix
+		st.Affinity, st.Lease, st.Note = "human", Lease{}, why
+		for j := range f.Steps {
+			for k, n := range f.Steps[j].Needs {
+				if n == old {
+					f.Steps[j].Needs[k] = st.ID
+				}
+			}
+		}
+		f.DesignReview = "required"
+		f.Log(now, by, "%s: to the human's design review (FLOW-19, FLOW-20): %s", old, why)
+		return nil
+	}
+	return fmt.Errorf("%s has no pending umbrella test or process test", f.Feature)
+}
+
 // Back returns the feature to an earlier phase with the finding recorded:
 // Design (FLOW-06), or Implement when Publish's consolidation finds work the
 // plan already covers (FLOW-10). It drops the pending steps of the target
@@ -604,13 +690,20 @@ func Back(f *Feature, by string, now time.Time, finding string, to int) {
 	}
 	f.Log(now, by, "back to design: %s", finding)
 	Seed(f)
-	if returns >= 2 {
+	// A program item escalates later: its fifth return, more than four
+	// (FLOW-06, FLOW-20).
+	most := 2
+	if f.Program {
+		most = 4
+	}
+	if returns >= most {
 		id := StepID(f.Round, 1, fmt.Sprintf("escalate-%d", returns+1))
 		gate := &f.Steps[len(f.Steps)-1]
 		gate.Needs = append(gate.Needs, id)
 		f.Steps = append(f.Steps, Step{
 			ID: id, Phase: 1, Affinity: "human", Status: "pending",
-			Note: "Returned to Design more than twice (FLOW-06): the human decides."})
+			Note: fmt.Sprintf("Returned to Design more than %s (FLOW-06): the human "+
+				"decides.", map[int]string{2: "twice", 4: "four times"}[most])})
 	}
 }
 

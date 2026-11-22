@@ -550,7 +550,7 @@ func TestApprovalMayWrap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := approvals(d); len(got) != 1 || got[0] != "abc1234" {
+	if got := approvals(d, false); len(got) != 1 || got[0] != "abc1234" {
 		t.Fatalf("approvals = %v", got)
 	}
 }
