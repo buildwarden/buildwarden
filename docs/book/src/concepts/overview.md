@@ -224,8 +224,9 @@ The image's own `ENTRYPOINT` never runs, and nothing from the image exists
 until the network is already isolated. The holder and sidecar images are
 published with each release and run by digest.
 
-`warden shell` does the same with `initialize --hold`, then opens a shell in the
-held environment.
+`warden shell` does the same with `initialize --hold`, starts the same waiter,
+whose exit it does not report, and opens a shell in the held environment once
+setup is done; the session ends when warden stops it.
 
 ## VM drivers (`driver/qemu`, `driver/hyperv`, `driver/vz`, `driver/firecracker`)
 

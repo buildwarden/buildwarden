@@ -405,9 +405,9 @@ the command before anything is listed or removed
 ([Configuration](configuration.md#the-container-runtime)); under
 `firecracker` and `hyperv` the setting is not read.
 
-Under the container driver a running build is left alone while its
-`warden-driver-container` runs, even another user's, whose lock is not in
-your lock directory: clean lists every user's processes and keeps a build
+Under the container driver a running build, a `warden shell` session
+included, is left alone while its `warden-driver-container` runs, even
+another user's, whose lock is not in your lock directory: clean lists every user's processes and keeps a build
 whose driver still waits on its `warden-build-<id>` container. A build whose
 `warden` and driver were both killed is removed, although its containers may
 still be running. On Windows, which has no `ps`, only the lock keeps a

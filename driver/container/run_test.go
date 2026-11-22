@@ -1,7 +1,9 @@
 package container
 
 import (
+	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -122,6 +124,60 @@ func TestHeldStart(t *testing.T) {
 	if !strings.Contains(string(calls), "container exec warden-build-k3v9x2ab test -f "+
 		shellEnvFile) {
 		t.Errorf("waitHeld did not look for %s:\n%s", shellEnvFile, calls)
+	}
+}
+
+// heldHost is a driver.Host whose Started is recorded and whose Wait returns
+// once stop is closed.
+type heldHost struct {
+	driver.Host
+	started chan struct{}
+	stop    chan struct{}
+}
+
+func (h *heldHost) Started() error { close(h.started); return nil }
+
+func (h *heldHost) Wait(ctx context.Context) string {
+	select {
+	case <-h.stop:
+	case <-ctx.Done():
+	}
+	return "shell-exited"
+}
+
+// A held run starts the waiter on the build container by name, as mode build
+// does, so that clean's process scan keeps a running shell session of
+// another user's (DRV-27).
+func TestHoldStartsTheWaiter(t *testing.T) {
+	_, log := fakeCLI(t, `"container exec") exit 0 ;;
+"container wait") sleep 1; echo 0 ;;`)
+	b := &build{buildID: "k3v9x2ab", buildContainer: "warden-build-k3v9x2ab",
+		req: &driver.BuildRequest{Stderr: io.Discard}}
+	h := &heldHost{started: make(chan struct{}), stop: make(chan struct{})}
+	done := make(chan error, 1)
+	go func() { done <- b.hold(t.Context(), h) }()
+	select {
+	case <-h.started:
+	case err := <-done:
+		t.Fatalf("hold = %v before the environment was started", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the held environment was not reported started")
+	}
+	want := "container wait warden-build-k3v9x2ab"
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		calls, _ := os.ReadFile(log)
+		if strings.Contains(string(calls), want) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no waiter %q was started:\n%s", want, calls)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	close(h.stop)
+	if err := <-done; err != nil {
+		t.Fatalf("hold = %v once warden stopped it", err)
 	}
 }
 

@@ -124,14 +124,26 @@ func (d *runner) Run(ctx context.Context, req *driver.BuildRequest, start *drive
 	return nil, nil
 }
 
-// runHeld starts the build container held, waits until initialize --hold
-// has finished setup, and reports the environment started, so that Attach
-// can enter it; it returns when host.Wait does. A stop that comes during the
-// setup ends the wait for it.
+// runHeld starts the build container held and then holds it (hold).
 func (b *build) runHeld(ctx context.Context, host driver.Host) error {
 	if err := b.startEnvironment(true); err != nil {
 		return err
 	}
+	return b.hold(ctx, host)
+}
+
+// hold starts the waiter on the running held container, waits until
+// initialize --hold has finished setup, and reports the environment started,
+// so that Attach can enter it; it returns when host.Wait does. A stop that
+// comes during the setup ends the wait for it.
+//
+// The waiter is the same as mode build's, so that clean's process scan keeps
+// a shell session while this driver runs (liveBuilds), but its result is not
+// reported: a held container that stops during setup fails the wait for it,
+// and after setup the session ends when warden stops it (DRV-53). The waiter
+// returns once teardown removes the container.
+func (b *build) hold(ctx context.Context, host driver.Host) error {
+	go b.containerWait()
 	wctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	stopped := make(chan struct{})
