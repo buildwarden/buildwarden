@@ -1,9 +1,9 @@
 feature: driver-contract
 title: 'The driver command contract, its suite and the kit: warden runs a driver binary, the container driver is one, and every build runs through warden''s build sequence (componentization K1)'
-priority: 5
+priority: 2
 status: in_progress
 round: feature
-phase: 7
+phase: 8
 design: docs/design/driver-contract.md
 branch: feat/driver-contract
 seams:
@@ -297,6 +297,13 @@ steps:
       expires: null
   - id: f7-merge
     phase: 7
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
     affinity: cloud
     status: pending
     lease:
@@ -1085,3 +1092,9 @@ history:
   - at: 2026-11-22T21:38:00Z
     by: cloud/20261122T180143Z
     event: entered phase 7 (merge)
+  - at: 2026-11-22T21:39:10Z
+    by: cloud/20261122T180143Z
+    event: done f7-merge
+  - at: 2026-11-22T21:39:10Z
+    by: cloud/20261122T180143Z
+    event: entered phase 8 (close)
