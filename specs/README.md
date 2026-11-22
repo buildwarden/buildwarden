@@ -20,11 +20,27 @@ specs/
   metadata-<name>/v<N>.schema.json   ... and its machine schema, beside it
   environment-<type>/v<N>.md     a signed environment payload's document
   environment-<type>/v<N>.schema.json  ... and its machine schema, beside it
+  build-ledger/v<N+1>.md         a working draft of the next major version, on a program trunk only
 ```
 
 A schema and its document share a major version and change together; a new
 major version adds `v<N+1>.schema.json` and `v<N+1>.md` beside the old pair,
 which stays for ledgers already written.
+
+While the componentization program runs (FLOW-20), the next major version of
+the ledger format, or of a schema it adds or changes, may be developed as a
+*working draft* beside the current one, on a program trunk only. Each draft
+document opens with this status block:
+
+> **Working draft, unreleased (FLOW-20).** Not a released version of the
+> ledger format. No released or pre-released build writes it; it may change
+> until the program lands, when it is finalized as v<N>.
+
+and the Documents list below names it "v<N> (working draft, unreleased)". Only
+tests and conformance suites write a draft; every ledger a release wrote is
+v1. A draft reaches `main` only finalized, when the program lands:
+`specs/specs_test.go` fails a document with the status block on a pull
+request or push to `main`.
 
 ## Documents
 
