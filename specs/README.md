@@ -4,6 +4,10 @@ The BuildWarden ledger format, versioned and long-lived (RELAY-05). The relay
 is a reference implementation of these documents; a third-party reader or
 writer needs nothing else.
 
+The driver contract, how an orchestrator such as `warden` runs a driver
+binary, is specified here too, in `driver-contract/`, until it moves to the
+specifications repository with its conformance suite.
+
 The specifications of BuildWarden's other component seams (the claim, the
 collector, the relay's guest API, the executor's `initialize` and the bootstrap
 config) are kept in their own repository; the
@@ -20,6 +24,8 @@ specs/
   metadata-<name>/v<N>.schema.json   ... and its machine schema, beside it
   environment-<type>/v<N>.md     a signed environment payload's document
   environment-<type>/v<N>.schema.json  ... and its machine schema, beside it
+  driver-contract/v<N>.md        the driver contract, one per contract version
+  driver-contract/v<N>.schema.json   ... and the schema of its JSON documents
   build-ledger/v<N+1>.md         a working draft of the next major version, on a program trunk only
 ```
 
@@ -45,6 +51,11 @@ request or push to `main`.
 ## Documents
 
 - [Ledger wire format, v1](build-ledger/v1.md)
+- [Driver contract, v1](driver-contract/v1.md), with the schema of its JSON
+  documents, [`v1.schema.json`](https://github.com/buildwarden/buildwarden/blob/main/specs/driver-contract/v1.schema.json)
+  (`$id`
+  `https://github.com/buildwarden/buildwarden/specs/driver-contract/v1.schema.json`).
+  Its examples are checked against the schema by `specs/specs_test.go`.
 
 | `$id` | Document | Machine schema |
 |-------|----------|----------------|

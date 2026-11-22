@@ -11,9 +11,14 @@ import (
 
 func hostSupported() error { return unsupportedHost(runtime.GOOS, runtime.GOARCH) }
 
-// StartBuild implements driver.Driver. Firecracker needs Linux KVM, so on
-// this host it returns a fixable error.
-func (d *Driver) StartBuild(context.Context, *driver.BuildRequest) (*driver.BuildResult, error) {
+// Preflight is the firecracker driver's probe. Firecracker needs Linux KVM,
+// so on this host it returns a fixable error.
+func (d *Driver) Preflight(*driver.BuildRequest) error { return hostSupported() }
+
+// Run is the firecracker driver's run. Firecracker needs Linux KVM, so on
+// this host it returns a fixable error and reports nothing.
+func (d *Driver) Run(context.Context, *driver.BuildRequest, *driver.Start,
+	driver.Host) ([]string, error) {
 	return nil, hostSupported()
 }
 

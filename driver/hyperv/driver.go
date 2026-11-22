@@ -18,7 +18,7 @@ package hyperv
 // avoid per-build network standup (which requires full Administrator).
 const DefaultDevSwitch = "warden-dev"
 
-// Driver implements driver.Driver using Hyper-V as the backend. Windows only
+// Driver is the hyperv driver, with Hyper-V as the backend. Windows only
 // (Pro/Enterprise/Server with the Hyper-V role enabled).
 type Driver struct {
 	// Verbose enables VM console output.
@@ -32,6 +32,3 @@ type Driver struct {
 
 // New returns a Hyper-V driver.
 func New() *Driver { return &Driver{} }
-
-// Name implements driver.Driver.
-func (d *Driver) Name() string { return "hyperv" }

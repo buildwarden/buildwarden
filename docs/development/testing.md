@@ -142,6 +142,12 @@ have no cases yet.
 The automated part is the `conformance` workflow and `make test`; the
 agent part judges whether a seam change added its cases to the suite.
 
+The driver contract carries a conformance suite that runs against a driver
+binary (`conformance/driver/`), so a driver written by anyone, in any
+language, has something to verify against. Its static tier runs in tier 0
+against every driver binary this repository builds; its lifecycle tier runs
+real builds on a host that can run the driver (TEST-02).
+
 ---
 
 ### TEST-06 — Coverage is signal, not a target

@@ -3000,3 +3000,27 @@ was opened.
   the queue item (Implementation plan, **State step**), and outside the
   repository **What only Jeff can do, once**. config-lookup-test-symlinked-tmp
   has since merged (#134), so the state step's line about it needs no action.
+- **Refresh** (2026-11-22, `x2-refresh`): merged `main` at `136be78`
+  (#135, driver-contract, componentization K1, whose rule changes were
+  approved at `a6c8f0b`). Two conflicts. `loop-profile.md`'s
+  **Specifications** row: K1 rewrote the row's opening (the driver
+  contract in `specs/driver-contract/`, its suite in `conformance/driver/`)
+  and left its last sentence as it was; PROFILE-01's amendment replaces
+  only that sentence ("Each pin is a release tag ..."), so the approved
+  wording is applied unchanged on top of K1's row, and K1's new
+  **Impact vocabulary** sentence stays. `specs/README.md`'s Layout: K1's
+  two `driver-contract/` lines and this item's working-draft line, all
+  kept. Everything else both sides changed merged without conflicts, each
+  side in its own paragraph or entry: K1's ORCH-01, ORCH-02 and ORCH-04
+  text and its paragraph after ORCH-03's amended sentence; UX-08's list
+  beside the UX-03 amendment; `AGENTS.md`'s rows; `CONTRIBUTING.md`;
+  `main.yml`'s `driver-contract` job beside the `'program/**'` triggers;
+  `release.yml`'s comment beside the `--exclude '*-*'` tier-1 base;
+  `.goreleaser.yaml`'s `warden-driver-container` build beside the
+  pre-release settings, which now cover its archive too; K1's driver
+  contract checks beside `checkDrafts` in `specs/specs_test.go`; and both
+  sides' entries in `tools/tier1/rules.yaml`. No approved wording had to
+  be adapted. The working draft covers the ledger format and its schemas
+  only, as approved; a draft of the driver contract's next version is not
+  one, and `checkDrafts`, which reads every `specs/*/v*.md`, still keeps a
+  draft status block off `main`.

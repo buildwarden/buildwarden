@@ -13,7 +13,7 @@ and the process for designing, reviewing and merging a feature is
 - Go at the version in `go.mod` (we manage it with [mise](https://mise.jdx.dev/);
   run `mise exec -- go ...` if your `GOROOT` is misconfigured)
 - golangci-lint v2
-- A container runtime: finch, docker, or podman
+- A container runtime: finch, podman, or docker
 - git 2.40 or later where the feature loop's `wf` runs: its merge check
   proves a squash merge with `git merge-tree --merge-base`, and with an
   older git it leaves the branch unconfirmed and says why
@@ -58,6 +58,12 @@ make tidy                # go mod tidy
 make cover               # Tests with a coverage report
 make deadcode            # Code unreachable on Linux, macOS and Windows
 make integration-test    # Real builds plus ledger checks; needs a container runtime
+make driver-conformance  # The driver suite's both tiers against DRIVER (default:
+                         #   dist/warden-driver-container, .exe on Windows); the lifecycle tier runs
+                         #   real builds; DRIVER_CONFORMANCE_FLAGS for the host;
+                         #   a case still running after the slowest case's
+                         #   worst path (3 h) fails as hung and ends the tier;
+                         #   --case-deadline <duration> changes it
 make integration-test-vz # VZ end to end; needs macOS/arm64 and a prepared image
 make clean               # Remove built binaries
 ```

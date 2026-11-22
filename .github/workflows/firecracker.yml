@@ -13,6 +13,7 @@ on:
       - 'driver/relayvm/**'
       - 'driver/linuxguest/**'
       - 'driver/buildlink/**'
+      - 'driver/drivercmd/**'
       - 'driver/*.go'
       - 'tools/firecracker-vm/**'
       - 'tools/relay-vm/build-initramfs.sh'
@@ -126,6 +127,35 @@ jobs:
           EOF
           dist/warden build --driver firecracker -o /tmp/fc-out-ubuntu /tmp/fc-ubuntu
           dist/warden inspect --verify-disks /tmp/fc-out-ubuntu
+
+      # A build ended mid-way: by Ctrl-C (exit 130), by SIGTERM (exit 1), and
+      # by its VMs killed, which fails it after the grace (driver-contract,
+      # Validation plan). Each leaves nothing on the slot.
+      - name: Interrupted, terminated and killed builds
+        run: |
+          mkdir -p /tmp/fc-sleep
+          printf '#!/bin/sh\necho started\nsleep 600\n' > /tmp/fc-sleep/build.sh
+          running() {
+            for _ in $(seq 120); do
+              [ "$(pgrep -cx firecracker)" -ge 2 ] && sleep 5 && return 0
+              sleep 1
+            done
+            return 1
+          }
+          for end in INT TERM kill; do
+            dist/warden build --driver firecracker -o "/tmp/fc-out-$end" /tmp/fc-sleep &
+            pid=$!
+            running
+            if [ "$end" = kill ]; then sudo pkill -9 -x firecracker; else kill -s "$end" "$pid"; fi
+            code=0; wait "$pid" || code=$?
+            echo "$end: exit $code"
+            case $end in
+              INT) [ "$code" = 130 ] ;;
+              *) [ "$code" = 1 ] ;;
+            esac
+            ! pgrep -x firecracker
+            test -z "$(ls -A "$HOME/.cache/warden/firecracker/work" 2>/dev/null)"
+          done
 
       - name: Teardown leaves nothing behind
         run: |

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
 	"time"
@@ -15,18 +14,12 @@ import (
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
-	"github.com/buildwarden/buildwarden/driver/container"
-	"github.com/buildwarden/buildwarden/driver/firecracker"
-	"github.com/buildwarden/buildwarden/driver/hyperv"
-	"github.com/buildwarden/buildwarden/driver/qemu"
-	"github.com/buildwarden/buildwarden/driver/vz"
 )
 
 var version = "dev"
 
 var (
 	flagConfig  string
-	flagRuntime string
 	flagDriver  string
 	flagVerbose bool
 	flagColor   string
@@ -43,7 +36,6 @@ var (
 	flagQuiet      bool
 	flagCPUs       int
 	flagMemoryMB   int
-	flagNetwork    string
 	flagKeepVMs    bool
 	flagTempDir    string
 	flagBuildLink  string
@@ -93,13 +85,15 @@ cannot attach an interactive session say so.`,
 
 func init() {
 	driver.WardenVersion = version
+	// The parse must agree with the scan that selected the driver.
+	rootCmd.PersistentPreRunE = func(*cobra.Command, []string) error { return checkScan() }
+	rootCmd.SetUsageTemplate(usageTemplate)
 	rootCmd.PersistentFlags().StringVar(&flagConfig, "config", "",
 		"config file to read, the only one that is "+
 			"(default: WARDEN_CONFIG, then ./warden.toml if it exists)")
-	rootCmd.PersistentFlags().StringVar(&flagRuntime, "runtime", "",
-		"container runtime (finch, docker, podman)")
 	rootCmd.PersistentFlags().StringVar(&flagDriver, "driver", "",
-		"orchestration driver (container, qemu, vz, hyperv, firecracker)")
+		"driver to run: container (default), qemu, vz, hyperv or firecracker, "+
+			"or the name or path of another driver binary")
 	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false,
 		"verbose output")
 	rootCmd.PersistentFlags().StringVar(&flagColor, "color", "",
@@ -125,9 +119,6 @@ func init() {
 			"build VM vCPUs (VM drivers; default per driver)")
 		f.IntVar(&flagMemoryMB, "memory", 0,
 			"build VM memory in MiB (VM drivers; default per driver)")
-		f.StringVar(&flagNetwork, "network", "",
-			"pre-provisioned network to reuse "+
-				"(hyperv: the durable switch from `warden setup`)")
 		f.BoolVar(&flagKeepVMs, "keep-vms", false,
 			"leave VMs, disks and the work dir in place for inspection (VM drivers)")
 		f.StringVar(&flagTempDir, "tmpdir", "",
@@ -143,13 +134,9 @@ func init() {
 }
 
 func main() {
-	rootCmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
-		help := fmt.Sprintf("see '%s --help'", c.CommandPath())
-		return driver.Fixable(help, "%v", err)
-	})
+	rootCmd.SetFlagErrorFunc(flagError)
 	fixableArgs(rootCmd)
-
-	if err := rootCmd.Execute(); err != nil {
+	if err := execute(os.Args[1:]); err != nil {
 		var es exitStatusError
 		if errors.As(err, &es) {
 			os.Exit(int(es))
@@ -161,6 +148,11 @@ func main() {
 		var fe *driver.FixableError
 		if errors.As(err, &fe) {
 			log.ErrorWithFix(err, fe.Fix)
+			os.Exit(1)
+		}
+		var de *driverError
+		if errors.As(err, &de) {
+			de.report()
 			os.Exit(1)
 		}
 		logError(err)
@@ -185,10 +177,9 @@ func fixableArgs(c *cobra.Command) {
 	}
 }
 
-// resolveConfig loads the config file and applies the flags over it. When
-// the driver in effect is not one warden has, it returns the configuration
-// with the error, so that the caller can say which file it read before the
-// error: the file can be a repository's.
+// resolveConfig loads the config file and applies the flags over it. The
+// driver it selects is found later (selectDriver), after the caller has said
+// which file it read: the file can be a repository's.
 func resolveConfig() (*Config, error) {
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -197,11 +188,8 @@ func resolveConfig() (*Config, error) {
 	// A background image prepare this run starts reads the same file.
 	driver.ConfigFile = cfg.File
 
-	if flagRuntime != "" {
-		cfg.Runtime.CLI, cfg.Runtime.CLISource = flagRuntime, cliFromFlag
-	}
 	if flagDriver != "" {
-		cfg.Runtime.Driver = flagDriver
+		cfg.Runtime.Driver, cfg.Runtime.DriverSource = flagDriver, sourceFlag
 	}
 	if flagVerbose {
 		cfg.Output.Verbose = true
@@ -210,14 +198,12 @@ func resolveConfig() (*Config, error) {
 		cfg.Output.Color = flagColor
 	}
 	setColorMode(cfg.Output.Color)
-	return cfg, validateDriver(cfg.Runtime.Driver)
+	return cfg, nil
 }
 
 // announcedConfig is resolveConfig for the commands that say on stderr which
 // config file they read, before any other line. doctor says it in its
-// report instead. A load that fails prints its error, which names the file;
-// a driver the file names that warden does not have is reported after the
-// line, which names the file.
+// report instead. A load that fails prints its error, which names the file.
 func announcedConfig() (*Config, error) {
 	cfg, err := resolveConfig()
 	if cfg != nil {
@@ -229,22 +215,16 @@ func announcedConfig() (*Config, error) {
 	return cfg, nil
 }
 
-// resolveRuntime returns the container runtime to run: the one in effect
-// when it is a supported runtime, the detected one when no level names any.
-// Another value is refused here, before anything is looked up, run or
-// created. Only the commands that run the container runtime call this, so a
-// run that does not use the setting does not validate it (UX-08).
-func resolveRuntime(cfg *Config) (string, error) {
-	if cfg.Runtime.CLI == "" {
-		return DetectRuntime()
+// validateGuestOS refuses a --guest-os the driver does not take: the bundled
+// drivers with today's messages, another driver by its describe's list.
+func validateGuestOS(guestOS, driverName string, caps capabilities) error {
+	if guestOS != "" && !contains(bundledDrivers, driverName) {
+		if !contains(caps.GuestOS, guestOS) {
+			return driver.Fixable("", "invalid --guest-os %q (driver %q takes %s)",
+				guestOS, driverName, strings.Join(caps.GuestOS, ", "))
+		}
+		return nil
 	}
-	if name, ok := supportedRuntime(cfg.Runtime.CLI); ok {
-		return name, nil
-	}
-	return "", unsupportedRuntime(cfg.Runtime)
-}
-
-func validateGuestOS(guestOS, driverName string) error {
 	switch guestOS {
 	case "", "linux", "windows":
 	default:
@@ -259,53 +239,14 @@ func validateGuestOS(guestOS, driverName string) error {
 	return nil
 }
 
-// newDriver constructs the configured driver.
-func newDriver(cfg *Config) (driver.Driver, error) {
-	switch cfg.Runtime.Driver {
-	case "vz":
-		d := vz.New()
-		d.Verbose = cfg.Output.Verbose
-		return d, nil
-	case "qemu":
-		d := qemu.New()
-		d.Verbose = cfg.Output.Verbose
-		return d, nil
-	case "hyperv":
-		d := hyperv.New()
-		d.Verbose = cfg.Output.Verbose
-		return d, nil
-	case "firecracker":
-		d := firecracker.New()
-		d.Verbose = cfg.Output.Verbose
-		return d, nil
-	default:
-		runtime, err := resolveRuntime(cfg)
-		if err != nil {
-			return nil, err
-		}
-		return &container.Driver{
-			Runtime: runtime,
-			Verbose: cfg.Output.Verbose,
-			Version: version,
-		}, nil
-	}
-}
-
 // newRequest resolves config and flags into the BuildRequest every driver
 // takes. Precedence everywhere: flag, then the environment variable, then
 // the config file, then the driver's default.
-func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
-	d := cfg.Runtime.Driver
-	if err := validateFlagsForDriver(d); err != nil {
+func newRequest(cfg *Config, sd *selectedDriver, args []string) (*driver.BuildRequest,
+	error) {
+	isVM := sd.caps().VM
+	if err := checkDriverFlags(sd); err != nil {
 		return nil, err
-	}
-	if err := validateGuestOS(flagGuestOS, d); err != nil {
-		return nil, err
-	}
-	if !isVMDriver(d) {
-		if err := checkRelayImage(cfg.Runtime); err != nil {
-			return nil, err
-		}
 	}
 
 	capture, err := resolveCapture(cfg)
@@ -321,7 +262,6 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 		return nil, err
 	}
 
-	isVM := isVMDriver(d)
 	var link buildlink.Link
 	var dns []netip.Addr
 	if isVM {
@@ -335,19 +275,12 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 	if len(args) > 0 {
 		path = args[0]
 	}
-	dockerfile, contextDir, script, err := resolveBuildInput(path, d, flagGuestOS, flagScript)
+	dockerfile, contextDir, script, err := resolveBuildInput(path, isVM, flagGuestOS,
+		flagScript)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshAfter, err := configAge(cfg, "image_refresh_after", cfg.VM.ImageRefreshAfter)
-	if err != nil {
-		return nil, err
-	}
-	minGrace, err := configAge(cfg, "image_min_grace", cfg.VM.ImageMinGrace)
-	if err != nil {
-		return nil, err
-	}
 	// Read here, before the output directory, the work directory or the
 	// relay exists; the claim sends what was read.
 	upstreamCAs, err := resolveUpstreamCAs(cfg, log.Info)
@@ -356,32 +289,38 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 	}
 
 	return &driver.BuildRequest{
-		ImageRefreshAfter: refreshAfter,
-		ImageMinGrace:     minGrace,
-		Script:            script,
-		ContextDir:        contextDir,
-		Image:             flagImage,
-		GuestOS:           flagGuestOS,
-		Containerfile:     dockerfile,
-		OutputDir:         resolveOutputDir(cfg),
-		CaptureMode:       capture,
-		Compress:          resolveCompress(cfg),
-		Quiet:             flagQuiet,
-		Timeout:           timeout,
-		CPUs:              vmFlagOr(flagCPUs, cfg.VM.CPUs, isVM),
-		MemoryMB:          vmFlagOr(flagMemoryMB, cfg.VM.MemoryMB, isVM),
-		Network:           resolveNetwork(cfg, d),
-		KeepVMs:           flagKeepVMs,
-		BuildLink:         link,
-		DNS:               dns,
-		TempDir:           tempDir,
-		RelayImage:        cfg.Runtime.RelayImage,
-		UpstreamCACerts:   upstreamCAs,
-		UpstreamSystemCA:  resolveSystemCA(cfg),
-		Stdin:             os.Stdin,
-		Stdout:            os.Stdout,
-		Stderr:            os.Stderr,
+		Script:           script,
+		ContextDir:       contextDir,
+		Image:            flagImage,
+		GuestOS:          flagGuestOS,
+		Containerfile:    dockerfile,
+		OutputDir:        resolveOutputDir(cfg),
+		CaptureMode:      capture,
+		Compress:         resolveCompress(cfg),
+		Quiet:            flagQuiet,
+		Timeout:          timeout,
+		CPUs:             vmFlagOr(flagCPUs, cfg.VM.CPUs, isVM),
+		MemoryMB:         vmFlagOr(flagMemoryMB, cfg.VM.MemoryMB, isVM),
+		KeepVMs:          flagKeepVMs,
+		BuildLink:        link,
+		DNS:              dns,
+		TempDir:          tempDir,
+		UpstreamCACerts:  upstreamCAs,
+		UpstreamSystemCA: resolveSystemCA(cfg),
+		Stdin:            os.Stdin,
+		Stdout:           os.Stdout,
+		Stderr:           os.Stderr,
 	}, nil
+}
+
+// checkDriverFlags refuses warden's flags of a build that the driver cannot
+// use; the driver's own it checks itself, in its probe.
+func checkDriverFlags(sd *selectedDriver) error {
+	d, caps := sd.name(), sd.caps()
+	if err := validateFlagsForDriver(caps.VM); err != nil {
+		return err
+	}
+	return validateGuestOS(flagGuestOS, d, caps)
 }
 
 // resolveCapture applies the flag, then warden.toml, then validates the mode.
@@ -487,15 +426,6 @@ func resolveBuildLink(cfg *Config) (buildlink.Link, string, error) {
 	return buildlink.Default(), "default", nil
 }
 
-// resolveNetwork reuses a pre-provisioned network; only hyperv falls back to
-// the [vm] network when --network is unset.
-func resolveNetwork(cfg *Config, d string) string {
-	if flagNetwork == "" && d == "hyperv" {
-		return cfg.VM.Network
-	}
-	return flagNetwork
-}
-
 // vmFlagOr returns flag when set or when the driver is not a VM driver;
 // otherwise the config default (VM-only flags default per driver).
 func vmFlagOr(flag, conf int, isVM bool) int {
@@ -505,82 +435,148 @@ func vmFlagOr(flag, conf int, isVM bool) int {
 	return conf
 }
 
-func buildContext() (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(context.Background())
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt)
-	go func() {
-		select {
-		case <-sig:
-			fmt.Fprintf(os.Stderr,
-				"\nInterrupted, cleaning up... "+
-					"(press ctrl+c again to force)\n")
-			cancel()
-			signal.Stop(sig)
-		case <-ctx.Done():
-		}
-	}()
-	return ctx, cancel
+// prepared is a build or shell that prepare readied: its configuration and
+// request, its driver, and the build's ID and hold on its lock and record.
+type prepared struct {
+	cfg  *Config
+	req  *driver.BuildRequest
+	sd   *selectedDriver
+	id   string
+	live *liveBuild
+	// done removes the stage directory and then the build's lock and record,
+	// or, with keep, leaves the record and lock for warden clean.
+	done func(keep bool)
 }
 
-// prepare resolves everything a build or shell needs.
-func prepare(args []string) (driver.Driver, *driver.BuildRequest, error) {
+// prepare resolves everything a build or shell needs and probes the driver's
+// run, then makes the build ID, takes the build's lock and writes its
+// record, and creates the output directory with driver.json and stages the
+// build script, in that order (DRV-33, DRV-45, DRV-56). A shell needs a
+// driver with capabilities.shell.
+func prepare(args []string, mode string) (*prepared, error) {
 	cfg, err := announcedConfig()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	req, err := newRequest(cfg, args)
+	sd, err := selectDriver(cfg)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	d, err := newDriver(cfg)
+	if mode == driver.ModeShell && !sd.caps().Shell {
+		return nil, driver.Fixable(
+			"use warden build, or --driver container for an interactive shell",
+			"warden shell is not supported by --driver %s", sd.name())
+	}
+	req, err := newRequest(cfg, sd, args)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return d, req, nil
+	p := &prepared{cfg: cfg, req: req, sd: sd}
+	if sd.bin != nil {
+		out, _ := filepath.Abs(req.OutputDir)
+		if err := checkUTF8Paths(map[string]string{"context": req.ContextDir,
+			"output": out, "temporary": req.TempDir}); err != nil {
+			return nil, err
+		}
+	}
+	if err := probeRun(p); err != nil {
+		return nil, err
+	}
+	dj, err := newDriverJSON(sd)
+	if err != nil {
+		return nil, err
+	}
+	p.id = driver.RandAlphaNum(8)
+	if p.live, err = startBuildRecord(newRecord(p)); err != nil {
+		return nil, err
+	}
+	unstage, err := stageBuild(req, sd.caps(), p.id, dj)
+	if err != nil {
+		_ = p.live.end()
+		return nil, err
+	}
+	p.done = func(keep bool) {
+		unstage()
+		if keep {
+			p.live.keep()
+			return
+		}
+		if err := p.live.end(); err != nil {
+			log.Info(fmt.Sprintf("warning: removing the build's lock and record: %v",
+				err))
+		}
+	}
+	return p, nil
+}
+
+// probeRun probes the driver's run before anything is created (DRV-33).
+func probeRun(p *prepared) error {
+	probe := newStart(p.cfg, p.req, p.sd.caps(), "", "", "")
+	probe.Probe = true
+	if p.sd.bin != nil {
+		probe.Contract = p.sd.bin.contract
+		return p.sd.bin.probeRun(probe)
+	}
+	// The probe is given a copy, so that what it resolves (a VM driver's
+	// resolvers) is resolved again by the run.
+	probeReq := *p.req
+	_, err := callLinkedRun(context.Background(), p.sd.linked, p.sd.name(), p.cfg,
+		&probeReq, probe, nil)
+	return err
+}
+
+// newRecord is the record of the build p prepares (DRV-59): a driver binary's
+// path and digest, or for a linked driver warden's own path.
+func newRecord(p *prepared) buildRecord {
+	rec := buildRecord{
+		Driver: p.sd.name(), ID: p.id, Path: p.sd.found.Path, Linked: p.sd.linked != nil,
+		Contract: contractVersion, TempDir: p.req.TempDir,
+		StageDir: stageDir(p.req.TempDir, p.id), ConfigFile: absConfigFile(p.cfg),
+		Args: driverFlags.argsFor("run"),
+	}
+	if p.sd.bin != nil {
+		rec.Contract = p.sd.bin.contract
+		rec.SHA256, _ = fileSHA256(p.sd.found.Path)
+	}
+	return rec
+}
+
+// absConfigFile is the absolute path of the config file warden read, or ""
+// when it read none.
+func absConfigFile(cfg *Config) string {
+	if cfg.File == "" {
+		return ""
+	}
+	if abs, err := filepath.Abs(cfg.File); err == nil {
+		return abs
+	}
+	return cfg.File
 }
 
 func runBuild(_ *cobra.Command, args []string) error {
-	d, req, err := prepare(args)
+	p, err := prepare(args, driver.ModeBuild)
 	if err != nil {
 		return err
 	}
-	defer d.Close()
-	ctx, stop := buildContext()
-	defer stop()
-
-	start := time.Now()
-	if _, err := d.StartBuild(ctx, req); err != nil {
-		return buildFailed(ctx, err, req, time.Since(start))
+	out, err := runSequence(p, driver.ModeBuild)
+	p.done(out.leftovers)
+	if err != nil {
+		return err
 	}
-	fmt.Fprintf(os.Stderr, "warden: build SUCCEEDED (output: %s)\n", req.OutputDir)
-	return nil
+	return reportBuild(out, p.req)
 }
 
 func runShell(_ *cobra.Command, args []string) error {
-	d, req, err := prepare(args)
+	p, err := prepare(args, driver.ModeShell)
 	if err != nil {
 		return err
 	}
-	defer d.Close()
-	ctx, stop := buildContext()
-	defer stop()
-
-	if err := d.Exec(ctx, req); err != nil {
-		if err == driver.ErrExecNotSupported {
-			return driver.Fixable(
-				"use warden build, or --driver container for an interactive shell",
-				"warden shell is not supported by --driver %s", d.Name())
-		}
-		// Leaving the shell with a non-zero status is the user's own
-		// result: pass it through, quietly.
-		var ee *driver.ExitError
-		if errors.As(err, &ee) {
-			return exitStatusError(ee.Code)
-		}
+	out, err := runSequence(p, driver.ModeShell)
+	p.done(out.leftovers)
+	if err != nil {
 		return err
 	}
-	return nil
+	return reportShell(out)
 }
 
 // exitStatusError ends warden with that exit code, the outcome already
@@ -595,46 +591,3 @@ const (
 	exitTimedOut    = 124
 	exitInterrupted = 130
 )
-
-// buildFailed reports a failed build. Outcomes of the build itself (its
-// script's non-zero exit, --timeout, Ctrl-C) are reported plainly and warden
-// exits with a matching code; anything else is a warden or environment
-// error, reported with the issue link.
-func buildFailed(
-	ctx context.Context, err error, req *driver.BuildRequest, elapsed time.Duration,
-) error {
-	var ee *driver.ExitError
-	switch {
-	case errors.As(err, &ee):
-		msg := fmt.Sprintf("warden: build FAILED (exit code %d)", ee.Code)
-		if ee.Detail != "" {
-			msg += ": " + ee.Detail
-		}
-		fmt.Fprintln(os.Stderr, msg)
-		return exitStatusError(ee.Code)
-	case req.Timeout > 0 && elapsed >= req.Timeout && errors.Is(err, context.DeadlineExceeded):
-		fmt.Fprintf(os.Stderr,
-			"warden: build FAILED: timed out after %s (--timeout)\n", req.Timeout)
-		return exitStatusError(exitTimedOut)
-	case ctx.Err() != nil:
-		fmt.Fprintln(os.Stderr, "warden: build interrupted")
-		return exitStatusError(exitInterrupted)
-	}
-	fmt.Fprintln(os.Stderr, "warden: build FAILED")
-	return err
-}
-
-// configAge parses a [vm] age setting; empty means the driver default. The
-// key has no flag and no variable, so a value is the config file's.
-func configAge(cfg *Config, key, v string) (time.Duration, error) {
-	if v == "" {
-		return 0, nil
-	}
-	d, err := driver.ParseAge(v)
-	if err != nil {
-		return 0, driver.Fixable(
-			"set it to an age such as \"7d\" or \"36h\"",
-			"%s [vm] %s: %v", driver.EscapeOutside(cfg.File), key, err)
-	}
-	return d, nil
-}

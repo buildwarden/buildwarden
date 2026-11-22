@@ -19,6 +19,10 @@ on:
       - 'collector/**'
       - 'relaycfg/**'
       - 'driver/buildlink/**'
+      - 'driver/drivercmd/**'
+      - 'driver/relaysource/**'
+      - 'conformance/driver/**'
+      - 'specs/driver-contract/**'
       - 'cmd/**'
       - 'test-integration.sh'
       - 'Dockerfile*'
@@ -44,6 +48,15 @@ jobs:
       # Refs older than the dist/warden fix in test-integration.sh call ./warden.
       - run: ln -sf dist/warden warden
       - run: make integration-test
+      # The driver suite's both tiers against the container driver binary
+      # make build left in dist. attach needs a terminal, which a runner
+      # step has not, and a container's first process cannot be killed
+      # from inside it to make the environment exit: those two cases are
+      # natively validated (macos-finch, container-any).
+      - run: >-
+          make driver-conformance DRIVER=dist/warden-driver-container
+          DRIVER_CONFORMANCE_FLAGS="--driver-arg=--runtime=docker
+          --base-image alpine:3.20 --skip shell --skip exited"
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

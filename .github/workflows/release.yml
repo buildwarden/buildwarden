@@ -11,7 +11,8 @@ permissions:
 
 jobs:
   # The container driver's namespace holder and iptables sidecar. Their digests
-  # are compiled into warden, which runs exactly these images (never a tag).
+  # are compiled into warden-driver-container, which runs exactly these images
+  # (never a tag).
   support-images:
     runs-on: ubuntu-latest
     outputs:

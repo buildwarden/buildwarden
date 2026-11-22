@@ -57,10 +57,12 @@ main() {
     mkdir -p "$INSTALL_DIR"
     if [ -w "$INSTALL_DIR" ]; then
         mv "${TMP}/warden" "${INSTALL_DIR}/warden"
+        mv "${TMP}/warden-driver-container" "${INSTALL_DIR}/warden-driver-container"
         mv "${TMP}/warden-io" "${INSTALL_DIR}/warden-io"
     else
         echo "Installing to ${INSTALL_DIR} (requires sudo)..."
         sudo mv "${TMP}/warden" "${INSTALL_DIR}/warden"
+        sudo mv "${TMP}/warden-driver-container" "${INSTALL_DIR}/warden-driver-container"
         sudo mv "${TMP}/warden-io" "${INSTALL_DIR}/warden-io"
     fi
 

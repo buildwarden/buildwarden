@@ -3,12 +3,10 @@ package hyperv
 import (
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"net/netip"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/relaycfg"
@@ -17,17 +15,17 @@ import (
 // The relay VM's upstream NIC sits on the NAT switch with a static address
 // (New-NetNat provides routing but no DHCP), allocated per build in the NAT's
 // prefix (allocate.go) and handed to the relay in its seed with the prefix,
-// the host's address as gateway and a per-build claim token. The orchestrator
+// the host's address as gateway and a per-build claim token. warden
 // claims the relay at that address with the token and serves the collector
 // back over the same host-initiated connection, so the host needs no listener
 // and no inbound firewall rule. The address is host-only: the build VM is on
 // the Private switch and never reaches it.
-const defaultReadyTimeout = 90 * time.Second
 
 // RelayHostConfig configures StartRelay.
 type RelayHostConfig struct {
-	BuildID     string // used to name the VM and its resources
-	OutputDir   string // where the collector lands this build's outputs
+	BuildID string // used to name the VM and its resources
+	// Token is warden's claim token, which the relay's seed carries.
+	Token       string
 	BootVHDX    string // static, read-only UKI boot disk
 	OverlayVHDX string // per-build differencing overlay path (created off BootVHDX)
 
@@ -50,15 +48,13 @@ type RelayHostConfig struct {
 	SeedDir     string
 	MakeSeedISO func(seedDir, iso string) error
 
-	// Request carries the build's relay settings (capture mode, upstream CAs,
-	// the build link and the relay's resolvers, DNS).
+	// Request carries the build link and the relay's resolvers (DNS) the
+	// relay is reported with.
 	Request *driver.BuildRequest
 	// Environment is the ledger's environment record; nil records none.
 	Environment *relaycfg.Environment
-	// ContextDir and BuildScriptPath are the inputs the collector serves.
-	ContextDir      string
-	BuildScriptPath string
-	// GuestOS picks the bootstrap config ("windows" or "linux").
+	// GuestOS is the guest reported, which picks the bootstrap config
+	// ("windows" or "linux").
 	GuestOS string
 
 	// KeepVM leaves the relay VM and its overlay for inspection (--keep-vms);
@@ -66,15 +62,12 @@ type RelayHostConfig struct {
 	// it is removed.
 	KeepVM bool
 
-	ClaimPort    int // default relaycfg.DefaultPort
-	ReadyTimeout time.Duration
-	OutputTee    io.Writer
+	ClaimPort int // default relaycfg.DefaultPort
 }
 
-// RelayHost is a running, claimed relay VM and the build's session.
+// RelayHost is a running relay VM that warden has claimed.
 type RelayHost struct {
-	VMName  string
-	Session *driver.Session
+	VMName string
 	// RelayIP is the relay's address on the NAT, where it was claimed.
 	RelayIP netip.Addr
 	// BuildSwitch is the Private switch the relay's build NIC is on, which the
@@ -91,8 +84,8 @@ func validateRelayHostConfig(cfg RelayHostConfig) error {
 	switch {
 	case cfg.BuildID == "":
 		return fmt.Errorf("StartRelay: empty build ID")
-	case cfg.OutputDir == "":
-		return fmt.Errorf("StartRelay: empty output dir")
+	case cfg.Token == "":
+		return fmt.Errorf("StartRelay: empty claim token")
 	case cfg.BootVHDX == "":
 		return fmt.Errorf("StartRelay: empty boot VHDX")
 	case cfg.OverlayVHDX == "":
@@ -109,15 +102,15 @@ func validateRelayHostConfig(cfg RelayHostConfig) error {
 	return nil
 }
 
-// StartRelay prepares the build's collector, allocates the relay's address
-// and build switch, creates the relay VM with its seed, boots it, and claims
-// it with a fresh token. On any failure everything it created is torn down.
-func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*RelayHost, error) {
+// StartRelay allocates the relay's address and build switch, creates the
+// relay VM with its seed, which carries warden's claim token, boots it, and
+// reports it to host at its NAT address; it returns once warden has claimed
+// it. The collector and the claim are warden's. On any failure everything it
+// created is torn down.
+func StartRelay(ctx context.Context, prov Provisioner, host driver.Host,
+	cfg RelayHostConfig) (*RelayHost, error) {
 	if cfg.ClaimPort == 0 {
 		cfg.ClaimPort = relaycfg.DefaultPort
-	}
-	if cfg.ReadyTimeout == 0 {
-		cfg.ReadyTimeout = defaultReadyTimeout
 	}
 	if cfg.Request == nil {
 		cfg.Request = &driver.BuildRequest{UpstreamSystemCA: true}
@@ -128,44 +121,32 @@ func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*Re
 	if err := validateRelayHostConfig(cfg); err != nil {
 		return nil, err
 	}
-	token, err := driver.RandomToken()
-	if err != nil {
-		return nil, fmt.Errorf("StartRelay: claim token: %w", err)
-	}
-
-	sess, err := driver.StartSession(driver.SessionConfig{
-		OutputDir:   cfg.OutputDir,
-		ContextDir:  cfg.ContextDir,
-		BuildScript: cfg.BuildScriptPath,
-		GuestOS:     cfg.GuestOS,
-		OutputTee:   cfg.OutputTee,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("StartRelay: %w", err)
-	}
 
 	h := &RelayHost{
 		VMName:  relayVMPrefix + cfg.BuildID,
-		Session: sess,
 		prov:    prov,
 		overlay: cfg.OverlayVHDX,
 		keep:    cfg.KeepVM,
 	}
-	if err := h.create(ctx, cfg, token); err != nil {
-		_ = h.Close()
+	if err := h.create(ctx, cfg, cfg.Token); err != nil {
+		h.Close()
 		return nil, fmt.Errorf("StartRelay: %w", err)
 	}
 	if err := prov.StartVM(ctx, h.VMName); err != nil {
-		_ = h.Close()
+		h.Close()
 		return nil, fmt.Errorf("StartRelay: %w", err)
 	}
 
-	claimCtx, cancel := context.WithTimeout(ctx, cfg.ReadyTimeout)
-	defer cancel()
 	claimAddr := net.JoinHostPort(h.RelayIP.String(), strconv.Itoa(cfg.ClaimPort))
-	if _, err := sess.ClaimRelay(claimCtx, claimAddr, token, cfg.Request, cfg.Environment,
-		cfg.Request.Link().Claim(), RefreshRelayBootFix); err != nil {
-		_ = h.Close()
+	if err := host.ClaimRelay(ctx, driver.RelayStarted{
+		Claim: driver.ClaimEndpoint{Network: driver.ClaimTCP, Address: claimAddr},
+		ClaimValues: driver.ClaimValues{Environment: cfg.Environment,
+			BuildLink:   cfg.Request.Link().Claim(),
+			UpstreamDNS: driver.UpstreamDNS(cfg.Request.DNS)},
+		GuestOS:     cfg.GuestOS,
+		OldRelayFix: RefreshRelayBootFix,
+	}); err != nil {
+		h.Close()
 		return nil, fmt.Errorf("StartRelay: relay VM %q at %s: %w", h.VMName, h.RelayIP,
 			err)
 	}
@@ -212,15 +193,14 @@ func (h *RelayHost) create(ctx context.Context, cfg RelayHostConfig, token strin
 	return nil
 }
 
-// Close stops the collector, removes the relay VM and deletes its overlay,
-// or with KeepVM leaves both.
-func (h *RelayHost) Close() error {
-	h.Session.Close()
+// Close removes the relay VM and deletes its overlay, or with KeepVM leaves
+// both and returns what it left.
+func (h *RelayHost) Close() (kept []string) {
 	if h.keep {
 		fmt.Fprintf(os.Stderr, "warden: --keep-vms: leaving relay VM %q (overlay %q, "+
 			"holding %s on %s) for inspection\n", h.VMName, h.overlay, h.RelayIP,
 			h.BuildSwitch)
-		return nil
+		return []string{"relay VM " + h.VMName, h.overlay}
 	}
 	if h.prov != nil && h.VMName != "" {
 		_ = h.prov.RemoveVM(context.Background(), h.VMName)

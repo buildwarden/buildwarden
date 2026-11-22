@@ -23,8 +23,9 @@ For the container driver you can also point at a specific Dockerfile:
 warden build ./my-project/Dockerfile.prod
 ```
 
-The container driver uses the first of `finch`, `docker` and `podman` that
-answers. To choose one, name it:
+The container driver uses the first of `finch`, `podman` and `docker` that
+answers, so with both `docker` and `podman` running it uses `podman`. To
+choose one, name it (`--runtime docker` for docker):
 
 ```sh
 warden build --runtime podman .
@@ -36,8 +37,14 @@ setting holds anything else (a path, a wrapper script, another runtime)
 stops before it runs anything, and the error says where the value is set and
 what to change. When it is set in the `warden.toml` of a repository you
 cloned, `--runtime` with one of the three builds it without editing the
-file. [The container runtime](../guide/configuration.md#the-container-runtime)
-has the rule and the error.
+file. A runtime you name must also be installed and running: one that is
+not on `PATH` stops the build before it makes an output directory, and one
+whose VM or daemon is stopped fails the build at its first call to the
+runtime, which leaves the output directory as any failed build does.
+`warden` does not pick another in its place. Start it, or name another;
+`warden doctor` checks that the runtime answers.
+[The container runtime](../guide/configuration.md#the-container-runtime)
+has the rules and the errors.
 
 Built from its own directory, a repository's `warden.toml` is the config
 file, and it chooses more than the runtime: the driver, the relay image and
@@ -64,6 +71,12 @@ warden-io: running build.sh
 [warden] Output: warden-output
 ```
 
+If the build environment exits before the build completes (the script
+powers off a VM, or the container's init fails), `warden` waits 10 seconds
+for the completion, then fails with `the build environment exited before
+the build completed` and a `To fix:` line naming the build's
+`build-output.log`, which holds the last thing the build printed.
+
 ## Output directory
 
 After the build completes (same structure for all drivers):
@@ -72,6 +85,7 @@ After the build completes (same structure for all drivers):
 warden-output/
 ├── ledger.zst              # Cryptographic ledger (ledger if --no-compress)
 ├── ca.cert.pem.zst         # Ephemeral CA cert (ca.cert.pem if --no-compress)
+├── driver.json             # Which driver ran the build, and where it was found
 ├── build-output.log        # Captured build console output
 ├── artifacts/              # Build outputs posted via warden-io post
 │   └── myapp.whl
@@ -183,6 +197,10 @@ where it came from (`WellKnown, no DHCP lease from the relay`).
 warden shell .
 # Drops into isolated container — all traffic still audited
 ```
+
+`warden clean` leaves an open shell session alone, as it does a running
+build, while its `warden-driver-container` runs; see
+[warden clean](../guide/cli.md#warden-clean).
 
 ## Custom output location
 

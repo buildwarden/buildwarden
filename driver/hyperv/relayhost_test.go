@@ -46,9 +46,9 @@ func (f *fakeProv) SwitchAdapters(context.Context, []string) (map[string][]strin
 	return nil, nil
 }
 
-// With no relay listening for the claim, StartRelay must hit the ready timeout
-// and tear everything down: create+start were attempted, the VM is removed, and
-// the per-build overlay file is deleted.
+// With no relay listening for the claim, warden's claim times out and
+// StartRelay tears everything down: create+start were attempted, the VM is
+// removed, and the per-build overlay file is deleted.
 func TestStartRelay_TimeoutTearsDown(t *testing.T) {
 	fp := &fakeProv{}
 	dir := t.TempDir()
@@ -58,19 +58,20 @@ func TestStartRelay_TimeoutTearsDown(t *testing.T) {
 	}
 
 	start := time.Now()
-	_, err := StartRelay(context.Background(), fp, RelayHostConfig{
-		BuildID:      "unit",
-		OutputDir:    dir,
-		BootVHDX:     "boot.vhdx",
-		OverlayVHDX:  overlay,
-		BuildSwitch:  "warden-dev",
-		NATSwitch:    "warden-dev-nat",
-		NATPrefix:    testNATPrefix, // the relay at 127.0.0.1, where nothing listens
-		HostIP:       testHostIP,
-		SeedDir:      filepath.Join(dir, "relay-seed"),
-		MakeSeedISO:  copySeedISO,
-		ClaimPort:    48301,
-		ReadyTimeout: 400 * time.Millisecond,
+	h := newSessionHost(t, dir, testToken)
+	h.claimTimeout = 400 * time.Millisecond
+	_, err := StartRelay(context.Background(), fp, h, RelayHostConfig{
+		BuildID:     "unit",
+		Token:       testToken,
+		BootVHDX:    "boot.vhdx",
+		OverlayVHDX: overlay,
+		BuildSwitch: "warden-dev",
+		NATSwitch:   "warden-dev-nat",
+		NATPrefix:   testNATPrefix, // the relay at 127.0.0.1, where nothing listens
+		HostIP:      testHostIP,
+		SeedDir:     filepath.Join(dir, "relay-seed"),
+		MakeSeedISO: copySeedISO,
+		ClaimPort:   48301,
 	})
 	if err == nil {
 		t.Fatal("expected a ready-timeout error (no relay to claim)")
@@ -93,11 +94,18 @@ func TestStartRelay_TimeoutTearsDown(t *testing.T) {
 }
 
 func TestStartRelay_ValidatesConfig(t *testing.T) {
-	_, err := StartRelay(context.Background(), &fakeProv{}, RelayHostConfig{
-		OutputDir: t.TempDir(), BootVHDX: "b", OverlayVHDX: "o",
+	_, err := StartRelay(context.Background(), &fakeProv{}, nil, RelayHostConfig{
+		Token: testToken, BootVHDX: "b", OverlayVHDX: "o",
 		BuildSwitch: "s", NATSwitch: "n", // missing BuildID
 	})
 	if err == nil {
 		t.Error("expected validation error for missing BuildID")
+	}
+	_, err = StartRelay(context.Background(), &fakeProv{}, nil, RelayHostConfig{
+		BuildID: "unit", BootVHDX: "b", OverlayVHDX: "o",
+		BuildSwitch: "s", NATSwitch: "n", // missing Token
+	})
+	if err == nil {
+		t.Error("expected validation error for a missing claim token")
 	}
 }

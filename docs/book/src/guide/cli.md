@@ -33,13 +33,19 @@ rejects only the flags it genuinely cannot use.
 - `-q, --quiet` — Do not echo the guest build console (still captured to `build-output.log`)
 
 The container driver refuses the VM-only flags (`--script`, `--image`, `--cpus`,
-`--memory`, `--keep-vms`, `--build-link`); `--network` is only used by `--driver hyperv`
-(firecracker builds take a network slot made by `warden setup`).
+`--memory`, `--keep-vms`, `--build-link`). A driver's own flags, such as the
+container driver's `--runtime` and hyperv's `--network`, are taken only when
+that driver is selected, and `--help` lists the selected driver's under
+`Flags of driver "<name>":`; with another driver each is refused as `unknown
+flag --network for driver "vz"`, with the fix `see 'warden build --driver vz
+--help' for the flags this driver takes` (firecracker builds take a network
+slot made by `warden setup`).
 `--guest-os windows` is supported by `--driver qemu` and `--driver hyperv`;
 `--driver firecracker` runs Linux guests only.
 
-Defaults for `--cpus`, `--memory` and `--network` come from the `[vm]` section
-of `warden.toml`. Per-driver VM defaults: qemu 4 CPU / 4096 MiB, vz 4 / 8192,
+Defaults for `--cpus` and `--memory` come from the `[vm]` section of
+`warden.toml`, and for `--network` from `[driver.hyperv] network` (old name
+`[vm] network`; see [Configuration](configuration.md#driver-settings)). Per-driver VM defaults: qemu 4 CPU / 4096 MiB, vz 4 / 8192,
 hyperv 4 / 4096, firecracker 4 / 4096 (its relay VM: 2 / 256).
 
 With `--driver firecracker`, `--keep-vms` leaves both VMs running and their
@@ -64,7 +70,9 @@ runtime's VM shares; the macOS temp dir is shared by all three.
 | `130` | Interrupted (Ctrl-C) |
 | `1` | Any other failure. A known cause (missing root or Administrator, unprepared image, absent tool, bad flag) is printed with `To fix: <what to do>`; only an unexplained failure carries the issue link |
 
-`warden shell` exits with the shell's own exit status.
+`warden shell` exits with the shell's own exit status, `130` when
+interrupted (Ctrl-C), and `1` when the shell could not be attached or for any
+other failure. `--timeout` does not limit a shell.
 
 **Example:**
 ```sh
@@ -149,7 +157,7 @@ defaults per driver (vz: macos, qemu and firecracker: linux, hyperv: windows). `
 | `qemu` / linux | cloud image ref (`alpine:3.21`, `ubuntu:24.04`, `debian:bookworm`) or qcow2 | Downloads and verifies the cloud image |
 | `firecracker` / linux | cloud image ref (default `ubuntu:24.04`), or a local qcow2 or raw image | Downloads the cloud image if needed (as qemu does), checks it with `qemu-img info` (a backing file, an external data file or another format is refused), and converts it once to the raw image builds copy, in `~/.cache/warden/firecracker/images` |
 | `qemu` / windows | Windows install ISO (required the first time) | Unattended install ending in `sysprep /generalize` (skipped if already installed unless `--force`), then prepares the layer builds boot from. With no source, re-prepares |
-| `hyperv` / windows | Windows Server evaluation VHDX: URL, or a local file registered in place (default: `[vm] windows_image`, else Microsoft's current Server 2025 evaluation download) | Fetches or registers the base, then prepares the layer builds boot from. With no source it is the refresh: re-checks a downloaded base for new media and re-prepares |
+| `hyperv` / windows | Windows Server evaluation VHDX: URL, or a local file registered in place (default: `[driver.hyperv] windows_image`, else Microsoft's current Server 2025 evaluation download) | Fetches or registers the base, then prepares the layer builds boot from. With no source it is the refresh: re-checks a downloaded base for new media and re-prepares |
 
 **Flags:**
 - `--os <os>` — Guest OS: macos, linux or windows (default per driver)
@@ -243,11 +251,15 @@ the slots, `/dev/kvm` access (kvm group membership) and leftover VMMs of the
 user who ran sudo, skipping the reflink probe so nothing is written into that
 user's cache.
 
-With the container driver, a runtime in effect that is not `finch`, `docker`
-or `podman` fails doctor with the error a build would get
+With the container driver, a runtime in effect that is not `finch`, `podman`
+or `docker` fails doctor with the error a build would get
 ([Configuration](configuration.md#the-container-runtime)), and so does a
 relay image that is not shaped like an image reference
-([Configuration](configuration.md#relay-image)).
+([Configuration](configuration.md#relay-image)). Doctor is also the
+runtime's health check: it asks the runtime it would use, named or
+detected, for its engine's version (`docker version --format '{{.Server.Version}}'`, `podman version --format '{{.Server.Version}}'` or `finch version`) and waits up to 10
+seconds. A runtime that is not on `PATH`, or whose engine is down or does
+not answer in that time, fails doctor with the fix to install or start it.
 
 With upstream CA paths configured (`WARDEN_UPSTREAM_CA_CERTS`, else `[relay]
 upstream_ca_certs`), every driver's doctor reads them as a build would and
@@ -318,7 +330,7 @@ Other drivers print that no host setup is needed. Replaces the old
 `warden hyperv setup`.
 
 **Flags:**
-- `--network <name>` — Durable network name, the prefix of its build switches `<name>-0` to `<name>-<N-1>` and of its NAT `<name>-nat` (default: `[vm]` network, then `warden-dev`)
+- `--network <name>` — Durable network name, the prefix of its build switches `<name>-0` to `<name>-<N-1>` and of its NAT `<name>-nat` (default: `[driver.hyperv] network`, then `warden-dev`)
 - `--nat-prefix <cidr>` — NAT CIDR for relay egress (default 192.168.240.0/20).
   Every build reads the NAT back from the host and gives its relay its own
   address in this prefix, so a non-default value takes effect on every build.
@@ -383,11 +395,27 @@ or crashed builds. Only removes resources not associated with a currently
 running warden process, and nothing a later build would reuse: prepared and
 downloaded VM images, the Hyper-V relay boot disk and the support images stay.
 
+Under every driver it first cleans up after the selected driver's builds
+whose warden is gone: a build holds a lock in warden's lock directory
+(`buildwarden/locks` in the user cache directory) while it runs, and for each
+build whose lock nobody holds clean removes its stage directory
+(`warden-stage-<id>`, where warden staged the build script, under the
+build's temporary directory) and then its lock and record, printing
+`Cleaning up after build <id> (<driver>)`. A running build's are left alone.
+
 Under the container driver, `qemu` and `vz` it removes leftover containers,
-so there a runtime in effect that is not `finch`, `docker` or `podman` fails
+so there a runtime in effect that is not `finch`, `podman` or `docker` fails
 the command before anything is listed or removed
 ([Configuration](configuration.md#the-container-runtime)); under
 `firecracker` and `hyperv` the setting is not read.
+
+Under the container driver a running build, a `warden shell` session
+included, is left alone while its `warden-driver-container` runs, even
+another user's, whose lock is not in your lock directory: clean lists every user's processes and keeps a build
+whose driver still waits on its `warden-build-<id>` container. A build whose
+`warden` and driver were both killed is removed, although its containers may
+still be running. On Windows, which has no `ps`, only the lock keeps a
+running build, so another user's running build there is removed.
 
 With `--driver firecracker` it needs no container runtime: it kills VMMs
 recorded on a network slot that no build holds (left by a warden that was
@@ -408,13 +436,53 @@ Run it as a Hyper-V Administrator.
 |------|-------------|
 | `--cache` | Also remove warden's whole cache directory. The next VM build downloads and prepares its images again. |
 
+## warden driver list
+
+```
+warden driver list [--json]
+```
+
+Lists one entry per driver name warden can find: the five bundled drivers and
+every `warden-driver-<name>` on `PATH` or beside warden. Each entry gives the
+file that would run and where it was found (`PATH`, `beside warden`,
+`linked`, or `path (--driver)` / `path (WARDEN_DRIVER)` when the selection
+names a file), and beneath it every other copy in lookup order: the ones it
+`shadows` and the ones it `skips` because they cannot be run, with the reason.
+`*` marks the driver this invocation's `--driver`, `WARDEN_DRIVER` and config
+file select; a selection that cannot be used is said in a line under the
+table. It reads directories only and runs no driver.
+
+```
+NAME          RUNS                                        FOUND
+container  *  /home/ana/bin/warden-driver-container       PATH
+                shadows /home/ana/.local/bin/warden-driver-container (beside warden)
+qemu          (linked into warden)                        linked
+```
+
+With `--json` it prints one object:
+`{"drivers":[{"name","path","found","source","selected","shadowed":[{"path","found"}],"skipped":[{"path","reason"}]}]}`,
+where `found` is `path`, `PATH`, `beside-warden` or `linked`, and `source`
+names the flag or variable behind a `path`.
+
+## warden &lt;driver&gt; ...
+
+A first argument that is not a flag and not a warden command is looked up as a
+driver's name: `warden <name> <args...>` runs that driver's own commands with
+the arguments as typed, and `warden <name> --help` lists them. Nothing after
+`<name>` is warden's. A name that finds no driver is the unknown-command
+error.
+
 ## Global Flags
+
+warden's own; a driver's flags are listed by `--help` with the driver
+selected (the container driver's `--runtime <name>`, on `build`, `shell`,
+`doctor` and `clean`: `finch`, `podman` or `docker`, see
+[Configuration](configuration.md#the-container-runtime)).
 
 | Flag | Description |
 |------|-------------|
 | `--config <path>` | The config file to read, which is then the only one read (default: the file `WARDEN_CONFIG` names, then `./warden.toml` if it exists; see [Configuration](configuration.md#the-config-file)). It has no short form. Given with an empty value it is an error |
-| `--driver <name>` | Orchestration driver (container, qemu, vz, hyperv, firecracker) |
-| `--runtime <name>` | Container runtime: `finch`, `docker` or `podman`, the only values it takes (see [Configuration](configuration.md#the-container-runtime)) |
+| `--driver <name>` | The driver to run: `container` (default), `qemu`, `vz`, `hyperv` or `firecracker`, or the name or path of another driver binary ([Drivers](drivers.md#where-a-driver-comes-from)) |
 | `--color <mode>` | Color output (auto, always, never) |
 | `-v, --verbose` | Verbose output; with upstream CA paths, also the list of the files that give a certificate and of the entries not read |
 | `--version` | Print version |

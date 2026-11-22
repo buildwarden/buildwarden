@@ -1,9 +1,11 @@
 // Package specs_test ties the ledger producer, the specification documents
-// under specs/ and the book's mirror of them together (RELAY-05), and the
-// book's seams page to the pins of the seam specifications under
-// tools/conformance/ (TEST-05). It holds no code of its own: specs/ is a
-// documentation tree, and this test only reads it, through the exported relay
-// and ledger APIs.
+// under specs/ and the book's mirror of them together (RELAY-05), the book's
+// seams page to the pins of the seam specifications under tools/conformance/
+// (TEST-05), the driver contract's schema to its document's examples, and the
+// three Go copies of that contract's tables to its document. It holds no code
+// of its own: specs/ is a documentation tree, and this test only reads it,
+// through the exported relay and ledger APIs and, for the tables, the Go
+// source that holds them.
 package specs_test
 
 import (
@@ -19,6 +21,8 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
+
 	"github.com/buildwarden/buildwarden/ledger"
 	"github.com/buildwarden/buildwarden/relay"
 )
@@ -27,7 +31,16 @@ const draft202012 = "https://json-schema.org/draft/2020-12/schema"
 
 // repo is the repository root as an fs.FS. io/fs paths always use forward
 // slashes, so every check below is the same on Windows.
-func repo() fs.FS { return os.DirFS("..") }
+func repo() fs.FS { return lfFS{os.DirFS("..")} }
+
+// lfFS reads every file with CRLF line ends as LF, so that a checkout with
+// core.autocrlf on Windows reads the specifications as CI and Git hold them.
+type lfFS struct{ fs.FS }
+
+func (f lfFS) ReadFile(name string) ([]byte, error) {
+	data, err := fs.ReadFile(f.FS, name)
+	return bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n")), err
+}
 
 // schemaIDs maps each specs/*/v*.schema.json file's $id to the files that
 // declare it, after checking that each parses and declares the 2020-12 draft.
@@ -572,5 +585,223 @@ func TestSeamRefChecks(t *testing.T) {
 				t.Fatal("want a failure, got none")
 			}
 		})
+	}
+}
+
+// The driver contract (seam 9) is specified here, in specs/driver-contract/,
+// until it moves to the specifications repository. Its document's JSON
+// examples are each a code block whose info string names the definition of
+// v1.schema.json the example is an instance of.
+const (
+	driverContractDoc    = "specs/driver-contract/v1.md"
+	driverContractSchema = "specs/driver-contract/v1.schema.json"
+)
+
+// driverContractDefs are the definitions every one of which the document
+// shows an example of: describe, each message, each request, each result and
+// the error object.
+var driverContractDefs = []string{
+	"describe", "describe-flag", "describe-key",
+	"start", "relay-started", "claimed", "environment-started", "exited", "stop",
+	"stopped", "failed",
+	"reap", "doctor", "setup", "image-prepare", "image-list", "image-verify",
+	"clean", "attach", "ext",
+	"reap-result", "doctor-result", "setup-result", "image-prepare-result",
+	"image-list-result", "image-verify-result", "clean-result", "attach-result",
+	"error",
+}
+
+// example is one JSON code block of a document: the definition its info
+// string names, its text and the line it starts on.
+type example struct {
+	def, text string
+	line      int
+}
+
+// jsonExamples returns the document's fenced code blocks whose info string
+// starts with "json", and fails for one that names no definition.
+func jsonExamples(doc string) ([]example, error) {
+	var out []example
+	var cur *example
+	var body strings.Builder
+	for i, line := range strings.Split(doc, "\n") {
+		switch {
+		case cur == nil && strings.HasPrefix(line, "```json"):
+			def := strings.TrimSpace(strings.TrimPrefix(line, "```json"))
+			if def == "" {
+				return nil, fmt.Errorf("line %d: an example names no definition",
+					i+1)
+			}
+			cur = &example{def: def, line: i + 1}
+			body.Reset()
+		case cur != nil && strings.HasPrefix(line, "```"):
+			cur.text = body.String()
+			out = append(out, *cur)
+			cur = nil
+		case cur != nil:
+			body.WriteString(line + "\n")
+		}
+	}
+	if cur != nil {
+		return nil, fmt.Errorf("line %d: an example is not closed", cur.line)
+	}
+	return out, nil
+}
+
+// driverContractCompiler loads the contract's schema from fsys.
+func driverContractCompiler(fsys fs.FS) (*jsonschema.Compiler, string, error) {
+	data, err := fs.ReadFile(fsys, driverContractSchema)
+	if err != nil {
+		return nil, "", err
+	}
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(data))
+	if err != nil {
+		return nil, "", fmt.Errorf("%s: %w", driverContractSchema, err)
+	}
+	m, ok := doc.(map[string]any)
+	if !ok {
+		return nil, "", fmt.Errorf("%s is not an object", driverContractSchema)
+	}
+	id, _ := m["$id"].(string)
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource(id, doc); err != nil {
+		return nil, "", err
+	}
+	return c, id, nil
+}
+
+// checkDriverContractExamples validates every example of the document
+// against the definition it names, and fails when a definition of
+// driverContractDefs has no example.
+func checkDriverContractExamples(fsys fs.FS) error {
+	doc, err := fs.ReadFile(fsys, driverContractDoc)
+	if err != nil {
+		return err
+	}
+	exs, err := jsonExamples(string(doc))
+	if err != nil {
+		return fmt.Errorf("%s: %w", driverContractDoc, err)
+	}
+	c, id, err := driverContractCompiler(fsys)
+	if err != nil {
+		return err
+	}
+	if _, err := c.Compile(id); err != nil {
+		return fmt.Errorf("%s: %w", driverContractSchema, err)
+	}
+	shown := map[string]bool{}
+	for _, ex := range exs {
+		sch, err := c.Compile(id + "#/$defs/" + ex.def)
+		if err != nil {
+			return fmt.Errorf("%s:%d: definition %q: %w", driverContractDoc, ex.line,
+				ex.def, err)
+		}
+		v, err := jsonschema.UnmarshalJSON(strings.NewReader(ex.text))
+		if err != nil {
+			return fmt.Errorf("%s:%d: not JSON: %w", driverContractDoc, ex.line, err)
+		}
+		if err := sch.Validate(v); err != nil {
+			return fmt.Errorf("%s:%d: not a valid %s: %w", driverContractDoc, ex.line,
+				ex.def, err)
+		}
+		shown[ex.def] = true
+	}
+	for _, def := range driverContractDefs {
+		if !shown[def] {
+			return fmt.Errorf("%s shows no example of %s", driverContractDoc, def)
+		}
+	}
+	return nil
+}
+
+func TestDriverContractExamples(t *testing.T) {
+	if err := checkDriverContractExamples(repo()); err != nil {
+		t.Error(err)
+	}
+}
+
+// The schema refuses what the document says is not valid, so that its
+// examples' passing means something.
+func TestDriverContractSchemaRefuses(t *testing.T) {
+	c, id, err := driverContractCompiler(repo())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ def, doc string }{
+		{"describe", `{"contract": [1], "name": "x", "version": "1", "commands": ["run"],
+		  "capabilities": {"vm": false, "shell": false, "keep": "none", "exited": false,
+		  "containerfile": "translate", "guest_os": ["linux"]}}`},
+		{"describe", `{"contract": [1], "name": "Bad-Name", "version": "1",
+		  "commands": ["run", "reap"], "capabilities": {"vm": false, "shell": false,
+		  "keep": "none", "exited": false, "containerfile": "translate",
+		  "guest_os": ["linux"]}}`},
+		{"describe-flag", `{"name": "x", "value": true, "commands": ["image-list"],
+		  "usage": "u"}`},
+		{"describe-key", `{"key": "vm.network", "type": "string", "commands": ["run"],
+		  "usage": "u"}`},
+		{"describe-key", `{"key": "driver.x.k", "type": "duration", "commands": ["run"],
+		  "usage": "u"}`},
+		{"start", `{"type": "start", "contract": 1, "mode": "build", "guest_os": "linux",
+		  "context_dir": "/c"}`},
+		{"start", `{"type": "start", "contract": 1, "mode": "build", "guest_os": "linux",
+		  "context_dir": "/c", "probe": true, "claim_token": "t"}`},
+		{"start", `{"type": "start", "contract": 1, "mode": "build", "guest_os": "linux",
+		  "context_dir": "/c", "probe": true, "collector": {}}`},
+		{"start", `{"type": "start", "contract": 1, "build_id": "ABC", "mode": "build",
+		  "claim_token": "t", "guest_os": "linux", "context_dir": "/c",
+		  "build_script": "/s", "diagnostics_dir": "/o", "state_file": "/f"}`},
+		{"relay-started", `{"type": "relay-started", "guest_os": "linux",
+		  "claim": {"network": "unix", "address": "/s"}}`},
+		{"stop", `{"type": "stop", "reason": "bored"}`},
+		{"failed", `{"type": "failed"}`},
+		{"error", `{"code": "oops", "msg": "m"}`},
+		{"start", `{"type": "start", "contract": 1, "mode": "build", "guest_os": "linux",
+		  "context_dir": "/c", "probe": true, "args": ["-x"]}`},
+		{"clean", `{"contract": 1}`},
+	} {
+		sch, err := c.Compile(id + "#/$defs/" + tc.def)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := jsonschema.UnmarshalJSON(strings.NewReader(tc.doc))
+		if err != nil {
+			t.Fatalf("%s: %v", tc.doc, err)
+		}
+		if sch.Validate(v) == nil {
+			t.Errorf("%s accepted %s", tc.def, tc.doc)
+		}
+	}
+}
+
+// A json example with no definition named, one that does not match its
+// definition, and a definition without an example each fail the check.
+func TestDriverContractExampleChecks(t *testing.T) {
+	schema, err := fs.ReadFile(repo(), driverContractSchema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := fs.ReadFile(repo(), driverContractDoc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, edit := range map[string]func(string) string{
+		"no definition named": func(s string) string {
+			return s + "\n```json\n{}\n```\n"
+		},
+		"an example that does not match": func(s string) string {
+			return s + "\n```json stop\n{\"type\": \"stop\"}\n```\n"
+		},
+		"a definition without an example": func(s string) string {
+			return strings.Replace(s, "```json claimed\n",
+				"```json environment-started\n", 1)
+		},
+	} {
+		m := fstest.MapFS{
+			driverContractSchema: &fstest.MapFile{Data: schema},
+			driverContractDoc:    file(edit(string(doc))),
+		}
+		if err := checkDriverContractExamples(m); err == nil {
+			t.Errorf("%s: want a failure, got none", name)
+		}
 	}
 }

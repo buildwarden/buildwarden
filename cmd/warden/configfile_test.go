@@ -405,7 +405,7 @@ func TestBuildContextConfigIsNotRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveConfig: %v", err)
 	}
-	req, err := newRequest(cfg, []string{context})
+	req, err := newRequest(cfg, linkedSel(cfg), []string{context})
 	if err != nil {
 		t.Fatalf("newRequest: %v", err)
 	}
@@ -444,12 +444,11 @@ func TestConfigFlagOnACommandThatReadsNoConfiguration(t *testing.T) {
 		{"image", "list", "--config", missing},
 		{"--config", missing, "--version"},
 	} {
-		rootCmd.SetArgs(args)
 		t.Cleanup(func() {
 			rootCmd.SetArgs(nil)
 			_ = rootCmd.Flags().Set("version", "false")
 		})
-		if err := rootCmd.Execute(); err != nil {
+		if err := execute(args); err != nil {
 			t.Errorf("warden %v: %v", args, err)
 		}
 	}

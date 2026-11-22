@@ -9,6 +9,7 @@ tools/relay-vm/hyperv/init text eol=lf
 # fail them (GLOBAL-07).
 tools/tier1/**/testdata/**    text eol=lf
 tools/workflow/**/testdata/** text eol=lf
+cmd/warden/testdata/**        -text
 # The Firecracker direct-boot launcher is PID 1 like the relay's init, and the
 # kernel config fragments are read by Kconfig on Linux.
 tools/firecracker-vm/init     text eol=lf

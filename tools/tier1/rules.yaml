@@ -63,7 +63,7 @@ rules:
   TEST-01: {owner: "make test"}
   TEST-02: {follow-up: "test scoping and tier2_gaps consistency"}
   TEST-03: {follow-up: "test scoping and tier2_gaps consistency"}
-  TEST-05: {owner: "the conformance workflow (the specs repository's suites at the pinned releases) and make test (the ledger round-trip tests)"}
+  TEST-05: {owner: "the conformance workflow (the specs repository's suites at the pinned releases) and make test (the ledger round-trip tests; the driver suite's static tier runs there)"}
   TEST-07: {follow-up: "test scoping and tier2_gaps consistency"}
   TEST-08: {owner: "the security suite (security-suite item)"}
 
@@ -84,7 +84,10 @@ drivers:
   all: [container, qemu, vz, hyperv, firecracker]
   dirs: [container, qemu, vz, hyperv, firecracker]
   shared: ["driver/*.go", "driver/winguest/", "driver/linuxguest/", "driver/relayvm/",
-    "driver/script/", "relay/", "ledger/", "collector/", "relaycfg/", "bootstrap/"]
+    "driver/script/", "relay/", "ledger/", "collector/", "relaycfg/", "bootstrap/",
+    "driver/drivercmd/", "driver/relaysource/", "driver/buildlink/", "driver/resolvers/",
+    cmd/warden/buildseq.go, cmd/warden/buildrecord.go, cmd/warden/linked.go,
+    cmd/warden/drivercall.go]
 
 # BOOT-07: the bootstrap surface and the document that owns the model. The
 # relay's guest-facing endpoints are the control plane (/ca.pem, /v1/output,
@@ -123,9 +126,10 @@ schema_doc:
   prose_only: [build-ledger]
 
 # GLOBAL-08, EXEC-04: versioned seams, each with the code that defines it
-# and the contract path a change to that code must also touch. For a seam
-# specified in the specs repository that path is the file that pins the
-# release of its specification here (TEST-05). The collector seam has two
+# and the contract path a change to that code must also touch: for a seam
+# specified in this repository its specification under specs/, and for a
+# seam specified in the specs repository the file that pins the release of
+# its specification here (TEST-05). The collector seam has two
 # specifications and so two entries, one for each pin.
 seams:
   - name: relay-claim
@@ -151,6 +155,11 @@ seams:
   - name: bootstrap-config
     code: [bootstrap/bootstrap.go]
     contract: tools/conformance/bootstrap-config/go.mod
+  - name: driver-contract
+    code: [driver/drivercmd/, driver/host.go, cmd/warden/drivercall.go,
+           cmd/warden/driverlookup.go, cmd/warden/buildseq.go,
+           cmd/warden/buildrecord.go]
+    contract: specs/driver-contract/v1.md
 
 # UX-01, ORCH-03, UX-03: the user-facing surface and its reference docs.
 surface:

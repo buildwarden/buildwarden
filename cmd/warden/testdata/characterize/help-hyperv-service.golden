@@ -1,0 +1,26 @@
+The privileged helper is a LocalSystem Windows service that performs ONLY
+host network standup (New-VMSwitch / New-NetNat / New-NetIPAddress) on behalf of
+non-elevated builds, over a named pipe ACL'd to Administrators and Hyper-V
+Administrators. With it installed, 'warden build --driver hyperv' runs entirely
+without elevation and stands up a fresh isolated network per build (no shared
+durable switch). VM lifecycle always runs in-process; only network standup is
+delegated.
+
+Usage:
+  warden hyperv service [command]
+
+Available Commands:
+  install     Install and start the privileged helper service (run once, elevated)
+  run         Run the privileged helper (invoked by the SCM; or in a console to smoke-test)
+  uninstall   Stop and remove the privileged helper service (elevated)
+
+Flags:
+  -h, --help   help for service
+
+Global Flags:
+      --color string    color output (auto, always, never)
+      --config string   config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
+      --driver string   driver to run: container (default), qemu, vz, hyperv or firecracker, or the name or path of another driver binary
+  -v, --verbose         verbose output
+
+Use "warden hyperv service [command] --help" for more information about a command.

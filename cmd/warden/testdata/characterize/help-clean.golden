@@ -1,0 +1,31 @@
+Remove containers, networks, and per-build images left behind by
+interrupted or crashed warden builds. Only removes resources that are not
+associated with a currently running warden process.
+
+With --driver firecracker it needs no container runtime: it kills VMMs left
+on a network slot by a warden that did not exit cleanly (or by --keep-vms)
+and removes the work dirs and per-build rootfs copies of builds that are no
+longer running. With --driver hyperv it likewise needs no container runtime:
+it removes the build and relay VMs, ephemeral build switch and work dir of
+each build that is no longer running (including VMs kept with --keep-vms).
+
+Nothing that a later build would reuse is removed: prepared and downloaded
+VM images, the relay boot disk and the support images stay. --cache also
+removes warden's whole cache directory, so the next VM build downloads and
+prepares its images again.
+
+Usage:
+  warden clean [flags]
+
+Flags:
+      --cache   also remove the whole cache (prepared and downloaded VM images, relay boot disk)
+  -h, --help    help for clean
+
+Global Flags:
+      --color string    color output (auto, always, never)
+      --config string   config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
+      --driver string   driver to run: container (default), qemu, vz, hyperv or firecracker, or the name or path of another driver binary
+  -v, --verbose         verbose output
+
+Flags of driver "container":
+      --runtime string   container runtime (finch, podman, docker)

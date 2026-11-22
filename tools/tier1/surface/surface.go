@@ -1,6 +1,14 @@
 // Package surface extracts warden's user-facing surface, cobra flag names and
 // toml config keys, from Go source at two revisions, and checks it against
 // the reference docs (UX-01, ORCH-03) and for silent removals (UX-03).
+//
+// The bundled drivers declare their flags and keys as drivercmd.Setting
+// literals in their own packages, so the surface also holds what those
+// declare: a Setting's Flag is a flag, and its Key is a key by the last
+// element of its path, which is the identity a toml tag gives. Its Common,
+// a common key the driver honours, is a key by its name. Each of its Aliases,
+// a key's old names, is a key the same way, so a key moved with its old name
+// kept is not removed.
 package surface
 
 import (
@@ -33,8 +41,19 @@ type Surface struct {
 	Literals map[string]bool
 }
 
-// Extract parses files (path to source) without type-checking.
+// driverRoot is the directory of the bundled drivers, whose Setting
+// literals are read in it and in each directory directly under it.
+const driverRoot = "driver/"
+
+// Extract parses files (path to source) without type-checking: their flag
+// calls, toml tags and string literals, and their drivercmd.Setting
+// literals.
 func Extract(files map[string]string) (*Surface, error) {
+	return extract(files, true)
+}
+
+// extract is Extract; with all false it reads the Setting literals only.
+func extract(files map[string]string, all bool) (*Surface, error) {
 	s := &Surface{Names: map[string]Name{}, Literals: map[string]bool{}}
 	paths := make([]string, 0, len(files))
 	for p := range files {
@@ -47,9 +66,111 @@ func Extract(files map[string]string) (*Surface, error) {
 		if err != nil {
 			return nil, fmt.Errorf("surface: %w", err)
 		}
-		s.file(fset, p, f)
+		s.settings(fset, p, f)
+		if all {
+			s.file(fset, p, f)
+		}
 	}
 	return s, nil
+}
+
+// settings adds the flags and keys of f's drivercmd.Setting literals,
+// the elements of a []drivercmd.Setting whose type is elided included.
+func (s *Surface) settings(fset *token.FileSet, path string, f *ast.File) {
+	inKit := f.Name.Name == "drivercmd"
+	ast.Inspect(f, func(n ast.Node) bool {
+		cl, ok := n.(*ast.CompositeLit)
+		if !ok {
+			return true
+		}
+		if isSetting(cl.Type, inKit) {
+			s.setting(fset, path, cl)
+			return true
+		}
+		arr, ok := cl.Type.(*ast.ArrayType)
+		if !ok || !isSetting(arr.Elt, inKit) {
+			return true
+		}
+		for _, e := range cl.Elts {
+			if el, ok := e.(*ast.CompositeLit); ok && el.Type == nil {
+				s.setting(fset, path, el)
+			}
+		}
+		return true
+	})
+}
+
+// isSetting reports whether e names drivercmd.Setting: as a selector, or as
+// Setting inside package drivercmd.
+func isSetting(e ast.Expr, inKit bool) bool {
+	switch t := e.(type) {
+	case *ast.SelectorExpr:
+		x, ok := t.X.(*ast.Ident)
+		return ok && x.Name == "drivercmd" && t.Sel.Name == "Setting"
+	case *ast.Ident:
+		return inKit && t.Name == "Setting"
+	}
+	return false
+}
+
+// setting adds the flag and key one Setting literal declares.
+func (s *Surface) setting(fset *token.FileSet, path string, cl *ast.CompositeLit) {
+	line := fset.Position(cl.Pos()).Line
+	for _, e := range cl.Elts {
+		kv, ok := e.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		field, ok := kv.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		if field.Name == "Aliases" {
+			s.aliases(path, line, kv.Value)
+			continue
+		}
+		v, ok := stringLit(kv.Value)
+		if !ok || v == "" {
+			continue
+		}
+		switch field.Name {
+		case "Flag":
+			s.add("flag", v, path, line)
+		case "Key":
+			s.add("key", lastElement(v), path, line)
+		case "Common":
+			s.add("key", v, path, line)
+		}
+	}
+}
+
+// aliases adds each string of a Setting's Aliases as a key, by the last
+// element of its path.
+func (s *Surface) aliases(path string, line int, e ast.Expr) {
+	cl, ok := e.(*ast.CompositeLit)
+	if !ok {
+		return
+	}
+	for _, el := range cl.Elts {
+		if v, ok := stringLit(el); ok && v != "" {
+			s.add("key", lastElement(v), path, line)
+		}
+	}
+}
+
+// stringLit is e's value when e is a string literal.
+func stringLit(e ast.Expr) (string, bool) {
+	lit, ok := e.(*ast.BasicLit)
+	if !ok || lit.Kind != token.STRING {
+		return "", false
+	}
+	v, err := strconv.Unquote(lit.Value)
+	return v, err == nil
+}
+
+// lastElement is the last element of a dotted key path.
+func lastElement(key string) string {
+	return key[strings.LastIndex(key, ".")+1:]
 }
 
 func (s *Surface) add(kind, name, file string, line int) {
@@ -143,18 +264,20 @@ func tomlKey(f *ast.Field) string {
 	return key
 }
 
-// Check compares the surface in dir's non-test Go files at the diff's base
-// and HEAD. sev gives each rule's severity.
+// Check compares the surface in dir's non-test Go files, and the Setting
+// literals of the non-test Go files of driver/ and of each directory directly
+// under it, at the diff's base and HEAD. It runs when the diff touches dir or
+// driver/. sev gives each rule's severity.
 func Check(d *diff.Diff, dir string, docs []string,
 	sev func(string) report.Severity) ([]report.Finding, error) {
-	if !touched(d, dir) {
+	if !touched(d, dir) && !touched(d, driverRoot) {
 		return nil, nil
 	}
-	base, err := load(d, d.Base, dir)
+	base, err := loadAll(d, d.Base, dir)
 	if err != nil {
 		return nil, err
 	}
-	head, err := load(d, d.Head, dir)
+	head, err := loadAll(d, d.Head, dir)
 	if err != nil {
 		return nil, err
 	}
@@ -221,12 +344,32 @@ func touched(d *diff.Diff, dir string) bool {
 	return false
 }
 
-// load reads dir's non-test Go files (not its subdirectories) at rev.
-func load(d *diff.Diff, rev, dir string) (*Surface, error) {
+// loadAll is dir's surface at rev with the drivers' Setting literals added;
+// the literals that stand for an alias are dir's alone.
+func loadAll(d *diff.Diff, rev, dir string) (*Surface, error) {
+	s, err := extract(sources(d, rev, dir, 0), true)
+	if err != nil {
+		return nil, err
+	}
+	drivers, err := extract(sources(d, rev, driverRoot, 1), false)
+	if err != nil {
+		return nil, err
+	}
+	for id, n := range drivers.Names {
+		if _, dup := s.Names[id]; !dup {
+			s.Names[id] = n
+		}
+	}
+	return s, nil
+}
+
+// sources are the non-test Go files at rev in dir and in its directories
+// down to depth below it.
+func sources(d *diff.Diff, rev, dir string, depth int) map[string]string {
 	files := map[string]string{}
 	for _, p := range d.List(rev, dir) {
 		rest := strings.TrimPrefix(p, dir)
-		if strings.Contains(rest, "/") || !strings.HasSuffix(p, ".go") ||
+		if strings.Count(rest, "/") > depth || !strings.HasSuffix(p, ".go") ||
 			strings.HasSuffix(p, "_test.go") {
 			continue
 		}
@@ -234,5 +377,5 @@ func load(d *diff.Diff, rev, dir string) (*Surface, error) {
 			files[p] = src
 		}
 	}
-	return Extract(files)
+	return files
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/fatih/color"
 
+	"github.com/buildwarden/buildwarden/driver/container"
+	"github.com/buildwarden/buildwarden/driver/drivercmd"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
 )
 
@@ -27,12 +30,14 @@ type precedenceLevel struct {
 // that inConfigFiles does not reset, and the variables it reads.
 func resetPrecedenceFlags(t *testing.T) {
 	t.Helper()
-	for _, name := range []string{"WARDEN_IMAGE", "WARDEN_VERBOSE", "NO_COLOR"} {
+	for _, name := range []string{"WARDEN_IMAGE", "WARDEN_CTR_CLI", "WARDEN_VERBOSE",
+		"NO_COLOR"} {
 		t.Setenv(name, "")
 	}
 	noColor := color.NoColor
 	t.Cleanup(func() {
-		flagOutput, flagCapture, flagNetwork, flagBuildLink = "", "", "", ""
+		flagOutput, flagCapture, flagBuildLink = "", "", ""
+		precedenceArgs = nil
 		flagColor, flagImgSource = "", ""
 		flagCPUs, flagMemoryMB = 0, 0
 		flagNoCompress, flagVerbose = false, false
@@ -50,6 +55,37 @@ func setFlag(p *string, v string) func(*testing.T) {
 
 func setIntFlag(p *int, v int) func(*testing.T) {
 	return func(*testing.T) { *p = v }
+}
+
+// precedenceArgs are the driver's flags as warden hands them on in args.
+var precedenceArgs []string
+
+func setArg(v string) func(*testing.T) {
+	return func(*testing.T) { precedenceArgs = []string{v} }
+}
+
+// driverSetting is a driver's setting as the kit resolves it for command
+// from the config file warden read, precedenceArgs and the environment.
+func driverSetting(drv, command, name string) func(*testing.T, *Config) string {
+	return func(t *testing.T, c *Config) string {
+		settings := container.Settings
+		if l := linkedDrivers[drv]; l != nil {
+			settings = l.Settings
+		}
+		set, err := drivercmd.Resolve(drv, settings, command,
+			precedenceArgs, absConfigFile(c), os.Environ())
+		if err != nil {
+			t.Fatalf("resolving: %v", err)
+		}
+		for _, s := range settings {
+			if s.Name == name && s.Type == drivercmd.Age {
+				d, _ := set.Age(name)
+				return d.String()
+			}
+		}
+		v, _ := set.String(name)
+		return v
+	}
 }
 
 // The precedence, key by key, as the design's table has it: for every key,
@@ -85,18 +121,16 @@ func TestPrecedenceKeyByKey(t *testing.T) {
 				{name: "--driver", set: setFlag(&flagDriver, "hyperv"),
 					want: "hyperv"},
 			}},
-		{"[runtime] cli", "",
-			func(_ *testing.T, c *Config) string { return c.Runtime.CLI },
+		{"[runtime] cli", "", driverSetting("container", "run", "runtime"),
 			[]precedenceLevel{
 				{name: "file", file: "[runtime]\ncli = \"podman\"\n",
 					want: "podman"},
 				{name: "WARDEN_CTR_CLI", set: setEnv("WARDEN_CTR_CLI", "docker"),
 					want: "docker"},
-				{name: "--runtime", set: setFlag(&flagRuntime, "finch"),
+				{name: "--runtime", set: setArg("--runtime=finch"),
 					want: "finch"},
 			}},
-		{"[runtime] relay_image", "",
-			func(_ *testing.T, c *Config) string { return c.Runtime.RelayImage },
+		{"[runtime] relay_image", "", driverSetting("container", "run", "relay-image"),
 			[]precedenceLevel{
 				{name: "file", file: "[runtime]\nrelay_image = \"file/relay:1\"\n",
 					want: "file/relay:1"},
@@ -152,13 +186,13 @@ func TestPrecedenceKeyByKey(t *testing.T) {
 			{name: "file", file: "[vm]\nmemory_mb = 3072\n", want: "3072"},
 			{name: "--memory", set: setIntFlag(&flagMemoryMB, 5120), want: "5120"},
 		}},
-		{"[vm] network", "", func(_ *testing.T, c *Config) string {
-			return resolveNetwork(c, "hyperv")
-		}, []precedenceLevel{
-			{name: "file", file: "[vm]\nnetwork = \"file-net\"\n", want: "file-net"},
-			{name: "--network", set: setFlag(&flagNetwork, "flag-net"),
-				want: "flag-net"},
-		}},
+		{"[vm] network", "", driverSetting("hyperv", "run", "network"),
+			[]precedenceLevel{
+				{name: "file", file: "[vm]\nnetwork = \"file-net\"\n",
+					want: "file-net"},
+				{name: "--network", set: setArg("--network=flag-net"),
+					want: "flag-net"},
+			}},
 		{"[vm] build_link", "default", func(t *testing.T, c *Config) string {
 			_, source, err := resolveBuildLink(c)
 			if err != nil {
@@ -176,21 +210,25 @@ func TestPrecedenceKeyByKey(t *testing.T) {
 		}, []precedenceLevel{
 			{name: "file", file: vmDNSFile(`"10.20.0.53"`), want: "[10.20.0.53]"},
 		}},
-		{"[vm] image_refresh_after", "0s", resolved(func(c *Config) (string, error) {
-			d, err := configAge(c, "image_refresh_after", c.VM.ImageRefreshAfter)
-			return d.String(), err
-		}), []precedenceLevel{
-			{name: "file", file: "[vm]\nimage_refresh_after = \"7d\"\n",
-				want: "168h0m0s"},
-		}},
-		{"[vm] image_min_grace", "0s", resolved(func(c *Config) (string, error) {
-			d, err := configAge(c, "image_min_grace", c.VM.ImageMinGrace)
-			return d.String(), err
-		}), []precedenceLevel{
-			{name: "file", file: "[vm]\nimage_min_grace = \"36h\"\n", want: "36h0m0s"},
-		}},
-		{"[vm] windows_image", "", func(_ *testing.T, c *Config) string {
-			src, _, _ := hypervImageSource(flagImgSource, c, hyperv.ImageStatus{})
+		{"[vm] image_refresh_after", "0s",
+			driverSetting("qemu", "run", "image-refresh-after"),
+			[]precedenceLevel{
+				{name: "file", file: "[vm]\nimage_refresh_after = \"7d\"\n",
+					want: "168h0m0s"},
+			}},
+		{"[vm] image_min_grace", "0s", driverSetting("hyperv", "run", "image-min-grace"),
+			[]precedenceLevel{
+				{name: "file", file: "[vm]\nimage_min_grace = \"36h\"\n",
+					want: "36h0m0s"},
+			}},
+		{"[vm] windows_image", "", func(t *testing.T, c *Config) string {
+			set, err := drivercmd.Resolve("hyperv", hyperv.Settings,
+				drivercmd.CmdImagePrepare, nil, absConfigFile(c), os.Environ())
+			if err != nil {
+				t.Fatal(err)
+			}
+			src, _, _ := hypervImageSource(flagImgSource, prepareOptionsFrom(set),
+				hyperv.ImageStatus{})
 			return src
 		}, []precedenceLevel{
 			{name: "file",
@@ -200,12 +238,12 @@ func TestPrecedenceKeyByKey(t *testing.T) {
 				set:  setFlag(&flagImgSource, "https://example.com/flag.iso"),
 				want: "https://example.com/flag.iso"},
 		}},
-		{"[vm] windows_image_update", "", func(_ *testing.T, c *Config) string {
-			return c.VM.WindowsImageUpdate
-		}, []precedenceLevel{
-			{name: "file", file: "[vm]\nwindows_image_update = \"reuse\"\n",
-				want: "reuse"},
-		}},
+		{"[vm] windows_image_update", "",
+			driverSetting("hyperv", "image-prepare", "windows-image-update"),
+			[]precedenceLevel{
+				{name: "file", file: "[vm]\nwindows_image_update = \"reuse\"\n",
+					want: "reuse"},
+			}},
 		{"[output] color", "auto", func(_ *testing.T, c *Config) string {
 			return c.Output.Color
 		}, []precedenceLevel{

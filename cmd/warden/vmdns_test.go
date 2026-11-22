@@ -29,12 +29,15 @@ func inConfigFiles(t *testing.T, body string) string {
 	home, dir := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	for _, name := range []string{configFromEnv, "WARDEN_CTR_CLI", "WARDEN_DRIVER",
-		"WARDEN_UPSTREAM_CA_CERTS"} {
+	for _, name := range []string{configFromEnv, "WARDEN_CTR_CLI", "WARDEN_IMAGE",
+		"WARDEN_DRIVER", "WARDEN_UPSTREAM_CA_CERTS"} {
 		t.Setenv(name, "")
 	}
+	// No command line has been scanned: the driver's flags are none.
+	driverFlags = &driverFlagState{switches: map[string]bool{}}
 	t.Cleanup(func() {
-		flagRuntime, flagDriver, flagTempDir = "", "", ""
+		driverFlags = &driverFlagState{switches: map[string]bool{}}
+		runtimeFlag, flagDriver, flagTempDir = "", "", ""
 		flagConfig = ""
 		rootCmd.PersistentFlags().Lookup("config").Changed = false
 	})
@@ -161,7 +164,7 @@ func TestBuildRequestDNSForVMDriversOnly(t *testing.T) {
 		"":            nil,
 	} {
 		cfg.Runtime.Driver = d
-		req, err := newRequest(cfg, []string{proj})
+		req, err := newRequest(cfg, linkedSel(cfg), []string{proj})
 		if err != nil {
 			t.Fatalf("%q: %v", d, err)
 		}
@@ -172,34 +175,36 @@ func TestBuildRequestDNSForVMDriversOnly(t *testing.T) {
 }
 
 func TestSetupSlots(t *testing.T) {
-	defer func() { flagDriver, flagSetupSlots = "", 0 }()
-	inConfigFiles(t, "")
 	// Out-of-range counts are refused before any host work, so these run on
-	// every platform without touching it.
+	// every platform without touching it. --slots is the flag of hyperv and
+	// firecracker; another driver refuses it as one it does not take.
 	for _, c := range []struct {
-		driver string
-		slots  int
-		want   string
+		driver, slots, want string
 	}{
-		{"hyperv", 65, "--slots 65 is out of range (1-64)"},
-		{"hyperv", -1, "--slots -1 is out of range (1-64)"},
-		{"firecracker", 257, "--slots 257 is out of range (1-256)"},
-		{"qemu", 4, "--slots is only used by --driver hyperv and firecracker"},
-		{"vz", 4, "--slots is only used by --driver hyperv and firecracker"},
-		{"container", 4, "--slots is only used by --driver hyperv and firecracker"},
+		{"hyperv", "65", "--slots 65 is out of range (1-64)"},
+		{"hyperv", "-1", "--slots -1 is out of range (1-64)"},
+		{"firecracker", "257", "--slots 257 is out of range (1-256)"},
+		{"qemu", "4", `unknown flag --slots for driver "qemu"`},
+		{"vz", "4", `unknown flag --slots for driver "vz"`},
+		{"container", "4", `unknown flag --slots for driver "container"`},
 	} {
-		flagDriver, flagSetupSlots = c.driver, c.slots
-		err := setupCmd.RunE(setupCmd, nil)
+		inConfigFiles(t, "")
+		_, err := runWarden(t, "setup", "--driver", c.driver, "--slots="+c.slots)
 		if err == nil || !strings.Contains(err.Error(), c.want) {
-			t.Errorf("--driver %s --slots %d: err = %v, want %q", c.driver, c.slots,
+			t.Errorf("--driver %s --slots %s: err = %v, want %q", c.driver, c.slots,
 				err, c.want)
 		}
 	}
-	help := setupCmd.Flags().Lookup("slots").Usage
-	for _, want := range []string{"hyperv: build switches to create, 1-64 (default 4)",
-		"firecracker: network slots to create, 1-256 (default 16)"} {
-		if !strings.Contains(help, want) {
-			t.Errorf("--slots help %q does not say %q", help, want)
+	for drv, want := range map[string]string{
+		"hyperv":      "build switches to create, 1-64 (default 4)",
+		"firecracker": "network slots to create, 1-256 (default 16)"} {
+		inConfigFiles(t, "")
+		if _, err := runWarden(t, "setup", "--driver", drv, "--help"); err != nil {
+			t.Fatal(err)
+		}
+		if f := setupCmd.Flags().Lookup("slots"); f == nil ||
+			!strings.Contains(f.Usage, want) {
+			t.Errorf("--driver %s: --slots help %v does not say %q", drv, f, want)
 		}
 	}
 }

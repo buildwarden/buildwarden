@@ -6,8 +6,10 @@ runs your build code and how network isolation is enforced.
 
 ## Driver Selection
 
-By default, BuildWarden uses the container driver if a container runtime is
-detected. Override with the `--driver` flag or a config file entry.
+By default, BuildWarden uses the container driver. Override with the
+`--driver` flag, `WARDEN_DRIVER`, or a config file entry. There is no
+auto-detection: a driver that is not found is an error that says where warden
+looked.
 
 **Flag:**
 ```sh
@@ -22,6 +24,49 @@ warden build --driver container .
 driver = "qemu"
 ```
 
+### Where a driver comes from
+
+A driver is a program named `warden-driver-<name>` (`warden-driver-<name>.exe`
+on Windows) that warden runs through the driver contract
+(`specs/driver-contract/v1.md`), or a driver linked into warden itself. In
+this release `container` is a binary, `warden-driver-container`, installed
+beside warden, and `qemu`, `vz`, `hyperv` and `firecracker` are linked. A
+name is looked up once
+per command, and the first match wins:
+
+1. `PATH`, in order;
+2. the directory warden itself is installed in (symbolic links resolved),
+   when `PATH` gave nothing;
+3. a driver linked into warden.
+
+So a `warden-driver-<name>` in a `PATH` directory that comes before warden's
+own runs in place of the one warden ships, for every command. A file of that
+name that is a directory or cannot be executed is passed over; one reached
+through a relative `PATH` entry (or an empty one, the current directory) is an
+error that names the entry, and is not run. A batch file (`.bat`, `.cmd`) is
+never taken for a driver.
+
+`--driver` and `WARDEN_DRIVER` also take the path of a driver's file
+(anything with a `/`, or on Windows a `\`): the file is used as given. A
+config file may select a driver by name only; `[runtime] driver` holding a
+path is refused, whichever file it is in.
+
+`warden driver list` shows, for each name, the file that would run and where
+it was found, and every other copy beneath it: the ones it shadows and the
+ones it skips. Each build records the same in its output's `driver.json`
+([Output](output.md#driverjson)). A driver binary is given
+`[build] teardown_timeout` (60 s unless set) to tear a build down after it is
+asked to stop; after that, or on a second Ctrl-C, warden kills it and runs its
+`reap` for the build, bounded by the same wait.
+
+To write a driver, implement the commands of the driver contract
+(`specs/driver-contract/v1.md`) in a program named `warden-driver-<name>`,
+and check it from a source tree with `make driver-conformance
+DRIVER=<path>`, which runs the contract's suite against it, real builds
+included ([CONTRIBUTING.md](https://github.com/buildwarden/buildwarden/blob/main/CONTRIBUTING.md)
+lists its options). Put the program on `PATH` and `--driver <name>` runs it;
+`[driver.<name>]` in `warden.toml` holds its settings.
+
 ---
 
 ## Container Driver
@@ -35,7 +80,7 @@ network namespace.
 
 ### Requirements
 
-- Docker, Finch, or Podman
+- Finch, Podman, or Docker
 - Works on: macOS, Linux, Windows — any platform with a container runtime
 
 No additional setup is needed beyond installing a container runtime.
@@ -51,16 +96,19 @@ datadisk: 150GiB
 
 ### Choosing the runtime
 
-With no runtime named, `warden` uses the first of `finch`, `docker` and
-`podman` that answers. To name one, use `--runtime`, `WARDEN_CTR_CLI` or
-`[runtime] cli`:
+With no runtime named, `warden` uses the first of `finch`, `podman` and
+`docker` that answers within 3 seconds. When both `docker` and `podman` are
+installed and running, `podman` is chosen; earlier releases chose `docker`.
+To use another runtime, such as `docker`, name it with `--runtime`,
+`WARDEN_CTR_CLI` or `[driver.container] cli` (old name `[runtime] cli`,
+read until 1.0):
 
 ```sh
 warden build --runtime podman .
 ```
 
 ```toml
-[runtime]
+[driver.container]
 cli = "podman"
 ```
 
@@ -78,6 +126,21 @@ Any other value in effect stops `build`, `shell`, `doctor` and `clean`
 before anything is run, with an error that says where the value is set and
 what to change. A project's `warden.toml` can choose among the three, and
 `--runtime` or `WARDEN_CTR_CLI` replaces its choice with yours.
+
+A runtime you name is used, or the command stops: one that is not on
+`PATH` stops `build` and `shell` before any output directory exists. One
+whose VM or daemon is stopped fails `build` and `shell` at their first call
+to the runtime, its version query, with an error that says to start it and
+to check with `warden doctor`; the output directory is left, as after any
+failed build. `doctor` asks the runtime for its engine's version, waiting
+up to 10 seconds, and is blocked by either. `warden` does not fall back to
+detection, so start the runtime or name another.
+
+With no runtime named, `doctor` detects it as a build does and reports the
+runtime a build would use. When none answers within 3 seconds, it asks each
+installed runtime again with up to 10 seconds; one that answers then is
+running but too slow for detection, and `doctor` is blocked with the fix to
+name it.
 
 The setting belongs to the container driver. A build with a VM driver does
 not read it, so one `warden.toml` can hold `cli` beside the VM drivers'
@@ -212,9 +275,10 @@ once with no network through OOBE and the same tuning as Hyper-V, registers
 the `warden-run` startup task, and powers off; builds boot a throwaway child of
 that layer as SYSTEM. With no `--source`, `image prepare` only re-prepares,
 and builds start that in the background once the layer is
-`[vm] image_refresh_after` old (see the Hyper-V section for the evaluation
-grace rules, which are the same, and the same report of a re-prepare that
-cannot start).
+`[driver] image_refresh_after` old, or `[driver.qemu] image_refresh_after`
+for this driver alone (see the Hyper-V section for the evaluation grace
+rules, which are the same, and the same report of a re-prepare that cannot
+start).
 
 ---
 
@@ -389,7 +453,7 @@ switch.
 
 Prepare a Windows Server base image. By default warden downloads Microsoft's
 current Windows Server 2025 evaluation VHDX (about 11 GB) from the Evaluation
-Center link; `--source` or `[vm] windows_image` names another URL, or a file
+Center link; `--source` or `[driver.hyperv] windows_image` names another URL, or a file
 you already have (registered in place, not copied):
 
 ```sh
@@ -402,7 +466,7 @@ must resolve to a Microsoft host), and the resolved URL, ETag and the sha256
 computed while downloading are recorded in the image manifest and in every
 build's ledger. `--sha256` adds an expected-digest check. When Microsoft
 publishes new media behind the link, the next refresh downloads it beside the
-current base and prepares from it; `[vm] windows_image_update = "reuse"`
+current base and prepares from it; `[driver.hyperv] windows_image_update = "reuse"`
 keeps the current base instead. A base you supplied as a local file is never
 replaced automatically.
 
@@ -422,8 +486,9 @@ starts a background re-prepare (`warden image prepare --driver hyperv` with no
 source does the same by hand), and a build refuses to start with less than a
 day of grace left. A re-prepare that cannot start is reported on the build's
 output with its error and that command to run by hand, and the build goes on
-on the current base. Both ages are set in `[vm]` (`image_refresh_after`,
-`image_min_grace`). Only one prepare runs at a time; superseded layers are
+on the current base. Both ages are set in `[driver]` (`image_refresh_after`,
+`image_min_grace`), or in `[driver.hyperv]` for this driver alone; their old
+names in `[vm]` are read until 1.0. Only one prepare runs at a time; superseded layers are
 deleted by a later prepare once no VM uses them.
 
 Optionally install the privileged helper service so builds run without

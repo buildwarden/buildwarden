@@ -65,7 +65,7 @@ whatever its name; the `config:` line gives its path.
 
 With no file named, `cd repo && warden build` reads the repository's
 `warden.toml`, and that file decides how the repository is measured: the
-driver, the container runtime among finch, docker and podman, the relay
+driver, the container runtime among finch, podman and docker, the relay
 image, the relay's extra trust roots, whether payloads are captured, where
 the output and work directories go, and, with `--driver hyperv`, a base image
 that later builds of every project boot. The `config:` line says the file was
@@ -126,15 +126,9 @@ of the two.
 
 ```toml
 [runtime]
-cli = "finch"              # Container runtime: finch, docker or podman, and nothing
-                           #   else (unset = detected; see The container runtime)
-driver = ""                # Build driver: container, qemu, vz, hyperv, firecracker
-                           #   (default: auto, the container driver)
-relay_image = ""           # Relay image override (container driver)
-                           #   "" = pull ghcr.io/buildwarden/relay:latest (release builds)
-                           #        or build from source (dev builds)
-                           #   "dev" = always build from source
-                           #   "ghcr.io/buildwarden/relay:v0.2.0" = specific version
+driver = ""                # Build driver: container, qemu, vz, hyperv, firecracker,
+                           #   or the name of another driver binary
+                           #   (default: the container driver)
 
 [build]
 dockerfile = ""            # Override Dockerfile discovery
@@ -148,6 +142,11 @@ capture = ""               # Payload capture mode:
                            #   "all" = save both
 tmpdir = ""                # Where each build's private work dir is created
                            #   ("" = the OS temp dir; --tmpdir wins)
+teardown_timeout = "60s"   # How long a driver binary is given to tear a build
+                           #   down when asked to stop, and then its reap;
+                           #   a Go duration from "1s" to "1h". A value that
+                           #   does not parse or is out of range is refused as
+                           #   the file loads. No flag, no variable
 
 [relay]
 upstream_ca_certs = []     # Files or directories of PEM certificates the relay
@@ -159,12 +158,6 @@ system_ca_bundle = true    # With upstream_ca_certs: keep the relay's own system
 cpus = 0                   # Build VM vCPUs (0 = per-driver default; vz, qemu,
                            #   hyperv and firecracker)
 memory_mb = 0              # Build VM memory in MiB (0 = per-driver default)
-network = ""               # hyperv: durable network name (switches <name>-0.., NAT <name>-nat)
-image_refresh_after = "7d" # hyperv: re-prepare the base in the background at this age
-image_min_grace = "1d"     # hyperv: refuse builds with less evaluation grace left
-windows_image = ""         # hyperv: base image URL or local path (default: Microsoft's
-                           # current Server 2025 evaluation download)
-windows_image_update = "auto" # hyperv: "auto" picks up new media at refresh; "reuse" keeps it
 build_link = "100.127.255.252/30" # advanced: the relay-to-build link, a /30 (every VM
                            #   driver; see Advanced options; --build-link wins)
 dns = ["10.20.0.53"]       # the relay's upstream DNS servers, in order, used exclusively
@@ -173,7 +166,89 @@ dns = ["10.20.0.53"]       # the relay's upstream DNS servers, in order, used ex
 [output]
 color = "auto"             # Color mode: auto, always, never
 verbose = false            # Verbose output (shows container runtime commands)
+
+# The drivers' own keys, read by the selected driver only (see Driver settings)
+[driver]                   # Common keys, for every driver that honours them
+image_refresh_after = "7d" # qemu, hyperv: re-prepare the base in the background at this age
+image_min_grace = "1d"     # qemu, hyperv: refuse builds with less evaluation grace left
+
+[driver.container]
+cli = "finch"              # Container runtime: finch, podman or docker, and nothing
+                           #   else (unset = detected; see The container runtime)
+relay_image = ""           # Relay image override
+                           #   "" = pull ghcr.io/buildwarden/relay:latest (release builds)
+                           #        or build from source (dev builds)
+                           #   "dev" = always build from source
+                           #   "ghcr.io/buildwarden/relay:v0.2.0" = specific version
+
+[driver.hyperv]
+network = ""               # durable network name (switches <name>-0.., NAT <name>-nat)
+windows_image = ""         # base image URL or local path (default: Microsoft's
+                           # current Server 2025 evaluation download)
+windows_image_update = "auto" # "auto" picks up new media at refresh; "reuse" keeps it
+image_refresh_after = "7d" # overrides [driver] image_refresh_after for hyperv only
 ```
+
+## Driver settings
+
+warden reads its own keys: `[runtime] driver`, `[build]`, `[relay]`, `[vm]
+cpus`, `memory_mb`, `build_link` and `dns`, and `[output]`. Every other key is
+a driver's, and only the selected driver reads it, in its own process for a
+driver binary, from the config file warden read (warden passes the file's
+path on). A driver's key that the run does not use is not read, so one file
+can hold the settings of several drivers.
+
+- `[driver]` holds the **common keys**, which the driver contract names for
+  every driver: `image_refresh_after` and `image_min_grace` (each an age:
+  a Go duration such as `"36h"`, or days such as `"7d"`). A driver reads the
+  ones it honours (qemu and hyperv honour both) and ignores the rest.
+- `[driver.<name>]` holds the keys of the driver `<name>` and its overrides
+  of the common keys. It is read before `[driver]`: with `[driver]
+  image_refresh_after = "3d"` and `[driver.hyperv] image_refresh_after =
+  "30d"`, hyperv uses 30 days and qemu 3.
+
+For one setting the order is: the driver's flag, then its environment
+variable (`WARDEN_CTR_CLI`, `WARDEN_IMAGE`), then `[driver.<name>]`, then
+`[driver]` for a common key, then the driver's default. A value found at
+one place that the driver cannot use is an error naming that place; the
+next place is not tried.
+
+### Renamed keys
+
+Seven keys moved into these tables. Each old name is still read, as the
+key itself, until BuildWarden 1.0, and only by the driver it belongs to; a
+file that sets one prints one warning line that names the new key. A file
+that sets both names of one key is refused, with both named.
+
+| Old name | New name | Driver |
+|---|---|---|
+| `[runtime] cli` | `[driver.container] cli` | container |
+| `[runtime] relay_image` | `[driver.container] relay_image` | container |
+| `[vm] image_refresh_after` | `[driver] image_refresh_after` | qemu, hyperv |
+| `[vm] image_min_grace` | `[driver] image_min_grace` | qemu, hyperv |
+| `[vm] network` | `[driver.hyperv] network` | hyperv |
+| `[vm] windows_image` | `[driver.hyperv] windows_image` | hyperv |
+| `[vm] windows_image_update` | `[driver.hyperv] windows_image_update` | hyperv |
+
+An old name stands where its new name stands: `[vm] image_refresh_after` is
+read below `[driver.hyperv]`, like `[driver] image_refresh_after`.
+
+### Keys are case-sensitive
+
+A driver's keys are read exactly as written above. A driver's key in another
+letter case, in its table or in its own table's name, is refused by the
+driver that owns it, naming the file, the spelling and the key to write,
+before its value is looked at:
+
+```
+[warden] ERROR: /src/repo/warden.toml: [Runtime] CLI: keys are case-sensitive, and the container driver reads [driver.container] cli (old name [runtime] cli)
+  To fix: write it as [driver.container] cli
+```
+
+Two spellings of one key in one table are refused the same way. A key that
+is no driver's key in any letter case is ignored, as is another driver's
+key while that driver is not selected. warden's own keys are still read in
+any letter case.
 
 ## Upstream CA paths
 
@@ -245,8 +320,8 @@ flag, variable, file, default.
 | Variable | Overrides | Description |
 |----------|-----------|-------------|
 | `WARDEN_DRIVER` | `runtime.driver` | Override driver selection |
-| `WARDEN_IMAGE` | `runtime.relay_image` | Relay image override |
-| `WARDEN_CTR_CLI` | `runtime.cli` | Container runtime: finch, docker or podman (see [The container runtime](#the-container-runtime)) |
+| `WARDEN_IMAGE` | `driver.container.relay_image` | Relay image override (container driver) |
+| `WARDEN_CTR_CLI` | `driver.container.cli` | Container runtime: finch, podman or docker (see [The container runtime](#the-container-runtime)) |
 | `WARDEN_CONFIG` | the config file | The config file to read when `--config` is not given (see [The config file](#the-config-file)); set it absolute |
 | `WARDEN_UPSTREAM_CA_CERTS` | `relay.upstream_ca_certs` | Replaces `relay.upstream_ca_certs`; paths separated by `:` (`;` on Windows) |
 | `NO_COLOR` | `output.color` | Disable colored output (any value) |
@@ -254,11 +329,16 @@ flag, variable, file, default.
 
 ## CLI Flags
 
+A driver's flags are the selected driver's: they are accepted only when it
+is selected, and `--help` lists them in a section of their own (`Flags of
+driver "container":`). A flag that neither warden nor the selected driver
+takes is refused as an unknown flag for that driver.
+
 | Flag | Scope | Description |
 |------|-------|-------------|
 | `--config` | Global | The config file to read, the only one that is (see [The config file](#the-config-file)) |
-| `--driver` | Global | Orchestration driver (container, qemu, vz, hyperv, firecracker) |
-| `--runtime` | Global | Container runtime: finch, docker or podman (see [The container runtime](#the-container-runtime)) |
+| `--driver` | Global | Driver to run: container, qemu, vz, hyperv, firecracker, or the name or path of a driver binary |
+| `--runtime` | container driver: build/shell/doctor/clean | Container runtime: finch, podman or docker (see [The container runtime](#the-container-runtime)) |
 | `--color` | Global | Color mode |
 | `-v, --verbose` | Global | Verbose output |
 | `-o, --output` | build/shell | Output directory |
@@ -270,7 +350,7 @@ flag, variable, file, default.
 | `--guest-os` | build/shell | Guest OS: linux (default) or windows (qemu, hyperv) |
 | `--cpus` | build/shell | Build VM vCPUs (VM drivers) |
 | `--memory` | build/shell | Build VM memory in MiB (VM drivers) |
-| `--network` | build/shell | Durable switch to reuse (hyperv) |
+| `--network` | hyperv driver: build/shell/doctor/setup | Durable switch to reuse |
 | `--keep-vms` | build/shell | Leave VMs and work dir for inspection (VM drivers) |
 | `--tmpdir` | build/shell | Directory for each build's private work dir (default: OS temp dir) |
 | `--build-link` | build/shell/doctor | Advanced: the VM drivers' relay-to-build link, a /30 (see Advanced options) |
@@ -371,19 +451,32 @@ levels that names a runtime is the one in effect:
 
 1. `--runtime`
 2. `WARDEN_CTR_CLI`
-3. `[runtime] cli` in the config file
+3. `[driver.container] cli` in the config file, or its old name `[runtime]
+   cli` (read until 1.0; see [Renamed keys](#renamed-keys))
 
 An empty `--runtime` or `WARDEN_CTR_CLI` is not set, and the next level is
 read. `cli = ""` in the file is not set either, and the runtime is detected.
 
-`warden` runs the runtime by its name, which is looked up on `PATH`. A
+The container driver (`warden-driver-container`) runs the runtime by its
+name, which is looked up on `PATH`. A
 runtime installed outside `PATH` needs its directory added to `PATH`.
 
 ### Detection
 
-When no level names a runtime, BuildWarden probes `finch`, then `docker`,
-then `podman`. The first one that answers `<runtime> info` within 3 seconds
-is used.
+When no level names a runtime, BuildWarden probes `finch`, then `podman`,
+then `docker`. The first one that answers its engine-version query within
+3 seconds is used, by every command, `warden doctor` included: `finch
+version` (which asks nerdctl in finch's VM, and fails when the VM is
+stopped), and `docker version --format '{{.Server.Version}}'` and the
+same for `podman` (on Linux, where podman has no server, it answers with
+its own version). A query that fails or
+prints no version means the runtime is not running.
+
+When both `docker` and `podman` are installed and running, and finch is not,
+`podman` is chosen: detection prefers it, as the open-source, free runtime.
+Earlier releases probed `docker` before `podman` and chose `docker` there.
+To use `docker`, name it: `--runtime docker`, `WARDEN_CTR_CLI=docker`, or
+`cli = "docker"` under `[driver.container]`.
 
 ### Which commands check the value
 
@@ -392,34 +485,79 @@ checks the value in effect:
 
 | Command | The runtime setting |
 |---------|---------------------|
-| `warden build`, `warden shell` and `warden doctor` with the container driver | checked |
-| `warden clean` with the container driver, `qemu` or `vz` (under all three it removes leftover containers) | checked |
-| `build`, `shell` and `doctor` with a VM driver; `clean` with `hyperv` or `firecracker`; `setup`; `image prepare` | not read |
+| `warden build`, `warden shell`, `warden doctor` and `warden clean` with the container driver | checked |
+| Every command with a VM driver (`clean` with `qemu` or `vz` no longer removes containers); `setup`; `image prepare` | not read |
 
 So one `warden.toml` can hold the settings of several drivers:
-`warden build --driver qemu` does not fail on a `[runtime] cli` it does not
-use, and `--runtime` is accepted and ignored there. A value that a higher
+`warden build --driver qemu` does not fail on a `cli` it does not use.
+`--runtime` is the container driver's flag: with another driver, or on a
+command that selects no driver, it is an unknown flag. A value that a higher
 level replaces is not checked either. With an unsupported `cli` in
 `./warden.toml`, `warden build --runtime docker` builds with Docker, which is
 also the way to build someone else's repository without editing its file.
 
 ### A value that is not supported
 
-A value in effect that is not `finch`, `docker` or `podman` is an error. The
+A value in effect that is not `finch`, `podman` or `docker` is an error. The
 command stops before it looks up or runs anything and before it makes an
 output directory, a container or a network, and `warden` exits 1. The message
 says where the value was set and what to change:
 
 ```
-[warden] ERROR: [runtime] cli in /src/repo/warden.toml is "dokcer"; the container driver supports finch, docker and podman
-  To fix: set it to finch, docker or podman, or remove it; --runtime with one of those replaces it for one command
+[warden] ERROR: [runtime] cli in /src/repo/warden.toml is "dokcer"; the container driver supports finch, podman and docker
+  To fix: set it to finch, podman or docker, or remove it; --runtime with one of those replaces it for one command
 ```
 
 No other value is tried in its place: neither a lower level's nor a detected
 runtime.
 
+### A runtime that is not installed or not running
+
+`warden build` and `warden shell` also refuse a runtime that a level names
+but that is not on `PATH`. The container driver refuses it before the build
+starts: no output directory, container or network is made, and `warden`
+exits 1. The message names where the runtime was named, and the fix is to
+install it, or to name another:
+
+```
+[warden] ERROR: WARDEN_CTR_CLI names the container runtime podman, which is not installed (not found on PATH)
+  To fix: install Podman, or set WARDEN_CTR_CLI to another runtime, or unset it
+```
+
+A named runtime that is on `PATH` but not running (its VM or daemon is
+stopped) is not checked before the build: the build's first call to it, the
+engine-version query above with up to 10 seconds, fails, and `warden` exits
+1 with the fix to start it. The output directory is left, as after any
+failed build:
+
+```
+[warden] ERROR: container runtime finch is installed but not running (`finch version` failed)
+  To fix: start its VM: finch vm start (or finch vm init the first time); warden doctor checks it
+```
+
+`warden doctor` asks a named runtime the same query and waits up to 10
+seconds. A runtime that is not installed or not running blocks it with the
+errors above: it exits 1 and prints no `ok`. Detection is not tried in its
+place.
+
+When no level names a runtime, `warden doctor` detects it as a build does,
+3 seconds per candidate, so it reports the runtime a build would use. When
+detection finds none running, doctor asks each installed one again, in the
+same order, waiting up to 10 seconds. The first that answers is running but
+too slow for detection, and doctor is blocked with the fix to name it:
+
+```
+[warden] ERROR: container runtime podman is running but answered after more than 3 s, so builds skip it
+  To fix: name it: --runtime podman, WARDEN_CTR_CLI=podman or [driver.container] cli = "podman"
+```
+
+When none answers, detection's own error says that none is running, with
+the fix to start it. At most, doctor waits 45 seconds: 3 seconds for each
+of the three runtimes and then 10 seconds for each again, 39 seconds, plus
+up to 1 second per query for the runtime's CLI to release its output.
+
 <!-- TRANSITIONAL(runtime-former-values): this subsection is removed with
-     cmd/warden/runtime_former.go, in the change that prepares 1.0. -->
+     driver/container/runtime_former.go, in the change that prepares 1.0. -->
 ### A path, or another runtime
 
 Earlier releases ran whatever program the setting named, from every level.
@@ -458,7 +596,7 @@ neither tested nor supported.
 
 ## Driver Selection
 
-When `driver` is empty (the default), the **container** driver is used. Use `--driver` or `WARDEN_DRIVER` to select a VM driver:
+When `driver` is empty (the default), the **container** driver is used. Use `--driver` or `WARDEN_DRIVER` to select another; either may also give the path of a driver binary, which `driver` in a config file may not ([Drivers](drivers.md#where-a-driver-comes-from)). The bundled drivers:
 
 - `container` — Unprivileged container with iptables isolation (default)
 - `qemu` — Two-VM topology, cross-platform, requires `qemu-system-*`
@@ -472,7 +610,8 @@ When `driver` is empty (the default), the **container** driver is used. Use `--d
 
 For release builds (`warden --version` shows a version tag), the relay is pulled as a pre-built container image. For development builds (`version = "dev"`), it's compiled from source.
 
-Override with `relay_image`, or `WARDEN_IMAGE`, which replaces it:
+Override with `[driver.container] relay_image` (or its old name `[runtime]
+relay_image`), or `WARDEN_IMAGE`, which replaces it:
 - `"dev"` — force build from source (requires Go toolchain, and a `warden`
   run from its source tree: `dist/warden` after `make build`)
 - `"ghcr.io/buildwarden/relay:v0.1.0"` — pin a specific version
@@ -485,7 +624,7 @@ the container runtime's command line as an option. It is refused, with the conta
 driver, by `build`, `shell` and `doctor` before anything is created:
 
 ```
-[warden] ERROR: [runtime] relay_image in /src/repo/warden.toml is "--volume=/:/host": not an image reference
+[warden] ERROR: [driver.container] relay_image in /src/repo/warden.toml is "--volume=/:/host": not an image reference
   To fix: set it to an image reference such as ghcr.io/buildwarden/relay:v0.2.0 or to "dev", or remove it
 ```
 
