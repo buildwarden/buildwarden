@@ -63,6 +63,15 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
    a MUST finding under GLOBAL-06, a SEC rule, RELAY-01 to RELAY-03 or
    RELAY-05, or on what FLOW-20 says never breaks, is never deferred: return
    `back-to-design` with it, recorded `-kind protected`. Never dismiss one.
+   When its `security_boundary` is not `none` and its review accepted that
+   the only trip is GLOBAL-06's relay clause (a `security-note -ref design`
+   record, a14), judge whether the diff stays within it: no new listener or
+   egress path, key, CA or trust-store handling, SSRF filter, netns or
+   iptables change, or socketpair topology change. If it does, record
+   `dist/wf record -kind security-note -ref diff -feature F -head <head>
+   -note "<why no posture changes>"` on each head you review, which merge
+   gate point 7 reads; if it does not, it is a posture change: a MUST
+   finding under GLOBAL-06, never deferred.
 
 ## The umbrella test (`f2-umbrella`, FLOW-20)
 
@@ -86,7 +95,9 @@ each point with its evidence:
   the profile.
 - U4: `security_boundary` is `none`, or the only trip is GLOBAL-06's relay
   clause and the Security note shows no boundary's posture changes (read
-  it; record `-kind security-note`).
+  it; record `-kind security-note -ref design -feature F -head <sha>
+  -note "<why only the relay clause>"`, which point 7 of the merge gate
+  reads).
 - U5: each interface break is one FLOW-20's Interfaces bullet allows.
 - U6: `repos` and `areas` declared; where they are fewer than intake
   recorded, or intake recorded none, check them against the area map and

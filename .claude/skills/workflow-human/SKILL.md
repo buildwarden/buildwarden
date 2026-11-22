@@ -113,7 +113,12 @@ Read the latest file in `.dev/workflow/digest/`.
       `tier2_gaps`, and, on a re-review, the finding, the tasks it touches,
       and how Design reconciled the later-phase steps `wf back` kept.
    3. **Risks and what is deferred:** native validation, `tier2_gaps`, rules
-      changed, a Bootstrap comparison or Security note to accept, and the
+      changed, a Bootstrap comparison or Security note to accept (on a
+      program item, when Jeff accepts that its only trip is GLOBAL-06's
+      relay clause with no boundary posture change, record `dist/wf record
+      -state .dev/workflow -kind security-note -ref design -worker
+      human/jeff -feature F -head <sha> -note "..."`, which merge gate
+      point 7 reads, a14), and the
       **Defaults and overrides** section, each named fallback in particular
       (GLOBAL-09 to GLOBAL-11).
       Ask the `rule_changes` entries (FLOW-14), each its own

@@ -116,7 +116,10 @@
 // it passed, was skipped or neutral, and the ruleset's required ones
 // succeeded; it contains the program trunk; the tier-2 report is for it with
 // no open MUST the records do not defer; no human step is pending; the
-// security boundary is none or the human acknowledged its note; the
+// security boundary is none, or its only trip is GLOBAL-06's relay clause,
+// accepted at its review (a security-note -ref design record) and found by
+// Review to hold on the head (a security-note -ref diff record on it), or the
+// human acknowledged its note (a security-ack record on the head); the
 // merged-first PRs merged; and the rule changes are cleared. Every other
 // merge step is the human's, as before. sync-program prints whether the
 // trunk is ahead of the program trunk and, when it is, the sync branch
@@ -413,7 +416,8 @@ func run(cmd string, args []string, now time.Time) error {
 		"check: the program sync's gate for -repository's PR -pr (FLOW-20)")
 	fs.IntVar(&o.pr, "pr", 0, "check -sync: the sync's pull request number")
 	fs.StringVar(&o.ref, "ref", "",
-		"record: what the decision is about: a PR (#N), a finding's id, a tag, an item")
+		"record: what the decision is about: a PR (#N), a finding's id, a tag, an item; "+
+			"for a security-note, design or diff")
 	fs.StringVar(&o.since, "since", "",
 		"record -list: only records at or after this RFC 3339 time")
 	fs.StringVar(&o.escalate, "escalate", "",

@@ -323,9 +323,13 @@ func (c *checker) gateHuman() {
 		"none pending"))
 }
 
-// gateSecurity checks point 7: security_boundary is none, or the human has
-// acknowledged the security note for this head (a security-ack record): a
-// posture change is component design and waits on the human (kind 2).
+// gateSecurity checks point 7: security_boundary is none; or its only trip is
+// GLOBAL-06's relay clause with no posture change, which its review accepted
+// (a security-note record with ref design, from U4 or the design review) and
+// Review found the diff at this head stays within (a security-note record
+// with ref diff on the head) (a14 (a)); or the human has acknowledged the
+// security note for this head (a security-ack record): a posture change is
+// component design and waits on the human (kind 2).
 func (c *checker) gateSecurity(head string) {
 	const name = "merge gate 7: security boundary (FLOW-08, GLOBAL-06)"
 	at := c.at
@@ -346,12 +350,49 @@ func (c *checker) gateSecurity(head string) {
 		c.add(name, false, "%v", err)
 		return
 	}
-	ack := slices.ContainsFunc(records, func(r queue.Record) bool {
-		return r.Kind == "security-ack" && r.Feature == c.f.Feature &&
-			len(r.Head) >= 7 && strings.HasPrefix(head, r.Head)
-	})
-	c.add(name, ack, "security_boundary: %s: a posture change waits on the human's "+
-		"acknowledgment of the security note at %s (kind 2)", orNone(b), short(head))
+	atHead := func(r queue.Record) bool {
+		return r.Feature == c.f.Feature && len(r.Head) >= 7 &&
+			strings.HasPrefix(head, r.Head)
+	}
+	if slices.ContainsFunc(records, func(r queue.Record) bool {
+		return r.Kind == "security-ack" && atHead(r)
+	}) {
+		c.add(name, true, "security_boundary: %s: the human acknowledged the security "+
+			"note at %s", b, short(head))
+		return
+	}
+	missing := c.relayClauseOnly(records, atHead, head)
+	if len(missing) == 0 {
+		c.add(name, true, "security_boundary: %s: only GLOBAL-06's relay clause, no "+
+			"posture change: accepted at the design's review, and the diff at %s "+
+			"stays within it (a14); acknowledged by the landing merge", b, short(head))
+		return
+	}
+	c.add(name, false, "security_boundary: %s: %s; a posture change waits on the "+
+		"human's acknowledgment of the security note at %s (kind 2)", orNone(b),
+		strings.Join(missing, "; "), short(head))
+}
+
+// relayClauseOnly lists what is missing for point 7's relay-clause case
+// (a14 (a)): the security-note record of the design's review, and Review's
+// on the head.
+func (c *checker) relayClauseOnly(records []queue.Record, atHead func(queue.Record) bool,
+	head string) []string {
+	var missing []string
+	if !slices.ContainsFunc(records, func(r queue.Record) bool {
+		return r.Kind == "security-note" && r.Feature == c.f.Feature &&
+			r.Ref == queue.SecurityNoteDesign
+	}) {
+		missing = append(missing, "no security-note -ref design record (U4 or the "+
+			"design review)")
+	}
+	if !slices.ContainsFunc(records, func(r queue.Record) bool {
+		return r.Kind == "security-note" && r.Ref == queue.SecurityNoteDiff && atHead(r)
+	}) {
+		missing = append(missing, fmt.Sprintf("no security-note -ref diff record on %s "+
+			"(Review)", short(head)))
+	}
+	return missing
 }
 
 // gateMergedFirst checks point 8: every pull request the design names to

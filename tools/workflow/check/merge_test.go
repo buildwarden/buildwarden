@@ -173,6 +173,53 @@ func TestMergeReady(t *testing.T) {
 	}
 }
 
+// TestMergeReadyRelayClause: a security_boundary whose only trip is
+// GLOBAL-06's relay clause merges on its review's security-note records, the
+// design's (U4 or the design review) and Review's on the head, with no
+// security-ack; without either, or with Review's on another head, it waits
+// on the human's acknowledgment (FLOW-08 point 7, a14 (a)).
+func TestMergeReadyRelayClause(t *testing.T) {
+	relay := strings.Replace(design, "security_boundary: none",
+		"security_boundary: env-relay", 1)
+	note := func(t *testing.T, g *gated, ref, head string) {
+		t.Helper()
+		if err := queue.AppendRecord(g.env.Workflow, queue.Record{By: "cloud/run",
+			Kind: "security-note", Feature: "demo", Ref: ref, Head: head,
+			Note: "only the relay clause; no boundary posture changes"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	other := strings.Repeat("c", 40)
+	both := []string{queue.SecurityNoteDesign, queue.SecurityNoteDiff}
+	for name, c := range map[string]struct {
+		refs  []string
+		heads []string
+		ok    bool
+	}{
+		"design and diff":      {both, nil, true},
+		"design only":          {[]string{queue.SecurityNoteDesign}, nil, false},
+		"diff only":            {[]string{queue.SecurityNoteDiff}, nil, false},
+		"diff on another head": {both, []string{"", other}, false},
+		"no record (posture)":  {nil, nil, false},
+	} {
+		g := gateFixture(t, relay, nil)
+		for i, ref := range c.refs {
+			head := g.head
+			if i < len(c.heads) && c.heads[i] != "" {
+				head = c.heads[i]
+			}
+			note(t, g, ref, head)
+		}
+		got := failures(MergeReady(g.env, g.f, hereRepo))
+		if c.ok && got != "" {
+			t.Errorf("%s: %s", name, got)
+		}
+		if !c.ok && !strings.Contains(got, "merge gate 7") {
+			t.Errorf("%s: merge gate 7 passed: %q", name, got)
+		}
+	}
+}
+
 // deferIt records finding 7 of the head as deferred.
 func deferIt(t *testing.T, g *gated) {
 	t.Helper()

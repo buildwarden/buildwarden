@@ -47,6 +47,16 @@ var RecordKinds = []string{
 	"filed", "relation", "area-map", "tag", "resumed", "escalation", "security-ack",
 }
 
+// The refs of a security-note record, which FLOW-08's merge gate reads at
+// point 7 (a14 (a)): the design's, written when the umbrella test (U4) or the
+// design review accepted that the only trip is GLOBAL-06's relay clause with
+// no change to a boundary's posture, and the diff's, written by Review on the
+// pull request's head when the diff stays within it.
+const (
+	SecurityNoteDesign = "design"
+	SecurityNoteDiff   = "diff"
+)
+
 // firstKinds are listed first under Decided for you: a departure from a
 // decision of the human's, a return to Design past the second, and a
 // re-estimate (FLOW-20).
@@ -82,6 +92,14 @@ func AppendRecord(dir string, r Record) error {
 		return errors.New("a record names who decided (-worker)")
 	case r.Kind == "security-ack" && Kind(r.By) != "human":
 		return errors.New("only the human acknowledges a security note (FLOW-08)")
+	case r.Kind == "security-note" && r.Ref != SecurityNoteDesign &&
+		r.Ref != SecurityNoteDiff:
+		return fmt.Errorf("a security-note record says what was read: -ref %s (U4 or "+
+			"the design review) or -ref %s (Review, on the head)", SecurityNoteDesign,
+			SecurityNoteDiff)
+	case r.Kind == "security-note" && r.Ref == SecurityNoteDiff && len(r.Head) < 7:
+		return errors.New("a security-note -ref diff record names the head Review read " +
+			"(-head)")
 	}
 	rs, err := LoadRecords(dir)
 	if err != nil {

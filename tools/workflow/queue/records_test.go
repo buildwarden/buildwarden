@@ -7,7 +7,8 @@ import (
 )
 
 // TestRecords: AppendRecord appends and refuses an unknown kind, a record
-// with no note, and a security-ack that is not the human's; Decided for you
+// with no note, a security-ack that is not the human's, and a security-note
+// with no design or diff ref, or a diff one with no head; Decided for you
 // lists a departure, a return past the second and a re-estimate first; the
 // landing body renders every kind it holds (FLOW-20, Decision 13).
 func TestRecords(t *testing.T) {
@@ -20,6 +21,9 @@ func TestRecords(t *testing.T) {
 		{By: "cloud/run", Kind: "whim", Note: "?"},
 		{By: "cloud/run", Kind: "merge"},
 		{By: "cloud/run", Kind: "security-ack", Note: "read"},
+		{By: "cloud/run", Kind: "security-note", Note: "read"},
+		{By: "cloud/run", Kind: "security-note", Ref: "U4", Note: "read"},
+		{By: "cloud/run", Kind: "security-note", Ref: SecurityNoteDiff, Note: "read"},
 	} {
 		if err := add(bad); err == nil {
 			t.Errorf("AppendRecord(%+v) succeeded", bad)
@@ -30,7 +34,11 @@ func TestRecords(t *testing.T) {
 		if kind == "security-ack" {
 			by = "human/jeff"
 		}
-		if err := add(Record{By: by, Kind: kind, Feature: "p", Repo: "o/here",
+		ref := ""
+		if kind == "security-note" {
+			ref = SecurityNoteDesign
+		}
+		if err := add(Record{By: by, Kind: kind, Feature: "p", Repo: "o/here", Ref: ref,
 			Note: kind + " decided"}); err != nil {
 			t.Fatal(err)
 		}

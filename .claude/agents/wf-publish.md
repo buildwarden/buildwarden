@@ -111,8 +111,10 @@ remote-tracking ref; run `make enforcement TIER1_BASE=origin/<trunk>` and
   run the check again and stop. A point 5 failure on a protected finding
   (GLOBAL-06, a SEC rule, RELAY-01 to RELAY-03, RELAY-05, or what FLOW-20
   says never breaks) returns `back-to-design` with the finding, recorded
-  `-kind protected`; one on a posture change (point 7) waits for Jeff's
-  `security-ack` record.
+  `-kind protected`. Point 7 passes a relay-clause-only security note on
+  its `security-note -ref design` record and Review's `security-note -ref
+  diff` record on the head (a14); without them it is a posture change and
+  waits for Jeff's `security-ack` record.
 - `sync` (the program sync, FLOW-20; no queue item): `dist/wf sync-program
   -state <workflow checkout> -repo <code checkout> -checkouts .dev/checkouts
   -repository R` names the branch `sync/program-<main sha>`. Cut it from
