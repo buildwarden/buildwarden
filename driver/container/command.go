@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/lesiw/ctrctl"
 
@@ -56,7 +55,7 @@ func preflight(_ context.Context, start *driver.Start) error {
 // checkedRunner is buildRunner with the runtime set names, when it names
 // one, checked as installed: the probe's checks.
 func checkedRunner(set driver.Settings) (*runner, error) {
-	d, err := buildRunner(set, answerTimeout)
+	d, err := buildRunner(set)
 	if err != nil {
 		return nil, err
 	}
@@ -66,14 +65,13 @@ func checkedRunner(set driver.Settings) (*runner, error) {
 	return d, nil
 }
 
-// buildRunner checks set's relay image and resolves its runtime, giving
-// each candidate detection asks timeout to answer.
-func buildRunner(set driver.Settings, timeout time.Duration) (*runner, error) {
+// buildRunner checks set's relay image and resolves its runtime.
+func buildRunner(set driver.Settings) (*runner, error) {
 	img, _ := set.String("relay-image")
 	if err := checkRelayImage(img, set.Source("relay-image")); err != nil {
 		return nil, err
 	}
-	rt, err := resolveRuntime(set, timeout)
+	rt, err := resolveRuntime(set)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +82,7 @@ func buildRunner(set driver.Settings, timeout time.Duration) (*runner, error) {
 // written to the state file before anything is created; then a named
 // runtime's engine is asked, the build's first engine call (checkEngine).
 func run(ctx context.Context, start *driver.Start, host driver.Host) ([]string, error) {
-	d, err := buildRunner(start.Settings, answerTimeout)
+	d, err := buildRunner(start.Settings)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +112,7 @@ func stateRuntime(stateFile string, set driver.Settings) (string, error) {
 		return "", err
 	}
 	if !found {
-		return resolveRuntime(set, answerTimeout)
+		return resolveRuntime(set)
 	}
 	if rt, ok := supportedRuntime(st.Runtime); ok {
 		return rt, nil
@@ -148,29 +146,30 @@ func reap(_ context.Context, req *drivercmd.ReapRequest) (int, error) {
 }
 
 // doctor checks what a build checks before it creates anything: the relay
-// image's shape and the runtime, which it names (DRV-25). It is the health
-// check: the runtime, named or detected, must answer its version query
-// within doctorTimeout, and one that does not blocks it with the fixable
-// error and the start hint (a28). Its detection gives each candidate
-// doctorTimeout too, so an engine slower than a build's answerTimeout is
-// found healthy. warden prints ok after it when nothing blocks.
+// image's shape and the runtime, which it names (DRV-25). It resolves the
+// runtime as the build does, so the two choose the same one, and is the
+// health check of it (doctorRuntime): a named runtime must answer its
+// version query within doctorTimeout, and one that does not blocks it with
+// the fixable error and the start hint (a28). warden prints ok after it
+// when nothing blocks.
 func doctor(_ context.Context, req *drivercmd.DoctorRequest) (bool, error) {
-	d, err := buildRunner(req.Settings, doctorTimeout)
+	img, _ := req.Settings.String("relay-image")
+	if err := checkRelayImage(img, req.Settings.Source("relay-image")); err != nil {
+		return false, err
+	}
+	rt, err := doctorRuntime(req.Settings)
 	if err != nil {
 		return false, err
 	}
-	if err := checkRuntime(d.runtime, req.Settings, doctorTimeout); err != nil {
-		return false, err
-	}
 	out := stdoutOf(req.Streams)
-	fmt.Fprintf(out, "container runtime: %s\n", d.runtime)
+	fmt.Fprintf(out, "container runtime: %s\n", rt)
 	return false, nil
 }
 
 // clean removes the containers, networks and dev relay images of every build
 // that is neither in keep_ids nor waited on by a live driver's waiter (DRV-27).
 func clean(_ context.Context, req *drivercmd.CleanRequest) (int, error) {
-	rt, err := resolveRuntime(req.Settings, answerTimeout)
+	rt, err := resolveRuntime(req.Settings)
 	if err != nil {
 		return 0, err
 	}

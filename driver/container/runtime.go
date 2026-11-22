@@ -3,7 +3,9 @@ package container
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -64,18 +66,19 @@ func runtimeNames(conj string) string {
 }
 
 // resolveRuntime returns the container runtime to run: the one set names
-// when it is a supported runtime, the detected one when none does. Another
+// when it is a supported runtime, the detected one when none does, each
+// candidate given answerTimeout; doctor detects the same way
+// (doctorRuntime), so it reports the runtime a build runs on. Another
 // value is refused here, before anything is looked up, run or created, and
 // so are settings that could not be read: in reap and attach they are
-// resolved on this first read (DRV-C10). Detection gives each candidate
-// timeout to answer: answerTimeout for a build, doctorTimeout for doctor.
-func resolveRuntime(set driver.Settings, timeout time.Duration) (string, error) {
+// resolved on this first read (DRV-C10).
+func resolveRuntime(set driver.Settings) (string, error) {
 	v, _ := set.String("runtime")
 	if err := set.Err(); err != nil {
 		return "", err
 	}
 	if v == "" {
-		return detectRuntime(timeout)
+		return detectRuntime()
 	}
 	if name, ok := supportedRuntime(v); ok {
 		return name, nil
@@ -88,7 +91,7 @@ func resolveRuntime(set driver.Settings, timeout time.Duration) (string, error) 
 // error before any work, never replaced by detection (Decision 26,
 // Behaviour 20). It makes no engine call; a named runtime whose engine is
 // down fails the build's first one (checkEngine), and doctor asks it
-// (checkRuntime) (r4, CI repair). A runtime set does not name was detected,
+// (doctorRuntime) (r4, CI repair). A runtime set does not name was detected,
 // and detection has asked its engine. run's probe calls it.
 func checkNamedRuntime(rt string, set driver.Settings) error {
 	if v, _ := set.String("runtime"); v == "" {
@@ -118,28 +121,64 @@ func checkEngine(rt string, set driver.Settings) error {
 		rt, versionCommand(rt))
 }
 
-// checkRuntime is doctor's health check of the runtime rt, the one set
-// names or the detected one: it is refused unless it is on PATH and
-// answers its version query within timeout. An error names where a named
-// runtime was named; a detected one is on PATH, and its error is
-// notAnswering's.
-func checkRuntime(rt string, set driver.Settings, timeout time.Duration) error {
-	if v, _ := set.String("runtime"); v == "" {
-		if !runtimeAnswers(rt, timeout) {
-			return notAnswering(rt, rt)
+// doctorRuntime is doctor's runtime: the one the build would run on, and
+// its health check. A named runtime is refused unless it is on PATH and
+// answers its version query within doctorTimeout; an error names where it
+// was named. With none named, it is detected as a build detects it, with
+// answerTimeout per candidate, so doctor and the build choose the same
+// runtime; the one detection chooses has answered within answerTimeout,
+// less than doctorTimeout, and is not asked again. When detection finds
+// none up, each installed candidate is asked once more, in detection's
+// order, with doctorTimeout: the first that answers is one builds skip,
+// and doctor is blocked with the slow hint (answeredSlowly); when none
+// does, with detection's error. Its worst case is detection's three
+// queries and the three re-asks (Decision 26, r4).
+func doctorRuntime(set driver.Settings) (string, error) {
+	v, _ := set.String("runtime")
+	if err := set.Err(); err != nil {
+		return "", err
+	}
+	if v == "" {
+		rt, installed := detect()
+		if rt != "" {
+			return rt, nil
 		}
-		return nil
+		for _, name := range installed {
+			if runtimeAnswers(name, doctorTimeout) {
+				return "", answeredSlowly(name)
+			}
+		}
+		return "", detectionError(installed)
+	}
+	rt, err := resolveRuntime(set)
+	if err != nil {
+		return "", err
 	}
 	if err := checkNamedRuntime(rt, set); err != nil {
-		return err
+		return "", err
 	}
-	if !runtimeAnswers(rt, timeout) {
+	if !runtimeAnswers(rt, doctorTimeout) {
 		setting, other := namedRuntimeFix(set.Source("runtime"))
-		return driver.Fixable(runtimeStartHint(rt)+", "+other,
+		return "", driver.Fixable(runtimeStartHint(rt)+", "+other,
 			"%s names the container runtime %s, which is installed but not running "+
 				"(`%s` failed)", setting, rt, versionCommand(rt))
 	}
-	return nil
+	return rt, nil
+}
+
+// answeredSlowly is doctor's error for the runtime name that detection
+// passed over but that answered doctor's re-ask: it is up, and a build
+// runs on it only when it is named.
+func answeredSlowly(name string) error {
+	return driver.Fixable(fmt.Sprintf("name it: --runtime %s, WARDEN_CTR_CLI=%s "+
+		"or [driver.container] cli = %q", name, name, name),
+		"container runtime %s is running but answered after more than %s, "+
+			"so builds skip it", name, seconds(answerTimeout))
+}
+
+// seconds words d in seconds, as messages put it: "3 s".
+func seconds(d time.Duration) string {
+	return strconv.FormatFloat(d.Seconds(), 'f', -1, 64) + " s"
 }
 
 // namedRuntimeFix words where the runtime was named, as checkNamedRuntime's
@@ -193,33 +232,52 @@ func unsupportedRuntime(value, source string) error {
 	return driver.Fixable(fix, "%s is %q; %s", setting, value, what)
 }
 
-// detectRuntime probes for a working container runtime, in runtimes' order,
-// giving each candidate timeout to answer its version query.
-func detectRuntime(timeout time.Duration) (string, error) {
+// detectRuntime probes for a working container runtime, in runtimes'
+// order, and explains the fix when none answers.
+func detectRuntime() (string, error) {
+	rt, installed := detect()
+	if rt == "" {
+		return "", detectionError(installed)
+	}
+	return rt, nil
+}
+
+// detect asks each installed runtime, in runtimes' order, its version
+// query with answerTimeout, and returns the first that answers, "" when
+// none does, and the ones installed up to it.
+func detect() (string, []string) {
 	var installed []string
 	for _, name := range runtimes {
 		if _, err := lookPath(name); err != nil {
 			continue
 		}
 		installed = append(installed, name)
-		if runtimeAnswers(name, timeout) {
-			return name, nil
+		if runtimeAnswers(name, answerTimeout) {
+			return name, installed
 		}
 	}
+	return "", installed
+}
+
+// detectionError is the error for a detection that found no runtime up,
+// the runtimes in installed installed.
+func detectionError(installed []string) error {
 	if len(installed) == 0 {
-		return "", driver.Fixable(
+		return driver.Fixable(
 			"install Finch (brew install --cask finch && finch vm init), "+
 				"Podman or Docker, or use a VM driver (--driver qemu or vz)",
 			"no container runtime found (tried finch, podman, docker)")
 	}
 	// Installed but not answering: almost always its VM or daemon is down.
-	return "", notAnswering(installed[0], strings.Join(installed, ", "))
+	return notAnswering(installed[0], strings.Join(installed, ", "))
 }
 
-// answerTimeout bounds detection's version query, per candidate;
-// doctorTimeout bounds doctor's and the build's (checkEngine), which have
-// the time to wait for an engine that is slow to answer. Tests shorten
-// them.
+// answerTimeout bounds detection's version query, per candidate, for a
+// build and for doctor alike, so both choose the same runtime.
+// doctorTimeout bounds the query of a named runtime by doctor and by the
+// build's first engine call (checkEngine), and doctor's re-ask of each
+// candidate when detection finds none up (doctorRuntime): they have the
+// time to wait for an engine that is slow to answer. Tests shorten them.
 var (
 	answerTimeout = 3 * time.Second
 	doctorTimeout = 10 * time.Second

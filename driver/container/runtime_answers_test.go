@@ -2,6 +2,7 @@ package container
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,7 +29,7 @@ const (
 	// emptyServer exits 0 and prints an empty line: a docker whose Server
 	// section is empty.
 	emptyServer
-	// slow answers after a second, as an engine under load may.
+	// slow answers after two seconds, as an engine under load may.
 	slow
 )
 
@@ -46,7 +47,7 @@ func writeRuntime(t *testing.T, dir, name string, r reply) {
 			fails:       "echo Client: Docker Engine\r\nexit 1",
 			hangs:       ping + "30 127.0.0.1\r\nexit 0",
 			emptyServer: "echo.\r\nexit 0",
-			slow:        ping + "2 127.0.0.1 >nul\r\necho 27.3.1\r\nexit 0",
+			slow:        ping + "3 127.0.0.1 >nul\r\necho 27.3.1\r\nexit 0",
 		}[r]
 		script := "@echo off\r\nif not \"%*\"==\"" + query + "\" exit 2\r\n" +
 			body + "\r\n"
@@ -63,7 +64,7 @@ func writeRuntime(t *testing.T, dir, name string, r reply) {
 		// still holds stdout.
 		hangs:       "/bin/sleep 30",
 		emptyServer: "echo",
-		slow:        "/bin/sleep 1\necho 27.3.1",
+		slow:        "/bin/sleep 2\necho 27.3.1",
 	}[r]
 	writeScript(t, filepath.Join(dir, name),
 		"#!/bin/sh\n[ \"$*\" = '"+query+"' ] || exit 2\n"+body+"\n")
@@ -176,7 +177,7 @@ func TestDetectRuntimeSkipsOneThatIsNotUp(t *testing.T) {
 	writeRuntime(t, dir, "podman", fails)
 	writeRuntime(t, dir, "docker", answers)
 	onlyOnPath(t, dir)
-	if rt, err := detectRuntime(answerTimeout); err != nil || rt != "docker" {
+	if rt, err := detectRuntime(); err != nil || rt != "docker" {
 		t.Fatalf("detectRuntime = %q, %v; want docker", rt, err)
 	}
 }
@@ -188,86 +189,174 @@ func TestDetectRuntimePrefersPodmanOverDocker(t *testing.T) {
 	writeRuntime(t, dir, "docker", answers)
 	writeRuntime(t, dir, "podman", answers)
 	onlyOnPath(t, dir)
-	if rt, err := detectRuntime(answerTimeout); err != nil || rt != "podman" {
+	if rt, err := detectRuntime(); err != nil || rt != "podman" {
 		t.Fatalf("detectRuntime = %q, %v; want podman", rt, err)
 	}
 }
 
-// Doctor is the health check: it waits doctorTimeout, not the probe's
-// answerTimeout, for the runtime it resolved, named or detected, and is
-// blocked with the start hint when the runtime does not answer in it. Its
-// detection gives each candidate doctorTimeout too: every case's runtime
-// is slower than answerTimeout.
-func TestDoctorWaitsItsOwnTimeout(t *testing.T) {
-	for _, tc := range []struct {
-		name          string
-		r             reply
-		doctor        time.Duration
-		named, refuse bool
-	}{
-		{"a slow named runtime within doctor's timeout", slow, 5 * time.Second,
-			true, false},
-		{"a slow detected runtime within doctor's timeout", slow, 5 * time.Second,
-			false, false},
-		{"a named runtime that hangs past it", hangs, 200 * time.Millisecond,
-			true, true},
-		{"a named runtime whose engine is down", fails, 5 * time.Second, true, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			writeRuntime(t, dir, "podman", tc.r)
-			onlyOnPath(t, dir)
-			named := ""
-			if tc.named {
-				named = "podman"
-			}
-			shortTimeouts(t, 50*time.Millisecond, tc.doctor)
-			t.Setenv("WARDEN_CTR_CLI", named)
-			t.Setenv("WARDEN_IMAGE", "")
-			wantDoctor(t, tc.refuse)
-		})
-	}
-}
-
-// wantDoctor checks that doctor is blocked by a podman that is not running
-// when refuse is set, and names podman unblocked when it is not.
-func wantDoctor(t *testing.T, refuse bool) {
+// slowTimeouts are timeouts the slow reply falls between: past
+// answerTimeout, within doctorTimeout. answerTimeout leaves a reply that
+// answers at once a second, for a loaded runner.
+func slowTimeouts(t *testing.T) {
 	t.Helper()
-	_, out, err := callContainer(t, drivercmd.CmdDoctor,
-		&drivercmd.Request{Contract: 1, Args: []string{}})
-	if !refuse {
-		if err != nil || out != "container runtime: podman\n" {
-			t.Fatalf("doctor = %v:\n%q; want podman, unblocked", err, out)
-		}
-		return
-	}
-	var fe *driver.FixableError
-	if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "podman machine start") ||
-		!strings.Contains(fe.Msg, "installed but not running") {
-		t.Fatalf("doctor = %v; want a fixable error with the start hint", err)
-	}
+	shortTimeouts(t, time.Second, 5*time.Second)
 }
 
-// A build's detection gives each candidate answerTimeout, not doctor's: the
-// slow runtime doctor finds healthy is passed over, and the probe of run
-// finds none answering.
-func TestRunDetectionSkipsARuntimeSlowerThanItsTimeout(t *testing.T) {
+// fakeRuntimes puts each runtime in replies on a PATH of their own, with
+// no runtime named.
+func fakeRuntimes(t *testing.T, replies map[string]reply) {
+	t.Helper()
 	dir := t.TempDir()
-	writeRuntime(t, dir, "podman", slow)
+	for name, r := range replies {
+		writeRuntime(t, dir, name, r)
+	}
 	onlyOnPath(t, dir)
-	shortTimeouts(t, 50*time.Millisecond, 5*time.Second)
 	t.Setenv("WARDEN_CTR_CLI", "")
 	t.Setenv("WARDEN_IMAGE", "")
+}
+
+// runRuntime is the runtime run's probe chooses, or its error.
+func runRuntime(t *testing.T) (string, error) {
+	t.Helper()
 	set, err := drivercmd.Resolve("container", Settings, drivercmd.CmdRun, nil, "",
 		os.Environ())
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = checkedRunner(set)
+	d, err := checkedRunner(set)
+	if err != nil {
+		return "", err
+	}
+	return d.runtime, nil
+}
+
+// doctorSays is what doctor prints, or its error.
+func doctorSays(t *testing.T) (string, error) {
+	t.Helper()
+	_, out, err := callContainer(t, drivercmd.CmdDoctor,
+		&drivercmd.Request{Contract: 1, Args: []string{}})
+	return out, err
+}
+
+// Doctor detects as the build does, with answerTimeout per candidate: with
+// podman slower than that but within doctorTimeout, and docker fast, both
+// choose docker, and doctor does not report a runtime the build skips
+// (Decision 26, r4).
+func TestDoctorChoosesTheRuntimeTheBuildDoes(t *testing.T) {
+	fakeRuntimes(t, map[string]reply{"podman": slow, "docker": answers})
+	slowTimeouts(t)
+	if rt, err := runRuntime(t); err != nil || rt != "docker" {
+		t.Fatalf("run's probe = %q, %v; want docker", rt, err)
+	}
+	if out, err := doctorSays(t); err != nil || out != "container runtime: docker\n" {
+		t.Fatalf("doctor = %v:\n%q; want docker, unblocked", err, out)
+	}
+}
+
+// With only a slow podman, run passes over it and finds none answering,
+// and doctor, re-asking it with doctorTimeout, is blocked with the slow
+// hint: podman is up, and a build runs on it when it is named.
+func TestDoctorGivesTheSlowHint(t *testing.T) {
+	fakeRuntimes(t, map[string]reply{"podman": slow})
+	slowTimeouts(t)
+	_, err := runRuntime(t)
 	var fe *driver.FixableError
 	if !errors.As(err, &fe) || !strings.Contains(fe.Msg, "installed but not running") {
-		t.Fatalf("run's probe = %v; want the slow podman passed over, none answering",
-			err)
+		t.Fatalf("run's probe = %v; want the slow podman passed over", err)
+	}
+	_, err = doctorSays(t)
+	wantMsg := "container runtime podman is running but answered after more " +
+		"than 1 s, so builds skip it"
+	wantFix := "name it: --runtime podman, WARDEN_CTR_CLI=podman or " +
+		"[driver.container] cli = \"podman\""
+	if !errors.As(err, &fe) || fe.Msg != wantMsg || fe.Fix != wantFix {
+		t.Fatalf("doctor = %v; want %q, fix %q", err, wantMsg, wantFix)
+	}
+}
+
+// With every installed runtime down, doctor's re-asks find none, and it
+// keeps detection's error and the start hint.
+func TestDoctorGivesTheStartHintWhenNoneIsUp(t *testing.T) {
+	fakeRuntimes(t, map[string]reply{"podman": fails, "docker": fails})
+	slowTimeouts(t)
+	_, err := doctorSays(t)
+	wantStartHint(t, err, "podman, docker is installed but not running")
+}
+
+// wantStartHint checks that err is a fixable error whose message holds msg
+// and whose fix is podman's start hint.
+func wantStartHint(t *testing.T, err error, msg string) {
+	t.Helper()
+	var fe *driver.FixableError
+	if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "podman machine start") ||
+		!strings.Contains(fe.Msg, msg) {
+		t.Fatalf("doctor = %v; want %q with the start hint", err, msg)
+	}
+}
+
+// Doctor asks the runtime detection chooses once: detection's answer,
+// within answerTimeout, is its health check. With none up, it asks each
+// installed runtime twice, once in detection and once in the re-ask, and
+// no more: its worst case is three queries of answerTimeout and three of
+// doctorTimeout.
+func TestDoctorAsksEachRuntimeAtMostTwice(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-script fakes need a POSIX shell")
+	}
+	for _, tc := range []struct {
+		name string
+		exit map[string]int
+		want string
+	}{
+		{"podman up", map[string]int{"finch": 1, "podman": 0, "docker": 0},
+			"finch\npodman\n"},
+		{"none up", map[string]int{"finch": 1, "podman": 1, "docker": 1},
+			"finch\npodman\ndocker\nfinch\npodman\ndocker\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bin, probed := t.TempDir(), filepath.Join(t.TempDir(), "probed")
+			for name, exit := range tc.exit {
+				script := fmt.Sprintf(
+					"#!/bin/sh\necho %s >> '%s'\necho 27.3.1\nexit %d\n",
+					name, probed, exit)
+				writeScript(t, filepath.Join(bin, name), script)
+			}
+			onlyOnPath(t, bin)
+			t.Setenv("WARDEN_CTR_CLI", "")
+			t.Setenv("WARDEN_IMAGE", "")
+			_, _ = doctorSays(t)
+			if got, _ := os.ReadFile(probed); string(got) != tc.want {
+				t.Errorf("doctor asked %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// Doctor's health check of a named runtime waits doctorTimeout, not the
+// probe's answerTimeout, and is blocked with the start hint when the
+// runtime does not answer in it.
+func TestDoctorWaitsItsOwnTimeoutForANamedRuntime(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		r      reply
+		doctor time.Duration
+		refuse bool
+	}{
+		{"a slow runtime within doctor's timeout", slow, 5 * time.Second, false},
+		{"a runtime that hangs past it", hangs, 200 * time.Millisecond, true},
+		{"a runtime whose engine is down", fails, 5 * time.Second, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeRuntimes(t, map[string]reply{"podman": tc.r})
+			shortTimeouts(t, 50*time.Millisecond, tc.doctor)
+			t.Setenv("WARDEN_CTR_CLI", "podman")
+			out, err := doctorSays(t)
+			if tc.refuse {
+				wantStartHint(t, err, "installed but not running")
+			} else if err != nil || out != "container runtime: podman\n" {
+				t.Fatalf("doctor = %v:\n%q; want podman, unblocked", err, out)
+			}
+		})
 	}
 }
 
