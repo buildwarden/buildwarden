@@ -218,11 +218,14 @@ user reads are unchanged. Only this repository is touched (LOOP-04).
 - `TestConfigFileLookupOrder` is unchanged: with the helper fixed, its
   expectation (the directory `inConfigFiles` returned) is the right one.
 
-The other callers of `inConfigFiles` (`configline_test.go`,
-`configmsg_test.go`, `runtime_test.go`, `upstreamca_test.go`,
-`vmdns_test.go`, and `TestRelativeConfigFile`) take their expected paths
-from the helper's return or from `configPath(t)` (`os.Getwd`), and both
-agree once `PWD` is set; the package passes with the change, with the
+The other callers of `inConfigFiles` (in `buildlink_test.go`,
+`config_former_test.go`, `config_test.go`, `configline_test.go`,
+`configmsg_test.go`, `precedence_test.go`, `relayimage_test.go`,
+`runtime_test.go`, `upstreamca_test.go`, `upstreamca_windows_test.go`,
+`vmdns_test.go`, and the rest of `configfile_test.go`, `TestRelativeConfigFile`
+among them) take their expected paths from the helper's return or
+from `configPath(t)` (`os.Getwd`), or compare no path, and both agree once
+`PWD` is set; the package passes with the change, with the
 default `TMPDIR` and with a linked one (checked at `be13847` on Linux while
 designing; the change was then reverted, it is Implement's).
 
@@ -311,6 +314,49 @@ No product code, reference doc (`docs/book/src/guide/`) or pseudocode in
   - sitting: 19:05-19:08 UTC, asks: 3 (0 in batches)
 
 ## Consolidation
+
+Publish, 2026-11-22 (FLOW-10, FLOW-15), on the branch at `f7ff696`.
+Forked from `main` at `be13847`; `origin/main` is still `be13847`, so
+`f6-merge-main` had nothing to merge and the branch contains `main` as it
+is.
+
+- **What landed on `main` since the fork.** Nothing: `origin/main` at
+  `be13847` is the merge base. Nothing to reconcile.
+- **Terminology and wording.** The Design section named six of the twelve test
+  files that call `inConfigFiles`. The list now names every one, and says
+  that some compare no path. The claim it makes
+  is unchanged and holds for each: every caller takes its expected path
+  from the helper's return or from `configPath(t)` (`os.Getwd`), or
+  compares none. No term in the design differs from `project-config-trust`'s
+  (`config:` line, "found in the working directory", `./warden.toml`).
+- **FLOW-15 sweep.**
+  - `make deadcode`: the unreachable functions it lists are all in
+    `cmd/relay`, `collector`, `driver/firecracker`, `driver/hyperv`,
+    `driver/vz` and `relay`, none touched here; the branch changes only
+    `_test.go` files in `cmd/warden` and adds no helper.
+  - Duplication: the new test reuses `inConfigFiles`, `write`,
+    `outputDirFile`, `configLine` and `selfLink`'s Windows skip reason, and
+    adds no helper. The one other `os.Chdir` in the repository's tests,
+    `TestResolvePath_Empty` (`cmd/warden/config_test.go`), resolves its
+    path with `EvalSymlinks` and compares a build context by identity, as
+    Prior art records; it is not a caller of the lookup and is left as it
+    is.
+  - `docs/book/src/concepts/overview.md`: `warden build`'s config lookup
+    (`--config`, else `WARDEN_CONFIG`, else `./warden.toml`) is unchanged
+    and no component's flow changes, so it is unchanged.
+- **Seams.** `seams: []`; no specification changes, and no
+  **Specification changes** section is needed (LOOP-02).
+- **Rules proposed:** none. **Follow-ups filed:** none. **Regressions
+  `main` already has:** none found beyond the one this item fixes.
+- **`dist/wf check` on `f7ff696`**, its trial-merge lines:
+
+  ```
+  ok   trial merge with workdir-in-context (a report, FLOW-10): clean
+  ok   trial merge with relay-collector-failure-fails-open (a report, FLOW-10): clean
+  ```
+
+- **Gates:** `make lint` and `make test` pass on the consolidation commit;
+  `TMPDIR=<a link to a directory> go test -count=1 ./cmd/warden` passes.
 
 ## Rollback notes
 
