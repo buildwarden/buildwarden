@@ -78,13 +78,18 @@ const (
 // stopRelay kills the relay, and the waiter if there is one, of the build
 // whose work directory is dir, left running when its driver was killed.
 func stopRelay(dir string) {
-	for _, f := range []string{relayPIDFile, waiterPIDFile} {
-		data, err := os.ReadFile(filepath.Join(dir, f))
-		if err != nil {
-			continue
-		}
-		if p, err := os.FindProcess(atoi(string(data))); err == nil &&
-			atoi(string(data)) > 0 {
+	killPIDFile(dir, relayPIDFile)
+	killPIDFile(dir, waiterPIDFile)
+}
+
+// killPIDFile kills the process whose ID the file f in dir holds, if any.
+func killPIDFile(dir, f string) {
+	data, err := os.ReadFile(filepath.Join(dir, f))
+	if err != nil {
+		return
+	}
+	if pid := atoi(string(data)); pid > 0 {
+		if p, err := os.FindProcess(pid); err == nil {
 			_ = p.Kill()
 		}
 	}

@@ -184,8 +184,10 @@ func teardown(st *start, relay *exec.Cmd, dir string) int {
 		send(map[string]any{"type": "stopped"})
 		return 0
 	}
+	// The relay is killed through its own process, not relay.pid: run's
+	// goroutine may have reaped it already, and its PID been reused.
 	_ = relay.Process.Kill()
-	stopRelay(dir)
+	killPIDFile(dir, waiterPIDFile)
 	if d, err := time.ParseDuration(os.Getenv("WARDEN_FAKE_TEARDOWN")); err == nil {
 		time.Sleep(d)
 	}
