@@ -40,6 +40,7 @@ questions:
     options:
       - resume it
     recommended: resume it
+    resumes: the change that prepares 1.0
 history:
   - at: 2026-11-15T22:52:20Z
     by: human/jeff
@@ -64,4 +65,7 @@ history:
     event: 'priority 77 -> 78 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 78 -> 13 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'
+    event: priority 78 -> 13 (renumbered to the item's 1-indexed queue position (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-22T23:38:51Z
+    by: human/jeff
+    event: 'hold q1 resumes: the change that prepares 1.0 (FLOW-20; program-north-star x4-state, on Jeff''s word)'

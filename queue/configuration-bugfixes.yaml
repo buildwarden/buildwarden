@@ -40,6 +40,7 @@ questions:
     options:
       - resume it
     recommended: resume it
+    resumes: program-end
 history:
   - at: 2026-11-15T20:14:52Z
     by: human/jeff
@@ -70,4 +71,7 @@ history:
     event: 'priority 76 -> 77 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 77 -> 12 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'
+    event: priority 77 -> 12 (renumbered to the item's 1-indexed queue position (Jeff, 2026-11-17; queue-positions))
+  - at: 2026-11-22T23:38:51Z
+    by: human/jeff
+    event: 'hold q1 resumes: program-end (FLOW-20; program-north-star x4-state, on Jeff''s word)'

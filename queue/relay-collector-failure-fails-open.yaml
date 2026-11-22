@@ -76,8 +76,9 @@ questions:
     question: 'Hold (Jeff, 2026-11-21): a follow-up of the relay''s component separation (the componentization program''s relay split, M1 onward), not before. The componentization program (FLOW-20) is the north star until it completes (Jeff, 2026-11-21): work not part of the component split waits; there is no release before the program ends and usage is low, so this item is cheaper done on the post-split structure. On resume the design is redone against the separated relay (its repository, its guest API and the collector seam as they stand then) and reviewed again.'
     options:
       - 'resume: the relay separation has completed (name its item and merge); the item goes back to Design against the separated relay'
-      - 'resume earlier on Jeffs word, naming why'
+      - resume earlier on Jeffs word, naming why
     recommended: 'resume: the relay separation has completed (name its item and merge); the item goes back to Design against the separated relay'
+    resumes: the relay's separation (M1 onward) has merged
   - id: a1
     kind: assumed
     status: open
@@ -175,7 +176,10 @@ history:
     event: 'priority 79 -> 80 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 80 -> 10 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'
+    event: priority 80 -> 10 (renumbered to the item's 1-indexed queue position (Jeff, 2026-11-17; queue-positions))
   - at: 2026-11-21T19:20:00Z
     by: human/jeff
     event: 'held on Jeff''s word (2026-11-21): q1, a follow-up of the relay''s component separation; f2-answer-q1 added, and f2-design-review waits on it'
+  - at: 2026-11-22T23:38:51Z
+    by: human/jeff
+    event: 'hold q1 resumes: the relay''s separation (M1 onward) has merged (FLOW-20; program-north-star x4-state, on Jeff''s word)'

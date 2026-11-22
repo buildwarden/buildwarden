@@ -39,8 +39,9 @@ questions:
     question: 'Hold (Jeff, 2026-11-21): until the componentization program (FLOW-20) completes, though a security fix. The componentization program (FLOW-20) is the north star until it completes (Jeff, 2026-11-21): work not part of the component split waits; there is no release before the program ends and usage is low, so this item is cheaper done on the post-split structure. On resume, the design is written against the post-split qemu and firecracker drivers.'
     options:
       - 'resume: the componentization program has completed (name the process item that retired FLOW-20)'
-      - 'resume earlier on Jeffs word, naming why'
+      - resume earlier on Jeffs word, naming why
     recommended: 'resume: the componentization program has completed (name the process item that retired FLOW-20)'
+    resumes: program-end
 history:
   - at: 2026-11-17T18:41:04Z
     by: human/jeff
@@ -60,3 +61,6 @@ history:
   - at: 2026-11-21T19:20:00Z
     by: human/jeff
     event: 'held on Jeff''s word (2026-11-21): q1, until the componentization program completes; the urgent mark is cleared'
+  - at: 2026-11-22T23:38:51Z
+    by: human/jeff
+    event: 'hold q1 resumes: program-end (FLOW-20; program-north-star x4-state, on Jeff''s word)'

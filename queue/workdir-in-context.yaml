@@ -68,8 +68,9 @@ questions:
     question: 'Hold (Jeff, 2026-11-21), replacing the K1 hold: until the componentization program (FLOW-20) completes. The componentization program (FLOW-20) is the north star until it completes (Jeff, 2026-11-21): work not part of the component split waits; there is no release before the program ends and usage is low, so this item is cheaper done on the post-split structure. On resume the item returns to Design once for the delta the program''s structure brings (K1''s and later phases'': newRequest''s refusal, the kit''s work-directory backstop, the FROM check under the base image, start.base_image), and that delta is reviewed (FLOW-06, FLOW-19).'
     options:
       - 'resume: the componentization program has completed (name the process item that retired FLOW-20); the item goes back to Design for the delta'
-      - 'resume earlier on Jeffs word, naming why'
+      - resume earlier on Jeffs word, naming why
     recommended: 'resume: the componentization program has completed (name the process item that retired FLOW-20); the item goes back to Design for the delta'
+    resumes: program-end
   - id: a1
     kind: assumed
     status: confirmed
@@ -157,7 +158,10 @@ history:
     event: 'priority 70 -> 71 (renumbered by wf new: skill-areas-yaml-lines queued at 63)'
   - at: 2026-11-17T20:47:40Z
     by: human/jeff
-    event: 'priority 71 -> 8 (renumbered to the item''s 1-indexed queue position (Jeff, 2026-11-17; queue-positions))'
+    event: priority 71 -> 8 (renumbered to the item's 1-indexed queue position (Jeff, 2026-11-17; queue-positions))
   - at: 2026-11-21T19:20:00Z
     by: human/jeff
     event: 'hold widened on Jeff''s word (2026-11-21): q1 now holds the item until the componentization program completes, not only until K1 merges'
+  - at: 2026-11-22T23:38:51Z
+    by: human/jeff
+    event: 'hold q1 resumes: program-end (FLOW-20; program-north-star x4-state, on Jeff''s word)'
