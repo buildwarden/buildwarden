@@ -36,7 +36,7 @@ None.
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | config-lookup-test-symlinked-tmp | fix (follows project-config-trust) | - | buildwarden/buildwarden | cli, designs | 8 close | f8-close (cloud) | - | [#134](https://github.com/buildwarden/buildwarden/pull/134) | 10 / 7 |
-| 2 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 6 publish | f6-merge-main-r2 (cloud) | - | - | 32 / 30 |
+| 2 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 6 publish | f6-merge-main-r2 (cloud, leased to cloud/20261122T180143Z) | - | - | 33 / 30 |
 | 5 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 6 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
 | 7 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 2 / 9 |
