@@ -27,6 +27,10 @@
 //	            [-escalate TEXT]
 //	wf hold     -state DIR -worker W -feature F -why TEXT -resumes WHEN
 //	wf trunk    -state DIR -feature F [-repository OWNER/NAME]
+//	wf record   -state DIR -worker W -kind KIND -note TEXT [-feature F]
+//	            [-repository OWNER/NAME] [-head SHA] [-ref REF]
+//	wf record   -state DIR -list [-since TIME]
+//	wf program-body -state DIR [-repository OWNER/NAME]
 //	wf move     -state DIR -worker human/NAME -feature F -to N [-why TEXT]
 //	wf urgent   -state DIR -worker human/NAME -feature F [-clear]
 //	wf state-step -state DIR -worker human/NAME -feature F (-note TEXT | -clear)
@@ -117,6 +121,17 @@
 // check -sync is the sync's gate (check.SyncReady). new -escalate files an
 // item, such as program-sync-<sha>, whose first step is a human escalation
 // carrying TEXT.
+//
+// record appends to the workflow branch's program/records.yaml each decision
+// FLOW-20 lets the loop take in the human's place (a loop merge, a deferred
+// or protected finding, an umbrella test, a process test, a security note
+// read, an assumed question, a departure from a strategy decision, a return
+// past the second, a re-estimate, a sync and its conflict resolution, a filed
+// item or relation, an area-map change, a tag, a hold resumed, an
+// escalation), and the human's security-ack of a security note at a program
+// merge; QUEUE.md lists the last week's under Decided for you, and record
+// -list prints them for the run's digest. program-body renders a repository's
+// records as the body of the pull request that lands its program trunk.
 //
 // new -lead, and lead for an item already queued or in progress, name the
 // host name whose machines take a feature's cloud steps of Branch setup
@@ -311,7 +326,7 @@ type opts struct {
 	urgent, clear, check, list, clones, prepare, program      bool
 	sync                                                      bool
 	pr                                                        int
-	escalate                                                  string
+	escalate, ref, since                                      string
 	// given holds the names of the flags the command line set, for a flag
 	// whose empty value means something.
 	given                                      map[string]bool
@@ -369,11 +384,16 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.answer, "answer", "", "the human's answer")
 	fs.StringVar(&o.title, "title", "", "new: the feature's title")
 	fs.StringVar(&o.source, "source", "", "new: where the item came from")
-	fs.StringVar(&o.kind, "kind", "", "new: feature (default) or process")
+	fs.StringVar(&o.kind, "kind", "", "new: feature (default) or process; record: "+
+		"the decision's kind ("+strings.Join(queue.RecordKinds, ", ")+")")
 	fs.StringVar(&o.follows, "follows", "", "new: the item this one fixes or finishes")
 	fs.BoolVar(&o.sync, "sync", false,
 		"check: the program sync's gate for -repository's PR -pr (FLOW-20)")
 	fs.IntVar(&o.pr, "pr", 0, "check -sync: the sync's pull request number")
+	fs.StringVar(&o.ref, "ref", "",
+		"record: what the decision is about: a PR (#N), a finding's id, a tag, an item")
+	fs.StringVar(&o.since, "since", "",
+		"record -list: only records at or after this RFC 3339 time")
 	fs.StringVar(&o.escalate, "escalate", "",
 		"new: the item's first step is a human escalation carrying this text (FLOW-20)")
 	fs.BoolVar(&o.program, "program", false,
@@ -465,8 +485,8 @@ func run(cmd string, args []string, now time.Time) error {
 		"validate": validate, "status": status, "next": next, "check": checkPhase,
 		"answer": answer, "back": back, "new": newFeature, "move": move, "urgent": urgent,
 		"lead": lead, "state-step": stateStep, "hold": hold, "trunk": trunkCmd,
-		"sync-program": syncProgram,
-		"gate":         gate, "budget": budget, "migrate": migrate, "stale": stale,
+		"sync-program": syncProgram, "record": record, "program-body": programBody,
+		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
 		"declare": declareItem, "relate": relate, "relations": relations,
 		"digest": digest, "areas": areasCmd, "native": native,
 	}
@@ -1045,6 +1065,61 @@ func holdOrEscalate(f *queue.Feature, o opts) error {
 		}
 	}
 	return nil
+}
+
+// record is wf record: it appends a decision the loop took in the human's
+// place to the program records, or with -list prints them in Decided for
+// you order (FLOW-20, Decision 13).
+func record(s *queue.State, o opts) error {
+	if o.list {
+		var since time.Time
+		if o.since != "" {
+			t, err := time.Parse(time.RFC3339, o.since)
+			if err != nil {
+				return fmt.Errorf("-since: %w", err)
+			}
+			since = t
+		}
+		for _, r := range queue.DecidedForYou(s.Records) {
+			if !r.At.Before(since) {
+				fmt.Println("- " + r.Line())
+			}
+		}
+		return nil
+	}
+	if o.feature != "" {
+		if _, err := s.Find(o.feature); err != nil {
+			return err
+		}
+	}
+	r := queue.Record{At: o.now, By: o.worker, Kind: o.kind, Feature: o.feature,
+		Repo: o.repository, Ref: o.ref, Note: o.note}
+	if o.given["head"] {
+		r.Head = o.head
+	}
+	if err := queue.AppendRecord(o.state, r); err != nil {
+		return err
+	}
+	fmt.Printf("recorded\t%s\t%s\n", r.Kind, orDash(r.Feature))
+	return nil
+}
+
+// programBody is wf program-body: the program records of a repository as
+// the body of the pull request that lands its program trunk (FLOW-20).
+func programBody(s *queue.State, o opts) error {
+	repo := o.repository
+	if repo == "" {
+		repo = s.Config.Repository
+	}
+	fmt.Print(queue.ProgramBody(s.Records, repo))
+	return nil
+}
+
+func orDash(v string) string {
+	if v == "" {
+		return "-"
+	}
+	return v
 }
 
 // move is wf move: the human places an open item (FLOW-05, LOOP-04).

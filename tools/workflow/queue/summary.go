@@ -24,6 +24,7 @@ func Summary(s *State) string {
 	fmt.Fprintf(&b, "%s\n", s.mainLine())
 
 	s.writeNeedsHuman(&b)
+	s.writeDecided(&b)
 	s.writeActive(&b)
 	s.writeWorkers(&b)
 	s.writeRelations(&b)
@@ -221,6 +222,30 @@ func (s *State) held() []string {
 		}
 	}
 	return out
+}
+
+// decidedDays is how far back QUEUE.md's Decided for you reaches from the
+// queue's last change.
+const decidedDays = 7
+
+// writeDecided is Decided for you: the program records of the last
+// decidedDays days before the queue's last change, a departure from the
+// human's decisions, a return past the second and a re-estimate first
+// (FLOW-20). With no records file it is left out.
+func (s *State) writeDecided(b *strings.Builder) {
+	if s.Records == nil {
+		return
+	}
+	since := s.updated().AddDate(0, 0, -decidedDays)
+	var lines []string
+	for _, r := range DecidedForYou(s.Records) {
+		if !r.At.Before(since) {
+			lines = append(lines, r.Line())
+		}
+	}
+	section(b, "Decided for you", lines, fmt.Sprintf("Nothing in the last %d days. "+
+		"Call any back with a blocking question or a follow-up item (FLOW-20).",
+		decidedDays))
 }
 
 // subsection writes a ### list; a line that ends in a newline is a paragraph

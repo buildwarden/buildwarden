@@ -340,6 +340,9 @@ type State struct {
 	// ProgramMain is program.yaml, the same record for the program trunk
 	// (FLOW-20); optional as main.yaml is.
 	ProgramMain *Main
+	// Records are the program records, program/records.yaml (FLOW-20); the
+	// file is optional.
+	Records []Record
 	// doneDir records that queue/done/ exists: done items are written there
 	// and carry no number (queue-positions, Decision 8).
 	doneDir bool
@@ -554,6 +557,10 @@ func Load(dir string) (*State, error) {
 		return nil, err
 	}
 	if err := s.loadMain(); err != nil {
+		return nil, err
+	}
+	var err error
+	if s.Records, err = LoadRecords(dir); err != nil {
 		return nil, err
 	}
 	return s, nil

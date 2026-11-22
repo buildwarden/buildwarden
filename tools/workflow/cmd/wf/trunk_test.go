@@ -79,3 +79,27 @@ func TestSyncProgram(t *testing.T) {
 		t.Fatalf("wf sync-program with a program-sync item open = %q", got)
 	}
 }
+
+// TestRecordCommands: wf record appends to program/records.yaml, record
+// -list prints in Decided for you order, and program-body renders a
+// repository's records (FLOW-20, Decision 13).
+func TestRecordCommands(t *testing.T) {
+	dir := stateDir(t, programHere)
+	queued(t, dir, "p", "1", "-program")
+	refused(t, dir, "record kind", "record", "-worker", "cloud/run", "-kind", "whim",
+		"-note", "x")
+	must(t, dir, "record", "-worker", "cloud/run", "-kind", "merge", "-feature", "p",
+		"-repository", "o/here", "-head", "0123456789abcdef", "-ref", "#42",
+		"-note", "loop merge, a merge commit")
+	must(t, dir, "record", "-worker", "cloud/run", "-kind", "return", "-feature", "p",
+		"-note", "third return to Design")
+	got := must(t, dir, "record", "-list")
+	if !strings.HasPrefix(got, "- return **p**: third return") ||
+		!strings.Contains(got, "- merge **p** o/here #42 at `0123456`") {
+		t.Fatalf("wf record -list = %q", got)
+	}
+	body := must(t, dir, "program-body")
+	if !strings.Contains(body, "### merge (1)") || !strings.Contains(body, "### return (1)") {
+		t.Fatalf("wf program-body = %q", body)
+	}
+}

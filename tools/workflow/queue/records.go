@@ -138,3 +138,44 @@ func (r Record) Line() string {
 	fmt.Fprintf(&b, ": %s (%s, %s)", r.Note, r.By, r.At.Format("2006-01-02"))
 	return b.String()
 }
+
+// bodyOrder is the order of the landing pull request's sections: what the
+// human's merge acknowledges first (deferred findings, security notes read
+// by the loop), then the decisions listed first under Decided for you, then
+// the rest in RecordKinds order.
+var bodyOrder = append([]string{"deferred", "security-note", "protected", "departure",
+	"return", "re-estimate"}, RecordKinds...)
+
+// ProgramBody renders the program records for repo as the body of the pull
+// request that lands its program trunk (FLOW-20, Decision 12): every
+// record of that repository, or of none, one section per kind, so the human's
+// squash merge is the sign-off for each.
+func ProgramBody(rs []Record, repo string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Program records (FLOW-20)\n\nEvery decision the loop took in "+
+		"the human's place for %s, from %s. Merging this pull request acknowledges "+
+		"each deferred finding and each security note below; dismiss one with a "+
+		"recorded reason in a comment (FLOW-08, LINT-03).\n", repo, RecordsFile)
+	seen, found := map[string]bool{}, false
+	for _, kind := range bodyOrder {
+		if seen[kind] {
+			continue
+		}
+		seen[kind] = true
+		var lines []string
+		for _, r := range rs {
+			if r.Kind == kind && (r.Repo == "" || r.Repo == repo) {
+				lines = append(lines, "- "+r.Line())
+			}
+		}
+		if len(lines) > 0 {
+			found = true
+			fmt.Fprintf(&b, "\n### %s (%d)\n\n%s\n", kind, len(lines),
+				strings.Join(lines, "\n"))
+		}
+	}
+	if !found {
+		b.WriteString("\nNo record.\n")
+	}
+	return b.String()
+}
