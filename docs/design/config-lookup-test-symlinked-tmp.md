@@ -260,17 +260,47 @@ empty.
 
 ## Implementation plan
 
-1. `inConfigFiles` enters its directory with `t.Chdir` (TEST-01, TEST-04),
-   and its comment says why.
-2. `TestConfigLineEscapesThePath` enters its subdirectory with `t.Chdir`
-   (TEST-01).
-3. Add `TestConfigLineNamesTheDirectoryAsEntered` (TEST-01, TEST-02,
-   GLOBAL-07: skips on Windows only, as `selfLink` does).
-4. `make test` and `make lint`; the linked-`TMPDIR` run of `./cmd/warden`
-   (Validation plan), recorded.
+Plan from the design as approved at `8eb333d` (r1). Only `cmd/warden`'s test
+files change; no package in `cmd/warden` calls `t.Parallel`, so `t.Chdir`
+cannot panic in any caller of `inConfigFiles`.
 
-No product code, reference doc or pseudocode in `overview.md` changes
-(UX-01 and FLOW-15 have nothing to update).
+1. **`inConfigFiles`** (`cmd/warden/vmdns_test.go`): replace the
+   `os.Getwd`/`os.Chdir`/`t.Cleanup` lines with `t.Chdir(dir)`, and say in
+   its comment that it enters the directory as a shell does, setting `PWD`,
+   so the paths `warden` prints are the directory as `t.TempDir` named it
+   (Decision 2; TEST-01, TEST-04). Rework of `project-config-trust`'s
+   helper (FLOW-06). `TestConfigFileLookupOrder` and the helper's other
+   callers are not edited (Design).
+2. **`TestConfigLineEscapesThePath`** (`cmd/warden/configline_test.go`): its
+   `setup` enters the escaped subdirectory with `t.Chdir(dir)` in place of
+   `os.Chdir(dir)` and its error check (Decision 2; TEST-01, TEST-04).
+   Rework (FLOW-06).
+3. **Tier 0: add `TestConfigLineNamesTheDirectoryAsEntered`**
+   (`cmd/warden/configfile_test.go`), as the Design section lays it out:
+   skip on Windows with `selfLink`'s reason; `inConfigFiles(t, "")`; a real
+   directory holding a `warden.toml` that sets `output_dir`; a symbolic link
+   to it in another `t.TempDir()`; `t.Chdir(link)`; `LoadConfig`; expect
+   `cfg.File == filepath.Join(link, "warden.toml")`, the source "found in
+   the working directory", the file's output directory, and
+   `configLine(cfg)` naming the same path (Decision 3; TEST-01, TEST-02,
+   TEST-03, TEST-04, GLOBAL-07, GLOBAL-09, UX-07). Confirm the Validation
+   plan's claim once: with `configFile` made to resolve links (a local edit,
+   never committed) the test fails; then revert the edit.
+4. **Tier 0 and tier 1 gates**: `make test` and `make lint` pass (no
+   build-tagged file is touched, so the host platform's lint is the one
+   owed; FLOW-17); then `TMPDIR=<a link to a directory> go test -count=1
+   ./cmd/warden` passes, and the commit message records both that run and
+   that it failed at `be13847` (Validation plan; TEST-01, TEST-02, TEST-04).
+5. **Tier 2, tracked, not a step**: the darwin/arm64 run and the
+   `warden doctor` check under `/var/folders` stay the `qemu-any` gap in
+   `tier2_gaps`, already on the native-gap backlog as
+   `config-lookup-test-symlinked-tmp-darwin`; Implement adds no
+   `f6-validate-*` step and edits no backlog entry (TEST-03, FLOW-09).
+
+No product code, reference doc (`docs/book/src/guide/`) or pseudocode in
+`overview.md` changes: no surface changes and no component's flow changes
+(UX-01, FLOW-15). No rule change was approved and none is needed
+(`rule_changes: []`; FLOW-14).
 
 ## Design review
 
