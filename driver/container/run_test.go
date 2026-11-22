@@ -58,7 +58,7 @@ func fakeRuntime(t *testing.T, wait string) {
 func TestWatchExitReportsTheBuildContainer(t *testing.T) {
 	fakeRuntime(t, "echo 3")
 	h := &exitHost{exits: make(chan string, 1)}
-	b := &build{buildContainer: "warden-build-k3v9x2ab"}
+	b := &build{buildID: "k3v9x2ab", buildContainer: "warden-build-k3v9x2ab"}
 	stop := b.watchExit(h)
 	select {
 	case got := <-h.exits:
@@ -78,7 +78,7 @@ func TestWatchExitReportsTheBuildContainer(t *testing.T) {
 func TestWatchExitStoppedReportsNothing(t *testing.T) {
 	fakeRuntime(t, "sleep 1; echo 0")
 	h := &exitHost{exits: make(chan string, 1)}
-	b := &build{buildContainer: "warden-build-k3v9x2ab"}
+	b := &build{buildID: "k3v9x2ab", buildContainer: "warden-build-k3v9x2ab"}
 	b.watchExit(h)()
 	select {
 	case got := <-h.exits:

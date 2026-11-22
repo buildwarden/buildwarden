@@ -140,7 +140,7 @@ func doctor(_ context.Context, req *drivercmd.DoctorRequest) (bool, error) {
 }
 
 // clean removes the containers, networks and dev relay images of every build
-// that is neither in keep_ids nor named by a running process (DRV-27).
+// that is neither in keep_ids nor waited on by a live driver's waiter (DRV-27).
 func clean(_ context.Context, req *drivercmd.CleanRequest) (int, error) {
 	rt, err := resolveRuntime(req.Settings)
 	if err != nil {

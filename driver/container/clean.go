@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -146,30 +147,79 @@ func removeWorkDirs(w io.Writer, tmpdir string, dead func(id string) bool) (int,
 	return removed, errors.Join(errs...)
 }
 
-// liveProcessBuilds are the build IDs of the driver's containers that a
-// running process names: the driver's own `container wait warden-build-<id>`
-// child, and the runtime's processes. It sees every user's processes, which
-// keep_ids cannot (a runtime daemon is shared between users; a lock
-// directory is not). With no ps, on Windows, it finds nothing.
+// liveProcessBuilds are the build IDs that a running build's waiter shows
+// alive, read from one listing of every user's processes, which keep_ids
+// cannot see (a runtime daemon is shared between users; a lock directory is
+// not). With no ps, or one that lacks -A, -ww or -o (on Windows, BusyBox), it
+// finds nothing, and keep_ids is the only sign.
 func liveProcessBuilds() map[string]bool {
-	out, err := exec.Command("ps", "aux").Output()
+	out, err := exec.Command("ps", "-A", "-ww", "-o", "pid=,ppid=,args=").Output()
 	if err != nil {
 		return nil
 	}
-	ids := make(map[string]bool)
-	for _, line := range strings.Split(string(out), "\n") {
-		if !strings.Contains(line, "warden") {
+	return liveBuilds(string(out))
+}
+
+// driverProgram is the base name of the container driver's binary.
+const driverProgram = "warden-driver-container"
+
+// liveBuilds parses a `ps -A -ww -o pid=,ppid=,args=` listing and returns
+// the IDs of the builds whose waiter runs under a live driver: a process
+// whose arguments are exactly `<runtime> container wait warden-build-<id>`,
+// the runtime one of runtimes by name or path, whose parent in the same
+// listing is a warden-driver-container. A waiter whose driver was killed is
+// orphaned (its parent is then init, a subreaper or gone) and does not
+// count, so a build whose driver is dead is cleaned while its container
+// still runs (Decision 25). No other process that names a build counts:
+// podman's conmon names the build container for its whole life, and a
+// runtime's helpers (finch's limactl, its ssh to nerdctl) run under the
+// runtime, not the driver.
+//
+// Arguments are split at blanks, as ps prints them: a driver or runtime
+// whose path holds a space is not recognised, which only ever leaves a build
+// to keep_ids.
+func liveBuilds(listing string) map[string]bool {
+	type proc struct {
+		ppid string
+		args []string
+	}
+	procs := make(map[string]proc)
+	var order []string
+	for _, line := range strings.Split(listing, "\n") {
+		f := strings.Fields(line)
+		if len(f) < 3 {
 			continue
 		}
-		for _, field := range strings.Fields(line) {
-			if strings.HasPrefix(field, "warden-relay-") ||
-				strings.HasPrefix(field, "warden-build-") {
-				parts := strings.SplitN(field, "-", 3)
-				if len(parts) == 3 {
-					ids[parts[2]] = true
-				}
-			}
+		procs[f[0]] = proc{ppid: f[1], args: f[2:]}
+		order = append(order, f[0])
+	}
+	ids := make(map[string]bool)
+	for _, pid := range order {
+		p := procs[pid]
+		id, ok := waiterBuild(p.args)
+		if !ok {
+			continue
+		}
+		parent, ok := procs[p.ppid]
+		if ok && p.ppid != pid && path.Base(parent.args[0]) == driverProgram {
+			ids[id] = true
 		}
 	}
 	return ids
+}
+
+// waiterBuild is the build ID that args wait on, when args are a waiter's:
+// `<runtime> container wait warden-build-<id>`.
+func waiterBuild(args []string) (string, bool) {
+	if len(args) != 4 || args[1] != "container" || args[2] != "wait" {
+		return "", false
+	}
+	if _, ok := supportedRuntime(path.Base(args[0])); !ok {
+		return "", false
+	}
+	id, ok := strings.CutPrefix(args[3], "warden-build-")
+	if !ok || id == "" || strings.Contains(id, "-") {
+		return "", false
+	}
+	return id, true
 }

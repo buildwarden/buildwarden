@@ -152,7 +152,7 @@ func TestStateFileRuntimeChecked(t *testing.T) {
 }
 
 // clean removes the leftovers of every build that is neither in keep_ids
-// nor named by a running process, and keeps the others (DRV-27, DRV-58).
+// nor waited on by a live driver's waiter, and keeps the others (DRV-27, DRV-58).
 func TestCleanKeepsTheLiveBuilds(t *testing.T) {
 	log := dockerOnPath(t, runtimeWithBuilds)
 	res, out, err := callContainer(t, drivercmd.CmdClean, &drivercmd.Request{Contract: 1,

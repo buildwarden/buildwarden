@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -174,7 +175,7 @@ func (b *build) watchExit(host driver.Host) func() {
 // containerWait blocks until the build container exits and returns its exit
 // code (-1 if the runtime does not report one).
 func (b *build) containerWait() int {
-	args := append(ctrctl.Cli, "container", "wait", b.buildContainer)
+	args := b.waitArgs()
 	out, err := exec.Command(args[0], args[1:]...).Output()
 	if err != nil {
 		return -1
@@ -184,6 +185,15 @@ func (b *build) containerWait() int {
 		return -1
 	}
 	return code
+}
+
+// waitArgs is the waiter's command line: `<runtime> container wait
+// warden-build-<id>`. It names the container, not the ID create returned,
+// because clean's process scan knows a live build by that name under a live
+// driver (liveBuilds).
+func (b *build) waitArgs() []string {
+	return append(slices.Clone(ctrctl.Cli), "container", "wait",
+		buildContainerName(b.buildID))
 }
 
 // consoleTail returns the last lines of the build container's console, which
