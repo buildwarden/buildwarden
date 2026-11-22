@@ -152,20 +152,38 @@ func (l *lifecycle) runCase(c lifecycleCase) (skipped, failure string, finished 
 }
 
 // killHeld kills the drivers of the builds the suite still holds, which a
-// hung case may be waiting on, and describes them.
+// hung case may be waiting on, reaps each as end does (DRV-52), releases
+// what the suite holds of it, and describes them. Each wait is bounded: the
+// exit by Teardown and drainWait, the reap by reap's own 2 x Teardown. The
+// hung case's goroutine may still run its end later; release is once only.
 func (l *lifecycle) killHeld() string {
 	l.mu.Lock()
-	defer l.mu.Unlock()
-	if len(l.held) == 0 {
+	builds := make([]*buildRun, 0, len(l.held))
+	procs := make([]*os.Process, 0, len(l.held))
+	for _, b := range l.held {
+		builds = append(builds, b)
+		procs = append(procs, b.proc)
+	}
+	l.mu.Unlock()
+	if len(builds) == 0 {
 		return "it held no build"
 	}
 	var held []string
-	for id, b := range l.held {
-		if b.proc != nil {
-			_ = b.proc.Kill()
+	for i, b := range builds {
+		if procs[i] != nil {
+			_ = procs[i].Kill()
+			select {
+			case <-b.exited:
+			case <-time.After(l.o.Teardown + drainWait):
+			}
 		}
-		held = append(held, fmt.Sprintf("build %s, whose driver was killed; its log:\n%s",
-			id, b.log()))
+		reaped := "reaped"
+		if _, err := l.reap(b); err != nil {
+			reaped = "not reaped: " + err.Error()
+		}
+		b.release()
+		held = append(held, fmt.Sprintf("build %s, whose driver was killed and %s; "+
+			"its log:\n%s", b.id, reaped, b.log()))
 	}
 	slices.Sort(held)
 	return "it held " + strings.Join(held, "\n")
@@ -229,7 +247,8 @@ type buildRun struct {
 	// exited when the driver has exited and its output ended, or did not end
 	// within drainWait of the exit.
 	outDone, errDone, exited chan struct{}
-	tunnel                   io.Closer
+	tunnel                   io.Closer // under l.mu
+	released                 sync.Once
 }
 
 // drainWait bounds the wait for a driver's output to end after its exit: a
@@ -513,7 +532,9 @@ func (b *buildRun) claim(started map[string]any) error {
 	if err != nil {
 		return fmt.Errorf("opening the tunnel at %s: %w", addr, err)
 	}
+	b.l.mu.Lock()
 	b.tunnel = conn
+	b.l.mu.Unlock()
 	cfg := relaycfg.Config{}
 	if values, ok := started["claim_values"]; ok {
 		data, _ := json.Marshal(values)
@@ -609,15 +630,28 @@ func (b *buildRun) end() {
 		<-b.exited
 		_, _ = b.l.reap(b)
 	}
-	_ = b.stdin.Close()
-	if b.tunnel != nil {
-		_ = b.tunnel.Close()
-	}
-	_ = b.col.Close()
-	b.l.mu.Lock()
-	delete(b.l.held, b.id)
-	b.l.mu.Unlock()
-	b.lock.release()
+	b.release()
+}
+
+// release releases b's input, tunnel, collector and lock, once: end and
+// killHeld may both come to it.
+func (b *buildRun) release() {
+	b.released.Do(func() {
+		b.l.mu.Lock()
+		tunnel := b.tunnel
+		delete(b.l.held, b.id)
+		b.l.mu.Unlock()
+		if b.stdin != nil {
+			_ = b.stdin.Close()
+		}
+		if tunnel != nil {
+			_ = tunnel.Close()
+		}
+		if b.col != nil {
+			_ = b.col.Close()
+		}
+		b.lock.release()
+	})
 }
 
 // reap runs reap of b with its values, and returns how many it removed.

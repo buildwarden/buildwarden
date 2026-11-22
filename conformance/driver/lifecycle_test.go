@@ -98,6 +98,46 @@ func TestRunCaseDeadline(t *testing.T) {
 	}
 }
 
+// A build held by a case that passed its deadline is killed, reaped and
+// released: nothing of it is left on the host, and its lock is free
+// (DRV-52).
+func TestKillHeldReaps(t *testing.T) {
+	hermetic(t)
+	s := fakeSuite(t)
+	t.Cleanup(func() { stopStubRelays(s.tmp) })
+	if _, failure := s.checkDescribe(); failure != "" {
+		t.Fatal(failure)
+	}
+	l := &lifecycle{s: s, o: LifecycleOptions{StubRelay: true, Teardown: 3 * time.Second},
+		dir: filepath.Join(s.scratch, "context"), held: map[string]*buildRun{}}
+	if err := l.prepare(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := l.start(script(0, true), "build", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.upTo("environment"); err != nil {
+		t.Fatal(err)
+	}
+	if l.leftIn(b) == "" {
+		t.Fatal("the running build left nothing in the temporary directory to reap")
+	}
+	if got := l.killHeld(); !strings.Contains(got, "killed and reaped") {
+		t.Errorf("killHeld = %q; want the build killed and reaped", got)
+	}
+	if left := l.leftIn(b); left != "" {
+		t.Errorf("after killHeld, %s", left)
+	}
+	if ids := heldLocks(s.name); len(ids) != 0 {
+		t.Errorf("after killHeld, the suite still holds the locks of %v", ids)
+	}
+	if len(l.held) != 0 {
+		t.Errorf("after killHeld, the suite still holds %d builds", len(l.held))
+	}
+	b.end() // the hung case's own end, should it wake: a no-op now
+}
+
 // stopStubRelays kills the stub relays, and the waiters, the fake's builds
 // under tmp left.
 func stopStubRelays(tmp string) {
