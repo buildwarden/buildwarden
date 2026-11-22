@@ -157,7 +157,8 @@ func TestConfigLineNamesTheDirectoryAsEntered(t *testing.T) {
 		t.Errorf("output_dir = %q, want %q: another file was decoded",
 			cfg.Build.OutputDir, "from-dir")
 	}
-	if line, wantLine := configLine(cfg), "config: "+want+" ("+configFromDir+")"; line != wantLine {
+	wantLine := "config: " + want + " (" + configFromDir + ")"
+	if line := configLine(cfg); line != wantLine {
 		t.Errorf("configLine = %q, want %q", line, wantLine)
 	}
 }
