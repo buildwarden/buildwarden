@@ -23,7 +23,7 @@ var (
 		{Name: "runtime", Type: String, Flag: "runtime", Key: "driver.container.cli",
 			Aliases: []string{"runtime.cli"}, Env: "WARDEN_CTR_CLI",
 			Commands: EveryCommand,
-			Usage:    "container runtime (finch, docker, podman)"},
+			Usage:    "container runtime (finch, podman, docker)"},
 		{Name: "relay-image", Type: String, Key: "driver.container.relay_image",
 			Aliases: []string{"runtime.relay_image"}, Env: "WARDEN_IMAGE",
 			Commands: []string{CmdRun}, Usage: "relay image reference, or dev"},

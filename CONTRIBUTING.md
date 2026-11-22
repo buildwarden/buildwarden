@@ -13,7 +13,7 @@ and the process for designing, reviewing and merging a feature is
 - Go at the version in `go.mod` (we manage it with [mise](https://mise.jdx.dev/);
   run `mise exec -- go ...` if your `GOROOT` is misconfigured)
 - golangci-lint v2
-- A container runtime: finch, docker, or podman
+- A container runtime: finch, podman, or docker
 - git 2.40 or later where the feature loop's `wf` runs: its merge check
   proves a squash merge with `git merge-tree --merge-base`, and with an
   older git it leaves the branch unconfirmed and says why

@@ -12,9 +12,11 @@ import (
 )
 
 // runtimes are the runtimes the container driver supports, in the order
-// detection prefers them. A runtime named by a flag, a variable, a config
-// file or a state file is one of these or is refused (resolveRuntime).
-var runtimes = []string{"finch", "docker", "podman"}
+// detection prefers them: finch first, then podman before docker, the open
+// source and free one where both answer. A runtime named by a flag, a
+// variable, a config file or a state file is one of these or is refused
+// (resolveRuntime).
+var runtimes = []string{"finch", "podman", "docker"}
 
 // lookPath finds a runtime on PATH, for detection and for the check of a
 // named runtime. Tests limit it to their fake runtimes' directory, which
@@ -53,8 +55,8 @@ func supportedRuntime(v string) (string, bool) {
 	return "", false
 }
 
-// runtimeNames lists runtimes in prose, the last after conj: "finch, docker
-// or podman".
+// runtimeNames lists runtimes in prose, the last after conj: "finch, podman
+// or docker".
 func runtimeNames(conj string) string {
 	last := len(runtimes) - 1
 	return strings.Join(runtimes[:last], ", ") + " " + conj + " " + runtimes[last]
@@ -204,8 +206,8 @@ func detectRuntime() (string, error) {
 	if len(installed) == 0 {
 		return "", driver.Fixable(
 			"install Finch (brew install --cask finch && finch vm init), "+
-				"Docker or Podman, or use a VM driver (--driver qemu or vz)",
-			"no container runtime found (tried finch, docker, podman)")
+				"Podman or Docker, or use a VM driver (--driver qemu or vz)",
+			"no container runtime found (tried finch, podman, docker)")
 	}
 	// Installed but not answering: almost always its VM or daemon is down.
 	return "", notAnswering(installed[0], strings.Join(installed, ", "))

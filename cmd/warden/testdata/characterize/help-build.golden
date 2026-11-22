@@ -40,4 +40,4 @@ Global Flags:
   -v, --verbose         verbose output
 
 Flags of driver "container":
-      --runtime string   container runtime (finch, docker, podman)
+      --runtime string   container runtime (finch, podman, docker)

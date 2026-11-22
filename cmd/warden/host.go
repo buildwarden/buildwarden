@@ -37,7 +37,7 @@ the config file). The report's first line says which config file was read
 and how it was chosen (--config, WARDEN_CONFIG, or ./warden.toml found in
 the working directory).
 
-  container  a container runtime (finch, docker, podman) is available
+  container  a container runtime (finch, podman, docker) is available
   qemu       qemu-system-* and qemu-img are on PATH; relay VM assets exist
   vz         Apple Silicon macOS; warden signed with the virtualization entitlement
   hyperv     hypervisor and management stack present; which privilege tier this

@@ -31,7 +31,7 @@ Or download from [Releases](https://github.com/buildwarden/buildwarden/releases)
 make build
 ```
 
-Requires a container runtime: [Finch](https://github.com/runfinch/finch), Docker, or Podman.
+Requires a container runtime: [Finch](https://github.com/runfinch/finch), Podman, or Docker.
 
 ### Build something
 
@@ -150,7 +150,7 @@ linked into `warden`. See
 # ./warden.toml, or the file --config or WARDEN_CONFIG names
 
 [driver.container]
-cli = "finch"                # container runtime (finch, docker, podman)
+cli = "finch"                # container runtime (finch, podman, docker)
 relay_image = ""             # relay image override ("dev" = build from source)
 
 [build]

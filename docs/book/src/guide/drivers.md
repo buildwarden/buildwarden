@@ -80,7 +80,7 @@ network namespace.
 
 ### Requirements
 
-- Docker, Finch, or Podman
+- Finch, Podman, or Docker
 - Works on: macOS, Linux, Windows — any platform with a container runtime
 
 No additional setup is needed beyond installing a container runtime.
@@ -96,8 +96,10 @@ datadisk: 150GiB
 
 ### Choosing the runtime
 
-With no runtime named, `warden` uses the first of `finch`, `docker` and
-`podman` that answers. To name one, use `--runtime`, `WARDEN_CTR_CLI` or
+With no runtime named, `warden` uses the first of `finch`, `podman` and
+`docker` that answers. When both `docker` and `podman` are installed and
+running, `podman` is chosen; earlier releases chose `docker`. To use
+`docker`, pass `--runtime docker` or set the key below to `"docker"`. To name one, use `--runtime`, `WARDEN_CTR_CLI` or
 `[driver.container] cli` (old name `[runtime] cli`, read until 1.0):
 
 ```sh

@@ -23,8 +23,9 @@ For the container driver you can also point at a specific Dockerfile:
 warden build ./my-project/Dockerfile.prod
 ```
 
-The container driver uses the first of `finch`, `docker` and `podman` that
-answers. To choose one, name it:
+The container driver uses the first of `finch`, `podman` and `docker` that
+answers, so with both `docker` and `podman` running it uses `podman`. To
+choose one, name it (`--runtime docker` for docker):
 
 ```sh
 warden build --runtime podman .

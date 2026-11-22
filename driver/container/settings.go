@@ -10,7 +10,7 @@ var Settings = []drivercmd.Setting{
 	{Name: "runtime", Type: drivercmd.String, Flag: "runtime",
 		Key: "driver.container.cli", Aliases: []string{"runtime.cli"},
 		Env: "WARDEN_CTR_CLI", Commands: drivercmd.EveryCommand,
-		Usage: "container runtime (finch, docker, podman)"},
+		Usage: "container runtime (finch, podman, docker)"},
 	{Name: "relay-image", Type: drivercmd.String,
 		Key:     "driver.container.relay_image",
 		Aliases: []string{"runtime.relay_image"}, Env: "WARDEN_IMAGE",

@@ -251,8 +251,8 @@ the slots, `/dev/kvm` access (kvm group membership) and leftover VMMs of the
 user who ran sudo, skipping the reflink probe so nothing is written into that
 user's cache.
 
-With the container driver, a runtime in effect that is not `finch`, `docker`
-or `podman` fails doctor with the error a build would get
+With the container driver, a runtime in effect that is not `finch`, `podman`
+or `docker` fails doctor with the error a build would get
 ([Configuration](configuration.md#the-container-runtime)), and so does a
 relay image that is not shaped like an image reference
 ([Configuration](configuration.md#relay-image)). Doctor is also the
@@ -404,7 +404,7 @@ build's temporary directory) and then its lock and record, printing
 `Cleaning up after build <id> (<driver>)`. A running build's are left alone.
 
 Under the container driver, `qemu` and `vz` it removes leftover containers,
-so there a runtime in effect that is not `finch`, `docker` or `podman` fails
+so there a runtime in effect that is not `finch`, `podman` or `docker` fails
 the command before anything is listed or removed
 ([Configuration](configuration.md#the-container-runtime)); under
 `firecracker` and `hyperv` the setting is not read.
@@ -476,7 +476,7 @@ error.
 
 warden's own; a driver's flags are listed by `--help` with the driver
 selected (the container driver's `--runtime <name>`, on `build`, `shell`,
-`doctor` and `clean`: `finch`, `docker` or `podman`, see
+`doctor` and `clean`: `finch`, `podman` or `docker`, see
 [Configuration](configuration.md#the-container-runtime)).
 
 | Flag | Description |

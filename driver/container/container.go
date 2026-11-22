@@ -46,7 +46,7 @@ var Version = "dev"
 // runner runs builds inside containers on one runtime, with network
 // isolation enforced by iptables.
 type runner struct {
-	runtime string // "finch", "docker" or "podman", supportedRuntime's own
+	runtime string // "finch", "podman" or "docker", supportedRuntime's own
 	// relayOrigin is where the relay-image setting came from, for messages.
 	relayOrigin string
 }

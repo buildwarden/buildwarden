@@ -173,11 +173,23 @@ func shortTimeouts(t *testing.T, answer, doctor time.Duration) {
 func TestDetectRuntimeSkipsOneThatIsNotUp(t *testing.T) {
 	dir := t.TempDir()
 	writeRuntime(t, dir, "finch", fails)
+	writeRuntime(t, dir, "podman", fails)
 	writeRuntime(t, dir, "docker", answers)
-	writeRuntime(t, dir, "podman", answers)
 	onlyOnPath(t, dir)
 	if rt, err := detectRuntime(); err != nil || rt != "docker" {
 		t.Fatalf("detectRuntime = %q, %v; want docker", rt, err)
+	}
+}
+
+// With docker and podman both installed and answering, and no runtime
+// named, detection chooses podman.
+func TestDetectRuntimePrefersPodmanOverDocker(t *testing.T) {
+	dir := t.TempDir()
+	writeRuntime(t, dir, "docker", answers)
+	writeRuntime(t, dir, "podman", answers)
+	onlyOnPath(t, dir)
+	if rt, err := detectRuntime(); err != nil || rt != "podman" {
+		t.Fatalf("detectRuntime = %q, %v; want podman", rt, err)
 	}
 }
 

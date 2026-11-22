@@ -71,7 +71,7 @@ buildwarden/
 │   ├── subnet.go              # Subnet allocation, utilities
 │   ├── container/             # Container driver (iptables isolation)
 │   │   ├── command.go            # Driver(): probe, run, reap, doctor, clean, attach
-│   │   ├── runtime.go            # The runtime: finch, docker or podman, and detection
+│   │   ├── runtime.go            # The runtime: finch, podman or docker, and detection
 │   │   ├── container.go          # Run/Attach: holder, sidecar, create, copy, start
 │   │   ├── images.go             # Holder + sidecar images: by digest, or built for dev
 │   │   ├── images/               # holder.Containerfile, netns.Containerfile

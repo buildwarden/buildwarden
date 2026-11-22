@@ -16,13 +16,13 @@ func TestFormerRuntimeValues(t *testing.T) {
 		asPath    = "the container runtime is named, not given as a path"
 		onPath    = "; warden looks docker up on PATH, so if it is installed " +
 			"outside PATH, add its directory to PATH"
-		otherRuntime = "the container driver supports finch, docker and podman " +
+		otherRuntime = "the container driver supports finch, podman and docker " +
 			"and no longer runs another runtime"
-		noNerdctl = "finch, docker or podman; there is no supported way to use " +
+		noNerdctl = "finch, podman or docker; there is no supported way to use " +
 			"nerdctl with the container driver"
-		otherProgram = "the container driver runs finch, docker or podman by " +
+		otherProgram = "the container driver runs finch, podman or docker by " +
 			"name and no longer runs another program"
-		noWrapper = "finch, docker or podman; if the program only set variables " +
+		noWrapper = "finch, podman or docker; if the program only set variables " +
 			"for one of them (DOCKER_HOST, DOCKER_CONTEXT, CONTAINER_HOST), set " +
 			"those in the environment; there is no supported way to run another " +
 			"program as the runtime"
@@ -90,9 +90,9 @@ func TestFormerRuntimeValueInTheError(t *testing.T) {
 			"pass --runtime docker"},
 		{"warden.toml", "nerdctl",
 			`[runtime] cli in warden.toml is "nerdctl"; the container driver ` +
-				"supports finch, docker and podman and no longer runs another " +
+				"supports finch, podman and docker and no longer runs another " +
 				"runtime",
-			"set it to finch, docker or podman; there is no supported way to " +
+			"set it to finch, podman or docker; there is no supported way to " +
 				"use nerdctl with the container driver"},
 	} {
 		source := tc.source

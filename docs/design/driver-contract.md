@@ -4307,7 +4307,8 @@ review of r3's delta with the rest. r4 (2026-11-22, after the
 escalation `f1-escalate-3`) adds 20 and changes 6 and 7, so there are
 now twenty: 20 and the change to 6 follow from Jeff's answers to `q4`
 and `q3`, and the change to 7 from his commit `c81892d`; all three go to
-the review of r4's delta. The list is against `main` as `project-config-trust` and
+the review of r4's delta. *r4, Jeff 2026-11-22: prefer podman over docker (open source)* adds 21, so there are
+now twenty-one. The list is against `main` as `project-config-trust` and
 `runtime-cli-project-path` leave it: that the user-level file is no
 longer read, `--config`, `WARDEN_CONFIG`, and the runtime's limit to
 three names are those items' changes, not K1's.
@@ -4537,6 +4538,15 @@ three names are those items' changes, not K1's.
     (a28). Detection, when nothing names a runtime, asks each candidate
     the version query in place of `info`, 3 s each (*r4, CI repair, Jeff 2026-11-22*). *New, r4
     (`q4`; Decision 26, a28).*
+21. **Detection prefers podman over docker.** *r4, Jeff 2026-11-22: prefer podman over docker (open source)*. When
+    nothing names a runtime, detection probes `finch`, then `podman`,
+    then `docker`, and takes the first that answers. `main`'s order was
+    `finch`, `docker`, `podman`, so on a host where docker and podman
+    both answer and finch does not, `main` chose docker and this chooses
+    podman. finch stays first. `--runtime docker`, `WARDEN_CTR_CLI=docker`
+    or `[driver.container] cli = "docker"` picks docker. The runtime's
+    usage string, its messages ("finch, podman or docker") and the guide
+    list the three in the new order. *New, r4 (Jeff 2026-11-22).*
 
 What does not change, although the code behind it moves:
 
@@ -5362,8 +5372,9 @@ not listed is unchanged and `warden`'s.
 | What `clean` treats as live: the held locks (`keep_ids`) and, for the container driver, its process scan, which since r4 counts only the driver's `container wait warden-build-<id>` waiter whose parent is a live `warden-driver-container` | **Changed**: the locks are added; *r4 (Decision 25):* the scan no longer counts any process that names a build (`conmon`, `warden-relay-<id>`), and finds the waiter it could not find before | Either sign is enough to keep a build; a process whose driver is gone is not a sign | Nothing. The dropped fallback, `main`'s scan of any command line, is a rejected alternative in Decision 25 |
 | A container runtime named by `--runtime`, `WARDEN_CTR_CLI` or the key that is not on `PATH`, or whose engine does not answer its server-version query | **Changed** in r4 (Behaviour 20, Decision 26, a28): one not on `PATH` is refused in the probe of `run` and by `doctor`, where `main` failed late. *r4, CI repair, Jeff 2026-11-22*: one whose engine is down is refused by the build's first engine call, the runtime's server-version query (`docker version --format '{{.Server.Version}}'`, the same for `podman`, `finch version`) with 10 s, with the start hint and a pointer to `warden doctor`, the output directory left as after any failed build; and by `doctor`, which asks the same query with 10 s. This said "or does not answer `<runtime> info` within 3 s", refused in the probe | A provided value that cannot be used is an error before any work (GLOBAL-10, UX-08) | Nothing: install or start it, or name another. Detection is not tried in its place (rejected in Decision 26) |
 | `--timeout` counts from the start of `run` | **Changed** slightly (Behaviour 14) | One clock for every driver | `--timeout` |
-| A driver setting nobody set | Unchanged per setting: the driver applies its own default (`network`: `warden-dev`; `slots`: 4 for hyperv, 16 for firecracker; `nat-prefix`: `192.168.240.0/20`; `host-ip`: `192.168.240.1`; `name`: `windows-server-2025`; `arch`: the host's; the two ages: `winguest`'s; `runtime`: the first of finch, docker, podman that answers its server-version query within 3 s (*r4, CI repair, Jeff 2026-11-22*; it said `info`), found once per build and kept in its state file). **Changed reader** (a21): the driver resolves it, through the kit, where `cmd/warden` did | These are the values `cmd/warden` and the drivers apply today | The flag, else the setting's environment variable (the two that exist), else the config file: the order `main` has once `project-config-trust` has merged, applied by the kit to the `args` and `config_file` `warden` passes on. In the file a common key is read in the driver's own table and then in `[driver]` (the row on a common key, below). The first place that sets it is the value; it is not merged with a lower one, and a value that does not parse or cannot be used is an error naming where it came from, reported by the driver in its probe (UX-08) |
+| A driver setting nobody set | Unchanged per setting: the driver applies its own default (`network`: `warden-dev`; `slots`: 4 for hyperv, 16 for firecracker; `nat-prefix`: `192.168.240.0/20`; `host-ip`: `192.168.240.1`; `name`: `windows-server-2025`; `arch`: the host's; the two ages: `winguest`'s; `runtime`: the first of finch, podman, docker that answers its server-version query within 3 s (*r4, CI repair, Jeff 2026-11-22*; it said `info`; *r4, Jeff 2026-11-22: prefer podman over docker (open source)*: `main`'s order was finch, docker, podman, and the next row is the change), found once per build and kept in its state file). **Changed reader** (a21): the driver resolves it, through the kit, where `cmd/warden` did | These are the values `cmd/warden` and the drivers apply today | The flag, else the setting's environment variable (the two that exist), else the config file: the order `main` has once `project-config-trust` has merged, applied by the kit to the `args` and `config_file` `warden` passes on. In the file a common key is read in the driver's own table and then in `[driver]` (the row on a common key, below). The first place that sets it is the value; it is not merged with a lower one, and a value that does not parse or cannot be used is an error naming where it came from, reported by the driver in its probe (UX-08) |
 | Which config file a driver reads: the one `warden` names in `config_file`, and no other | **New** (a21); one file since 2026-11-15 (Decision 23) | `warden` and the driver must read the same file, and a driver that searched by itself, in the working directory or through `WARDEN_CONFIG`, could find another | Nothing for the driver: which file it is, `warden` decides from `--config`, `WARDEN_CONFIG` and the working directory (`project-config-trust`). A driver started with no request, such as a service, reads none and uses its defaults |
+| The container runtime when nobody names one: the first of `finch`, `podman`, `docker` that answers its server-version query | **Changed**, *r4, Jeff 2026-11-22: prefer podman over docker (open source)* (Behaviour 21): `main`'s order was `finch`, `docker`, `podman`, so on a host where both docker and podman answer, and finch does not, `main` chose docker and K1 chooses podman | finch stays first, as on `main`; between the other two the open-source, free runtime is preferred | `--runtime`, else `WARDEN_CTR_CLI`, else `[driver.container] cli` (old name `[runtime] cli`): `--runtime docker` picks docker. A named runtime is used or refused, and detection is not tried in its place |
 | The values the container driver's `runtime` takes: `finch`, `docker` or `podman` | Unchanged by K1: it is `runtime-cli-project-path`'s rule, which K1 moves into the driver and keeps from every source and under both names of the key | They are the runtimes the driver supports and probes for | Nothing: another value is an error, and detection is not tried in its place |
 | A driver's flag given with an empty value, or a driver's variable that is set but empty: not set, and the next place is read | Unchanged in effect, **changed reader** (a21): `cmd/warden` tests for the empty string today; the contract now states it for every driver (C8) | It is today's behaviour for every such flag and both variables | Nothing; give a value |
 | A driver's switch: on when present | Unchanged in effect: `--force=false` and a repeated switch are settled by `warden`, the last occurrence winning, as the command line does today | A driver reads one form | Nothing |
@@ -8552,6 +8563,9 @@ runtime's server-version query replaces `info`, the probe only looks a
 named runtime up on `PATH`, the build's first engine call and `doctor`
 (10 s) ask the engine, and detection asks each candidate (3 s).
 
+*r4, Jeff 2026-11-22: prefer podman over docker (open source)*: detection's order becomes finch, podman, docker, where `main`'s was
+finch, docker, podman (Behaviour 21, a new **Defaults and overrides** row).
+
 **What landed on `main` since the last merge (`be13847`).** One pull
 request: config-lookup-test-symlinked-tmp (#134, `d67da9d`). It changes
 tests only: `inConfigFiles` enters its directory with `t.Chdir`, and
@@ -8998,7 +9012,9 @@ signals (19); a driver's key is matched by its exact name (24, q2);
 runtime not on `PATH` is refused in the probe, and one whose engine is
 down by the build's first engine call and by `doctor`, which ask its
 server version rather than `info` (26, q4, a28; r4, CI repair, Jeff
-2026-11-22).
+2026-11-22); detection prefers podman over docker, finch, podman,
+docker where `main` had finch, docker, podman (Behaviour 21; r4, Jeff
+2026-11-22, open source).
 
 **Rejected.** The first draft's Go interfaces linked into `warden`
 (sent back at the 2026-11-14 review); gRPC or another RPC framework;

@@ -184,7 +184,7 @@ records its bytes.
 
 ```
 resolve the runtime (--runtime, WARDEN_CTR_CLI, [driver.container] cli, else
-    the first of finch, docker, podman that answers; any other value is
+    the first of finch, podman, docker that answers; any other value is
     refused before anything is run) and write it to the state file
     detection asks each candidate its engine-version query (docker/podman
     `version --format {{.Server.Version}}`, `finch version`), 3 s each

@@ -9,10 +9,10 @@ Prerequisites vary by driver:
 A container runtime is required. Any of the following will work:
 
 - [Finch](https://github.com/runfinch/finch) (preferred on macOS)
-- [Docker](https://docs.docker.com/get-docker/)
 - [Podman](https://podman.io/)
+- [Docker](https://docs.docker.com/get-docker/)
 
-`warden` runs the runtime by its name (`finch`, `docker` or `podman`), which
+`warden` runs the runtime by its name (`finch`, `podman` or `docker`), which
 it looks up on `PATH`. If yours is installed outside `PATH`, as it often is
 for a CI job or a service, add its directory to `PATH`: the runtime setting
 takes one of the three names, not a path.
@@ -254,7 +254,7 @@ and Firecracker relay initramfs need no rebuild.
 ## Upgrading: the Container Runtime Setting
 
 Earlier releases ran whatever program `--runtime`, `WARDEN_CTR_CLI` or
-`[runtime] cli` named. The setting now takes `finch`, `docker` or `podman`
+`[runtime] cli` named. The setting now takes `finch`, `podman` or `docker`
 and nothing else, wherever it is set. If yours names one of the three or is
 unset, nothing changes. Any other value is refused by the first command that
 uses the container runtime (`build`, `shell` and `doctor` with the container
@@ -312,4 +312,4 @@ warden --help
 warden driver list   # the drivers warden finds, and the file each one runs
 ```
 
-BuildWarden auto-detects your container runtime for the container driver (trying finch, docker, podman in order). Override with `--runtime` or the `WARDEN_CTR_CLI` environment variable; see [The container runtime](../guide/configuration.md#the-container-runtime).
+BuildWarden auto-detects your container runtime for the container driver (trying finch, podman, docker in order, so podman rather than docker when both are running). Override with `--runtime` or the `WARDEN_CTR_CLI` environment variable; see [The container runtime](../guide/configuration.md#the-container-runtime).

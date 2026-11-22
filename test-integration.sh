@@ -51,7 +51,7 @@ REPO="$PWD"
 # ─── Test 0: an unsupported container runtime is refused, not run ───────────
 
 bold ""
-bold "━━━ Test 0: [runtime] cli, WARDEN_CTR_CLI and --runtime name finch, docker or podman ━━━"
+bold "━━━ Test 0: [runtime] cli, WARDEN_CTR_CLI and --runtime name finch, podman or docker ━━━"
 
 # A project that ships a program and names it as the container runtime. The
 # program leaves a marker when it is run. A home of its own keeps the caller's

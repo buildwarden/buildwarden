@@ -193,7 +193,7 @@ func forEachLevel(t *testing.T, name string, fn func(t *testing.T, r *runtimeTes
 }
 
 func TestSupportedRuntimeFromEverySource(t *testing.T) {
-	for i, name := range []string{"finch", "docker", "podman"} {
+	for i, name := range []string{"finch", "podman", "docker"} {
 		forEachLevel(t, name, func(t *testing.T, r *runtimeTest, level, table,
 			label string) {
 			r.name(level, table, label, name)
@@ -230,10 +230,10 @@ func writeScript(t *testing.T, path, script string) {
 	}
 }
 
-// Detection and the check share one list, in the order detection has always
-// probed.
+// Detection and the check share one list, in the order detection probes:
+// finch, then podman before docker.
 func TestDetectRuntimeProbesTheSupportedList(t *testing.T) {
-	want := []string{"finch", "docker", "podman"}
+	want := []string{"finch", "podman", "docker"}
 	if !slices.Equal(runtimes, want) {
 		t.Fatalf("runtimes = %v, want %v", runtimes, want)
 	}
@@ -253,11 +253,11 @@ func TestDetectRuntimeProbesTheSupportedList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantRan := "finch version\ndocker version --format {{.Server.Version}}\n" +
-		"podman version --format {{.Server.Version}}\n"
+	wantRan := "finch version\npodman version --format {{.Server.Version}}\n" +
+		"docker version --format {{.Server.Version}}\n"
 	if string(got) != wantRan {
-		t.Errorf("detection ran %q, want the version query of finch, docker, "+
-			"podman in order", got)
+		t.Errorf("detection ran %q, want the version query of finch, podman, "+
+			"docker in order", got)
 	}
 }
 
@@ -370,16 +370,16 @@ func TestEmptyRuntime(t *testing.T) {
 // for that level.
 func TestUnsupportedRuntimeMessage(t *testing.T) {
 	const (
-		supports = `is "dokcer"; the container driver supports finch, docker and podman`
-		fileFix  = "set it to finch, docker or podman, or remove it; " +
+		supports = `is "dokcer"; the container driver supports finch, podman and docker`
+		fileFix  = "set it to finch, podman or docker, or remove it; " +
 			"--runtime with one of those replaces it for one command"
 		file = "/src/repo/warden.toml"
 	)
 	for _, tc := range []struct{ source, msg, fix string }{
 		{cliFromFlag, "--runtime " + supports,
-			"pass --runtime finch, docker or podman, or leave it out"},
+			"pass --runtime finch, podman or docker, or leave it out"},
 		{cliFromEnv, "WARDEN_CTR_CLI " + supports,
-			"set WARDEN_CTR_CLI to finch, docker or podman, or unset it"},
+			"set WARDEN_CTR_CLI to finch, podman or docker, or unset it"},
 		{file + " [runtime] cli", "[runtime] cli in " + file + " " + supports, fileFix},
 		{file + " [driver.container] cli", "[driver.container] cli in " + file + " " +
 			supports, fileFix},

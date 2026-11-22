@@ -65,7 +65,7 @@ whatever its name; the `config:` line gives its path.
 
 With no file named, `cd repo && warden build` reads the repository's
 `warden.toml`, and that file decides how the repository is measured: the
-driver, the container runtime among finch, docker and podman, the relay
+driver, the container runtime among finch, podman and docker, the relay
 image, the relay's extra trust roots, whether payloads are captured, where
 the output and work directories go, and, with `--driver hyperv`, a base image
 that later builds of every project boot. The `config:` line says the file was
@@ -173,7 +173,7 @@ image_refresh_after = "7d" # qemu, hyperv: re-prepare the base in the background
 image_min_grace = "1d"     # qemu, hyperv: refuse builds with less evaluation grace left
 
 [driver.container]
-cli = "finch"              # Container runtime: finch, docker or podman, and nothing
+cli = "finch"              # Container runtime: finch, podman or docker, and nothing
                            #   else (unset = detected; see The container runtime)
 relay_image = ""           # Relay image override
                            #   "" = pull ghcr.io/buildwarden/relay:latest (release builds)
@@ -321,7 +321,7 @@ flag, variable, file, default.
 |----------|-----------|-------------|
 | `WARDEN_DRIVER` | `runtime.driver` | Override driver selection |
 | `WARDEN_IMAGE` | `driver.container.relay_image` | Relay image override (container driver) |
-| `WARDEN_CTR_CLI` | `driver.container.cli` | Container runtime: finch, docker or podman (see [The container runtime](#the-container-runtime)) |
+| `WARDEN_CTR_CLI` | `driver.container.cli` | Container runtime: finch, podman or docker (see [The container runtime](#the-container-runtime)) |
 | `WARDEN_CONFIG` | the config file | The config file to read when `--config` is not given (see [The config file](#the-config-file)); set it absolute |
 | `WARDEN_UPSTREAM_CA_CERTS` | `relay.upstream_ca_certs` | Replaces `relay.upstream_ca_certs`; paths separated by `:` (`;` on Windows) |
 | `NO_COLOR` | `output.color` | Disable colored output (any value) |
@@ -338,7 +338,7 @@ takes is refused as an unknown flag for that driver.
 |------|-------|-------------|
 | `--config` | Global | The config file to read, the only one that is (see [The config file](#the-config-file)) |
 | `--driver` | Global | Driver to run: container, qemu, vz, hyperv, firecracker, or the name or path of a driver binary |
-| `--runtime` | container driver: build/shell/doctor/clean | Container runtime: finch, docker or podman (see [The container runtime](#the-container-runtime)) |
+| `--runtime` | container driver: build/shell/doctor/clean | Container runtime: finch, podman or docker (see [The container runtime](#the-container-runtime)) |
 | `--color` | Global | Color mode |
 | `-v, --verbose` | Global | Verbose output |
 | `-o, --output` | build/shell | Output directory |
@@ -463,13 +463,19 @@ runtime installed outside `PATH` needs its directory added to `PATH`.
 
 ### Detection
 
-When no level names a runtime, BuildWarden probes `finch`, then `docker`,
-then `podman`. The first one that answers its engine-version query within
+When no level names a runtime, BuildWarden probes `finch`, then `podman`,
+then `docker`. The first one that answers its engine-version query within
 3 seconds is used: `finch version` (which asks nerdctl in finch's VM, and
 fails when the VM is stopped), and `docker version --format
 '{{.Server.Version}}'` and the same for `podman` (on Linux, where podman
 has no server, it answers with its own version). A query that fails or
 prints no version means the runtime is not running.
+
+When both `docker` and `podman` are installed and running, and finch is not,
+`podman` is chosen: detection prefers it, as the open-source, free runtime.
+Earlier releases probed `docker` before `podman` and chose `docker` there.
+To use `docker`, name it: `--runtime docker`, `WARDEN_CTR_CLI=docker`, or
+`cli = "docker"` under `[driver.container]`.
 
 ### Which commands check the value
 
@@ -491,14 +497,14 @@ also the way to build someone else's repository without editing its file.
 
 ### A value that is not supported
 
-A value in effect that is not `finch`, `docker` or `podman` is an error. The
+A value in effect that is not `finch`, `podman` or `docker` is an error. The
 command stops before it looks up or runs anything and before it makes an
 output directory, a container or a network, and `warden` exits 1. The message
 says where the value was set and what to change:
 
 ```
-[warden] ERROR: [runtime] cli in /src/repo/warden.toml is "dokcer"; the container driver supports finch, docker and podman
-  To fix: set it to finch, docker or podman, or remove it; --runtime with one of those replaces it for one command
+[warden] ERROR: [runtime] cli in /src/repo/warden.toml is "dokcer"; the container driver supports finch, podman and docker
+  To fix: set it to finch, podman or docker, or remove it; --runtime with one of those replaces it for one command
 ```
 
 No other value is tried in its place: neither a lower level's nor a detected
