@@ -151,11 +151,20 @@ rt_warden WARDEN_CTR_CLI="$RT_PROJECT/rt" doctor
 assert_runtime_refused "warden doctor refuses the program's path in WARDEN_CTR_CLI"
 
 bold "  The value in effect is the one checked:"
+# A docker that answers its version query at once, first on PATH: these
+# cases are about which value is checked, not about the host's engine,
+# whose answer can be slow (TEST-04). docker.cmd is the one Windows runs.
+RT_FAKE_BIN="$RT_HOME/fake-bin"
+mkdir -p "$RT_FAKE_BIN"
+printf '#!/bin/sh\n[ "$1" = version ] && echo 27.3.1\nexit 0\n' > "$RT_FAKE_BIN/docker"
+printf '@echo off\r\nif "%%~1"=="version" echo 27.3.1\r\nexit 0\r\n' \
+    > "$RT_FAKE_BIN/docker.cmd"
+chmod +x "$RT_FAKE_BIN/docker"
 printf '[runtime]\ncli = "./rt"\n' > "$RT_PROJECT/warden.toml"
-rt_warden doctor --runtime docker
+rt_warden PATH="$RT_FAKE_BIN:$PATH" doctor --runtime docker
 assert_runtime_unchecked "--runtime docker replaces the file's value" \
     '^container runtime: docker$'
-rt_warden WARDEN_CTR_CLI=docker doctor
+rt_warden PATH="$RT_FAKE_BIN:$PATH" WARDEN_CTR_CLI=docker doctor
 assert_runtime_unchecked "WARDEN_CTR_CLI=docker replaces the file's value" \
     '^container runtime: docker$'
 

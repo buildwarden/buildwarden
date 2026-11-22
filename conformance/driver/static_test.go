@@ -102,21 +102,56 @@ func TestStaticFake(t *testing.T) {
 	}
 }
 
-// The static tier passes against the container driver, on a host with or
-// without a container runtime (TEST-05).
+// The static tier passes against the container driver, with a container
+// runtime and without one (TEST-05). The runtime is a fake that answers at
+// once, never the host's: a real engine's answer can be slow on one probe
+// and not the next, and the check compares probes (TEST-04).
 func TestStaticContainer(t *testing.T) {
 	t.Parallel()
-	s, err := New(filepath.Join(bin, exe("warden-driver-container")))
-	if err != nil {
-		t.Fatal(err)
+	for name, withRuntime := range map[string]bool{
+		"a runtime that answers": true, "no runtime": false} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			s, err := New(filepath.Join(bin, exe("warden-driver-container")))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = s.Close() }()
+			s.env = []string{"PATH=" + runtimePath(t, withRuntime)}
+			for _, r := range s.Static() {
+				if r.Failure != "" {
+					t.Errorf("%s (%s): %s", r.Check,
+						strings.Join(r.Requirements, ", "), r.Failure)
+				}
+			}
+		})
 	}
-	defer func() { _ = s.Close() }()
-	for _, r := range s.Static() {
-		if r.Failure != "" {
-			t.Errorf("%s (%s): %s", r.Check, strings.Join(r.Requirements, ", "),
-				r.Failure)
+}
+
+// runtimePath is a PATH that holds a fake docker when withRuntime is set,
+// and no other runtime; on Windows it adds the directory a batch file's
+// interpreter is run from. The fake prints a server version to its version
+// query and nothing to any other call, so listings are empty and nothing
+// is created.
+func runtimePath(t *testing.T, withRuntime bool) string {
+	t.Helper()
+	dir := t.TempDir()
+	if withRuntime {
+		file, script := filepath.Join(dir, "docker"),
+			"#!/bin/sh\n[ \"$1\" = version ] && echo 27.3.1\nexit 0\n"
+		if runtime.GOOS == "windows" {
+			file, script = file+".cmd",
+				"@echo off\r\nif \"%~1\"==\"version\" echo 27.3.1\r\nexit 0\r\n"
+		}
+		if err := os.WriteFile(file, []byte(script), 0o755); err != nil {
+			t.Fatal(err)
 		}
 	}
+	if runtime.GOOS == "windows" {
+		return dir + string(os.PathListSeparator) +
+			filepath.Join(os.Getenv("SystemRoot"), "System32")
+	}
+	return dir
 }
 
 // The suite's self-test: each check fails under the fake's fault that breaks
