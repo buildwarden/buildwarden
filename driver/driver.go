@@ -1,36 +1,12 @@
 package driver
 
 import (
-	"context"
-	"errors"
 	"io"
 	"net/netip"
 	"time"
 
 	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
-
-// Driver is the interface all orchestration backends implement.
-type Driver interface {
-	// Name returns a short identifier (e.g., "container", "vz", "qemu").
-	Name() string
-
-	// StartBuild provisions the environment, starts the relay, runs the
-	// build script, and collects outputs.
-	StartBuild(ctx context.Context, req *BuildRequest) (*BuildResult, error)
-
-	// Exec provisions the environment and relay but opens an interactive
-	// session instead of running a script. Drivers that don't support
-	// interactive mode return ErrExecNotSupported.
-	Exec(ctx context.Context, req *BuildRequest) error
-
-	// Close releases any resources held by the driver.
-	Close() error
-}
-
-// ErrExecNotSupported is returned by Driver.Exec when the driver has no
-// interactive mode.
-var ErrExecNotSupported = errors.New("driver does not support interactive exec")
 
 // BuildRequest encapsulates everything a driver needs to run a build.
 type BuildRequest struct {
@@ -44,7 +20,17 @@ type BuildRequest struct {
 	// ("linux" (default) or "windows"). Ignored by the container driver.
 	GuestOS string
 	// Containerfile is the path to the original Dockerfile/Containerfile.
+	// warden empties it for a driver whose guest cannot run one (vz).
 	Containerfile string
+	// BuildScript is the absolute path of the build script warden staged
+	// (driver.StageBuildScript), which the collector serves. A driver reads
+	// it to describe the environment and never stages one of its own.
+	BuildScript string
+	// BaseImage is the FROM image of Containerfile, as written there, also
+	// when the build script is the user's (--script); empty when there is no
+	// Containerfile, it cannot be parsed, or its FROM is scratch. The driver
+	// resolves it to what it boots or runs.
+	BaseImage string
 	// OutputDir is the final output directory for the build.
 	OutputDir string
 	// CaptureMode controls payload capture ("none","headers","bodies","all").
@@ -107,11 +93,3 @@ type BuildRequest struct {
 
 // Link is the request's build link, the default when none was resolved.
 func (r *BuildRequest) Link() buildlink.Link { return r.BuildLink.OrDefault() }
-
-// BuildResult contains outputs from a completed build.
-type BuildResult struct {
-	// OutputDir is the path containing the ledger, artifacts, and logs.
-	OutputDir string
-	// RelayLogs contains the relay's log output.
-	RelayLogs []byte
-}

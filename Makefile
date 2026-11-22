@@ -1,11 +1,15 @@
-.PHONY: build test release-build integration-test lint tier1 enforcement fmt tidy cover clean sign relay-vm deadcode pin-specs conformance
+.PHONY: build test release-build integration-test driver-conformance lint tier1 enforcement fmt tidy cover clean sign relay-vm deadcode pin-specs conformance
 
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
+# EXE is ".exe" when the target OS is Windows, where warden finds a driver only
+# by its .exe name; go env GOEXE follows GOOS, so a cross-build gets none.
+EXE := $(shell go env GOEXE)
 
 build:
 	@mkdir -p dist
 	go build -o dist/warden ./cmd/warden/
+	go build -o dist/warden-driver-container$(EXE) ./cmd/warden-driver-container/
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/warden-relay-linux-amd64 ./cmd/relay/
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/warden-relay-linux-arm64 ./cmd/relay/
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/warden-io-linux-amd64 ./cmd/warden-io/
@@ -43,11 +47,22 @@ release-build:
 	@for t in $(RELEASE_TARGETS); do \
 		echo "== $$t"; \
 		GOOS=$${t%/*} GOARCH=$${t#*/} CGO_ENABLED=0 \
-			go build ./cmd/warden ./cmd/warden-io ./cmd/relay ./cmd/warden-pause || exit 1; \
+			go build ./cmd/warden ./cmd/warden-driver-container ./cmd/warden-io \
+				./cmd/relay ./cmd/warden-pause || exit 1; \
 	done
 
 integration-test:
 	./test-integration.sh
+
+# The driver contract's conformance suite, both tiers, against the driver
+# binary DRIVER. The lifecycle tier runs real builds, so it needs a host the
+# driver runs on; DRIVER_CONFORMANCE_FLAGS are driver-conformance's flags for
+# that host (--driver-arg, --config-file, --base-image, --skip,
+# --case-deadline, ...).
+DRIVER ?= dist/warden-driver-container$(EXE)
+driver-conformance:
+	go run ./conformance/driver/cmd/driver-conformance --driver $(DRIVER) \
+		$(DRIVER_CONFORMANCE_FLAGS)
 
 integration-test-vz:
 ifeq ($(UNAME_S),Darwin)

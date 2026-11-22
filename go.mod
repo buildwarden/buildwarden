@@ -4,7 +4,7 @@ go 1.26.3
 
 require (
 	github.com/spf13/cobra v1.10.2
-	github.com/spf13/pflag v1.0.10 // indirect
+	github.com/spf13/pflag v1.0.10
 )
 
 require (
@@ -16,6 +16,7 @@ require (
 	github.com/lesiw/ctrctl v0.5.0
 	github.com/miekg/dns v1.1.73
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.5.0
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	golang.org/x/crypto v0.56.0
 	golang.org/x/net v0.58.0
 	golang.org/x/sys v0.47.0

@@ -113,9 +113,6 @@ verbose = true
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if cfg.Runtime.CLI != "podman" {
-		t.Errorf("runtime = %q, want podman", cfg.Runtime.CLI)
-	}
 	if !cfg.Output.Verbose {
 		t.Error("verbose = false, want true")
 	}
@@ -123,16 +120,12 @@ verbose = true
 
 func TestLoadConfig_EnvOverrides(t *testing.T) {
 	inConfigFiles(t, "")
-	t.Setenv("WARDEN_CTR_CLI", "docker")
 	t.Setenv("NO_COLOR", "1")
 	t.Setenv("WARDEN_VERBOSE", "1")
 
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
-	}
-	if cfg.Runtime.CLI != "docker" {
-		t.Errorf("runtime = %q, want docker", cfg.Runtime.CLI)
 	}
 	if cfg.Output.Color != "never" {
 		t.Errorf("color = %q, want never", cfg.Output.Color)

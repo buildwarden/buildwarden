@@ -9,8 +9,8 @@ See [`README.md`](./README.md) for the rule format.
 ## The model
 
 ```
-  HOST (warden + collector)                    BUILD ENVIRONMENT
-  ==========================                   ==================================
+  HOST (warden + collector; the driver)        BUILD ENVIRONMENT
+  =====================================        ==================================
 
   (1) isolate ------------------------------>  sole network path: the relay
       Hyper-V: write the relay seed (its       (exists before any guest code runs)
@@ -23,7 +23,7 @@ See [`README.md`](./README.md) for the rule format.
                                                resolvers in the claim, RELAY-08
 
   (2) deliver the executor ----------------->  warden-io + a launcher
-      per build, version-matched               (seed disk, cloud-init ISO,
+      per build, the driver's version          (seed disk, cloud-init ISO,
                                                copied-in file, ...)
 
   (3) start -------------------------------->  launcher: address from the seed,
@@ -100,8 +100,9 @@ This is a security boundary (GLOBAL-06).
 
 The host delivers exactly one thing to the build environment outside the relay:
 the executor (`warden-io`) and the minimal launcher that starts it. It is
-delivered per build and matches the orchestrator's version. The build script,
-context files, the CA and extension material never travel this way.
+delivered per build by the driver and matches the version of the driver that
+delivers it; a driver linked into `warden` has `warden`'s version. The build
+script, context files, the CA and extension material never travel this way.
 
 ---
 

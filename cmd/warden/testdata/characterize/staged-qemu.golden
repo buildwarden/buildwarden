@@ -1,0 +1,45 @@
+== Dockerfile
+  inputs/Containerfile:
+    FROM alpine
+    RUN echo hi
+  inputs/build.sh:
+    #!/bin/sh
+    set -e
+    echo hi
+  staged/build.sh:
+    #!/bin/sh
+    set -e
+    echo hi
+== Containerfile
+  inputs/Containerfile:
+    FROM alpine
+    RUN echo hi
+  inputs/build.sh:
+    #!/bin/sh
+    set -e
+    echo hi
+  staged/build.sh:
+    #!/bin/sh
+    set -e
+    echo hi
+== build.sh
+  staged/build.sh:
+    echo sh
+== Dockerfile and build.sh
+  inputs/Containerfile:
+    FROM alpine
+    RUN echo hi
+  inputs/build.sh:
+    #!/bin/sh
+    set -e
+    echo hi
+  staged/build.sh:
+    #!/bin/sh
+    set -e
+    echo hi
+== --script and Dockerfile
+  staged/build.sh:
+    echo own
+== windows build.ps1
+  staged/build.ps1:
+    Write-Output ps

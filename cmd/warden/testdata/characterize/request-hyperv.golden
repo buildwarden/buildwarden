@@ -1,0 +1,246 @@
+== defaults: warden build --driver hyperv $CTX
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
+== flags: warden build --driver hyperv --capture headers --output out --no-compress --timeout 10m --tmpdir tmp --quiet $CTX
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         out
+  CaptureMode       headers
+  Compress          false
+  Quiet             true
+  Timeout           10m0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           $CTX/tmp
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
+== vm flags: warden build --driver hyperv --image base.qcow2 --cpus 8 --memory 16384 --keep-vms --build-link 10.9.0.0/30 --script build.sh $CTX
+  Script            build.sh
+  ContextDir        $CTX
+  Image             base.qcow2
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              8
+  MemoryMB          16384
+  Network           
+  KeepVMs           true
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         10.9.0.0/30
+  DNS               []
+  Env               map[]
+== config file: warden build --driver hyperv $CTX
+warden.toml:
+    [build]
+    capture = "bodies"
+    output_dir = "o"
+    compress = false
+    tmpdir = "t"
+    [relay]
+    system_ca_bundle = false
+    [runtime]
+    relay_image = "dev"
+    [vm]
+    cpus = 2
+    memory_mb = 2048
+    network = "warden-ci"
+    image_refresh_after = "3d"
+    image_min_grace = "6h"
+    build_link = "10.9.0.4/30"
+    dns = ["10.20.0.53"]
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         o
+  CaptureMode       bodies
+  Compress          false
+  Quiet             false
+  Timeout           0s
+  CPUs              2
+  MemoryMB          2048
+  Network           warden-ci
+  KeepVMs           false
+  ImageRefreshAfter 72h0m0s
+  ImageMinGrace     6h0m0s
+  TempDir           $CTX/t
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  false
+  BuildLink         10.9.0.4/30
+  DNS               [10.20.0.53]
+  Env               map[]
+== network flag: warden build --driver hyperv --network warden-x $CTX
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           warden-x
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
+== [Runtime] cli: warden build --driver hyperv $CTX
+warden.toml:
+    [Runtime]
+    cli = "podman"
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
+== [runtime] Relay_Image: warden build --driver hyperv $CTX
+warden.toml:
+    [runtime]
+    Relay_Image = "dev"
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           
+  Containerfile     $CTX/Dockerfile
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]
+== [VM] image_refresh_after: warden build --driver hyperv $CTX
+warden.toml:
+    [VM]
+    image_refresh_after = "3d"
+  error: $CTX/warden.toml: [VM] image_refresh_after: keys are case-sensitive, and the hyperv driver reads [driver] image_refresh_after (old name [vm] image_refresh_after)
+  fix:   write it as [driver] image_refresh_after
+== [vm] Image_Min_Grace: warden build --driver hyperv $CTX
+warden.toml:
+    [vm]
+    Image_Min_Grace = "6h"
+  error: $CTX/warden.toml: [vm] Image_Min_Grace: keys are case-sensitive, and the hyperv driver reads [driver] image_min_grace (old name [vm] image_min_grace)
+  fix:   write it as [driver] image_min_grace
+== [vm] Network: warden build --driver hyperv $CTX
+warden.toml:
+    [vm]
+    Network = "warden-ci"
+  error: $CTX/warden.toml: [vm] Network: keys are case-sensitive, and the hyperv driver reads [driver.hyperv] network (old name [vm] network)
+  fix:   write it as [driver.hyperv] network
+== [Vm] windows_image: warden build --driver hyperv $CTX
+warden.toml:
+    [Vm]
+    windows_image = "w.vhdx"
+  error: $CTX/warden.toml: [Vm] windows_image: keys are case-sensitive, and the hyperv driver reads [driver.hyperv] windows_image (old name [vm] windows_image)
+  fix:   write it as [driver.hyperv] windows_image
+== [vm] WINDOWS_IMAGE_UPDATE: warden build --driver hyperv $CTX
+warden.toml:
+    [vm]
+    WINDOWS_IMAGE_UPDATE = "reuse"
+  error: $CTX/warden.toml: [vm] WINDOWS_IMAGE_UPDATE: keys are case-sensitive, and the hyperv driver reads [driver.hyperv] windows_image_update (old name [vm] windows_image_update)
+  fix:   write it as [driver.hyperv] windows_image_update
+== windows guest: warden build --driver hyperv --guest-os windows $CTX
+  Script            
+  ContextDir        $CTX
+  Image             
+  GuestOS           windows
+  Containerfile     
+  OutputDir         warden-output
+  CaptureMode       
+  Compress          true
+  Quiet             false
+  Timeout           0s
+  CPUs              0
+  MemoryMB          0
+  Network           
+  KeepVMs           false
+  ImageRefreshAfter 0s
+  ImageMinGrace     0s
+  TempDir           
+  RelayImage        
+  UpstreamCACerts   0 bytes
+  UpstreamSystemCA  true
+  BuildLink         $DEFAULT_LINK
+  DNS               []
+  Env               map[]

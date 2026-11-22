@@ -18,8 +18,8 @@ import (
 // The holder and the iptables sidecar are trusted code: the holder runs before
 // the build's network is isolated, and the sidecar runs --privileged. A release
 // build sets these (-ldflags -X) to the published images by digest
-// (ghcr.io/buildwarden/holder@sha256:...), and warden runs exactly those. When
-// unset (a development build), warden builds them from the embedded
+// (ghcr.io/buildwarden/holder@sha256:...), and the driver runs exactly those. When
+// unset (a development build), the driver builds them from the embedded
 // Containerfiles and tags them by content hash, never by a reusable tag.
 var (
 	holderImageRef string

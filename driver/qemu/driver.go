@@ -7,11 +7,9 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
@@ -26,7 +24,7 @@ import (
 // upstream: qemu's default, which the driver does not override.
 const UserNetCIDR = "10.0.2.0/24"
 
-// Driver implements driver.Driver using QEMU as the virtualization backend.
+// Driver is the qemu driver, with QEMU as the virtualization backend.
 // Works on all host platforms (macOS, Linux, Windows) with optional hardware
 // acceleration (HVF on macOS, KVM on Linux, WHPX on Windows).
 //
@@ -60,118 +58,86 @@ func New() *Driver {
 	return &Driver{}
 }
 
-// Name implements driver.Driver; it returns "qemu".
-func (d *Driver) Name() string { return "qemu" }
-
 func (d *Driver) status(msg string) {
 	fmt.Fprintf(os.Stderr, "[warden] %s\n", msg)
 }
 
-// StartBuild implements driver.Driver. It boots the relay VM and the build VM,
-// whose only network path is the relay, and waits for the build to finish.
-func (d *Driver) StartBuild(
-	ctx context.Context, req *driver.BuildRequest,
-) (*driver.BuildResult, error) {
+// Preflight is the qemu driver's probe, and the checks its Run makes before
+// it creates anything: the qemu binaries, a build link no host interface
+// holds, and the relay's resolvers, which replace req.DNS.
+func (d *Driver) Preflight(req *driver.BuildRequest) error {
 	if err := d.checkPrereqs(); err != nil {
-		return nil, err
+		return err
 	}
 	if err := driver.CheckHostLink(req.Link()); err != nil {
+		return err
+	}
+	return setRelayDNS(req, runtime.GOOS, os.ReadFile)
+}
+
+// Run is the qemu driver's run of one build (specs/driver-contract/v1.md,
+// The build): it boots the relay VM with the claim token and reports it
+// through host, boots the build VM, whose only network path is the relay,
+// once warden has claimed it, and stops both when host.Wait returns. Under
+// --keep-vms it leaves the work directory, with the disks, and returns it as
+// kept.
+func (d *Driver) Run(ctx context.Context, req *driver.BuildRequest, start *driver.Start,
+	host driver.Host) (kept []string, err error) {
+	if err := d.Preflight(req); err != nil {
 		return nil, err
 	}
-	if err := setRelayDNS(req, runtime.GOOS, os.ReadFile); err != nil {
-		return nil, err
-	}
-	if req.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
-		defer cancel()
-	}
-
-	// Cancel context on interrupt for graceful cleanup
-	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	buildID := driver.RandAlphaNum(8)
-
-	outputDir := req.OutputDir
-	if outputDir == "" {
-		outputDir = "warden-output"
-	}
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		return nil, fmt.Errorf("creating output dir: %w", err)
-	}
-
-	workDir, err := driver.NewWorkDir(req, "qemu-"+buildID)
+	workDir, err := driver.NewWorkDir(req, "qemu-"+start.BuildID)
 	if err != nil {
 		return nil, err
 	}
 	defer driver.RemoveWorkDir(req, workDir)
+	if req.KeepVMs {
+		kept = []string{workDir}
+	}
 
 	d.status("preparing build environment...")
-	buildScript, err := driver.StageBuildScript(req, workDir)
-	if err != nil {
-		return nil, fmt.Errorf("staging build script: %w", err)
-	}
-	if err := driver.RecordInputs(outputDir, req, buildScript); err != nil {
-		return nil, fmt.Errorf("recording inputs: %w", err)
-	}
-
 	// Resolve both VMs' boot assets before anything boots, so a missing
 	// image or asset fails in milliseconds rather than after the relay is up.
 	buildCfg, err := d.resolveBuildVMConfig(req, workDir)
 	if err != nil {
-		return nil, err
+		return kept, err
 	}
 	kernelPath, initrdPath, err := d.relayInitrd(workDir)
 	if err != nil {
-		return nil, fmt.Errorf("resolving relay assets: %w", err)
+		return kept, fmt.Errorf("resolving relay assets: %w", err)
 	}
-	env, err := buildEnvironment(buildCfg, buildScript)
+	env, err := buildEnvironment(buildCfg, req.BuildScript)
 	if err != nil {
-		return nil, fmt.Errorf("describing build environment: %w", err)
+		return kept, fmt.Errorf("describing build environment: %w", err)
 	}
-
-	// The relay's claim port is forwarded to host loopback (hostfwd); the
-	// collector rides the tunnel the session opens over it.
-	sess, err := driver.StartSession(driver.SessionConfig{
-		OutputDir:   outputDir,
-		ContextDir:  req.ContextDir,
-		BuildScript: buildScript,
-		GuestOS:     req.GuestOS,
-		OutputTee:   driver.ConsoleTee(req),
-		Verbose:     d.Verbose,
-	})
-	if err != nil {
-		return nil, err
-	}
-	defer sess.Close()
 
 	// Socket for the isolated relay<->build network.
 	socketPath := filepath.Join(workDir, "vlan.sock")
-
-	if err := d.runVMs(ctx, sess, req, env, buildCfg,
-		kernelPath, initrdPath, socketPath); err != nil {
-		return nil, err
-	}
-	driver.FinalizeOutput(outputDir, req.Compress)
-	return &driver.BuildResult{OutputDir: outputDir}, nil
+	relay := relayBoot{env: env, kernel: kernelPath, initrd: initrdPath,
+		socket: socketPath, token: start.ClaimToken, guestOS: start.GuestOS}
+	return kept, d.runVMs(ctx, host, req, relay, buildCfg)
 }
 
 // stopper is a started VM.
 type stopper interface{ stop() }
 
-// runVMs boots the relay VM and claims it, and only once the claim has
-// returned (the relay has addressed the build link and is serving its DHCP
-// lease) boots the build VM, then waits for the build. The two steps go
-// through d.relayStep and d.buildStep when set, so a test can pin the order.
-func (d *Driver) runVMs(ctx context.Context, sess *driver.Session, req *driver.BuildRequest,
-	env *relaycfg.Environment, buildCfg *buildVMConfig,
-	kernelPath, initrdPath, socketPath string) error {
+// relayBoot is what the relay VM boots with and reports.
+type relayBoot struct {
+	env                    *relaycfg.Environment
+	kernel, initrd, socket string
+	token, guestOS         string
+}
+
+// runVMs boots the relay VM and reports it, and only once warden has claimed
+// it (the relay has addressed the build link and is serving its DHCP lease)
+// boots the build VM, then waits for warden's stop. The two steps go through
+// d.relayStep and d.buildStep when set, so a test can pin the order.
+func (d *Driver) runVMs(ctx context.Context, host driver.Host, req *driver.BuildRequest,
+	relay relayBoot, buildCfg *buildVMConfig) error {
 	relayStep := func() (stopper, error) {
-		return d.startAndClaimRelay(ctx, sess, req, env, kernelPath, initrdPath,
-			socketPath)
+		return d.startAndClaimRelay(ctx, host, req, relay)
 	}
-	buildStep := func() (stopper, error) { return d.startBuildVM(buildCfg, socketPath) }
+	buildStep := func() (stopper, error) { return d.startBuildVM(buildCfg, relay.socket) }
 	if d.relayStep != nil {
 		relayStep = d.relayStep
 	}
@@ -192,37 +158,41 @@ func (d *Driver) runVMs(ctx context.Context, sess *driver.Session, req *driver.B
 	}
 	defer buildProc.stop()
 
+	if err := host.Started(); err != nil {
+		return err
+	}
 	d.status("running...")
-	return sess.Wait(ctx)
+	host.Wait(ctx)
+	return nil
 }
 
-// startAndClaimRelay boots the relay VM and claims it over the loopback-
-// forwarded claim port, returning the running relay process. On a claim
-// failure it stops the relay before returning, so the caller only needs to
-// defer stop on success.
-func (d *Driver) startAndClaimRelay(
-	ctx context.Context, sess *driver.Session, req *driver.BuildRequest,
-	env *relaycfg.Environment, kernelPath, initrdPath, socketPath string,
-) (*vmProcess, error) {
+// startAndClaimRelay boots the relay VM and reports it at its loopback-
+// forwarded claim port, returning the running relay process once warden has
+// claimed it. On a claim failure it stops the relay before returning, so the
+// caller only needs to defer stop on success.
+func (d *Driver) startAndClaimRelay(ctx context.Context, host driver.Host,
+	req *driver.BuildRequest, relay relayBoot) (*vmProcess, error) {
 	claimPort, err := driver.FreeLoopbackPort()
-	if err != nil {
-		return nil, err
-	}
-	claimToken, err := driver.RandomToken()
 	if err != nil {
 		return nil, err
 	}
 
 	d.status("starting relay...")
 	relayProc, err := d.startRelayVM(
-		kernelPath, initrdPath, socketPath, claimPort, claimToken)
+		relay.kernel, relay.initrd, relay.socket, claimPort, relay.token)
 	if err != nil {
 		return nil, fmt.Errorf("starting relay VM: %w", err)
 	}
 
 	claimAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(claimPort))
-	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, env,
-		req.Link().Claim(), driver.OldRelayFix); err != nil {
+	if err := host.ClaimRelay(ctx, driver.RelayStarted{
+		Claim: driver.ClaimEndpoint{Network: driver.ClaimTCP, Address: claimAddr},
+		ClaimValues: driver.ClaimValues{Environment: relay.env,
+			BuildLink:   req.Link().Claim(),
+			UpstreamDNS: driver.UpstreamDNS(req.DNS)},
+		GuestOS:     relay.guestOS,
+		OldRelayFix: driver.OldRelayFix,
+	}); err != nil {
 		relayProc.stop()
 		return nil, err
 	}
@@ -240,7 +210,7 @@ func (d *Driver) resolveBuildVMConfig(
 		MemoryMB: driver.OrDefault(req.MemoryMB, 4096),
 	}
 
-	image := linuxguest.ContainerfileImage(req)
+	image := linuxguest.RequestImage(req)
 
 	if image == "" {
 		if isWindowsGuest(req) {
@@ -425,16 +395,6 @@ func configureWindowsBuildVM(cfg *buildVMConfig, workDir string, link buildlink.
 	cfg.SeedISO = seedImg
 	return nil
 }
-
-// Exec implements driver.Driver. The qemu driver has no interactive mode, so
-// it returns driver.ErrExecNotSupported.
-func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
-	return driver.ErrExecNotSupported
-}
-
-// Close implements driver.Driver. Each build stops its own VMs, so the driver
-// holds nothing to release.
-func (d *Driver) Close() error { return nil }
 
 func (d *Driver) checkPrereqs() error {
 	binary := d.qemuBinary(hostQEMUArch())

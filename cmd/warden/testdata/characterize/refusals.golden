@@ -1,0 +1,97 @@
+warden build --cpus 2
+  error: --cpus requires a VM driver (--driver qemu, vz, hyperv or firecracker)
+warden build --memory 512
+  error: --memory requires a VM driver (--driver qemu, vz, hyperv or firecracker)
+warden build --script x.sh
+  error: --script requires a VM driver (--driver qemu, vz, hyperv or firecracker)
+warden build --image x.qcow2
+  error: --image requires a VM driver (--driver qemu, vz, hyperv or firecracker)
+warden build --keep-vms
+  error: --keep-vms requires a VM driver (--driver qemu, vz, hyperv or firecracker)
+warden build --build-link 10.9.0.0/30
+  error: --build-link requires a VM driver (--driver qemu, vz, hyperv or firecracker)
+warden build --network x
+  error: unknown flag --network for driver "container"
+  fix:   see 'warden build --driver container --help' for the flags this driver takes
+warden build --driver qemu --network x
+  error: unknown flag --network for driver "qemu"
+  fix:   see 'warden build --driver qemu --help' for the flags this driver takes
+warden build --driver firecracker --network x
+  error: unknown flag --network for driver "firecracker"
+  fix:   see 'warden build --driver firecracker --help' for the flags this driver takes
+warden build --driver vz --guest-os windows
+  error: --guest-os windows is currently only supported by --driver qemu or --driver hyperv
+warden build --driver firecracker --guest-os windows
+  error: --guest-os windows is currently only supported by --driver qemu or --driver hyperv
+warden build --guest-os plan9
+  error: invalid --guest-os "plan9" (want "linux" or "windows")
+warden build --driver nomad
+  error: driver "nomad" not found (searched PATH, then $WARDEN_DIR, where warden is installed)
+  fix:   put warden-driver-nomad on PATH or beside warden, or name its file: --driver /path/to/warden-driver-nomad. `warden driver list` shows the drivers warden can find
+warden build --timeout soon
+  error: invalid --timeout: time: invalid duration "soon"
+  fix:   give a Go duration such as 30s, 10m or 1h
+warden build --capture everything
+  error: invalid capture mode "everything" (valid: none, headers, bodies, all)
+warden build --driver qemu --build-link 10.9.0.0/24
+  error: --build-link: 10.9.0.0/24 is a /24; the build link must be a /30
+  fix:   pass --build-link a valid /30, e.g. --build-link 100.126.255.252/30
+warden build --regoin eu
+  error: unknown flag --regoin for driver "container"
+  fix:   see 'warden build --driver container --help' for the flags this driver takes
+warden build a b
+  error: accepts at most 1 arg(s), received 2
+  fix:   see 'warden build --help'
+warden build
+  error: no Dockerfile or Containerfile found in $CTX
+  fix:   pass the Dockerfile's path, or the directory that holds it
+warden build --driver qemu
+  error: nothing to build in $CTX: pass --script, or add build.sh or a Dockerfile
+warden build --driver hyperv --guest-os windows
+  error: nothing to build in $CTX: pass --script, or add build.ps1
+warden build  (warden.toml: "[runtime]\ndriver = \"nomad\"\n")
+  error: driver "nomad" not found (searched PATH, then $WARDEN_DIR, where warden is installed)
+  fix:   put warden-driver-nomad on PATH or beside warden, or name its file: --driver /path/to/warden-driver-nomad. `warden driver list` shows the drivers warden can find
+warden build  (warden.toml: "[runtime]\nrelay_image = \"-x\"\n")
+  error: [runtime] relay_image in $CTX/warden.toml is "-x": not an image reference
+  fix:   set it to an image reference such as ghcr.io/buildwarden/relay:v0.2.0 or to "dev", or remove it
+warden build --driver qemu  (warden.toml: "[vm]\nimage_refresh_after = \"soon\"\n")
+  error: $CTX/warden.toml [vm] image_refresh_after: invalid age "soon"
+  fix:   set it to an age such as "7d" or "36h"
+warden build --driver qemu  (warden.toml: "[vm]\nimage_min_grace = \"soon\"\n")
+  error: $CTX/warden.toml [vm] image_min_grace: invalid age "soon"
+  fix:   set it to an age such as "7d" or "36h"
+warden build --driver qemu  (warden.toml: "[vm]\nbuild_link = \"10.9.0.0/24\"\n")
+  error: [vm] build_link in $CTX/warden.toml: 10.9.0.0/24 is a /24; the build link must be a /30
+  fix:   set [vm] build_link in $CTX/warden.toml to a valid /30, e.g. build_link = "100.126.255.252/30", or remove it to use the default
+warden build  (warden.toml: "[Runtime]\nCLI = \"podman\"\n")
+  error: $CTX/warden.toml: [Runtime] CLI: keys are case-sensitive, and the container driver reads [driver.container] cli (old name [runtime] cli)
+  fix:   write it as [driver.container] cli
+warden build --driver qemu  (warden.toml: "[driver.Qemu]\nimage_refresh_after = \"3d\"\n")
+  error: $CTX/warden.toml: [driver.Qemu] image_refresh_after: keys are case-sensitive, and the qemu driver reads [driver.qemu] image_refresh_after
+  fix:   write it as [driver.qemu] image_refresh_after
+warden build --driver hyperv  (warden.toml: "[vm]\nnetwork = \"a\"\nNetwork = \"b\"\n")
+  error: $CTX/warden.toml: [vm] holds network and Network: keys are case-sensitive, and the hyperv driver reads [driver.hyperv] network (old name [vm] network)
+  fix:   keep one, written as [driver.hyperv] network
+warden build  (warden.toml: "[build]\ncapture = \"everything\"\n")
+  error: invalid capture mode "everything" (valid: none, headers, bodies, all)
+warden build  (warden.toml: "not toml [")
+  error: parsing $CTX/warden.toml: toml: line 1: expected '.' or '=', but got 't' instead
+  fix:   fix the TOML syntax in $CTX/warden.toml
+warden shell --cpus 2
+  error: --cpus requires a VM driver (--driver qemu, vz, hyperv or firecracker)
+warden image prepare --driver container
+  error: no linux image for --driver "container" (vz: macos; qemu: linux, windows; hyperv: windows; firecracker: linux)
+warden image prepare --driver qemu --os macos
+  error: no macos image for --driver "qemu" (vz: macos; qemu: linux, windows; hyperv: windows; firecracker: linux)
+warden image prepare --driver qemu --update
+  error: unknown flag --update for driver "qemu"
+  fix:   see 'warden image prepare --driver qemu --help' for the flags this driver takes
+warden image verify --driver container
+  error: driver "container" has no base-image layer cache on this host
+  fix:   warden image verify --driver qemu|hyperv|vz|firecracker
+warden image list extra
+  error: unknown command "extra" for "warden image list"
+  fix:   see 'warden image list --help'
+warden frobnicate
+  error: unknown command "frobnicate" for "warden"

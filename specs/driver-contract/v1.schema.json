@@ -1,0 +1,1039 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/buildwarden/buildwarden/specs/driver-contract/v1.schema.json",
+  "title": "driver-contract v1",
+  "description": "The JSON documents of the driver contract (specs/driver-contract/v1.md): describe, the requests, the messages of run, the results and the error object. Each is a definition under $defs; the root is any one of them.",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/describe"
+    },
+    {
+      "$ref": "#/$defs/message"
+    },
+    {
+      "$ref": "#/$defs/reap"
+    },
+    {
+      "$ref": "#/$defs/doctor"
+    },
+    {
+      "$ref": "#/$defs/setup"
+    },
+    {
+      "$ref": "#/$defs/image-prepare"
+    },
+    {
+      "$ref": "#/$defs/image-list"
+    },
+    {
+      "$ref": "#/$defs/image-verify"
+    },
+    {
+      "$ref": "#/$defs/clean"
+    },
+    {
+      "$ref": "#/$defs/attach"
+    },
+    {
+      "$ref": "#/$defs/ext"
+    },
+    {
+      "$ref": "#/$defs/reap-result"
+    },
+    {
+      "$ref": "#/$defs/doctor-result"
+    },
+    {
+      "$ref": "#/$defs/image-prepare-result"
+    },
+    {
+      "$ref": "#/$defs/image-list-result"
+    },
+    {
+      "$ref": "#/$defs/image-verify-result"
+    },
+    {
+      "$ref": "#/$defs/clean-result"
+    },
+    {
+      "$ref": "#/$defs/attach-result"
+    }
+  ],
+  "$defs": {
+    "contract-version": {
+      "description": "A contract version.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "build-id": {
+      "description": "Eight lowercase letters and digits.",
+      "type": "string",
+      "pattern": "^[a-z0-9]{8}$"
+    },
+    "driver-name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]{0,31}$"
+    },
+    "abs-path": {
+      "description": "An absolute path, UTF-8.",
+      "type": "string",
+      "minLength": 1
+    },
+    "args": {
+      "description": "The driver's flags: --name=value for a flag with a value, --name for a switch that is on.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^--[a-z][a-z0-9-]*(=.*)?$"
+      }
+    },
+    "config-file": {
+      "description": "The absolute path of the one config file, absent when there is none.",
+      "$ref": "#/$defs/abs-path"
+    },
+    "probe": {
+      "type": "boolean"
+    },
+    "vm": {
+      "description": "The shared VM settings; zero or empty is not set.",
+      "type": "object",
+      "properties": {
+        "cpus": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "memory_mb": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "build_link": {
+          "type": "string"
+        },
+        "build_link_source": {
+          "type": "string"
+        },
+        "dns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "enum": [
+            "fixable",
+            "busy",
+            "invalid-request",
+            "unsupported-command",
+            "unsupported-contract",
+            "internal"
+          ]
+        },
+        "msg": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fix": {
+          "type": "string"
+        },
+        "details": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "code",
+        "msg"
+      ]
+    },
+    "describe-flag": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "value": {
+          "type": "boolean"
+        },
+        "commands": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "run",
+              "doctor",
+              "setup",
+              "image-prepare",
+              "clean"
+            ]
+          }
+        },
+        "usage": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "commands",
+        "usage"
+      ]
+    },
+    "describe-key": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^driver\\.([a-z][a-z0-9_]*|[a-z][a-z0-9]{0,31}\\.[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*)$"
+        },
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "float",
+            "boolean",
+            "array",
+            "table",
+            "any"
+          ]
+        },
+        "aliases": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)+$"
+          }
+        },
+        "commands": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "run",
+              "reap",
+              "doctor",
+              "setup",
+              "image-prepare",
+              "image-list",
+              "image-verify",
+              "clean",
+              "attach",
+              "ext"
+            ]
+          }
+        },
+        "usage": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "key",
+        "type",
+        "commands",
+        "usage"
+      ]
+    },
+    "describe": {
+      "description": "What describe prints.",
+      "type": "object",
+      "properties": {
+        "contract": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/contract-version"
+          }
+        },
+        "name": {
+          "$ref": "#/$defs/driver-name"
+        },
+        "version": {
+          "type": "string"
+        },
+        "vendor": {
+          "type": "string"
+        },
+        "bug_url": {
+          "type": "string"
+        },
+        "commands": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "run",
+              "reap",
+              "doctor",
+              "setup",
+              "image-prepare",
+              "image-list",
+              "image-verify",
+              "clean",
+              "attach",
+              "ext"
+            ]
+          },
+          "allOf": [
+            {
+              "contains": {
+                "const": "run"
+              }
+            },
+            {
+              "contains": {
+                "const": "reap"
+              }
+            }
+          ]
+        },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "vm": {
+              "type": "boolean"
+            },
+            "shell": {
+              "type": "boolean"
+            },
+            "keep": {
+              "enum": [
+                "running",
+                "stopped",
+                "none"
+              ]
+            },
+            "exited": {
+              "type": "boolean"
+            },
+            "containerfile": {
+              "enum": [
+                "translate",
+                "ignore"
+              ]
+            },
+            "guest_os": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "image_os": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "default_image_os": {
+              "type": "string"
+            },
+            "reserved_ranges": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "vm",
+            "shell",
+            "keep",
+            "exited",
+            "containerfile",
+            "guest_os"
+          ]
+        },
+        "flags": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/describe-flag"
+          }
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/describe-key"
+          }
+        },
+        "ext": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "usage": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "usage"
+            ]
+          }
+        },
+        "help": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "contract",
+        "name",
+        "version",
+        "commands",
+        "capabilities"
+      ]
+    },
+    "start": {
+      "description": "warden to driver: the build.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "start"
+        },
+        "contract": {
+          "$ref": "#/$defs/contract-version"
+        },
+        "build_id": {
+          "$ref": "#/$defs/build-id"
+        },
+        "mode": {
+          "enum": [
+            "build",
+            "shell"
+          ]
+        },
+        "claim_token": {
+          "type": "string",
+          "minLength": 1
+        },
+        "guest_os": {
+          "type": "string"
+        },
+        "image": {
+          "type": "string"
+        },
+        "base_image": {
+          "type": "string"
+        },
+        "build_script": {
+          "$ref": "#/$defs/abs-path"
+        },
+        "context_dir": {
+          "$ref": "#/$defs/abs-path"
+        },
+        "tmpdir": {
+          "type": "string"
+        },
+        "diagnostics_dir": {
+          "$ref": "#/$defs/abs-path"
+        },
+        "state_file": {
+          "$ref": "#/$defs/abs-path"
+        },
+        "keep": {
+          "type": "boolean"
+        },
+        "verbose": {
+          "type": "boolean"
+        },
+        "vm": {
+          "$ref": "#/$defs/vm"
+        },
+        "config_file": {
+          "$ref": "#/$defs/config-file"
+        },
+        "args": {
+          "$ref": "#/$defs/args"
+        },
+        "probe": {
+          "$ref": "#/$defs/probe"
+        },
+        "collector": {
+          "description": "Reserved; never sent in version 1.",
+          "not": {}
+        }
+      },
+      "required": [
+        "type",
+        "contract",
+        "mode",
+        "guest_os",
+        "context_dir"
+      ],
+      "if": {
+        "properties": {
+          "probe": {
+            "const": true
+          }
+        },
+        "required": [
+          "probe"
+        ]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "build_id"
+              ]
+            },
+            {
+              "required": [
+                "claim_token"
+              ]
+            },
+            {
+              "required": [
+                "build_script"
+              ]
+            },
+            {
+              "required": [
+                "diagnostics_dir"
+              ]
+            },
+            {
+              "required": [
+                "state_file"
+              ]
+            }
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "build_id",
+          "claim_token",
+          "build_script",
+          "diagnostics_dir",
+          "state_file"
+        ]
+      }
+    },
+    "relay-started": {
+      "description": "driver to warden: where to claim the relay.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "relay-started"
+        },
+        "claim": {
+          "type": "object",
+          "properties": {
+            "network": {
+              "const": "tcp"
+            },
+            "address": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "network",
+            "address"
+          ]
+        },
+        "claim_values": {
+          "type": "object",
+          "properties": {
+            "environment": {
+              "type": "object"
+            },
+            "build_link": {
+              "type": "object"
+            },
+            "upstream_dns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "guest_os": {
+          "type": "string",
+          "minLength": 1
+        },
+        "old_relay_fix": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "claim",
+        "guest_os"
+      ]
+    },
+    "claimed": {
+      "description": "warden to driver: the relay is ready; start the environment.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "claimed"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "environment-started": {
+      "description": "driver to warden.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "environment-started"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "exited": {
+      "description": "driver to warden: a part stopped on its own.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "exited"
+        },
+        "which": {
+          "enum": [
+            "relay",
+            "build"
+          ]
+        },
+        "detail": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "which"
+      ]
+    },
+    "stop": {
+      "description": "warden to driver.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "stop"
+        },
+        "reason": {
+          "enum": [
+            "completed",
+            "failed",
+            "interrupted",
+            "timeout",
+            "shell-exited"
+          ]
+        },
+        "detail": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "reason"
+      ]
+    },
+    "stopped": {
+      "description": "driver to warden: torn down; the last message.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "stopped"
+        },
+        "kept": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "failed": {
+      "description": "driver to warden: the driver cannot go on; torn down; the last message.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "failed"
+        },
+        "error": {
+          "$ref": "#/$defs/error"
+        }
+      },
+      "required": [
+        "type",
+        "error"
+      ]
+    },
+    "message": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/start"
+        },
+        {
+          "$ref": "#/$defs/relay-started"
+        },
+        {
+          "$ref": "#/$defs/claimed"
+        },
+        {
+          "$ref": "#/$defs/environment-started"
+        },
+        {
+          "$ref": "#/$defs/exited"
+        },
+        {
+          "$ref": "#/$defs/stop"
+        },
+        {
+          "$ref": "#/$defs/stopped"
+        },
+        {
+          "$ref": "#/$defs/failed"
+        }
+      ]
+    },
+    "reap": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/$defs/contract-version"
+        },
+        "probe": {
+          "$ref": "#/$defs/probe"
+        },
+        "build_id": {
+          "$ref": "#/$defs/build-id"
+        },
+        "tmpdir": {
+          "type": "string"
+        },
+        "config_file": {
+          "$ref": "#/$defs/config-file"
+        },
+        "args": {
+          "$ref": "#/$defs/args"
+        },
+        "state_file": {
+          "$ref": "#/$defs/abs-path"
+        }
+      },
+      "required": [
+        "contract",
+        "build_id",
+        "state_file"
+      ]
+    },
+    "doctor": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/$defs/contract-version"
+        },
+        "probe": {
+          "$ref": "#/$defs/probe"
+        },
+        "vm": {
+          "$ref": "#/$defs/vm"
+        },
+        "config_file": {
+          "$ref": "#/$defs/config-file"
+        },
+        "args": {
+          "$ref": "#/$defs/args"
+        },
+        "verbose": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "contract"
+      ]
+    },
+    "setup": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/$defs/contract-version"
+        },
+        "probe": {
+          "$ref": "#/$defs/probe"
+        },
+        "vm": {
+          "$ref": "#/$defs/vm"
+        },
+        "config_file": {
+          "$ref": "#/$defs/config-file"
+        },
+        "args": {
+          "$ref": "#/$defs/args"
+        },
+        "verbose": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "contract"
+      ]
+    },
+    "image-prepare": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/$defs/contract-version"
+        },
+        "probe": {
+          "$ref": "#/$defs/probe"
+        },
+        "os": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "config_file": {
+          "$ref": "#/$defs/config-file"
+        },
+        "args": {
+          "$ref": "#/$defs/args"
+        },
+        "verbose": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "contract",
+        "os"
+      ]
+    },
+    "image-list": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/$defs/contract-version"
+        },
+        "probe": {
+          "$ref": "#/$defs/probe"
+        },
+        "config_file": {
+          "$ref": "#/$defs/config-file"
+        }
+      },
+      "required": [
+        "contract"
+      ]
+    },
+    "image-verify": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/$defs/contract-version"
+        },
+        "probe": {
+          "$ref": "#/$defs/probe"
+        },
+        "config_file": {
+          "$ref": "#/$defs/config-file"
+        }
+      },
+      "required": [
+        "contract"
+      ]
+    },
+    "clean": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/$defs/contract-version"
+        },
+        "probe": {
+          "$ref": "#/$defs/probe"
+        },
+        "keep_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/build-id"
+          }
+        },
+        "cache": {
+          "type": "boolean"
+        },
+        "tmpdir": {
+          "type": "string"
+        },
+        "config_file": {
+          "$ref": "#/$defs/config-file"
+        },
+        "args": {
+          "$ref": "#/$defs/args"
+        }
+      },
+      "required": [
+        "contract",
+        "keep_ids"
+      ]
+    },
+    "attach": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/$defs/contract-version"
+        },
+        "probe": {
+          "$ref": "#/$defs/probe"
+        },
+        "build_id": {
+          "$ref": "#/$defs/build-id"
+        },
+        "config_file": {
+          "$ref": "#/$defs/config-file"
+        },
+        "args": {
+          "$ref": "#/$defs/args"
+        },
+        "state_file": {
+          "$ref": "#/$defs/abs-path"
+        }
+      },
+      "required": [
+        "contract",
+        "build_id",
+        "state_file"
+      ]
+    },
+    "ext": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/$defs/contract-version"
+        },
+        "probe": {
+          "$ref": "#/$defs/probe"
+        },
+        "config_file": {
+          "$ref": "#/$defs/config-file"
+        }
+      },
+      "required": [
+        "contract"
+      ]
+    },
+    "reap-result": {
+      "type": "object",
+      "properties": {
+        "removed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "error": {
+          "$ref": "#/$defs/error"
+        }
+      }
+    },
+    "doctor-result": {
+      "type": "object",
+      "properties": {
+        "blocked": {
+          "type": "boolean"
+        },
+        "error": {
+          "$ref": "#/$defs/error"
+        }
+      }
+    },
+    "setup-result": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/error"
+        }
+      }
+    },
+    "image-prepare-result": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "error": {
+          "$ref": "#/$defs/error"
+        }
+      }
+    },
+    "image-list-result": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "error": {
+          "$ref": "#/$defs/error"
+        }
+      }
+    },
+    "image-verify-result": {
+      "type": "object",
+      "properties": {
+        "checked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "drift": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "error": {
+          "$ref": "#/$defs/error"
+        }
+      }
+    },
+    "clean-result": {
+      "type": "object",
+      "properties": {
+        "removed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "error": {
+          "$ref": "#/$defs/error"
+        }
+      }
+    },
+    "attach-result": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/error"
+        }
+      }
+    }
+  }
+}

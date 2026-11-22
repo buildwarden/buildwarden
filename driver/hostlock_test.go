@@ -82,3 +82,55 @@ func TestLockDir(t *testing.T) {
 		t.Fatalf("lock file not in LockDir: %v", err)
 	}
 }
+
+// inLockDir gives the test a lock directory of its own.
+func inLockDir(t *testing.T) {
+	t.Helper()
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("LocalAppData", t.TempDir())
+}
+
+// A build lock is named for its driver and build, and a held one is seen as
+// held, so a build is live exactly while its warden holds it.
+func TestBuildLockHeld(t *testing.T) {
+	inLockDir(t)
+	l, err := TakeBuildLock("fake", "k3v9x2ab")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(LockDir(), "build-fake-k3v9x2ab.lock")
+	if l.Path() != want {
+		t.Fatalf("lock at %s, want %s", l.Path(), want)
+	}
+	if other, held, err := TryBuildLock(want); other != nil || !held || err != nil {
+		t.Fatalf("TryBuildLock while held: %v %v %v, want nil, true, nil",
+			other, held, err)
+	}
+	l.Release()
+	other, held, err := TryBuildLock(want)
+	if other == nil || held || err != nil {
+		t.Fatalf("TryBuildLock after release: %v %v %v", other, held, err)
+	}
+	other.Release()
+}
+
+// A build lock is removed while it is held; a lock file that is gone is
+// reported as such, not as held.
+func TestBuildLockRemove(t *testing.T) {
+	inLockDir(t)
+	l, err := TakeBuildLock("fake", "bbbbbbbb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Remove(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(l.Path()); !os.IsNotExist(err) {
+		t.Fatalf("lock file still there: %v", err)
+	}
+	if other, held, err := TryBuildLock(l.Path()); other != nil || held || err != nil {
+		t.Fatalf("TryBuildLock of a removed lock: %v %v %v, want nil, false, nil",
+			other, held, err)
+	}
+}

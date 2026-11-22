@@ -1,0 +1,19 @@
+== Dockerfile
+  staged/build.sh:
+    #!/bin/sh
+    true
+== Containerfile
+  staged/build.sh:
+    #!/bin/sh
+    true
+== build.sh
+  staged/build.sh:
+    echo sh
+== Dockerfile and build.sh
+  staged/build.sh:
+    echo sh
+== --script and Dockerfile
+  staged/build.sh:
+    echo own
+== windows build.ps1
+  error: --guest-os windows is currently only supported by --driver qemu or --driver hyperv

@@ -133,7 +133,8 @@ func RunSetup(ctx context.Context, w io.Writer, opts SetupOptions) error {
 	fmt.Fprintf(w, "\nThis durable network is for NON-elevated builds (Hyper-V "+
 		"Administrators), up to %d at a time:\n", opts.Slots)
 	fmt.Fprintf(w, "  warden build --driver hyperv --network %s\n", opts.SwitchName)
-	fmt.Fprintf(w, "  (or set network = \"%s\" under [vm] in warden.toml)\n", opts.SwitchName)
+	fmt.Fprintf(w, "  (or set network = \"%s\" under [driver.hyperv] in warden.toml)\n",
+		opts.SwitchName)
 	fmt.Fprintln(w,
 		"Elevated builds stand up a fresh build switch per build and use this NAT.")
 	return nil

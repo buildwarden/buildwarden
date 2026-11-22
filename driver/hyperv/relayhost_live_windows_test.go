@@ -44,25 +44,26 @@ func TestLiveRelayHostEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("VerifyNetwork: %v", err)
 	}
-	h, err := StartRelay(context.Background(), prov, RelayHostConfig{
-		BuildID:      "livee2e",
-		OutputDir:    dir,
-		BootVHDX:     boot,
-		OverlayVHDX:  overlay,
-		Slots:        res.Slots,
-		NATSwitch:    res.NATName,
-		NATPrefix:    res.NATPrefix,
-		HostIP:       res.HostIP,
-		SeedDir:      filepath.Join(dir, "relay-seed"),
-		ReadyTimeout: 120 * time.Second,
+	host := newSessionHost(t, dir, testToken)
+	host.claimTimeout = 120 * time.Second
+	h, err := StartRelay(context.Background(), prov, host, RelayHostConfig{
+		BuildID:     "livee2e",
+		Token:       testToken,
+		BootVHDX:    boot,
+		OverlayVHDX: overlay,
+		Slots:       res.Slots,
+		NATSwitch:   res.NATName,
+		NATPrefix:   res.NATPrefix,
+		HostIP:      res.HostIP,
+		SeedDir:     filepath.Join(dir, "relay-seed"),
 	})
 	if err != nil {
 		t.Fatalf("StartRelay end-to-end: %v", err)
 	}
-	t.Cleanup(func() { _ = h.Close() })
+	t.Cleanup(func() { h.Close() })
 
 	t.Logf("relay host ready: vm=%s (claimed, collector tunnel up)", h.VMName)
-	if h.Session.Token == "" {
-		t.Error("expected a minted token")
+	if host.sess == nil || host.sess.Token == "" {
+		t.Error("expected a minted collector token")
 	}
 }

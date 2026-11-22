@@ -35,9 +35,8 @@ func TestHypervImageSource(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			cfg := &Config{}
-			cfg.VM.WindowsImage, cfg.VM.WindowsImageUpdate = c.conf, c.update
-			src, fetch, tolerant := hypervImageSource(c.source, cfg, c.st)
+			o := prepareOptions{windowsImage: c.conf, windowsUpdate: c.update}
+			src, fetch, tolerant := hypervImageSource(c.source, o, c.st)
 			if src != c.wantSrc || fetch != c.wantFetch || tolerant != c.wantTolerat {
 				t.Errorf("got (%q, fetch=%v, tolerant=%v), want (%q, %v, %v)",
 					src, fetch, tolerant,

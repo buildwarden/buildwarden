@@ -1,0 +1,27 @@
+Build software with a verifiable network ledger
+
+Usage:
+  warden [command]
+
+Available Commands:
+  build       Run a build with network auditing
+  clean       Remove orphaned warden containers, networks, and images
+  completion  Generate the autocompletion script for the specified shell
+  doctor      Preflight the host for the selected driver
+  driver      Show the drivers warden can find
+  help        Help about any command
+  hyperv      Hyper-V privileged helper service (Windows host)
+  image       Prepare and list build-guest base images (VM drivers)
+  inspect     Verify and display a build ledger
+  setup       Prepare the host for the selected driver (one time, idempotent)
+  shell       Open an interactive shell in the build environment
+
+Flags:
+      --color string    color output (auto, always, never)
+      --config string   config file to read, the only one that is (default: WARDEN_CONFIG, then ./warden.toml if it exists)
+      --driver string   driver to run: container (default), qemu, vz, hyperv or firecracker, or the name or path of another driver binary
+  -h, --help            help for warden
+  -v, --verbose         verbose output
+      --version         version for warden
+
+Use "warden [command] --help" for more information about a command.

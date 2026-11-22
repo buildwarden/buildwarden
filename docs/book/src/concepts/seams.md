@@ -7,7 +7,8 @@ executor for another guest. Each seam is specified in its own document, with
 numbered requirements, and comes with a conformance suite that checks an
 implementation of either side against them.
 
-The specifications of every seam but the ledger live in their own repository,
+The specifications of every seam but the ledger and the driver contract live
+in their own repository,
 [buildwarden/buildwarden-specs](https://github.com/buildwarden/buildwarden-specs),
 and are released one at a time, each under its own tags
 `<directory>/vX.Y.Z`. Where this book's other pages describe a seam (the
@@ -25,6 +26,7 @@ specification is the contract.
 | 4, the ledger | The relay and every reader | [Ledger Wire Format v1](../specs/build-ledger/v1.md) and its metadata schemas, in this repository until milestone M6 | `ledger/` | `specs/specs_test.go` and the ledger's own tests | Not pinned: it is in this repository |
 | 5, the executor's `initialize` | The launcher and the executor | [executor-initialize](https://github.com/buildwarden/buildwarden-specs/blob/executor-initialize/v0.1.0/executor-initialize/v1.md) | `cmd/warden-io/` | None yet: its cases come with phase S2 | `executor-initialize@v0.1.0` |
 | 6, the bootstrap config | Its producer and the executor, carried by the relay | [bootstrap-config](https://github.com/buildwarden/buildwarden-specs/blob/bootstrap-config/v0.1.0/bootstrap-config/v1.md) | `bootstrap/` | [bootstrap-config cases](https://github.com/buildwarden/buildwarden-specs/tree/bootstrap-config/v0.1.0/bootstrap-config/cases) | `bootstrap-config@v0.1.0` |
+| 9, the driver contract | `warden` and a driver binary | [Driver contract v1](../specs/driver-contract/v1.md) and its schema, in this repository until phase K2 | `cmd/warden/` (warden's side); `driver/drivercmd/` (the kit) and `cmd/warden-driver-container/` (the container driver) | `conformance/driver/` (`make driver-conformance`) | Not pinned: it is in this repository |
 
 ## Which version this repository implements
 

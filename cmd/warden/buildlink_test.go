@@ -114,7 +114,7 @@ func TestBuildLinkFlagNeedsAVMDriver(t *testing.T) {
 	inConfigFiles(t, "")
 	flagBuildLink = buildlink.DefaultCIDR
 	for _, d := range []string{"", "container"} {
-		if err := validateFlagsForDriver(d); err == nil ||
+		if err := validateFlagsForDriver(isVMDriver(d)); err == nil ||
 			!strings.Contains(err.Error(), "--build-link") {
 			t.Errorf("build/shell with driver %q: err = %v", d, err)
 		}
@@ -125,7 +125,7 @@ func TestBuildLinkFlagNeedsAVMDriver(t *testing.T) {
 		}
 	}
 	for _, d := range []string{"qemu", "vz", "hyperv", "firecracker"} {
-		if err := validateFlagsForDriver(d); err != nil {
+		if err := validateFlagsForDriver(isVMDriver(d)); err != nil {
 			t.Errorf("--build-link refused by %s: %v", d, err)
 		}
 	}

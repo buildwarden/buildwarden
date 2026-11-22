@@ -2,12 +2,10 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
-	"github.com/lesiw/ctrctl"
 	"github.com/spf13/cobra"
 
 	"github.com/buildwarden/buildwarden/driver"
@@ -49,79 +47,50 @@ func runClean(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	removed := 0
-	if cfg.Runtime.Driver == "firecracker" {
-		tempDir, err := resolveTempDir(cfg)
-		if err != nil {
-			return err
-		}
-		removed += firecracker.Clean(os.Stderr, tempDir)
-		finishClean(removed)
-		return nil
-	}
-	if cfg.Runtime.Driver == "hyperv" {
-		tempDir, err := resolveTempDir(cfg)
-		if err != nil {
-			return err
-		}
-		removed += hyperv.Clean(os.Stderr, tempDir)
-		finishClean(removed)
-		return nil
-	}
-	runtime, err := resolveRuntime(cfg)
+	sd, err := selectDriver(cfg)
 	if err != nil {
 		return err
 	}
-	ctrctl.Cli = []string{runtime}
-
-	liveBuildIDs := findLiveWardenProcesses()
-
-	// Clean containers (Volumes: true removes anonymous DinD volumes)
-	containers := listResources("container", "ls", "-a",
-		"--filter", "name=warden-", "--format", "{{.Names}}")
-	for _, name := range containers {
-		if isOrphan(name, liveBuildIDs) {
-			fmt.Fprintf(os.Stderr, "Removing container: %s\n", name)
-			_, _ = ctrctl.ContainerRm(
-				&ctrctl.ContainerRmOpts{Force: true, Volumes: true},
-				name)
-			removed++
-		}
+	if sd.bin != nil {
+		return cleanBinary(cfg, sd)
 	}
-
-	// Clean networks
-	networks := listResources("network", "ls",
-		"--format", "{{.Name}}")
-	for _, name := range networks {
-		if !strings.HasPrefix(name, "warden-") {
-			continue
-		}
-		if isOrphan(name, liveBuildIDs) {
-			fmt.Fprintf(os.Stderr, "Removing network: %s\n", name)
-			_, _ = ctrctl.NetworkRm(nil, name)
-			removed++
-		}
+	// The driver's settings are resolved, and refused, before anything is
+	// removed, where a driver binary's clean is probed.
+	if _, err := linkedSettings(cfg, sd, "clean"); err != nil {
+		return err
 	}
-
-	// Clean images
-	images := listResources("image", "ls",
-		"--format", "{{.Repository}}:{{.Tag}}")
-	for _, img := range images {
-		if !strings.HasPrefix(img, "warden-relay:") {
-			continue
-		}
-		buildID := strings.TrimPrefix(img, "warden-relay:")
-		if !liveBuildIDs[buildID] {
-			fmt.Fprintf(os.Stderr, "Removing image: %s\n", img)
-			_, _ = ctrctl.ImageRm(nil, img)
-			removed++
-		}
+	removed := cleanAfterLinkedBuilds(driverName(cfg))
+	var clean func(io.Writer, string) int
+	switch cfg.Runtime.Driver {
+	case "firecracker":
+		clean = firecracker.Clean
+	case "hyperv":
+		clean = hyperv.Clean
 	}
-
-	// Build containers are removed with their anonymous volumes above; other
-	// dangling volumes on the runtime are not warden's to prune.
+	// qemu and vz have no clean of their own beyond dead builds; the
+	// container runtime is not theirs to clean (Decision 16).
+	if clean != nil {
+		tempDir, err := resolveTempDir(cfg)
+		if err != nil {
+			return err
+		}
+		removed += clean(os.Stderr, tempDir)
+	}
 	finishClean(removed)
 	return nil
+}
+
+// cleanAfterLinkedBuilds removes the stage directory, record and lock of each
+// dead build of the driver drv. The drivers are linked into warden and have
+// no reap: what a dead build's driver left is found by the driver's own
+// cleanup, which follows. A file that cannot be removed is reported and does
+// not stop the rest.
+func cleanAfterLinkedBuilds(drv string) int {
+	n, err := cleanDeadBuilds(drv, nil, os.Stderr)
+	if err != nil {
+		log.Error(fmt.Sprintf("cleaning up after dead builds: %v", err))
+	}
+	return n
 }
 
 // finishClean handles the cache (removed with --cache, else its size noted)
@@ -170,54 +139,83 @@ func dirSize(dir string) int64 {
 	return size
 }
 
-func listResources(args ...string) []string {
-	cmdArgs := append(ctrctl.Cli, args...)
-	out, err := exec.Command(cmdArgs[0], cmdArgs[1:]...).Output()
+// cleanBinary is warden clean for a driver binary (the design's warden
+// clean): it probes the driver's clean with this invocation's flags and
+// config file, so a value the driver refuses stops it before anything is
+// removed; then it reaps every dead build from its record; then it runs the
+// driver's clean with the held builds as keep_ids. A failed reap keeps that
+// build's files, and clean exits 1 at the end.
+func cleanBinary(cfg *Config, sd *selectedDriver) error {
+	bin := sd.bin
+	tempDir, err := resolveTempDir(cfg)
 	if err != nil {
-		return nil
+		return err
 	}
-	var results []string
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line != "" {
-			results = append(results, line)
+	cleanReq := func(keep []string, probe bool) map[string]any {
+		req := withConfig(map[string]any{"contract": bin.contract,
+			"keep_ids": nonNil(keep), "cache": flagCleanCache, "tmpdir": tempDir,
+			"args": driverFlags.argsFor("clean")}, absConfigFile(cfg))
+		if probe {
+			req["probe"] = true
+		}
+		return req
+	}
+	if bin.desc.lists("clean") {
+		if _, err := bin.call("clean", cleanReq(nil, true),
+			callOpts{limit: probeLimit}); err != nil {
+			return err
 		}
 	}
-	return results
+	removed := 0
+	reap := func(rec buildRecord, stateFile string) error {
+		rb, err := recordDriver(rec, sd)
+		if err != nil {
+			return err
+		}
+		res, err := rb.call("reap", reapRequest(rec, stateFile, rb.contract),
+			callOpts{argv: []string{rec.ID}})
+		removed += resultInt(res, "removed")
+		return err
+	}
+	n, reapErr := cleanDeadBuilds(sd.name(), reap, os.Stderr)
+	removed += n
+	if bin.desc.lists("clean") {
+		keep, err := heldBuildIDs(sd.name())
+		if err != nil {
+			return err
+		}
+		res, err := bin.call("clean", cleanReq(keep, false), callOpts{})
+		if err != nil {
+			return err
+		}
+		removed += resultInt(res, "removed")
+	}
+	finishClean(removed)
+	if reapErr != nil {
+		return fmt.Errorf("cleaning up after dead builds: %w", reapErr)
+	}
+	return nil
 }
 
-func findLiveWardenProcesses() map[string]bool {
-	out, err := exec.Command("ps", "aux").Output()
-	if err != nil {
-		return nil
+// recordDriver is the driver binary that reaps the dead build rec: the file
+// its record names, or the one named with --driver for this clean. A file
+// that is gone or cannot be run is an error with the fix; one that changed
+// since the build is run, with a line that says so.
+func recordDriver(rec buildRecord, sd *selectedDriver) (*execDriver, error) {
+	if sd.found.Found == foundPath {
+		return sd.bin, nil
 	}
-	ids := make(map[string]bool)
-	for _, line := range strings.Split(string(out), "\n") {
-		if !strings.Contains(line, "warden") {
-			continue
-		}
-		// Extract build IDs from running warden-relay-XXXX or warden-build-XXXX
-		for _, field := range strings.Fields(line) {
-			if strings.HasPrefix(field, "warden-relay-") ||
-				strings.HasPrefix(field, "warden-build-") {
-				parts := strings.SplitN(field, "-", 3)
-				if len(parts) == 3 {
-					ids[parts[2]] = true
-				}
-			}
-		}
+	if reason := unrunnable(rec.Path, isWindows); reason != "" {
+		fix := fmt.Sprintf("reap it with the driver's file named: warden clean "+
+			"--driver /path/to/%s", driverFileName(rec.Driver, isWindows))
+		return nil, driver.Fixable(fix, "the driver %s that ran build %s %s",
+			driver.EscapeOutside(rec.Path), rec.ID, reason)
 	}
-	return ids
-}
-
-func isOrphan(name string, liveIDs map[string]bool) bool {
-	if !strings.HasPrefix(name, "warden-") {
-		return false
+	if sum, err := fileSHA256(rec.Path); err == nil && rec.SHA256 != "" && sum != rec.SHA256 {
+		log.Info(fmt.Sprintf("the driver %s has changed since build %s; reaping with it",
+			driver.EscapeOutside(rec.Path), rec.ID))
 	}
-	// Extract build ID: warden-relay-XXXX or warden-build-XXXX or warden-XXXX
-	parts := strings.Split(name, "-")
-	if len(parts) < 2 {
-		return false
-	}
-	buildID := parts[len(parts)-1]
-	return !liveIDs[buildID]
+	return &execDriver{found: &foundDriver{Name: rec.Driver, Path: rec.Path},
+		desc: sd.bin.desc, contract: rec.Contract, after: sd.bin.after,
+		teardown: sd.bin.teardown}, nil
 }

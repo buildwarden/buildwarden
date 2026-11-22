@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
-	"github.com/buildwarden/buildwarden/driver/script"
 	"github.com/buildwarden/buildwarden/ledger"
 )
 
@@ -228,18 +227,14 @@ func PrepareImage(ref string) (string, error) {
 	return ResolveImage(ref)
 }
 
-// ContainerfileImage returns req.Image, or when it is empty, the local cloud
-// image a Containerfile FROM resolves to (empty when there is none, it is
-// "scratch", or it does not resolve).
-func ContainerfileImage(req *driver.BuildRequest) string {
-	if req.Image != "" || req.Containerfile == "" {
+// RequestImage returns req.Image, or when it is empty, the local cloud image
+// the Containerfile's FROM (req.BaseImage) resolves to: empty when there is
+// none or it does not resolve.
+func RequestImage(req *driver.BuildRequest) string {
+	if req.Image != "" || req.BaseImage == "" {
 		return req.Image
 	}
-	result, err := script.Translate(req.Containerfile, req.ContextDir)
-	if err != nil || result.Image == "" || result.Image == "scratch" {
-		return ""
-	}
-	resolved, err := ResolveImage(result.Image)
+	resolved, err := ResolveImage(req.BaseImage)
 	if err != nil || resolved == "" {
 		return ""
 	}

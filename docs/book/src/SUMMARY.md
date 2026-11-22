@@ -45,6 +45,7 @@
   - [environment-container v1 (legacy)](./specs/metadata-environment-container/v1.md)
   - [oci-image/v1 environment](./specs/environment-oci-image/v1.md)
   - [vm-disk-chain/v1 environment](./specs/environment-vm-disk-chain/v1.md)
+  - [Driver contract v1](./specs/driver-contract/v1.md)
 
 # Contributing
 

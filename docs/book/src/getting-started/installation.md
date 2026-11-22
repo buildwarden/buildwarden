@@ -9,10 +9,10 @@ Prerequisites vary by driver:
 A container runtime is required. Any of the following will work:
 
 - [Finch](https://github.com/runfinch/finch) (preferred on macOS)
-- [Docker](https://docs.docker.com/get-docker/)
 - [Podman](https://podman.io/)
+- [Docker](https://docs.docker.com/get-docker/)
 
-`warden` runs the runtime by its name (`finch`, `docker` or `podman`), which
+`warden` runs the runtime by its name (`finch`, `podman` or `docker`), which
 it looks up on `PATH`. If yours is installed outside `PATH`, as it often is
 for a CI job or a service, add its directory to `PATH`: the runtime setting
 takes one of the three names, not a path.
@@ -67,7 +67,7 @@ Xcode Command Line Tools (`xcode-select --install`).
 curl -sSfL https://raw.githubusercontent.com/buildwarden/buildwarden/main/install.sh | sh
 ```
 
-This detects your OS and architecture, downloads the latest release, and installs to `/usr/local/bin/`. The released binary is ready for the container driver out of the box. It is built without cgo, so it has no vz driver: for vz, build `warden` from source on the Mac and follow the [first-time VZ setup](#first-time-vz-setup).
+This detects your OS and architecture, downloads the latest release, and installs `warden`, the container driver `warden-driver-container` and `warden-io` to `/usr/local/bin/`. The container driver is a program of its own, which warden finds beside itself; with it, the release is ready for the container driver out of the box. It is built without cgo, so it has no vz driver: for vz, build `warden` from source on the Mac and follow the [first-time VZ setup](#first-time-vz-setup).
 
 ## From Releases
 
@@ -76,12 +76,15 @@ Download the appropriate binary from [GitHub Releases](https://github.com/buildw
 ```sh
 # macOS (Apple Silicon)
 tar xzf buildwarden_*_darwin_arm64.tar.gz
-mv warden /usr/local/bin/
+mv warden warden-driver-container warden-io /usr/local/bin/
 
 # Linux (x86_64)
 tar xzf buildwarden_*_linux_amd64.tar.gz
-mv warden /usr/local/bin/
+mv warden warden-driver-container warden-io /usr/local/bin/
 ```
+
+Keep `warden-driver-container` in the same directory as `warden`: warden
+looks for its drivers on `PATH`, then beside itself ([Drivers](../guide/drivers.md#where-a-driver-comes-from)).
 
 These are the same binaries the one-liner installs, so the macOS one has no vz
 driver either.
@@ -103,6 +106,7 @@ The build produces the following binaries in `dist/`:
 | Binary | Description |
 |--------|-------------|
 | `dist/warden` | Host binary (codesigned on macOS for VZ entitlement) |
+| `dist/warden-driver-container` | The container driver, which warden runs from beside itself (`warden-driver-container.exe` on Windows) |
 | `dist/warden-relay-linux-arm64` | Relay binary for VM/container use |
 | `dist/warden-io-linux-arm64` | Agent binary for Linux build environments |
 | `dist/warden-io-darwin-arm64` | Agent binary for macOS VZ builds |
@@ -250,7 +254,7 @@ and Firecracker relay initramfs need no rebuild.
 ## Upgrading: the Container Runtime Setting
 
 Earlier releases ran whatever program `--runtime`, `WARDEN_CTR_CLI` or
-`[runtime] cli` named. The setting now takes `finch`, `docker` or `podman`
+`[runtime] cli` named. The setting now takes `finch`, `podman` or `docker`
 and nothing else, wherever it is set. If yours names one of the three or is
 unset, nothing changes. Any other value is refused by the first command that
 uses the container runtime (`build`, `shell` and `doctor` with the container
@@ -270,11 +274,42 @@ Two kinds of value have a replacement:
 [A path, or another runtime](../guide/configuration.md#a-path-or-another-runtime)
 lists every value that stopped working and the message each one gets.
 
+## Upgrading: Driver Binaries and Renamed Keys
+
+The container driver is now a binary of its own, `warden-driver-container`,
+which warden runs from beside itself. The one-liner and the release archives
+install it; if you copy `warden` by hand, copy `warden-driver-container` into
+the same directory. `warden driver list` shows which file each driver name
+runs and where it was found, and a build records the same in its output's
+[`driver.json`](../guide/output.md#driverjson).
+
+A driver's settings moved into `[driver]` and `[driver.<name>]`. An existing
+`warden.toml` keeps working: the old names are read until BuildWarden 1.0,
+and each one prints a warning naming its new key:
+
+```
+[warden] warning: /src/repo/warden.toml: [runtime] cli is deprecated; use [driver.container] cli
+```
+
+Rename them when you next edit the file. `[runtime] cli = "podman"` becomes:
+
+```toml
+[driver.container]
+cli = "podman"
+```
+
+[Renamed keys](../guide/configuration.md#renamed-keys) lists all seven. A file
+that sets both names of one key is refused. A driver's keys are now
+case-sensitive: `[Runtime] CLI` is refused with the spelling to write, see
+[Keys are case-sensitive](../guide/configuration.md#keys-are-case-sensitive).
+`[runtime] driver` is warden's own key and does not change.
+
 ## Verify Installation
 
 ```sh
 warden --version
 warden --help
+warden driver list   # the drivers warden finds, and the file each one runs
 ```
 
-BuildWarden auto-detects your container runtime for the container driver (trying finch, docker, podman in order). Override with `--runtime` or the `WARDEN_CTR_CLI` environment variable; see [The container runtime](../guide/configuration.md#the-container-runtime).
+BuildWarden auto-detects your container runtime for the container driver (trying finch, podman, docker in order, so podman rather than docker when both are running). Override with `--runtime` or the `WARDEN_CTR_CLI` environment variable; see [The container runtime](../guide/configuration.md#the-container-runtime).

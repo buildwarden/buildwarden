@@ -140,31 +140,42 @@ func TestSubnetOf(t *testing.T) {
 	}
 }
 
-// TestRunVMsOrder pins BOOT-01's ordering on vz: the build VM boots only after
-// the relay step (network, relay, claim) has returned, never after it failed.
-func TestRunVMsOrder(t *testing.T) {
-	sess, err := driver.StartSession(driver.SessionConfig{OutputDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer sess.Close()
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+// orderHost is a driver.Host whose stop has already come, and which logs the
+// environment's start.
+type orderHost struct {
+	driver.Host
+	log *[]string
+}
 
+func (h orderHost) Started() error {
+	*h.log = append(*h.log, "environment-started")
+	return nil
+}
+
+func (h orderHost) Wait(context.Context) string { return driver.StopCompleted }
+
+// TestRunVMsOrder pins BOOT-01's ordering on vz: the build VM boots only after
+// the relay step (network, relay, claim) has returned, never after it failed;
+// the environment is reported started once it booted, and both stop once
+// warden's stop has come.
+func TestRunVMsOrder(t *testing.T) {
+	ctx := context.Background()
 	var log []string
+	host := orderHost{log: &log}
 	step := func(name string) func() (func(), error) {
 		return func() (func(), error) {
 			log = append(log, name)
 			return func() { log = append(log, "stop "+name) }, nil
 		}
 	}
-	_ = runVMs(ctx, sess, step("relay"), step("build"))
-	if got := strings.Join(log, ","); got != "relay,build,stop build,stop relay" {
+	_ = runVMs(ctx, host, step("relay"), step("build"))
+	if got := strings.Join(log, ","); got !=
+		"relay,build,environment-started,stop build,stop relay" {
 		t.Fatalf("order = %s", got)
 	}
 	log = nil
 	failed := func() (func(), error) { return nil, errors.New("claim refused") }
-	if err := runVMs(ctx, sess, failed, step("build")); err == nil || len(log) != 0 {
+	if err := runVMs(ctx, host, failed, step("build")); err == nil || len(log) != 0 {
 		t.Fatalf("after a failed claim: %v %v", err, log)
 	}
 }

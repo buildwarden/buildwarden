@@ -223,7 +223,8 @@ func TestUpstreamCALinesOfABuild(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				req, err = newRequest(cfg, []string{buildProject(t)})
+				req, err = newRequest(cfg, linkedSel(cfg),
+					[]string{buildProject(t)})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -253,7 +254,8 @@ func TestUpstreamCALinesOfABuild(t *testing.T) {
 // doctor prints the same lines in its report, on stdout without the prefix,
 // after its config: line; with a path a build refuses it prints BLOCKED and
 // exits 1. Run in a child process, since doctor ends the process itself;
-// the container driver finds a docker that answers.
+// the container driver finds a docker that answers. A blocked doctor prints
+// no ok line.
 func TestUpstreamCALinesOfDoctor(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the fake docker is a shell script")
@@ -299,7 +301,7 @@ func TestUpstreamCALinesOfDoctor(t *testing.T) {
 				paths, _ = caDirectory(t)
 			}
 			bin := t.TempDir()
-			writeScript(t, filepath.Join(bin, "docker"), "#!/bin/sh\nexit 0\n")
+			writeScript(t, filepath.Join(bin, "docker"), "#!/bin/sh\necho 27.3.1\n")
 			self, err := os.Executable()
 			if err != nil {
 				t.Fatal(err)
@@ -388,7 +390,7 @@ func TestNoUpstreamCAPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req, err := newRequest(cfg, []string{buildProject(t)})
+	req, err := newRequest(cfg, linkedSel(cfg), []string{buildProject(t)})
 	if err != nil {
 		t.Fatal(err)
 	}

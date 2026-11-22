@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -28,12 +29,6 @@ import (
 // Driver-specific machinery with no analog elsewhere (the Hyper-V privileged
 // helper service) stays under `warden hyperv`.
 
-var (
-	flagSetupNATPrefix string
-	flagSetupHostIP    string
-	flagSetupSlots     int
-)
-
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Preflight the host for the selected driver",
@@ -42,7 +37,7 @@ the config file). The report's first line says which config file was read
 and how it was chosen (--config, WARDEN_CONFIG, or ./warden.toml found in
 the working directory).
 
-  container  a container runtime (finch, docker, podman) is available
+  container  a container runtime (finch, podman, docker) is available
   qemu       qemu-system-* and qemu-img are on PATH; relay VM assets exist
   vz         Apple Silicon macOS; warden signed with the virtualization entitlement
   hyperv     hypervisor and management stack present; which privilege tier this
@@ -82,12 +77,27 @@ or agent gate.`,
 		if err != nil {
 			return err
 		}
-		drv := cfg.Runtime.Driver
-		if flagBuildLink != "" && !isVMDriver(drv) {
+		sd, err := selectDriver(cfg)
+		if err != nil {
+			return err
+		}
+		drv := sd.name()
+		if flagBuildLink != "" && !sd.caps().VM {
 			return driver.Fixable("", "--build-link requires a VM driver "+
 				"(--driver qemu, vz, hyperv or firecracker)")
 		}
 		blocked, err := doctorUpstreamCAs(out, cfg)
+		if err != nil {
+			return err
+		}
+		if sd.bin != nil {
+			failed, err := doctorBinary(out, cfg, sd, blocked)
+			if failed {
+				os.Exit(1)
+			}
+			return err
+		}
+		set, err := linkedSettings(cfg, sd, "doctor")
 		if err != nil {
 			return err
 		}
@@ -103,7 +113,7 @@ or agent gate.`,
 		}
 		switch drv {
 		case "hyperv":
-			detected := hyperv.Detect(hypervNetwork(cfg))
+			detected := hyperv.Detect(hypervNetwork(set))
 			if hyperv.Doctor(out, detected, link, vmDNS) || blocked {
 				os.Exit(1)
 			}
@@ -122,16 +132,6 @@ or agent gate.`,
 			if err = vz.Preflight(); err == nil &&
 				doctorResolvers(out, vz.Resolvers, link, vmDNS) {
 				blocked = true
-			}
-		default:
-			// The check a build makes, so that doctor does not pass a relay
-			// image the build refuses.
-			if err = checkRelayImage(cfg.Runtime); err != nil {
-				return err
-			}
-			var rt string
-			if rt, err = resolveRuntime(cfg); err == nil {
-				fmt.Fprintf(out, "container runtime: %s\n", rt)
 			}
 		}
 		if err != nil {
@@ -176,15 +176,25 @@ Other drivers need no host setup; their base images are prepared with
 		if err != nil {
 			return err
 		}
+		sd, err := selectDriver(cfg)
+		if err != nil {
+			return err
+		}
+		if sd.bin != nil {
+			return setupBinary(cfg, sd)
+		}
+		var set driver.Settings
+		if sd.lists("setup") {
+			if set, err = linkedSettings(cfg, sd, "setup"); err != nil {
+				return err
+			}
+		}
+		slots, _ := settingInt(set, "slots")
 		if cfg.Runtime.Driver == "firecracker" {
 			return firecracker.RunSetup(cmd.OutOrStdout(),
-				firecracker.SetupOptions{Slots: flagSetupSlots})
+				firecracker.SetupOptions{Slots: slots})
 		}
 		if cfg.Runtime.Driver != "hyperv" {
-			if flagSetupSlots != 0 {
-				return driver.Fixable("", "--slots is only used by --driver "+
-					"hyperv and firecracker")
-			}
 			fmt.Fprintf(cmd.OutOrStdout(),
 				"--driver %s needs no host setup; "+
 					"prepare a base image with 'warden image prepare'\n",
@@ -195,12 +205,14 @@ Other drivers need no host setup; their base images are prepared with
 		if err != nil {
 			return err
 		}
+		natPrefix, _ := set.String("nat-prefix")
+		hostIP, _ := set.String("host-ip")
 		return hyperv.RunSetup(cmd.Context(), cmd.OutOrStdout(), hyperv.SetupOptions{
 			BuildLink:  link,
-			SwitchName: hypervNetwork(cfg),
-			NATPrefix:  flagSetupNATPrefix,
-			HostIP:     flagSetupHostIP,
-			Slots:      flagSetupSlots,
+			SwitchName: hypervNetwork(set),
+			NATPrefix:  natPrefix,
+			HostIP:     hostIP,
+			Slots:      slots,
 			Verbose:    cfg.Output.Verbose,
 		})
 	},
@@ -224,23 +236,7 @@ delegated.`,
 }
 
 func init() {
-	for _, c := range []*cobra.Command{doctorCmd, setupCmd} {
-		c.Flags().StringVar(&flagNetwork, "network", "",
-			"hyperv: durable build switch name "+
-				"(default: [vm] network, then warden-dev)")
-	}
 	addBuildLinkFlag(doctorCmd)
-	setupCmd.Flags().StringVar(&flagSetupNATPrefix, "nat-prefix", "",
-		"hyperv: NAT CIDR for relay egress, used by every build "+
-			"(default "+hyperv.DefaultNATPrefix+")")
-	setupCmd.Flags().StringVar(&flagSetupHostIP, "host-ip", "",
-		"hyperv: host gateway IP on the NAT switch, used by every build "+
-			"(default "+hyperv.DefaultHostIP+")")
-	setupCmd.Flags().IntVar(&flagSetupSlots, "slots", 0,
-		fmt.Sprintf("hyperv: build switches to create, 1-%d (default %d); "+
-			"firecracker: network slots to create, 1-%d (default %d)",
-			hyperv.MaxSlots, hyperv.DefaultSlots,
-			firecracker.MaxSlots, firecracker.DefaultSlots))
 
 	hypervServiceCmd.AddCommand(&cobra.Command{
 		Use:   "install",
@@ -358,16 +354,23 @@ func launcherStamps(drv string) []driver.LauncherStamp {
 	return nil
 }
 
-// hypervNetwork is the durable switch a Hyper-V build reuses: --network, then
-// [vm] network, then the default.
-func hypervNetwork(cfg *Config) string {
-	switch {
-	case flagNetwork != "":
-		return flagNetwork
-	case cfg.VM.Network != "":
-		return cfg.VM.Network
+// hypervNetwork is the durable switch a Hyper-V build reuses: hyperv's
+// network setting (--network, [driver.hyperv] network or its old name),
+// else the default.
+func hypervNetwork(set driver.Settings) string {
+	if v, _ := set.String("network"); v != "" {
+		return v
 	}
 	return hyperv.DefaultDevSwitch
+}
+
+// settingInt is an integer setting of set, which may be nil for a command
+// the driver does not list.
+func settingInt(set driver.Settings, name string) (int, bool) {
+	if set == nil {
+		return 0, false
+	}
+	return set.Int(name)
 }
 
 func driverName(cfg *Config) string {
@@ -389,4 +392,65 @@ func runServiceOp(out io.Writer, label, okMsg string, op func() error) error {
 		fmt.Fprintln(out, okMsg)
 	}
 	return nil
+}
+
+// hostRequest is the request of doctor and setup for a driver binary:
+// {contract, vm, config_file, args, verbose}.
+func hostRequest(cfg *Config, sd *selectedDriver, command string) (map[string]any,
+	error) {
+	req := withConfig(map[string]any{"contract": sd.bin.contract,
+		"args":    driverFlags.argsFor(command),
+		"verbose": cfg.Output.Verbose}, absConfigFile(cfg))
+	if sd.caps().VM {
+		link, source, err := resolveBuildLink(cfg)
+		if err != nil {
+			return nil, err
+		}
+		vm := map[string]any{"build_link": link.String(), "build_link_source": source}
+		if source == "default" {
+			vm["build_link"] = ""
+		}
+		req["vm"] = vm
+	}
+	return req, nil
+}
+
+// doctorBinary runs a driver binary's doctor after warden's own part of the
+// report; blocked is whether warden's part blocks a build. It reports
+// whether doctor fails, which it does when either part blocks (UX-09), and
+// prints ok to out only when neither does: a blocked doctor ends with no
+// extra line. A driver that lists no doctor leaves warden's part to decide.
+func doctorBinary(out io.Writer, cfg *Config, sd *selectedDriver, blocked bool) (bool,
+	error) {
+	if sd.bin.desc.lists("doctor") {
+		req, err := hostRequest(cfg, sd, "doctor")
+		if err != nil {
+			return false, err
+		}
+		res, err := sd.bin.call("doctor", req, callOpts{})
+		if err != nil {
+			return false, err
+		}
+		var driverBlocked bool
+		_ = json.Unmarshal(res["blocked"], &driverBlocked)
+		blocked = blocked || driverBlocked
+	}
+	if !blocked {
+		fmt.Fprintln(out, "ok")
+	}
+	return blocked, nil
+}
+
+// setupBinary runs a driver binary's setup.
+func setupBinary(cfg *Config, sd *selectedDriver) error {
+	if !sd.bin.desc.lists("setup") {
+		fmt.Printf("--driver %s needs no host setup\n", sd.name())
+		return nil
+	}
+	req, err := hostRequest(cfg, sd, "setup")
+	if err != nil {
+		return err
+	}
+	_, err = sd.bin.call("setup", req, callOpts{})
+	return err
 }

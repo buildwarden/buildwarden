@@ -31,7 +31,7 @@ Or download from [Releases](https://github.com/buildwarden/buildwarden/releases)
 make build
 ```
 
-Requires a container runtime: [Finch](https://github.com/runfinch/finch), Docker, or Podman.
+Requires a container runtime: [Finch](https://github.com/runfinch/finch), Podman, or Docker.
 
 ### Build something
 
@@ -134,15 +134,23 @@ warden inspect <path>         # Verify and display a ledger
 warden inspect --json <path>  # Machine-readable output
 warden shell [path]           # Interactive shell in audited environment
 warden clean                  # Remove orphaned containers/networks/volumes
+warden driver list            # Which driver binary each --driver name runs
 ```
+
+A driver can be a binary of its own, `warden-driver-<name>`, which warden
+finds on `PATH` or beside itself, the way git finds its subcommands;
+`--driver` also takes a driver's path. The container driver is one,
+`warden-driver-container`, installed beside `warden`; the VM drivers are
+linked into `warden`. See
+[Drivers](docs/book/src/guide/drivers.md#where-a-driver-comes-from).
 
 ## Configuration
 
 ```toml
 # ./warden.toml, or the file --config or WARDEN_CONFIG names
 
-[runtime]
-cli = "finch"                # container runtime (finch, docker, podman)
+[driver.container]
+cli = "finch"                # container runtime (finch, podman, docker)
 relay_image = ""             # relay image override ("dev" = build from source)
 
 [build]
@@ -156,6 +164,11 @@ verbose = false
 ```
 
 Environment overrides: `WARDEN_CONFIG`, `WARDEN_CTR_CLI`, `NO_COLOR`, `WARDEN_VERBOSE`.
+
+A driver's settings live in `[driver]` and `[driver.<name>]`, and their keys
+are case-sensitive. The earlier `[runtime] cli` and `[runtime] relay_image`
+are still read, with a warning, until 1.0; see
+[Renamed keys](docs/book/src/guide/configuration.md#renamed-keys).
 
 ## Examples
 

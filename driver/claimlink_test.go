@@ -11,10 +11,12 @@ import (
 )
 
 // TestVMDriversClaimWithRequestLink pins that the qemu, firecracker and vz
-// drivers each claim their relay with the request's build link: the one
-// ClaimRelay call in each passes <req>.Link().Claim() for the request it
-// also passes. Their relay-start steps boot a real VM, so this is checked on
-// the source; Hyper-V's claim is tested end to end over its Provisioner
+// drivers each report their relay to warden with the request's build link:
+// the one host.ClaimRelay call in each passes a driver.RelayStarted literal
+// whose claim is a tcp endpoint with an address, where warden claims the
+// relay, and whose claim_values.build_link is <req>.Link().Claim(). Their
+// relay-start steps boot a real VM, so this is checked on the source;
+// Hyper-V's claim is tested end to end over its Provisioner
 // (TestRunBuild_ClaimBeforeBuildVM). A nil link is loud on qemu and
 // firecracker (the relay refuses "build_link is required") but quiet on vz,
 // whose host relay would fall back to --subnet (Review r1 SHOULD 5).
@@ -25,16 +27,46 @@ func TestVMDriversClaimWithRequestLink(t *testing.T) {
 			if len(calls) != 1 {
 				t.Fatalf("%d ClaimRelay calls, want 1", len(calls))
 			}
-			c := calls[0]
-			if len(c.Args) != 7 {
-				t.Fatalf("ClaimRelay has %d arguments, want 7", len(c.Args))
-			}
-			req := exprString(c.Args[3])
-			if got, want := exprString(c.Args[5]), req+".Link().Claim()"; got != want {
-				t.Errorf("ClaimRelay's link argument is %s, want %s", got, want)
-			}
+			checkRelayStarted(t, calls[0])
 		})
 	}
+}
+
+// checkRelayStarted checks the host.ClaimRelay call c: its relay-started
+// value names a tcp claim endpoint with an address, and the request's link.
+func checkRelayStarted(t *testing.T, c *ast.CallExpr) {
+	t.Helper()
+	if len(c.Args) != 2 {
+		t.Fatalf("ClaimRelay has %d arguments, want 2 (ctx and the relay-started "+
+			"value)", len(c.Args))
+	}
+	claim := litField(t, c.Args[1], "Claim")
+	if got := exprString(litField(t, claim, "Network")); got != "driver.ClaimTCP" {
+		t.Errorf("relay-started's claim network is %s, want driver.ClaimTCP", got)
+	}
+	litField(t, claim, "Address")
+	link := exprString(litField(t, litField(t, c.Args[1], "ClaimValues"), "BuildLink"))
+	if !strings.HasSuffix(link, "req.Link().Claim()") {
+		t.Errorf("relay-started's build_link is %s, want <req>.Link().Claim()", link)
+	}
+}
+
+// litField is the value of the field name in the composite literal e.
+func litField(t *testing.T, e ast.Expr, name string) ast.Expr {
+	t.Helper()
+	lit, ok := e.(*ast.CompositeLit)
+	if !ok {
+		t.Fatalf("%s is not a literal", exprString(e))
+	}
+	for _, el := range lit.Elts {
+		if kv, ok := el.(*ast.KeyValueExpr); ok {
+			if k, ok := kv.Key.(*ast.Ident); ok && k.Name == name {
+				return kv.Value
+			}
+		}
+	}
+	t.Fatalf("the literal sets no %s", name)
+	return nil
 }
 
 // claimRelayCalls returns every call to a ClaimRelay method in the package's

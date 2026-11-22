@@ -29,56 +29,95 @@ Three rules hold for every driver (the full model is
 
 ```
 warden build <context>:
-    cfg := the one config file: --config, else WARDEN_CONFIG, else
-           ./warden.toml if it exists, else none; a named file that
-           cannot be read is an error, and so is a ./warden.toml that is
-           not a regular file or that gives more than 1 MiB
-    req := resolve each setting: flag, else its variable, else cfg,
-           else the default (driver, runtime, output dir, ...)
+    load warden's own configuration from the one config file (--config,
+        found by a scan of the raw arguments, else WARDEN_CONFIG, else
+        ./warden.toml if it exists, else none; a named file that cannot
+        be read is an error, and so is a ./warden.toml that is not a
+        regular file or that gives more than 1 MiB)
+                                            # the driver may be named in it
+    driver := the driver named by --driver (found by the same scan),
+              WARDEN_DRIVER or [runtime] driver (in the config file a
+              name, never a path), else container: a path as
+              given, else warden-driver-<name> on PATH in PATH's order,
+              else beside warden, else a linked driver; not found is an
+              error
+    d := driver.describe                    # what it is; the flags it takes
+    parse the command line: warden's flags, and the driver's declared
+        flags, whose values are passed on unread; a flag neither declares
+        is refused, and so is a line whose parsed --driver or --config
+        is not the scanned one
+    req := resolve warden's flags and config (output dir, capture, ...)
     req.UpstreamCACerts := the valid PEM certificates under each
            upstream CA path (WARDEN_UPSTREAM_CA_CERTS, else [relay]
            upstream_ca_certs), read once, before any driver work; each
            skip and each path's count logged; a path that is missing,
            unreadable or gives none is an error
-    container driver: runtime := --runtime, else WARDEN_CTR_CLI, else
-                [runtime] cli (the config file), else
-                the first of finch, docker, podman that answers; a value
-                that is not one of those three is refused here, before
-                anything is run
-    VM drivers: req.BuildLink := --build-link, else [vm] build_link (checked as
-                the file loads), else 100.127.255.252/30; each checked /30,
-                disjoint from BuildWarden's own ranges, before any driver work
-                req.DNS := [vm] dns (checked as the file loads: IPv4, not
-                unspecified, multicast or broadcast, not empty), else none;
-                the container driver gets neither
-    driver := select(req.driver)            # container | qemu | vz | hyperv | firecracker
-    driver.StartBuild(req)                  # below; every driver has this shape
-    print the result; exit with the build script's exit code
-```
-
-`warden clean` resolves the container runtime the same way, and refuses it
-the same way, under every driver but `firecracker` and `hyperv`: under the
-container driver, `qemu` and `vz` it removes leftover containers.
-
-Every driver's `StartBuild` follows the same skeleton. Only the marked steps
-differ per driver.
-
-```
-StartBuild(req):
-    script := translate(req.Containerfile, req.ContextDir)   # see Translator
-    if script was translated: keep both under <output>/inputs/  # ORCH-02; not vz
+    VM drivers (capabilities.vm): req.BuildLink := --build-link, else
+                [vm] build_link (checked as the file loads), else
+                100.127.255.252/30, disjoint from BuildWarden's own ranges;
+                req.DNS := [vm] dns (checked as the file loads), else none
+    probe `driver run`                      # the driver reads and checks its
+                                            # own flags and keys, then makes
+                                            # its preflight
+    lock build-<driver>-<id>; write the build record beside the lock
+    write <output>/driver.json
+    script := translate(Containerfile, context)     # see Translator; not when
+                                                    # the driver ignores one
+    if script was translated: keep both under <output>/inputs/   # ORCH-02
+    start `driver run`; send start{id, claim token, script, base image,
+        state file, the config file's path, the driver's flags, ...}
+    <- relay-started{claim address, environment, build link, resolvers}
     session := StartSession(output dir, context, script, guest OS)
+    session.ClaimRelay(claim address, claim token, the driver's values)
+    -> claimed
+    <- environment-started
+    session.Wait()      # completion, a failure, SIGINT or SIGTERM, or the
+                        # driver's `exited` (a relay exit at once, a build
+                        # exit after 10 s)
+    -> stop; <- stopped                     # the driver tears down
+    a driver that died or would not stop within [build] teardown_timeout:
+        kill it, `driver reap <id>` with the record's values
+    remove the stage directory, the record and the lock
+    finalize output (optional zstd); print the result; exit with the build
+        script's exit code
+```
+
+Each driver's `run` follows the same skeleton, in a process of its own for a
+driver binary (the container driver, `warden-driver-container`) and as a Go
+call for a driver linked into warden (qemu, vz, hyperv, firecracker). Only
+the marked steps differ per driver.
+
+```
+run (one process per build, or a linked driver's Run):
+    <- start
+    read its own configuration: its flags from start, the two existing
+        variables, its keys from the config file start names (its own
+        table, then [driver] for a common key), with warden's
+        precedence                                             # the kit
+    write the state file, if reap will need more than the ID   # per driver
+    resolve the relay and the environment's image              # per driver
     VM drivers: refuse a build link a host interface holds, and a launcher
                 asset whose link-channel stamp is missing or old
-    relay := start the relay, unconfigured                 # per driver
-    session.ClaimRelay(relay, build link, req.DNS)         # tunnel + config;
-                                                           # container: neither
+    relay := start the relay, unconfigured, with the claim token # per driver
+    -> relay-started; wait for claimed
     isolate the build environment                          # per driver
     deliver warden-io into it                              # per driver
     start it                                               # per driver
-    session.Wait()          # until warden-io reports exit, or a failure
-    teardown; finalize output (optional zstd)
+    -> environment-started; wait for stop or the end of input
+    write relay.log and console.log; teardown, even with stdout and
+        stderr closed
+    -> stopped
 ```
+
+The other commands run the driver once each and exit: `doctor`, `setup`,
+`image prepare`, `image list` and `image verify` (the bundled drivers'
+binaries; a linked driver's code stays in warden until it is a binary),
+`clean`, which probes the driver's `clean`, then runs `reap` for every
+dead build from its record and the driver's `clean` with the live builds'
+IDs as `keep_ids`, `shell`, which runs a build in mode shell and then the
+driver's `attach`, and `warden <name> ...`, a driver's own commands. Each
+finds the driver by the same lookup: a path as given, else `PATH`, else
+beside warden, else a linked driver (`warden driver list` shows it).
 
 ## Session and collector (`driver/session.go`, `collector/`)
 
@@ -141,10 +180,29 @@ translate(containerfile, context):
 Each `warden-io fetch` in the script pulls one file through the relay, which
 records its bytes.
 
-## Container driver (`driver/container`)
+## Container driver (`driver/container`, `cmd/warden-driver-container`)
 
 ```
-start the relay container on a per-build network; claim it
+resolve the runtime (--runtime, WARDEN_CTR_CLI, [driver.container] cli, else
+    the first of finch, podman, docker that answers; any other value is
+    refused before anything is run) and write it to the state file
+    detection asks each candidate its engine-version query (docker/podman
+    `version --format {{.Server.Version}}`, `finch version`), 3 s each,
+    for every command, doctor included
+    probe: a named runtime not on PATH -> fixable error naming where it was
+    named, before any output directory exists; no engine call; detection
+    is not tried in its place
+    build: a named runtime's first engine call is that query (10 s); it
+    fails -> fixable "installed but not running", start hint, warden doctor
+    doctor: a named runtime: that query (10 s); not on PATH, failing or not
+    answering -> blocked with the fix. None named: detection, as above, and
+    the runtime it chooses is not asked again; none up -> each installed
+    candidate asked again, in detection's order, 10 s each: the first that
+    answers -> blocked, "running but answered after more than 3 s", fix:
+    name it; none -> detection's error and start hint. At most 45 s:
+    3 x 3 s + 3 x 10 s = 39 s, plus up to 1 s per query (WaitDelay)
+resolve the relay image (driver/relaysource) and verify it
+start the relay container on a per-build network; report relay-started
 
 isolate:
     holder := run warden-holder              # does nothing; owns the network
@@ -164,15 +222,23 @@ start:
     start build                              # warden-io initialize runs as PID 1
 
 watch:
+    <runtime> container wait warden-build-<id>   # by name, a child of the driver
     wait for the session's completion, or the container exiting without one
 ```
+
+`clean` keeps a build whose lock is held, or whose waiter, `<runtime> container
+wait warden-build-<id>` in one `ps -A -ww -o pid=,ppid=,args=` listing, runs
+under a live `warden-driver-container`. A waiter whose driver was killed is
+orphaned and keeps nothing; no other process that names the build counts. With
+no `ps` (Windows), only the locks keep a build.
 
 The image's own `ENTRYPOINT` never runs, and nothing from the image exists
 until the network is already isolated. The holder and sidecar images are
 published with each release and run by digest.
 
-`warden shell` does the same with `initialize --hold`, then opens a shell in the
-held environment.
+`warden shell` does the same with `initialize --hold`, starts the same waiter,
+whose exit it does not report, and opens a shell in the held environment once
+setup is done; the session ends when warden stops it.
 
 ## VM drivers (`driver/qemu`, `driver/hyperv`, `driver/vz`, `driver/firecracker`)
 
@@ -218,9 +284,9 @@ link and the resolvers
                  durable strategy's slot switches <network>-0..N-1 (--slots,
                  default 4), trim unattached extras, retire an unattached old
                  <network> switch
-    hyperv build (StartBuild):
+    hyperv build (Run):
         hold the host lock "hyperv-build-<id>" from the build ID's creation
-            to StartBuild's return
+            to Run's return
         the network strategy: elevated -> a per-build network; else the
             privileged service at this protocol -> a per-build network through
             it; a service at another protocol (or failing its ping) -> a fix
