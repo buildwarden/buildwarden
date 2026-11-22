@@ -301,7 +301,7 @@ func TestUpstreamCALinesOfDoctor(t *testing.T) {
 				paths, _ = caDirectory(t)
 			}
 			bin := t.TempDir()
-			writeScript(t, filepath.Join(bin, "docker"), "#!/bin/sh\nexit 0\n")
+			writeScript(t, filepath.Join(bin, "docker"), "#!/bin/sh\necho 27.3.1\n")
 			self, err := os.Executable()
 			if err != nil {
 				t.Fatal(err)

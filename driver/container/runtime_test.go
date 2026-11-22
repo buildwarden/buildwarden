@@ -242,7 +242,7 @@ func TestDetectRuntimeProbesTheSupportedList(t *testing.T) {
 	}
 	bin, probed := t.TempDir(), filepath.Join(t.TempDir(), "probed")
 	for _, name := range want {
-		script := fmt.Sprintf("#!/bin/sh\necho %s \"$1\" >> '%s'\nexit 1\n", name, probed)
+		script := fmt.Sprintf("#!/bin/sh\necho %s \"$*\" >> '%s'\nexit 1\n", name, probed)
 		writeScript(t, filepath.Join(bin, name), script)
 	}
 	t.Setenv("PATH", bin)
@@ -253,21 +253,21 @@ func TestDetectRuntimeProbesTheSupportedList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != "finch info\ndocker info\npodman info\n" {
-		t.Errorf("detection ran %q, want info of finch, docker, podman in order", got)
+	wantRan := "finch version\ndocker version --format {{.Server.Version}}\n" +
+		"podman version --format {{.Server.Version}}\n"
+	if string(got) != wantRan {
+		t.Errorf("detection ran %q, want the version query of finch, docker, "+
+			"podman in order", got)
 	}
 }
 
-// installRuntime puts an executable named name on a PATH of its own; its
-// `info` subcommand exits with code.
-func installRuntime(t *testing.T, name string, code int) {
+// installRuntime puts a fake runtime named name on a PATH of its own; it
+// gives r to its version query.
+func installRuntime(t *testing.T, name string, r reply) {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("shell-script fakes need a POSIX shell")
-	}
 	dir := t.TempDir()
-	writeScript(t, filepath.Join(dir, name), fmt.Sprintf("#!/bin/sh\nexit %d\n", code))
-	t.Setenv("PATH", dir)
+	writeRuntime(t, dir, name, r)
+	onlyOnPath(t, dir)
 }
 
 func TestDetectRuntimeExplainsTheFix(t *testing.T) {
@@ -281,7 +281,7 @@ func TestDetectRuntimeExplainsTheFix(t *testing.T) {
 		}
 	})
 	t.Run("installed but stopped", func(t *testing.T) {
-		installRuntime(t, "finch", 1)
+		installRuntime(t, "finch", fails)
 		_, err := detectRuntime()
 		var fe *driver.FixableError
 		if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "finch vm start") {
@@ -290,7 +290,7 @@ func TestDetectRuntimeExplainsTheFix(t *testing.T) {
 		}
 	})
 	t.Run("running", func(t *testing.T) {
-		installRuntime(t, "podman", 0)
+		installRuntime(t, "podman", answers)
 		if rt, err := detectRuntime(); err != nil || rt != "podman" {
 			t.Fatalf("detectRuntime = %q, %v; want podman", rt, err)
 		}
@@ -586,7 +586,8 @@ func wantNotRun(t *testing.T, marker string) {
 // (Behaviour 19).
 func TestUnsupportedRuntimeIsNeverRun(t *testing.T) {
 	const viaShell = "sh" // runs ./pull, ./container, ... from the project
-	shipped := []string{"rt", "pull", "container", "network", "image", "info"}
+	shipped := []string{"rt", "pull", "container", "network", "image", "info",
+		"version"}
 	type project struct {
 		name, body, value, label string
 		caseRefused              bool

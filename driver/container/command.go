@@ -44,15 +44,16 @@ type state struct {
 
 // preflight is the probe of run: it refuses a relay image that is not one,
 // and resolves the runtime (the setting, else detection), refusing one that
-// is not supported, is not installed or does not answer, before anything is
-// created (Behaviour 20).
+// is not supported or not installed, or a detected one that does not
+// answer, before anything is created (Behaviour 20). A named runtime's
+// engine is not asked here; the build's first engine call is (checkEngine).
 func preflight(_ context.Context, start *driver.Start) error {
 	_, err := checkedRunner(start.Settings)
 	return err
 }
 
 // checkedRunner is buildRunner with the runtime set names, when it names
-// one, checked as installed and answering: the probe's and doctor's checks.
+// one, checked as installed: the probe's checks.
 func checkedRunner(set driver.Settings) (*runner, error) {
 	d, err := buildRunner(set)
 	if err != nil {
@@ -78,7 +79,8 @@ func buildRunner(set driver.Settings) (*runner, error) {
 }
 
 // run is the build: the runtime resolved once more, as after a probe, and
-// written to the state file before anything is created.
+// written to the state file before anything is created; then a named
+// runtime's engine is asked, the build's first engine call (checkEngine).
 func run(ctx context.Context, start *driver.Start, host driver.Host) ([]string, error) {
 	d, err := buildRunner(start.Settings)
 	if err != nil {
@@ -89,6 +91,9 @@ func run(ctx context.Context, start *driver.Start, host driver.Host) ([]string, 
 		if err != nil {
 			return nil, err
 		}
+	}
+	if err := checkEngine(d.runtime, start.Settings); err != nil {
+		return nil, err
 	}
 	img, _ := start.Settings.String("relay-image")
 	req := &driver.BuildRequest{ContextDir: start.ContextDir, Image: start.Image,
@@ -141,12 +146,17 @@ func reap(_ context.Context, req *drivercmd.ReapRequest) (int, error) {
 }
 
 // doctor checks what a build checks before it creates anything: the relay
-// image's shape and the runtime, which it names (DRV-25); a runtime the
-// probe refuses blocks it with the probe's error (a28). warden prints ok
-// after it when nothing blocks.
+// image's shape and the runtime, which it names (DRV-25). It is the health
+// check: the runtime, named or detected, must answer its version query
+// within doctorTimeout, and one that does not blocks it with the fixable
+// error and the start hint (a28). warden prints ok after it when nothing
+// blocks.
 func doctor(_ context.Context, req *drivercmd.DoctorRequest) (bool, error) {
-	d, err := checkedRunner(req.Settings)
+	d, err := buildRunner(req.Settings)
 	if err != nil {
+		return false, err
+	}
+	if err := checkRuntime(d.runtime, req.Settings, doctorTimeout); err != nil {
 		return false, err
 	}
 	out := stdoutOf(req.Streams)

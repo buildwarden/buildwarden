@@ -74,25 +74,60 @@ func resolveRuntime(set driver.Settings) (string, error) {
 }
 
 // checkNamedRuntime refuses the runtime rt that set names, when it does,
-// unless it is on PATH and answers `<rt> info` within 3 s: a value the user
-// provided that cannot be used is an error before any work, never replaced
-// by detection (Decision 26, Behaviour 20). A runtime set does not name was
-// detected, and detection has made the same checks. run's probe and doctor
-// call it; the build itself resolves as resolveRuntime does.
+// unless it is on PATH: a value the user provided that cannot be used is an
+// error before any work, never replaced by detection (Decision 26,
+// Behaviour 20). It makes no engine call; a named runtime whose engine is
+// down fails the build's first one (checkEngine), and doctor asks it
+// (checkRuntime) (r4, CI repair). A runtime set does not name was detected,
+// and detection has asked its engine. run's probe calls it.
 func checkNamedRuntime(rt string, set driver.Settings) error {
 	if v, _ := set.String("runtime"); v == "" {
 		return nil
 	}
-	setting, other := namedRuntimeFix(set.Source("runtime"))
 	if _, err := exec.LookPath(rt); err != nil {
+		setting, other := namedRuntimeFix(set.Source("runtime"))
 		return driver.Fixable(runtimeInstallHint(rt)+", "+other,
 			"%s names the container runtime %s, which is not installed "+
 				"(not found on PATH)", setting, rt)
 	}
-	if !runtimeAnswers(rt) {
+	return nil
+}
+
+// checkEngine is the build's first engine call on the runtime rt that set
+// names: its version query, given doctor's time. One that fails is the
+// error a28 gives, with the start hint and a pointer to warden doctor; the
+// output directory warden made is left, as after any failed build. A
+// detected runtime has just answered detection's query, and is not asked
+// again.
+func checkEngine(rt string, set driver.Settings) error {
+	if v, _ := set.String("runtime"); v == "" || runtimeAnswers(rt, doctorTimeout) {
+		return nil
+	}
+	return driver.Fixable(runtimeStartHint(rt)+"; warden doctor checks it",
+		"container runtime %s is installed but not running (`%s` failed)",
+		rt, versionCommand(rt))
+}
+
+// checkRuntime is doctor's health check of the runtime rt, the one set
+// names or the detected one: it is refused unless it is on PATH and
+// answers its version query within timeout. An error names where a named
+// runtime was named; a detected one is on PATH, and its error is
+// notAnswering's.
+func checkRuntime(rt string, set driver.Settings, timeout time.Duration) error {
+	if v, _ := set.String("runtime"); v == "" {
+		if !runtimeAnswers(rt, timeout) {
+			return notAnswering(rt, rt)
+		}
+		return nil
+	}
+	if err := checkNamedRuntime(rt, set); err != nil {
+		return err
+	}
+	if !runtimeAnswers(rt, timeout) {
+		setting, other := namedRuntimeFix(set.Source("runtime"))
 		return driver.Fixable(runtimeStartHint(rt)+", "+other,
 			"%s names the container runtime %s, which is installed but not running "+
-				"(`%s info` failed)", setting, rt, rt)
+				"(`%s` failed)", setting, rt, versionCommand(rt))
 	}
 	return nil
 }
@@ -156,7 +191,7 @@ func detectRuntime() (string, error) {
 			continue
 		}
 		installed = append(installed, name)
-		if runtimeAnswers(name) {
+		if runtimeAnswers(name, answerTimeout) {
 			return name, nil
 		}
 	}
@@ -170,19 +205,62 @@ func detectRuntime() (string, error) {
 	return "", notAnswering(installed[0], strings.Join(installed, ", "))
 }
 
-// runtimeAnswers reports whether `<name> info` succeeds within 3 s.
-func runtimeAnswers(name string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+// answerTimeout bounds detection's version query, per candidate;
+// doctorTimeout bounds doctor's and the build's (checkEngine), which have
+// the time to wait for an engine that is slow to answer. Tests shorten
+// them.
+var (
+	answerTimeout = 3 * time.Second
+	doctorTimeout = 10 * time.Second
+)
+
+// versionQuery is the command that asks the runtime name for its engine's
+// version: the cheapest call that reaches the engine and fails when the
+// engine is down, where `info` makes the engine walk its storage and
+// plugins and can take longer than the timeout on a host whose engine is up
+// (Decision 26, r4). docker exits non-zero when its daemon does not answer.
+// podman fails the same way when its machine is stopped (macOS, Windows);
+// on Linux it has no server, and the template falls back to the client's
+// version. finch's own `version` asks nerdctl in its VM and fails when the
+// VM is not running; it has no Server.Version, and older releases have no
+// --format, so it is run bare.
+func versionQuery(name string) []string {
+	if name == "finch" {
+		return []string{"version"}
+	}
+	return []string{"version", "--format", "{{.Server.Version}}"}
+}
+
+// versionCommand is versionQuery as a user would type it, for messages.
+func versionCommand(name string) string {
+	args := versionQuery(name)
+	if len(args) > 1 {
+		return name + " " + args[0] + " " + args[1] + " '" + args[2] + "'"
+	}
+	return name + " " + args[0]
+}
+
+// runtimeAnswers reports whether name's version query succeeds within
+// timeout and prints a version: an empty one is a docker whose Server
+// section is empty, not an engine that is up.
+func runtimeAnswers(name string, timeout time.Duration) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	return exec.CommandContext(ctx, name, "info").Run() == nil
+	cmd := exec.CommandContext(ctx, name, versionQuery(name)...)
+	// A child of the runtime's CLI (finch's limactl, say) can outlive it
+	// when it is killed and hold stdout open; WaitDelay stops Output
+	// waiting for it.
+	cmd.WaitDelay = time.Second
+	out, err := cmd.Output()
+	return err == nil && strings.TrimSpace(string(out)) != ""
 }
 
 // notAnswering is the error for the runtime name, installed as installed
-// says, whose `info` failed.
+// says, whose version query failed.
 func notAnswering(name, installed string) error {
 	return driver.Fixable(runtimeStartHint(name),
-		"container runtime %s is installed but not running (`%s info` failed)",
-		installed, name)
+		"container runtime %s is installed but not running (`%s` failed)",
+		installed, versionCommand(name))
 }
 
 // runtimeStartHint is the command that starts a stopped runtime.

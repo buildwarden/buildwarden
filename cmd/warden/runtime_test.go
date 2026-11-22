@@ -199,7 +199,7 @@ func TestCleanUnderAVMDriverRunsNoRuntime(t *testing.T) {
 			marker := filepath.Join(t.TempDir(), "ran")
 			project := inConfigFiles(t, tc.project)
 			shipPrograms(t, project, marker, "rt", "pull", "container", "network",
-				"image", "info")
+				"image", "info", "version")
 			t.Setenv("XDG_CACHE_HOME", t.TempDir())
 			t.Setenv("LocalAppData", t.TempDir())
 			flagDriver = tc.driver

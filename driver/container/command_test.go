@@ -32,9 +32,14 @@ func dockerOnPath(t *testing.T, cases string) (log string) {
 	return log
 }
 
-// runtimeWithBuilds answers the listings with two builds' containers,
-// networks and dev relay images: k3v9x2ab's and live1234's.
-const runtimeWithBuilds = `"info "*) exit 0 ;;
+// dockerAnswers is the case that answers the version query, as a docker
+// whose daemon is up does.
+const dockerAnswers = `"version --format") echo 27.3.1 ;;`
+
+// runtimeWithBuilds answers the version query, and the listings with two
+// builds' containers, networks and dev relay images: k3v9x2ab's and
+// live1234's.
+const runtimeWithBuilds = dockerAnswers + `
 "container ls") printf 'warden-build-k3v9x2ab\nwarden-relay-k3v9x2ab\n` +
 	`warden-holder-k3v9x2ab\nwarden-build-live1234\nother\n' ;;
 "network ls") printf 'bridge\nwarden-k3v9x2ab\nwarden-live1234\n' ;;
@@ -172,7 +177,7 @@ func TestCleanKeepsTheLiveBuilds(t *testing.T) {
 
 // doctor names the runtime it resolved, and leaves ok to warden (DRV-25).
 func TestDoctorNamesTheRuntime(t *testing.T) {
-	dockerOnPath(t, `"info "*) exit 0 ;;`)
+	dockerOnPath(t, dockerAnswers)
 	res, out, err := callContainer(t, drivercmd.CmdDoctor, &drivercmd.Request{Contract: 1,
 		Args: []string{}})
 	if err != nil || res.Blocked || out != "container runtime: docker\n" {
