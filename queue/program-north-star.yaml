@@ -1,6 +1,6 @@
 feature: program-north-star
 title: 'The componentization program is the north star: prioritize and parallelize for it, even across interface breaks, until it completes'
-priority: 2
+priority: 1
 kind: process
 status: queued
 round: process

@@ -1,10 +1,10 @@
 feature: config-lookup-test-symlinked-tmp
 title: 'TestConfigFileLookupOrder fails on macOS: it expects the unresolved t.TempDir path, and LoadConfig returns the working directory os.Getwd resolves (/var -> /private/var)'
-priority: 1
+priority: 3
 follows: project-config-trust
 status: in_progress
 round: feature
-phase: 6
+phase: 7
 design: docs/design/config-lookup-test-symlinked-tmp.md
 branch: feat/config-lookup-test-symlinked-tmp
 areas:
@@ -14,6 +14,10 @@ declared: 8eb333d
 alters_relationships: false
 design_review: required
 source: 'host:qemu-any/macbook.20261120T125213Z (unattended) found it; that run''s push failed (session left uncommitted workflow changes) so the filing was lost; refiled attended from the saved leftover on Jeff''s word, 2026-11-20. go test -count=1 -run TestConfigFileLookupOrder ./cmd/warden FAILS on darwin/arm64 on main e9315c2 and again on be13847: subtests ''./warden.toml when nothing names a file'' and ''an empty variable is not set'' get config file /private/var/folders/.../warden.toml, want /var/folders/.../warden.toml (cmd/warden/configfile_test.go:125, added by project-config-trust). Log: native/qemu-any/2026-11-20/cmd-warden-go-test.log.'
+pr:
+  number: 134
+  ci: green
+  head: ca55efb74d8423c4b655650609887981cee39cb1
 steps:
   - id: f0-branch-setup
     phase: 0
@@ -85,12 +89,19 @@ steps:
   - id: f6-open-pr
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-consolidate
     lease:
-      claimed_by: cloud/20261122T105700Z
-      expires: 2026-11-22T13:08:15.223753037Z
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -200,3 +211,9 @@ history:
   - at: 2026-11-22T11:08:15Z
     by: cloud/20261122T105700Z
     event: claimed f6-open-pr until 2026-11-22T13:08:15Z
+  - at: 2026-11-22T11:18:37Z
+    by: cloud/20261122T105700Z
+    event: done f6-open-pr
+  - at: 2026-11-22T11:18:37Z
+    by: cloud/20261122T105700Z
+    event: entered phase 7 (merge)
