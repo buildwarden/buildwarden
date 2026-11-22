@@ -552,8 +552,9 @@ too slow for detection, and doctor is blocked with the fix to name it:
 ```
 
 When none answers, detection's own error says that none is running, with
-the fix to start it. At most, doctor waits 3 seconds for each of the three
-runtimes and then 10 seconds for each again: 39 seconds.
+the fix to start it. At most, doctor waits 45 seconds: 3 seconds for each
+of the three runtimes and then 10 seconds for each again, 39 seconds, plus
+up to 1 second per query for the runtime's CLI to release its output.
 
 <!-- TRANSITIONAL(runtime-former-values): this subsection is removed with
      driver/container/runtime_former.go, in the change that prepares 1.0. -->

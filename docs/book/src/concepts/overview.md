@@ -199,8 +199,8 @@ resolve the runtime (--runtime, WARDEN_CTR_CLI, [driver.container] cli, else
     the runtime it chooses is not asked again; none up -> each installed
     candidate asked again, in detection's order, 10 s each: the first that
     answers -> blocked, "running but answered after more than 3 s", fix:
-    name it; none -> detection's error and start hint. At most 3 x 3 s +
-    3 x 10 s = 39 s
+    name it; none -> detection's error and start hint. At most 45 s:
+    3 x 3 s + 3 x 10 s = 39 s, plus up to 1 s per query (WaitDelay)
 resolve the relay image (driver/relaysource) and verify it
 start the relay container on a per-build network; report relay-started
 
