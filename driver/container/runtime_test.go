@@ -128,7 +128,7 @@ func (r *runtimeTest) resolved() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return resolveRuntime(set)
+	return resolveRuntime(set, answerTimeout)
 }
 
 // wantRuntime checks that the runtime in effect resolves to want, and
@@ -246,7 +246,7 @@ func TestDetectRuntimeProbesTheSupportedList(t *testing.T) {
 		writeScript(t, filepath.Join(bin, name), script)
 	}
 	t.Setenv("PATH", bin)
-	if rt, err := detectRuntime(); err == nil {
+	if rt, err := detectRuntime(answerTimeout); err == nil {
 		t.Fatalf("detectRuntime = %q with no runtime answering", rt)
 	}
 	got, err := os.ReadFile(probed)
@@ -273,7 +273,7 @@ func installRuntime(t *testing.T, name string, r reply) {
 func TestDetectRuntimeExplainsTheFix(t *testing.T) {
 	t.Run("none installed", func(t *testing.T) {
 		t.Setenv("PATH", t.TempDir())
-		_, err := detectRuntime()
+		_, err := detectRuntime(answerTimeout)
 		var fe *driver.FixableError
 		if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "install") {
 			t.Fatalf("detectRuntime = %v, want a FixableError with an install hint",
@@ -282,7 +282,7 @@ func TestDetectRuntimeExplainsTheFix(t *testing.T) {
 	})
 	t.Run("installed but stopped", func(t *testing.T) {
 		installRuntime(t, "finch", fails)
-		_, err := detectRuntime()
+		_, err := detectRuntime(answerTimeout)
 		var fe *driver.FixableError
 		if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "finch vm start") {
 			t.Fatalf("detectRuntime = %v, want a FixableError saying to start "+
@@ -291,7 +291,7 @@ func TestDetectRuntimeExplainsTheFix(t *testing.T) {
 	})
 	t.Run("running", func(t *testing.T) {
 		installRuntime(t, "podman", answers)
-		if rt, err := detectRuntime(); err != nil || rt != "podman" {
+		if rt, err := detectRuntime(answerTimeout); err != nil || rt != "podman" {
 			t.Fatalf("detectRuntime = %q, %v; want podman", rt, err)
 		}
 	})

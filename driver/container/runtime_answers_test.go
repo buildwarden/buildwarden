@@ -176,7 +176,7 @@ func TestDetectRuntimeSkipsOneThatIsNotUp(t *testing.T) {
 	writeRuntime(t, dir, "podman", fails)
 	writeRuntime(t, dir, "docker", answers)
 	onlyOnPath(t, dir)
-	if rt, err := detectRuntime(); err != nil || rt != "docker" {
+	if rt, err := detectRuntime(answerTimeout); err != nil || rt != "docker" {
 		t.Fatalf("detectRuntime = %q, %v; want docker", rt, err)
 	}
 }
@@ -188,14 +188,16 @@ func TestDetectRuntimePrefersPodmanOverDocker(t *testing.T) {
 	writeRuntime(t, dir, "docker", answers)
 	writeRuntime(t, dir, "podman", answers)
 	onlyOnPath(t, dir)
-	if rt, err := detectRuntime(); err != nil || rt != "podman" {
+	if rt, err := detectRuntime(answerTimeout); err != nil || rt != "podman" {
 		t.Fatalf("detectRuntime = %q, %v; want podman", rt, err)
 	}
 }
 
 // Doctor is the health check: it waits doctorTimeout, not the probe's
 // answerTimeout, for the runtime it resolved, named or detected, and is
-// blocked with the start hint when the runtime does not answer in it.
+// blocked with the start hint when the runtime does not answer in it. Its
+// detection gives each candidate doctorTimeout too: every case's runtime
+// is slower than answerTimeout.
 func TestDoctorWaitsItsOwnTimeout(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
@@ -215,13 +217,11 @@ func TestDoctorWaitsItsOwnTimeout(t *testing.T) {
 			dir := t.TempDir()
 			writeRuntime(t, dir, "podman", tc.r)
 			onlyOnPath(t, dir)
-			// Detection must find the slow runtime; a named one is given a
-			// probe timeout it would miss, which doctor does not use.
-			answer, named := 5*time.Second, ""
+			named := ""
 			if tc.named {
-				answer, named = 50*time.Millisecond, "podman"
+				named = "podman"
 			}
-			shortTimeouts(t, answer, tc.doctor)
+			shortTimeouts(t, 50*time.Millisecond, tc.doctor)
 			t.Setenv("WARDEN_CTR_CLI", named)
 			t.Setenv("WARDEN_IMAGE", "")
 			wantDoctor(t, tc.refuse)
@@ -245,5 +245,28 @@ func wantDoctor(t *testing.T, refuse bool) {
 	if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "podman machine start") ||
 		!strings.Contains(fe.Msg, "installed but not running") {
 		t.Fatalf("doctor = %v; want a fixable error with the start hint", err)
+	}
+}
+
+// A build's detection gives each candidate answerTimeout, not doctor's: the
+// slow runtime doctor finds healthy is passed over, and the probe of run
+// finds none answering.
+func TestRunDetectionSkipsARuntimeSlowerThanItsTimeout(t *testing.T) {
+	dir := t.TempDir()
+	writeRuntime(t, dir, "podman", slow)
+	onlyOnPath(t, dir)
+	shortTimeouts(t, 50*time.Millisecond, 5*time.Second)
+	t.Setenv("WARDEN_CTR_CLI", "")
+	t.Setenv("WARDEN_IMAGE", "")
+	set, err := drivercmd.Resolve("container", Settings, drivercmd.CmdRun, nil, "",
+		os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = checkedRunner(set)
+	var fe *driver.FixableError
+	if !errors.As(err, &fe) || !strings.Contains(fe.Msg, "installed but not running") {
+		t.Fatalf("run's probe = %v; want the slow podman passed over, none answering",
+			err)
 	}
 }

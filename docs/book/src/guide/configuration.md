@@ -465,7 +465,7 @@ runtime installed outside `PATH` needs its directory added to `PATH`.
 
 When no level names a runtime, BuildWarden probes `finch`, then `podman`,
 then `docker`. The first one that answers its engine-version query within
-3 seconds is used: `finch version` (which asks nerdctl in finch's VM, and
+3 seconds (10 seconds for `warden doctor`) is used: `finch version` (which asks nerdctl in finch's VM, and
 fails when the VM is stopped), and `docker version --format
 '{{.Server.Version}}'` and the same for `podman` (on Linux, where podman
 has no server, it answers with its own version). A query that fails or

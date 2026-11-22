@@ -188,6 +188,7 @@ resolve the runtime (--runtime, WARDEN_CTR_CLI, [driver.container] cli, else
     refused before anything is run) and write it to the state file
     detection asks each candidate its engine-version query (docker/podman
     `version --format {{.Server.Version}}`, `finch version`), 3 s each
+    (10 s each for doctor)
     probe: a named runtime not on PATH -> fixable error naming where it was
     named, before any output directory exists; no engine call; detection
     is not tried in its place

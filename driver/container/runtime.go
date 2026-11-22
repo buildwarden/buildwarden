@@ -66,14 +66,15 @@ func runtimeNames(conj string) string {
 // when it is a supported runtime, the detected one when none does. Another
 // value is refused here, before anything is looked up, run or created, and
 // so are settings that could not be read: in reap and attach they are
-// resolved on this first read (DRV-C10).
-func resolveRuntime(set driver.Settings) (string, error) {
+// resolved on this first read (DRV-C10). Detection gives each candidate
+// timeout to answer: answerTimeout for a build, doctorTimeout for doctor.
+func resolveRuntime(set driver.Settings, timeout time.Duration) (string, error) {
 	v, _ := set.String("runtime")
 	if err := set.Err(); err != nil {
 		return "", err
 	}
 	if v == "" {
-		return detectRuntime()
+		return detectRuntime(timeout)
 	}
 	if name, ok := supportedRuntime(v); ok {
 		return name, nil
@@ -191,15 +192,16 @@ func unsupportedRuntime(value, source string) error {
 	return driver.Fixable(fix, "%s is %q; %s", setting, value, what)
 }
 
-// detectRuntime probes for a working container runtime, in runtimes' order.
-func detectRuntime() (string, error) {
+// detectRuntime probes for a working container runtime, in runtimes' order,
+// giving each candidate timeout to answer its version query.
+func detectRuntime(timeout time.Duration) (string, error) {
 	var installed []string
 	for _, name := range runtimes {
 		if _, err := lookPath(name); err != nil {
 			continue
 		}
 		installed = append(installed, name)
-		if runtimeAnswers(name, answerTimeout) {
+		if runtimeAnswers(name, timeout) {
 			return name, nil
 		}
 	}
