@@ -16,8 +16,31 @@ repositories:
   - name: buildwarden/buildwarden
     trunk: main
     profile: docs/development/loop-profile.yaml
+    program_trunk: program/componentization
   - name: buildwarden/buildwarden-specs  # not adopted: no profile
     trunk: main
+    # program_trunk: program/componentization once buildwarden-specs#5 merges and the trunk is cut
+  - name: buildwarden/buildwarden-relay  # not adopted: no profile
+    trunk: main
+    program_trunk: program/componentization
+  - name: buildwarden/buildwarden-ai-workflow
+    trunk: main
+    program_trunk: program/componentization
+  - name: buildwarden/buildwarden-driver-container
+    trunk: main
+    program_trunk: program/componentization
+  - name: buildwarden/buildwarden-driver-qemu
+    trunk: main
+    program_trunk: program/componentization
+  - name: buildwarden/buildwarden-driver-vz
+    trunk: main
+    program_trunk: program/componentization
+  - name: buildwarden/buildwarden-driver-hyperv
+    trunk: main
+    program_trunk: program/componentization
+  - name: buildwarden/buildwarden-driver-firecracker
+    trunk: main
+    program_trunk: program/componentization
 
 # Steps one daily run may take; calibrate against /usage. Doubled from 12 on
 # 2026-11-12 (Jeff): weekly usage was very low.
