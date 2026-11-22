@@ -221,7 +221,7 @@ steps:
   - id: f2-design-review-r3
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -240,7 +240,7 @@ budget:
     steps: 30
   spent:
     runs: 10
-    steps: 27
+    steps: 28
 questions:
   - id: a16
     kind: assumed
@@ -523,12 +523,13 @@ questions:
     answer: The probe refuses a named runtime (--runtime, WARDEN_CTR_CLI or the key) that is missing or does not answer, as a fixable error naming its source, before any output directory exists; reword 'as newDriver does today'; list it as Behaviour 20. Jeff at f1-escalate-3 (2026-11-21).
   - id: a28
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Does warden doctor report a named container runtime that cannot be used (r4, from q4; design, Questions, Assumed, a28; Behaviour 20)? On main and on the branch doctor prints container runtime: podman and ok for a podman that is not installed. Proceeding with (i).'
     options:
       - (i) the container driver's doctor makes the probe's check and reports the same fixable error as blocked, so warden doctor exits 1 with no ok (UX-09)
       - (ii) doctor as on main, reporting the name without checking it
     recommended: (i)
+    answer: '(i): doctor makes the probe''s check and reports the same fixable error as blocked (Jeff, r4 review, 2026-11-22)'
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
@@ -920,3 +921,12 @@ history:
   - at: 2026-11-22T11:28:00Z
     by: cloud/20261122T105700Z
     event: entered phase 2 (plan)
+  - at: 2026-11-22T18:00:51Z
+    by: human/jeff
+    event: claimed f2-design-review-r3 until 2026-11-22T20:00:51Z
+  - at: 2026-11-22T18:00:51Z
+    by: human/jeff
+    event: 'assumed question a28 confirmed: (i): doctor makes the probe''s check and reports the same fixable error as blocked (Jeff, r4 review, 2026-11-22)'
+  - at: 2026-11-22T18:01:11Z
+    by: human/jeff
+    event: done f2-design-review-r3
