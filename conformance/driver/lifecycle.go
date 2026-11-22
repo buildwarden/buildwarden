@@ -889,6 +889,22 @@ func (l *lifecycle) caseEndOfInput() (string, string) {
 	})
 }
 
+// caseOrphaned ends a build at each point as a killed orchestrator does:
+// its output closed, then its input.
+//
+// Its limit, on Windows only: a close of stdout or stderr that missed its
+// cancel (closeOutput) ends only on the driver's next write to that stream
+// or its exit. That write succeeds, the suite's pending read taking it, and
+// only the driver's second write meets the closed stream. So when the race
+// hits, a driver that writes to a stream once during teardown and then
+// dies on the failed write passes there; one that writes twice or more, as
+// the fake's die-on-closed-stderr fault does, is caught. settle makes the
+// race rare; on POSIX the close is exact. The kit's handling of a closed
+// stream is the same code on every platform, so the Linux and macOS runs
+// check it exactly, and native Windows validation (container-any) runs the
+// case against the real driver there. Waiting for both closes before the
+// input closes would deadlock against a driver that waits for the end of
+// its input before it writes.
 func (l *lifecycle) caseOrphaned() (string, string) {
 	return "", l.atEachPoint(func(b *buildRun) string {
 		// Output first: a driver that tears down on the end of its input
@@ -926,7 +942,8 @@ const (
 // given settle to enter their reads, where the cancel reaches them, and each
 // close runs on its own and is waited on for closeWait at most. A close that
 // missed still ends once the driver's teardown writes to the stream or the
-// driver exits: the driver then meets its closed output on its next write.
+// driver exits: the driver then meets its closed output on its next write
+// (caseOrphaned states the limit this leaves on Windows).
 func (b *buildRun) closeOutput() {
 	time.Sleep(settle)
 	var wg sync.WaitGroup

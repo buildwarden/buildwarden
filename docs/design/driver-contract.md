@@ -7107,6 +7107,24 @@ is, and the workflow file is the list.
 
 Evidence goes under `native/<host>/<date>/` on the `workflow` branch.
 
+- *r4, CI repair, 2026-11-22*: the Orphaned case's limit on Windows. There
+  the suite's pipes are synchronous, and a close of stdout or stderr whose
+  cancel reaches its reader before the reader is in its read ends only on
+  the driver's next write to that stream, which then succeeds; only the
+  driver's second write meets the closed stream. When that race hits, a
+  driver that writes to a stream once during teardown and then dies on the
+  failed write passes the case on Windows. The suite gives the readers
+  200 ms to enter their reads first, so the race is rare; it cannot wait
+  for the close before closing the input, since a driver that waits for
+  the end of its input before writing would never release it. On Linux
+  and macOS the close is exact. The kit's handling of a closed stream is
+  the same code on every platform, so the suite's runs on Linux and macOS
+  (`tier1`'s `make driver-conformance`, the `driver-contract` job's
+  self-test, macos-finch's case (9)) check it exactly, and container-any's
+  case (6) runs the
+  case against `warden-driver-container.exe` natively on Windows. The
+  limit is stated in the Orphaned case's comment
+  (`conformance/driver/lifecycle.go`).
 - Native, tracked: macos-qemu. A qemu Windows build goes through `warden`'s
   build sequence like any other (`warden` stages `build.ps1`, starts the
   collector with the Windows bootstrap and claims). Tier 0 covers the
