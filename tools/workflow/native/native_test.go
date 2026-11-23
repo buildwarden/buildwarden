@@ -471,3 +471,42 @@ func TestNativeClonesRules(t *testing.T) {
 		}
 	}
 }
+
+// TestNoPipeIntoGrepQ: no native script pipes a command into grep -q. Under
+// pipefail grep -q exits at its first match, the writer takes SIGPIPE on its
+// next write, and the pipeline exits 141, which read as "no match"
+// (docs/design/native-loop-fixes.md, fix 10). The scripts capture the output
+// first and test it with case or a match.
+func TestNoPipeIntoGrepQ(t *testing.T) {
+	scripts, err := filepath.Glob("*.sh")
+	if err != nil || len(scripts) == 0 {
+		t.Fatalf("no native scripts: %v", err)
+	}
+	shape := regexp.MustCompile(`\| *grep +-[a-zA-Z]*q`)
+	for _, f := range scripts {
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(raw), "\n") {
+			if shape.MatchString(line) {
+				t.Errorf("%s:%d pipes into grep -q: %s", f, i+1, strings.TrimSpace(line))
+			}
+		}
+	}
+	// The shape is what the test looks for.
+	for _, c := range []struct {
+		line string
+		want bool
+	}{
+		{`pmset -g batt | grep -q "AC Power"`, true},
+		{`printf '%s' "$auth" | grep -Eq x`, true},
+		{`pmset -g sched |grep -qi wake`, true},
+		{`grep -qx 'status: done' "$q"`, false},
+		{`ls | grep x`, false},
+	} {
+		if got := shape.MatchString(c.line); got != c.want {
+			t.Errorf("%q: matched %v, want %v", c.line, got, c.want)
+		}
+	}
+}
