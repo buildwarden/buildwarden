@@ -44,9 +44,9 @@ None.
 
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | wf-gate-rest | process | - | buildwarden/buildwarden | - | 1 design | x1-design (cloud, leased to cloud/20261123T232256Z) | - | - | 8 / 5 |
-| 2 | sync-pr-tier1 | process | - | buildwarden/buildwarden | - | 1 design | x1-design (cloud, leased to cloud/20261123T232256Z-2) | - | - | 1 / 4 |
-| 5 | relay-conformance-timeout | fix (follows seam-specs) | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay | 2 plan | f2-plan (cloud, leased to cloud/20261123T232256Z-3) | - | - | 4 / 8 |
+| 1 | relay-conformance-timeout | fix (follows seam-specs) | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay | 3 implement | f3-implement (cloud) | - | - | 4 / 8 |
+| 2 | wf-gate-rest | process | - | buildwarden/buildwarden | - | 1 design | x1-design (cloud, leased to cloud/20261123T232256Z) | - | - | 8 / 5 |
+| 3 | sync-pr-tier1 | process | - | buildwarden/buildwarden | - | 1 design | x1-design (cloud, leased to cloud/20261123T232256Z-2) | - | - | 1 / 4 |
 | 6 | finch-version-starts-vm | fix (follows driver-contract) | - | buildwarden/buildwarden | undeclared | 1 design | f1-design (cloud, leased to cloud/20261123T232256Z-4) | - | - | 2 / 8 |
 | 7 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 8 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
@@ -131,8 +131,8 @@ Open features that are not disjoint. Process items are outside the relations (FL
 
 | Pri | Item | Kind | Repositories | Areas | Est. steps |
 |---|---|---|---|---|---|
-| 3 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
-| 4 | program-land | process | buildwarden/buildwarden | - | 5 |
+| 4 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
+| 5 | program-land | process | buildwarden/buildwarden | - | 5 |
 | 11 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
 | 12 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
 | 13 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |

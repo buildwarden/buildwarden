@@ -1,6 +1,6 @@
 feature: wf-gate-rest
 title: The loop's merge gate reads pull requests over REST, so the cloud can pass it; and wf's built binary leaves the repository
-priority: 1
+priority: 2
 kind: process
 status: in_progress
 round: process

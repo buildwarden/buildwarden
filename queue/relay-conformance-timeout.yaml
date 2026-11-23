@@ -1,11 +1,11 @@
 feature: relay-conformance-timeout
 title: Relay conformance runs fail intermittently on a relay connection timeout
-priority: 5
+priority: 1
 follows: seam-specs
 trunk: main
 status: in_progress
 round: feature
-phase: 2
+phase: 3
 design: docs/design/relay-conformance-timeout.md
 branch: feat/relay-conformance-timeout
 repos:
@@ -46,12 +46,19 @@ steps:
   - id: f2-plan
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f2-design-review
     lease:
-      claimed_by: cloud/20261123T232256Z-3
-      expires: 2026-11-24T01:24:19.227232217Z
+      claimed_by: ""
+      expires: null
+  - id: f3-implement
+    phase: 3
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -169,3 +176,12 @@ history:
   - at: 2026-11-23T23:24:19Z
     by: cloud/20261123T232256Z-3
     event: claimed f2-plan until 2026-11-24T01:24:19Z
+  - at: 2026-11-23T23:40:00Z
+    by: cloud/20261123T232256Z-3
+    event: 'plan at ac1b3c6 (buildwarden; buildwarden-specs unchanged at 70457f1): 14 tasks, from r1 at e0a1b27; task 1 merges specs main (ab9303c, #6) into the specs branch before the v0.2.1 entry; no rework, no rule change, no native step; wf check ok'
+  - at: 2026-11-23T23:27:54Z
+    by: cloud/20261123T232256Z-3
+    event: done f2-plan
+  - at: 2026-11-23T23:27:54Z
+    by: cloud/20261123T232256Z-3
+    event: entered phase 3 (implement)
