@@ -416,20 +416,87 @@ check.
 
 ## Implementation plan
 
-1. `buildwarden-specs`: `netstack.Capture` sets TIME-WAIT 0; the fixed-port
-   test (GLOBAL-06, TEST-04, GUEST-6).
-2. `buildwarden-specs`: the oci launcher's bounds, phases and message; its
-   fake-runtime test (TEST-04, GLOBAL-11, D2).
-3. `buildwarden-specs`: `conformance/CHANGELOG.md` v0.2.1 and `go.work`;
-   `make check`; push and open its pull request to `main`.
-4. `buildwarden`: `NewFDIngress` sets TIME-WAIT 0; the fixed-port test
-   (GLOBAL-06, RELAY-04, TEST-04); `make test`, `make lint` (Linux and
-   darwin, since `ingress_fd.go` is `unix`), `make conformance` for the
-   relay targets as root where the session allows it.
-5. The repeated in-process runs of the Validation plan with the committed
-   change, their counts recorded in the pull requests (FLOW-06 on a failure).
-6. Publish: Consolidation, Archive summary, both pull requests (no
-   `merge_first`).
+From the design as approved in r1 at e0a1b27. Tasks 1 to 8 are in
+`buildwarden/buildwarden-specs` on `feat/relay-conformance-timeout`, whose
+trunk is its `main`; tasks 9 to 12 in this repository; 13 and 14 span both.
+There is no rework of already-implemented code (nothing of this item is
+implemented yet), no approved rule change (`rule_changes: []`), and no
+later-phase native step (`native_validation: []`).
+
+1. `buildwarden-specs`: merge its `main` (ab9303c, with #6) into the branch
+   before any change, so that `conformance/CHANGELOG.md`'s head is v0.2.0 and
+   `go.work`'s `replace` names v0.2.0 when task 7 raises them; a merge, no
+   rebase or force-push (LOOP-04, FLOW-17).
+2. `buildwarden-specs`, `conformance/netstack/netstack.go`, `Stack.Capture`:
+   set `tcpip.TCPTimeWaitTimeoutOption(0)` on the stack's TCP protocol, with a
+   comment saying why (D1); a stack that only dials keeps gVisor's default;
+   no flag or setting (GLOBAL-06, GLOBAL-09, GLOBAL-11, TEST-05; GUEST-6).
+3. `buildwarden-specs`, tier 0 (TEST-02), `conformance/netstack/netstack_test.go`:
+   the fixed-port reconnection test of the Validation plan: a client stack on
+   the frame link connects from one fixed source port to a capturing stack
+   whose handler closes first, then connects again from that port, and the
+   second connection must complete; wall-clock only as the failure bound.
+   Run it once against today's `Capture` to see it fail at its bound, and
+   with task 2 to see it pass in milliseconds (TEST-01, TEST-04).
+4. `buildwarden-specs`, `conformance/launch/relay.go`, `containerPID`: bound
+   the wait for the container to be running by `CommandLimit` (60 s), not
+   `sandbox.StartLimit`; its failure says that the runtime did not start the
+   container and that the relay under test was never running; keep the
+   `StartPoll` (20 ms) interval, each `inspect` call bounded by what is left
+   of the wait. The relay's own bound, `StartLimit` from the container
+   running in `sb.WaitListening`, is unchanged. No retry (D2; TEST-04,
+   GLOBAL-10, GLOBAL-11).
+5. `buildwarden-specs`, `conformance/launch/relay.go`, `startOCI`: record each
+   oci start's phases (when `docker run` started, when `inspect` first
+   returned the container, when it had a process, when the claim endpoint
+   answered); a failed start prints them with the runtime's `inspect` state
+   (D2; GLOBAL-11, TEST-04).
+6. `buildwarden-specs`, tier 0 (TEST-02), `conformance/launch/relay_test.go`:
+   drive `containerPID` with a fake runtime (a script that answers `inspect`
+   after a delay) to check the bound it uses and the message and phases a
+   failure prints; deterministic, no real runtime (TEST-01, TEST-04).
+7. `buildwarden-specs`: a `## v0.2.1` entry at the head of
+   `conformance/CHANGELOG.md`, above v0.2.0, naming task 2 and tasks 4 to 5,
+   and `go.work`'s `replace` raised to v0.2.1, as its README requires; no
+   specification directory, version or `CHANGELOG.md` changes, and no tag is
+   pushed: `conformance/v0.2.1` is Jeff's (D3, D4; LOOP-07, FLOW-20).
+8. `buildwarden-specs`: `make check` green, `TestAgainstTheHarness` for every
+   specification included (its LOOP-08 invariants); commit and push the
+   branch (LOOP-01, FLOW-17).
+9. `buildwarden`, `cmd/relay/ingress_fd.go`, `NewFDIngress`: after
+   `stack.New`, set `tcpip.TCPTimeWaitTimeoutOption(0)` on the TCP protocol
+   with a comment saying why (D1), and fail the ingress's construction if the
+   option is refused. Host mode only: the container and vm modes are not
+   touched; no flag, config key, claim field or output (GLOBAL-06, GLOBAL-09,
+   GLOBAL-11, RELAY-04, ORCH-01).
+10. `buildwarden`, tier 0 (TEST-02), `cmd/relay/ingress_fd_test.go`: connect
+    twice from one fixed source port over a socket pair through
+    `NewFDIngress`, the handler closing first, the client a small gVisor
+    stack in the test; the second connection must complete. Run it once
+    without task 9 to see it fail at its bound, and with it to see it pass in
+    milliseconds (TEST-01, TEST-04).
+11. `buildwarden`: no reference doc or `overview.md` change is owed, since no
+    user-facing surface and no component's flow changes; and no pin moves,
+    `tools/conformance/*/go.mod` untouched (D4). Check the branch's diff
+    against `main` holds only `cmd/relay/` and this design (UX-01, FLOW-15,
+    LOOP-07, FLOW-02).
+12. `buildwarden`: `make test`, `make lint` and `GOOS=darwin make lint`
+    (`ingress_fd.go` is `unix`); `make conformance` for the relay targets
+    (tier 1, TEST-02) as root where the session allows it, else left to the
+    pull request's `conformance.yml`; commit and push (LOOP-01, TEST-01,
+    FLOW-17).
+13. Both: the repeated in-process runs of the Validation plan with the
+    committed change, against the harness's in-process host relay: the
+    GUEST-46 host case 300 times and the GUEST-34 cwd case 3000 times, in a
+    throwaway loop not committed; the counts recorded in both pull requests.
+    Any failure with D1 in place returns the item to Design with that
+    finding (TEST-04, FLOW-06).
+14. Publish: Consolidation and Archive summary (naming D5's
+    `tools/vz-image-prep/netfwd.go` and D3's offered fixed-source-port suite
+    case); both pull requests, `buildwarden-specs`'s to its `main` and this
+    one's to `main`, with no `merge_first`; tier 1 green on each:
+    `conformance.yml`'s `relay` job, every target, and `buildwarden-specs`'s
+    `ci` (FLOW-08, FLOW-10, FLOW-11, FLOW-12, FLOW-15).
 
 ## Design review
 
