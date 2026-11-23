@@ -393,7 +393,8 @@ func secondRepos(t *testing.T, repo string, git func(...string),
 		t.Fatal(err)
 	}
 	body := "#!/bin/sh\necho n-x\n"
-	if err := os.WriteFile(filepath.Join(far, "tools", "x.sh"), []byte(body), 0o755); err != nil {
+	err := os.WriteFile(filepath.Join(far, "tools", "x.sh"), []byte(body), 0o755)
+	if err != nil {
 		t.Fatal(err)
 	}
 	git("-C", far, "add", "tools")
@@ -490,7 +491,8 @@ func TestNoPipeIntoGrepQ(t *testing.T) {
 		}
 		for i, line := range strings.Split(string(raw), "\n") {
 			if shape.MatchString(line) {
-				t.Errorf("%s:%d pipes into grep -q: %s", f, i+1, strings.TrimSpace(line))
+				t.Errorf("%s:%d pipes into grep -q: %s", f, i+1,
+					strings.TrimSpace(line))
 			}
 		}
 	}

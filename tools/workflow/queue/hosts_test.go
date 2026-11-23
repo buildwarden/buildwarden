@@ -170,14 +170,15 @@ func TestFingerprintProgramTrunk(t *testing.T) {
 	}
 	g, err := s.Gate(mac, repo, stamp, 7, now.Add(time.Hour))
 	if err != nil || !g.Run ||
-		!strings.Contains(g.Reasons[0], "a trunk, a program trunk or a waiting branch moved") {
+		!strings.Contains(g.Reasons[0], "a program trunk or a waiting branch moved") {
 		t.Fatalf("gate after a program-trunk move = %+v, %v; want a sweep", g, err)
 	}
 	// o/relay is not listed: its program trunk's move changes nothing.
 	git(clone, "commit", "-q", "--allow-empty", "-m", "two")
 	git(clone, "update-ref", "refs/remotes/origin/program/p", "HEAD")
 	if again, _ := s.fingerprint(mac, repo); again != after {
-		t.Error("the fingerprint changed when an unlisted repository's program trunk moved")
+		t.Error("the fingerprint changed when an unlisted repository's program " +
+			"trunk moved")
 	}
 	// Once listed, it counts.
 	mac.Repositories = []string{"o/here", "o/relay"}
@@ -185,7 +186,8 @@ func TestFingerprintProgramTrunk(t *testing.T) {
 	git(clone, "commit", "-q", "--allow-empty", "-m", "three")
 	git(clone, "update-ref", "refs/remotes/origin/program/p", "HEAD")
 	if moved, _ := s.fingerprint(mac, repo); moved == listed {
-		t.Error("the fingerprint did not change when a listed repository's program trunk moved")
+		t.Error("the fingerprint did not change when a listed repository's " +
+			"program trunk moved")
 	}
 }
 
