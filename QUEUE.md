@@ -38,6 +38,7 @@ None.
 ## Decided for you
 
 - sync buildwarden/buildwarden sync/program-168cf9503d4b at `caf7a53`: sync/program-168cf9503d4b pushed at caf7a536078f: a clean merge (cloud/20261123T105717Z, 2026-11-23)
+- merge buildwarden/buildwarden #140 at `5b0a000`: Jeff merged the program sync PR #140 (main 168cf95 into program/componentization) himself, as 5b0a000, after labeling no-design on his word; the loop's gate (wf check -sync) could not run in the cloud (GraphQL 403, wf-gate-rest) (human/jeff, 2026-11-23)
 
 ## Active
 
@@ -53,7 +54,7 @@ None.
 
 | Machine | Host names | Last run | Leads | Holds |
 |---|---|---|---|---|
-| macbook | macos-vz, macos-qemu, macos-finch, qemu-any, container-any, macos-any | failed, 2026-11-23 12:40: session left uncommitted workflow changes | - | - |
+| macbook | macos-vz, macos-qemu, macos-finch, qemu-any, container-any, macos-any | worked, 2026-11-23 22:07: claude exited 0 | - | - |
 | windows-desktop | windows-hyperv, container-any, linux-kvm, windows-any | worked, 2026-11-22 11:10: claude exited 0; skipped windows-hyperv (native.prepare failed) | - | - |
 
 ## Relations
