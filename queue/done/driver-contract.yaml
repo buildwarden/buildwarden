@@ -1,8 +1,8 @@
 feature: driver-contract
 title: 'The driver command contract, its suite and the kit: warden runs a driver binary, the container driver is one, and every build runs through warden''s build sequence (componentization K1)'
-priority: 2
 program: true
-status: in_progress
+trunk: program/componentization
+status: done
 round: feature
 phase: 8
 design: docs/design/driver-contract.md
@@ -306,10 +306,10 @@ steps:
   - id: f8-close
     phase: 8
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261122T180143Z
-      expires: 2026-11-23T02:37:22.192436836Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -1105,3 +1105,12 @@ history:
   - at: 2026-11-23T00:37:22Z
     by: cloud/20261122T180143Z
     event: claimed f8-close until 2026-11-23T02:37:22Z
+  - at: 2026-11-23T00:37:25Z
+    by: cloud/20261122T180143Z
+    event: done f8-close
+  - at: 2026-11-23T00:37:25Z
+    by: cloud/20261122T180143Z
+    event: closed; feature done
+  - at: 2026-11-23T00:37:25Z
+    by: cloud/20261122T180143Z
+    event: 'trunk in buildwarden/buildwarden: program/componentization (FLOW-20)'

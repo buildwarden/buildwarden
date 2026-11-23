@@ -1,6 +1,6 @@
 feature: specs-prerelease-tags
 title: The specifications repository's release workflow accepts program-trunk pre-release tags and publishes them with --prerelease (program-north-star Decision 16, a17)
-priority: 9
+priority: 8
 status: queued
 round: tracked
 phase: 1
