@@ -38,7 +38,7 @@ None.
 
 ## Decided for you
 
-Nothing in the last 7 days. Call any back with a blocking question or a follow-up item (FLOW-20).
+- sync buildwarden/buildwarden sync/program-168cf9503d4b at `caf7a53`: sync/program-168cf9503d4b pushed at caf7a536078f: a clean merge (cloud/20261123T105717Z, 2026-11-23)
 
 ## Active
 
