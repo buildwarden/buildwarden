@@ -372,8 +372,8 @@ func (s *State) Gate(m *Machine, repo string, last *GateStamp, sweepDays int,
 		g.Reasons = append(g.Reasons, "gaps\tfirst sweep\t"+strings.Join(open, ","))
 	case last.Print != print:
 		g.Run = true
-		g.Reasons = append(g.Reasons, "gaps\tmain or a waiting branch moved\t"+
-			strings.Join(open, ","))
+		g.Reasons = append(g.Reasons, "gaps\ta trunk, a program trunk or a waiting "+
+			"branch moved\t"+strings.Join(open, ","))
 	case sweepDays > 0 && now.Sub(last.At) >= time.Duration(sweepDays)*24*time.Hour:
 		g.Run = true
 		g.Reasons = append(g.Reasons, fmt.Sprintf("gaps\tno sweep in %d days\t%s",
@@ -404,11 +404,12 @@ func (s *State) unheld(m *Machine, g *Gate) map[string]bool {
 	return serves
 }
 
-// fingerprint hashes, for each repository the machine lists, its trunk and
-// the branch there of every in-progress feature that works in it, as last
-// fetched: the queue's own in repo, the machine's dedicated checkout, and
-// each other in its clone at repo/.dev/checkouts/<owner>/<name> (a14 of
-// docs/design/loop-repository.md). A repository with no entry is an error.
+// fingerprint hashes, for each repository the machine lists, its trunk, its
+// program trunk when config.yaml records one (FLOW-20), and the branch there
+// of every in-progress feature that works in it, as last fetched: the
+// queue's own in repo, the machine's dedicated checkout, and each other in
+// its clone at repo/.dev/checkouts/<owner>/<name>. An absent ref hashes as
+// absent. A repository with no entry is an error.
 func (s *State) fingerprint(m *Machine, repo string) (string, error) {
 	h := sha256.New()
 	for _, name := range s.Lists(m) {
@@ -428,13 +429,17 @@ func (s *State) fingerprint(m *Machine, repo string) (string, error) {
 			label = name + " "
 		}
 		refs := []string{"refs/remotes/origin/" + trunk}
+		if pt := s.Config.ProgramTrunkOf(name); pt != "" {
+			refs = append(refs, "refs/remotes/origin/"+pt)
+		}
+		fixed := len(refs)
 		for _, f := range s.Features {
 			if f.Status == "in_progress" && f.Branch != "" &&
 				slices.Contains(s.ReposOf(f), name) {
 				refs = append(refs, "refs/remotes/origin/"+f.Branch)
 			}
 		}
-		sort.Strings(refs[1:])
+		sort.Strings(refs[fixed:])
 		for _, r := range refs {
 			out, err := exec.Command("git", "-C", dir, "rev-parse", "-q", "--verify",
 				r+"^{commit}").Output()
