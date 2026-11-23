@@ -2,7 +2,7 @@ feature: finch-version-starts-vm
 title: The container runtime check reports a stopped finch VM that its own query is starting
 priority: 6
 follows: driver-contract
-status: queued
+status: in_progress
 round: feature
 phase: 0
 design: docs/design/finch-version-starts-vm.md
@@ -15,15 +15,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261123T232256Z-4
+      expires: 2026-11-24T01:24:22.46234562Z
 budget:
   estimate:
     runs: 1
     steps: 8
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-11-23T22:15:02Z
@@ -32,3 +32,9 @@ history:
   - at: 2026-11-23T22:15:02Z
     by: host:macos-finch/macbook.20261123T220740Z
     event: 'repos and areas taken from driver-contract: it has none'
+  - at: 2026-11-23T23:24:22Z
+    by: cloud/20261123T232256Z-4
+    event: started (FLOW-05)
+  - at: 2026-11-23T23:24:22Z
+    by: cloud/20261123T232256Z-4
+    event: claimed f0-branch-setup until 2026-11-24T01:24:22Z

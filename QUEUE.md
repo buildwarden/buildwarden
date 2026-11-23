@@ -47,6 +47,7 @@ None.
 | 1 | wf-gate-rest | process | - | buildwarden/buildwarden | - | 1 design | x1-design (cloud, leased to cloud/20261123T232256Z) | - | - | 8 / 5 |
 | 2 | sync-pr-tier1 | process | - | buildwarden/buildwarden | - | 1 design | x1-design (cloud, leased to cloud/20261123T232256Z-2) | - | - | 1 / 4 |
 | 5 | relay-conformance-timeout | fix (follows seam-specs) | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay | 2 plan | f2-plan (cloud, leased to cloud/20261123T232256Z-3) | - | - | 4 / 8 |
+| 6 | finch-version-starts-vm | fix (follows driver-contract) | - | buildwarden/buildwarden | undeclared | 0 branch-setup | f0-branch-setup (cloud, leased to cloud/20261123T232256Z-4) | - | - | 1 / 8 |
 | 7 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 8 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
 | 9 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 2 / 9 |
@@ -132,7 +133,6 @@ Open features that are not disjoint. Process items are outside the relations (FL
 |---|---|---|---|---|---|
 | 3 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
 | 4 | program-land | process | buildwarden/buildwarden | - | 5 |
-| 6 | finch-version-starts-vm | fix (follows driver-contract) | buildwarden/buildwarden | undeclared | 8 |
 | 11 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
 | 12 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
 | 13 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
