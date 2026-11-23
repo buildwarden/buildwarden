@@ -4,7 +4,7 @@ priority: 1
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/native-loop-fixes.md
 branch: feat/native-loop-fixes
 areas:
@@ -14,6 +14,10 @@ declared: a5aed35
 alters_relationships: null
 design_review: required
 source: 'Jeff, 2026-11-23 attended macbook session (a readiness survey of the Mac native loop for the componentization program). One consolidated bugfix, at Jeff''s word, to keep churn low: a meta-item on the loop''s own health, so its design stays lean (one design document, one PR; no case-by-case rounds). (1) Unattended -p sessions ended their turn waiting on run_in_background builds and exited with them still running (runs 20261120T125213Z, 600 s background-wait ceiling, and 20261123T124004Z), losing the night''s evidence to a leftover; the skill forbids only asking a question and waiting. (2) native-tick.sh moves gate-macbook.json past such a run (rc 0) and hands the leftover to no later session. (3) workflow-native Branch setup forks from origin/main, where a program item''s branch forks from `wf trunk`. (4) The second-repository procedure has no Branch setup form and no form for a worktree kept from an earlier night (worktree add fails; reuse with merge --ff-only). (5) native-run.sh refuses .scratch/<owner>/<repo>/<item>/{tools,dist} paths and go -C into them. (6) The gate fingerprint (queue/hosts.go) hashes only each repository''s trunk, never its program_trunk, so a program-trunk move wakes no native machine. (7) Cleanup''s branch -d tests a program item''s branch against main once its remote branch is gone, leaving a FLOW-16 leftover note every night; detached validation worktrees and non-worktree .scratch directories are neither removed nor named. (8) native-tick.sh''s PATH lacks the rustup proxies (/opt/homebrew/opt/rustup/bin, ~/.cargo/bin) the relay needs; linked into ~/.local/bin on the macbook as a stopgap. (9) `entire status` reports the Claude Code hooks in .claude/settings.json out of date. (10) `pmset -g ... | grep -q` under pipefail exits 141 (install-macos.sh:135 falsely warns of no scheduled wake; native-tick.sh:286''s AC-power check can falsely skip a run). (11) loop-profile.yaml has no native.check for the macbook hosts (finch VM running, qemu present, warden signed with the virtualization entitlement) and wf native -check does not check the clones'' Entire git hooks. Not included: an allow rule for cargo (a scratch Makefile covers relay steps; a new permission is reserved to Jeff under FLOW-20).'
+pr:
+  number: 141
+  ci: green
+  head: 1b2a17e1878bcb3d87df9e4b43d8ae719e4f52bc
 steps:
   - id: x1-design
     phase: 1
@@ -32,12 +36,19 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - x2-design-review
     lease:
-      claimed_by: cloud/20261123T195428Z
-      expires: 2026-11-23T22:29:31.123145594Z
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -153,3 +164,9 @@ history:
   - at: 2026-11-23T20:29:31Z
     by: cloud/20261123T195428Z
     event: claimed x2-implement until 2026-11-23T22:29:31Z
+  - at: 2026-11-23T21:46:17Z
+    by: cloud/20261123T195428Z
+    event: done x2-implement
+  - at: 2026-11-23T21:46:17Z
+    by: cloud/20261123T195428Z
+    event: entered phase 3 (merge)
