@@ -2,9 +2,10 @@ feature: finch-version-starts-vm
 title: The container runtime check reports a stopped finch VM that its own query is starting
 priority: 6
 follows: driver-contract
+trunk: main
 status: in_progress
 round: feature
-phase: 0
+phase: 1
 design: docs/design/finch-version-starts-vm.md
 branch: feat/finch-version-starts-vm
 alters_relationships: null
@@ -13,10 +14,17 @@ steps:
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261123T232256Z-4
-      expires: 2026-11-24T01:24:22.46234562Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -38,3 +46,12 @@ history:
   - at: 2026-11-23T23:24:22Z
     by: cloud/20261123T232256Z-4
     event: claimed f0-branch-setup until 2026-11-24T01:24:22Z
+  - at: 2026-11-23T23:26:11Z
+    by: cloud/20261123T232256Z-4
+    event: done f0-branch-setup
+  - at: 2026-11-23T23:26:11Z
+    by: cloud/20261123T232256Z-4
+    event: entered phase 1 (design)
+  - at: 2026-11-23T23:26:11Z
+    by: cloud/20261123T232256Z-4
+    event: 'trunk in buildwarden/buildwarden: main (FLOW-20)'
