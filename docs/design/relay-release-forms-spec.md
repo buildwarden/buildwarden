@@ -487,9 +487,11 @@ has not adopted the Loop Contract (no profile, LOOP-08), so the fast gate
 and the reference-document checks do not run there (FLOW-03); its CI
 (`make check`) does, and its conventions in `README.md` are the invariants
 the change keeps (LOOP-04, LOOP-08). It has no area map, so FLOW-05 treats
-it as one exclusive area: this item collides there with
-`relay-conformance-timeout` and `relay-collector-failure-fails-open`, both
-in progress with that repository, and the queue orders them.
+it as one exclusive area: at this design's declaration the queue shows it
+colliding there with `specs-prerelease-tags` (a tracked item, which neither
+holds nor waits). `relay-conformance-timeout` works in that repository
+against its `main`, not the program trunk, and also changes the harness
+(below).
 
 In `buildwarden-specs`:
 
