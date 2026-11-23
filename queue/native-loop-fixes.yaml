@@ -25,7 +25,7 @@ steps:
   - id: x2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -44,60 +44,66 @@ budget:
     steps: 6
   spent:
     runs: 1
-    steps: 1
+    steps: 2
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: 'How an unattended session waits on a case longer than the Bash tool''s 10-minute ceiling (design: Questions a1; Design 1). Proceeding with (A): a command that fits the ceiling runs in the foreground; a longer one runs in the background and the session waits for it in repeated bounded waits until it exits, or stops it and records the case as not run, before writing its digest. If the wait tool it needs is one settings.native.json does not allow, that is an allowlist gap under Blocked on Jeff, and this item adds no permission; the wrapper''s digest check (Design 2) is the backstop either way.'
     options:
       - '(A) as stated: foreground when it fits, otherwise background with bounded waits, or stopped and recorded as not run'
       - (B) foreground only, long cases split into scratch Makefile targets each under 10 minutes; multi-hour installs cannot split
       - '(C) the wrapper runs long cases itself: a second driver of validation outside the skill'
     recommended: (A) foreground when it fits, otherwise wait in bounded waits or stop and record
+    answer: '(A), the recommendation (Jeff, 2026-11-23 design review r1: the assumptions read reasonable; re-evaluate later if found incorrect)'
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Flagged: FLOW-16 is a rule FLOW-20 reserves to Jeff (pushing). Whether a program item''s local branch on a native machine is contained in trunk when its program trunk contains it (design: Questions a2; Design 7). Proceeding with (A): yes, by FLOW-20, which makes the program trunk the item''s trunk for its merge; no FLOW-16 wording change; the wrapper sets the branch''s upstream to origin/<wf trunk> and runs git branch -d, git''s safe form.'
     options:
       - '(A) as stated: contained in its program trunk, by FLOW-20; no wording change'
       - '(B) amend FLOW-16 to say its trunk (for a program item, its program trunk, FLOW-20): a second rule change in this review'
       - (C) keep testing against main, with the nightly leftover note
     recommended: (A) contained in its program trunk, by FLOW-20, no wording change
+    answer: '(A), the recommendation (Jeff, 2026-11-23 design review r1: the assumptions read reasonable; re-evaluate later if found incorrect)'
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Flagged: it widens the shapes the unattended launcher native-run.sh accepts (design: Questions a3; Design 5). Proceeding with (A): accept .scratch/<owner>/<repo>/<item>/tools/<path>, .scratch/<owner>/<repo>/<item>/dist/warden* and go -C .scratch/<owner>/<repo>/<item> test, only where <owner>/<repo> has a clone at .dev/checkouts/<owner>/<repo> and the worktree''s common directory is that clone''s; the tracked-file, no . or .. and not-tools/workflow/ checks stay; no allow rule changes.'
     options:
       - '(A) as stated: second-repository worktrees under the same checks'
       - (B) scratch Makefiles only, each an allowlist gap for Jeff
       - (C) a separate launcher for second repositories
     recommended: (A) second-repository worktrees under the same checks
+    answer: '(A), the recommendation (Jeff, 2026-11-23 design review r1: the assumptions read reasonable; re-evaluate later if found incorrect)'
   - id: a4
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Non-worktree directories under .scratch/ (design: Questions a4; Design 7; Defaults and overrides). Proceeding with (A): each is named in the leftovers, and one unchanged for BW_SCRATCH_DAYS (default 7) is removed; the listed repositories'' <owner> directories and .scratch/leftover/ are excluded.'
     options:
       - (A) named, and removed after BW_SCRATCH_DAYS (default 7)
       - '(B) named only: the nightly note Jeff found'
       - '(C) removed at the next run: a crashed session''s scratch logs go before anyone reads them'
     recommended: (A) named, and removed after 7 days
+    answer: '(A), the recommendation (Jeff, 2026-11-23 design review r1: the assumptions read reasonable; re-evaluate later if found incorrect)'
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Native validation tracked, not blocking (design: Questions a5; Validation plan). Proceeding with (A): macos-any and windows-any tracked, with backlog entries native-loop-fixes-macbook and native-loop-fixes-windows for the first scheduled runs after the merge, as native-loop-followups and native-refresh-scoped did.'
     options:
       - '(A) tracked: the first scheduled runs after the merge'
       - (B) a blocking f6-validate-macos-any step run attended from a branch worktree; the wrapper resets its own checkout to main, so only the install check, wf native -check, the launcher and the gate could run from the branch
     recommended: (A) tracked
+    answer: '(A), the recommendation (Jeff, 2026-11-23 design review r1: the assumptions read reasonable; re-evaluate later if found incorrect)'
   - id: a6
     kind: assumed
-    status: open
+    status: confirmed
     question: 'A missing Entire git hook in the dedicated checkout or a clone fails wf native -check (design: Questions a6; Design 11). Proceeding with (A): FAIL, naming entire enable in that directory, since a commit there without the hooks is not linked to its session (FLOW-18).'
     options:
       - (A) FAIL
       - (B) warn
     recommended: (A) FAIL
+    answer: '(A), the recommendation (Jeff, 2026-11-23 design review r1: the assumptions read reasonable; re-evaluate later if found incorrect)'
 history:
   - at: 2026-11-23T19:44:39Z
     by: human/jeff
@@ -120,3 +126,27 @@ history:
   - at: 2026-11-23T20:05:02Z
     by: cloud/20261123T195428Z
     event: entered phase 2 (implement)
+  - at: 2026-11-23T20:29:10Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: (A), the recommendation (Jeff, 2026-11-23 design review r1: the assumptions read reasonable; re-evaluate later if found incorrect)'
+  - at: 2026-11-23T20:29:10Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: (A), the recommendation (Jeff, 2026-11-23 design review r1: the assumptions read reasonable; re-evaluate later if found incorrect)'
+  - at: 2026-11-23T20:29:10Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: (A), the recommendation (Jeff, 2026-11-23 design review r1: the assumptions read reasonable; re-evaluate later if found incorrect)'
+  - at: 2026-11-23T20:29:10Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: (A), the recommendation (Jeff, 2026-11-23 design review r1: the assumptions read reasonable; re-evaluate later if found incorrect)'
+  - at: 2026-11-23T20:29:10Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: (A), the recommendation (Jeff, 2026-11-23 design review r1: the assumptions read reasonable; re-evaluate later if found incorrect)'
+  - at: 2026-11-23T20:29:10Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: (A), the recommendation (Jeff, 2026-11-23 design review r1: the assumptions read reasonable; re-evaluate later if found incorrect)'
+  - at: 2026-11-23T20:29:21Z
+    by: human/jeff
+    event: claimed x2-design-review until 2026-11-23T22:29:21Z
+  - at: 2026-11-23T20:29:21Z
+    by: human/jeff
+    event: done x2-design-review
