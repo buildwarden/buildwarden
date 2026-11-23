@@ -1,9 +1,9 @@
 feature: specs-prerelease-tags
 title: The specifications repository's release workflow accepts program-trunk pre-release tags and publishes them with --prerelease (program-north-star Decision 16, a17)
 priority: 8
-status: queued
+status: in_progress
 round: tracked
-phase: 1
+phase: 2
 design: docs/design/specs-prerelease-tags.md
 branch: feat/specs-prerelease-tags
 repos:
@@ -13,6 +13,13 @@ source: 'Filed by program-north-star''s state step (x4-state, item 5) on Jeff''s
 steps:
   - id: t1-work
     phase: 1
+    affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: t2-merge
+    phase: 2
     affinity: human
     status: pending
     lease:
@@ -24,9 +31,21 @@ budget:
     steps: 2
   spent:
     runs: 0
-    steps: 0
+    steps: 1
 questions: []
 history:
   - at: 2026-11-22T23:39:52Z
     by: human/jeff
     event: queued at position 10 (asked 1)
+  - at: 2026-11-23T22:09:43Z
+    by: human/jeff
+    event: started (FLOW-05)
+  - at: 2026-11-23T22:09:43Z
+    by: human/jeff
+    event: claimed t1-work until 2026-11-24T00:09:43Z
+  - at: 2026-11-23T22:09:43Z
+    by: human/jeff
+    event: done t1-work
+  - at: 2026-11-23T22:09:43Z
+    by: human/jeff
+    event: entered phase 2 (merge)
