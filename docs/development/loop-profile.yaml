@@ -34,3 +34,7 @@ native:
     windows-hyperv: [[tools/relay-vm/hyperv/refresh-cache.sh]]
   check:                        # run by the install script (LOOP-05)
     windows-hyperv: [[tools/relay-vm/hyperv/refresh-cache.sh, --check]]
+    macos-finch: [[sh, -c, "finch vm status | grep -qx Running"]]
+    macos-qemu: [[qemu-system-aarch64, --version]]
+    qemu-any: [[qemu-system-aarch64, --version]]
+    macos-vz: [[sh, -c, "codesign -d --entitlements - dist/warden 2>&1 | grep -q com.apple.security.virtualization"]]
