@@ -55,7 +55,7 @@ None.
 
 | Machine | Host names | Last run | Leads | Holds |
 |---|---|---|---|---|
-| macbook | macos-vz, macos-qemu, macos-finch, qemu-any, container-any, macos-any | worked, 2026-11-22 12:40 (since 2026-11-20): claude exited 0 | - | - |
+| macbook | macos-vz, macos-qemu, macos-finch, qemu-any, container-any, macos-any | failed, 2026-11-23 12:40: session left uncommitted workflow changes | - | - |
 | windows-desktop | windows-hyperv, container-any, linux-kvm, windows-any | worked, 2026-11-22 11:10: claude exited 0; skipped windows-hyperv (native.prepare failed) | - | - |
 
 ## Relations

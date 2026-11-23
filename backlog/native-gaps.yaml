@@ -968,7 +968,7 @@ gaps:
       feat/project-config-trust once it is implemented. prebuilt-artifacts removes the tree lookup
       afterwards and restates this entry.
   - id: prebuilt-artifacts-windows
-    host: container-any
+    host: windows-any
     status: open
     what: >-
       On the Windows desktop with a real container runtime: go test ./driver/... ./cmd/warden; make build
@@ -1042,6 +1042,8 @@ gaps:
       2026-11-22 (host:container-any/windows-desktop.20261122T231002Z, unattended, main fa1dc64): not run.
       main moved (#134 to #136; driver-contract merged as #135), but feat/prebuilt-artifacts is still
       49b513a (design only), under the FLOW-20 hold.
+      2026-11-23 (Jeff's request, macbook.attended-20261123T160000Z): host container-any -> windows-any; the
+      case runs only on the Windows desktop, and container-any woke the macbook's gate for it every night.
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: open
@@ -1106,7 +1108,7 @@ gaps:
       prepare past Claude Code's 600 s background-wait ceiling and exited uncommitted. Logs:
       native/macos-qemu/2026-11-20/dpwe-b4f86e2-*.
   - id: workdir-in-context-windows
-    host: container-any
+    host: windows-any
     status: open
     what: >-
       On the Windows desktop: go test ./cmd/warden ./driver/...; warden build --tmpdir .\tmp . and
@@ -1153,6 +1155,8 @@ gaps:
       2026-11-22 (host:container-any/windows-desktop.20261122T231002Z, unattended, main fa1dc64): not run.
       main moved (#134 to #136), but feat/workdir-in-context is still 24376c0 (design only), under the
       FLOW-20 hold.
+      2026-11-23 (Jeff's request, macbook.attended-20261123T160000Z): host container-any -> windows-any; the
+      case runs only on the Windows desktop, and container-any woke the macbook's gate for it every night.
   - id: workdir-in-context-macos
     host: macos-finch
     status: open
@@ -1220,7 +1224,7 @@ gaps:
       No .scratch/ directory or local feature branch on windows-desktop; nothing to clean.
   - id: config-lookup-test-symlinked-tmp-darwin
     host: qemu-any
-    status: open
+    status: done
     what: >-
       On the macbook (darwin/arm64), on feat/config-lookup-test-symlinked-tmp and then on main after its
       merge: go test -count=1 ./cmd/warden passes, TestConfigFileLookupOrder included, with t.TempDir
@@ -1243,6 +1247,12 @@ gaps:
       /private/var/folders/...), `warden doctor --driver container`'s first line is "config:
       /var/folders/.../warden.toml (found in the working directory)" (scratch Makefile .scratch/clt-case). Kept
       open for the main half, after PR #134 merges. Log: native/qemu-any/2026-11-22/config-lookup-branch.log.
+      2026-11-23 (host:qemu-any/macbook.20261123T124004Z, unattended, main 168cf950, go1.26.5; recorded by
+      macbook.attended-20261123T160000Z from the run's saved leftover, the session having exited before
+      committing): main half PASSES. TestConfigFileLookupOrder passes all five cases, `go test -count=1
+      ./cmd/warden` ok, and doctor in a mktemp dir under /var/folders prints "config:
+      /var/folders/.../warden.toml (found in the working directory)". Done. Log:
+      native/qemu-any/2026-11-23/config-lookup-main.log.
   - id: driver-contract-runtime-check-finch
     host: macos-finch
     status: open

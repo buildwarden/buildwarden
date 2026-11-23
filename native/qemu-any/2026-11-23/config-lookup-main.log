@@ -1,0 +1,21 @@
+host:qemu-any/macbook.20261123T124004Z, unattended, main 168cf950, go1.26.5 darwin/arm64, worktree .scratch/main
+
+$ go test -count=1 -v -run TestConfigFileLookupOrder ./cmd/warden
+--- PASS: TestConfigFileLookupOrder (0.01s)
+    --- PASS: TestConfigFileLookupOrder/the_flag_over_the_variable_and_./warden.toml (0.00s)
+    --- PASS: TestConfigFileLookupOrder/the_variable_over_./warden.toml (0.00s)
+    --- PASS: TestConfigFileLookupOrder/./warden.toml_when_nothing_names_a_file (0.00s)
+    --- PASS: TestConfigFileLookupOrder/an_empty_variable_is_not_set (0.00s)
+    --- PASS: TestConfigFileLookupOrder/no_file_at_all (0.00s)
+PASS
+ok  	github.com/buildwarden/buildwarden/cmd/warden	1.080s
+
+$ go test -count=1 ./cmd/warden
+ok  	github.com/buildwarden/buildwarden/cmd/warden	15.196s
+
+$ make -C .scratch/clt-case doctor-varfolders
+dir: /var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/clt-case.elpoD3
+realpath: /private/var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/clt-case.elpoD3
+config: /var/folders/4m/c4_8507d2_34mhx8_l_29f8w0000gn/T/clt-case.elpoD3/warden.toml (found in the working directory)
+container runtime: finch
+ok
