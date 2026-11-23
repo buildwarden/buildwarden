@@ -4,22 +4,40 @@ priority: 2
 kind: process
 status: in_progress
 round: process
-phase: 1
+phase: 2
 design: docs/design/wf-gate-rest.md
 branch: feat/wf-gate-rest
 areas:
   - loop
   - build
+declared: "6316252"
 alters_relationships: null
+design_review: required
 source: 'Jeff, 2026-11-23 attended human session: the program sync PR #140 could not pass wf check -sync in the cloud, because check/merge.go reads the PR with gh pr view (GraphQL), which returns 403 in Claude Code cloud sessions; REST gh api repos/<o>/<r>/pulls/<n> works. Every program-trunk merge (sync, f7-merge, f6-merged-<n>) is blocked on it in the cloud. Folded in on Jeff''s word: tools/workflow/cmd/wf/wf, the built binary main has tracked since #130, is removed and ignored, since a local go build overwrites it on any branch (native-loop-fixes'' implement had to restore it).'
 steps:
   - id: x1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-design-review
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261123T232256Z
-      expires: 2026-11-24T01:23:56.403322696Z
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - x2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -27,7 +45,23 @@ budget:
   spent:
     runs: 1
     steps: 8
-questions: []
+questions:
+  - id: q1
+    kind: assumed
+    status: open
+    question: 'Flagged: a decision about the merge gate, a rule FLOW-20 reserves to Jeff. The gate reads nothing new (design Decision 2): its nine points stay as they are, read over REST; GitHub''s merge refuses a closed, conflicting or moved PR (the sha parameter), and the agent then re-checks and stops. Proceeding with A.'
+    options:
+      - (A) keep the gate's points as they are, read over REST
+      - (B) add a point that the PR is open and mergeable, from the same REST response
+    recommended: (A) keep the gate's points as they are, read over REST
+  - id: q2
+    kind: assumed
+    status: open
+    question: 'Flagged: departs from loop-parallel''s earlier decision ("elsewhere gh pr ready --undo"). The draft and ready conversions name only the session''s ccr/convert_to_draft and ccr/ready_for_review routes, since every step that converts a PR is a cloud step (FLOW-04) and native settings deny gh api (design Decision 3). Proceeding with A.'
+    options:
+      - (A) the session routes only
+      - (B) keep gh pr ready / --undo for a non-cloud session
+    recommended: (A) the session routes only
 history:
   - at: 2026-11-23T22:11:34Z
     by: human/jeff
@@ -59,3 +93,12 @@ history:
   - at: 2026-11-23T23:23:56Z
     by: cloud/20261123T232256Z
     event: claimed x1-design until 2026-11-24T01:23:56Z
+  - at: 2026-11-23T23:30:24Z
+    by: cloud/20261123T232256Z
+    event: 'declared at 6316252: design_review unset -> required'
+  - at: 2026-11-23T23:30:52Z
+    by: cloud/20261123T232256Z
+    event: done x1-design
+  - at: 2026-11-23T23:30:52Z
+    by: cloud/20261123T232256Z
+    event: entered phase 2 (implement)
