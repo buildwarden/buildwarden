@@ -308,15 +308,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261122T180143Z
+      expires: 2026-11-23T02:37:22.192436836Z
 budget:
   estimate:
     runs: 5
     steps: 30
   spent:
     runs: 13
-    steps: 40
+    steps: 41
 questions:
   - id: a16
     kind: assumed
@@ -1102,3 +1102,6 @@ history:
   - at: 2026-11-22T23:39:04Z
     by: human/jeff
     event: 'program item (FLOW-20): program: true (program-north-star x4-state, on Jeff''s word)'
+  - at: 2026-11-23T00:37:22Z
+    by: cloud/20261122T180143Z
+    event: claimed f8-close until 2026-11-23T02:37:22Z

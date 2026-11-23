@@ -45,7 +45,7 @@ Nothing in the last 7 days. Call any back with a blocking question or a follow-u
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | config-lookup-test-symlinked-tmp | fix (follows project-config-trust) | - | buildwarden/buildwarden | cli, designs | 8 close | f8-close (cloud) | - | [#134](https://github.com/buildwarden/buildwarden/pull/134) | 10 / 7 |
-| 2 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 8 close | f8-close (cloud) | - | [#135](https://github.com/buildwarden/buildwarden/pull/135) | 40 / 30 |
+| 2 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 8 close | f8-close (cloud, leased to cloud/20261122T180143Z) | - | [#135](https://github.com/buildwarden/buildwarden/pull/135) | 41 / 30 |
 | 6 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 7 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
 | 8 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 2 / 9 |
