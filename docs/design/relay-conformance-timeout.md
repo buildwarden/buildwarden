@@ -229,7 +229,7 @@ new release of it, Jeff's to tag; it is offered as a follow-up. *(a2)*
 **D4. This item moves no pin.** The Go relay's fix is all `buildwarden` needs
 to make its `relay` job deterministic: it runs the pinned suites, whose build
 environment is unchanged. The harness's two changes reach `buildwarden` at
-its next pin of `conformance`, after Jeff tags `conformance/v0.1.1` (a
+its next pin of `conformance`, after Jeff tags `conformance/v0.2.1` (a
 release without a suffix is his, FLOW-20). *(a4)*
 
 **D5. The same pattern in `tools/vz-image-prep` is out of scope.**
@@ -268,7 +268,7 @@ None.
   until a second occurrence names the cause; (c) one retry of `docker run`,
   reported (rejected by TEST-04). Confirm.
 - **a4.** Proceeding with D4: no pin moves here; the harness's changes reach
-  `buildwarden` when `conformance/v0.1.1` is tagged and pinned later.
+  `buildwarden` when `conformance/v0.2.1` is tagged and pinned later.
   Options: (a) no pin move (recommended: the CI failures here are all fixed
   by the relay change alone, and the item does not wait on a release); (b)
   wait for Jeff's tag and move the pin in this item. Confirm.
@@ -332,7 +332,7 @@ is not a program item):
   test in `launch/relay_test.go` that drives `containerPID` with a fake
   runtime (a script that answers `inspect` after a delay) to check the
   bound used and the message and phases a failure prints.
-- `conformance/CHANGELOG.md`: a `## v0.1.1` entry naming both, and `go.work`'s
+- `conformance/CHANGELOG.md`: a `## v0.2.1` entry naming both, and `go.work`'s
   `replace` raised to it, as the specs repository's README requires of a
   change to `conformance/`. No specification directory changes, so no
   specification's version or `CHANGELOG.md` changes.
@@ -420,7 +420,7 @@ check.
    test (GLOBAL-06, TEST-04, GUEST-6).
 2. `buildwarden-specs`: the oci launcher's bounds, phases and message; its
    fake-runtime test (TEST-04, GLOBAL-11, D2).
-3. `buildwarden-specs`: `conformance/CHANGELOG.md` v0.1.1 and `go.work`;
+3. `buildwarden-specs`: `conformance/CHANGELOG.md` v0.2.1 and `go.work`;
    `make check`; push and open its pull request to `main`.
 4. `buildwarden`: `NewFDIngress` sets TIME-WAIT 0; the fixed-port test
    (GLOBAL-06, RELAY-04, TEST-04); `make test`, `make lint` (Linux and
