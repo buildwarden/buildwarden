@@ -100,7 +100,13 @@ jobs:
           # to main spans merged PRs that already passed it, and its payload
           # carries no labels, so it is not judged again there.
           FLAGS: ${{ (github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'no-design')) && '-no-design' || '' }}
+          DEFAULT: ${{ github.event.repository.default_branch }}
+        # A push that creates a branch (a program trunk cut at main's head)
+        # has an all-zero before; diff it against the default branch instead.
         run: |
+          if [ "$BASE" = 0000000000000000000000000000000000000000 ]; then
+            BASE=$(git merge-base "origin/$DEFAULT" HEAD)
+          fi
           ./dist/tier1 -base "$BASE" -json $FLAGS > tier1.json || code=$?
           ./dist/tier1 -base "$BASE" $FLAGS || true
           exit "${code:-0}"
