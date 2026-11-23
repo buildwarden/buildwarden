@@ -28,8 +28,9 @@ rules: [FLOW-01, FLOW-08, FLOW-14, FLOW-15, FLOW-17, FLOW-19, FLOW-20, LINT-02, 
         PROFILE-01, GLOBAL-09, GLOBAL-10, GLOBAL-11, UX-04]
 rule_changes:
   - {rule: FLOW-01, change: amend, paths: [docs/development/process.md, .github/workflows/main.yml,
-     tools/workflow/check/merge.go, tools/workflow/check/merge_test.go,
-     tools/workflow/cmd/wf/main.go, tools/workflow/cmd/wf/trunk_test.go]}
+     tools/workflow/check/merge.go, tools/workflow/check/merge_test.go]}
+                         # tools/workflow/cmd/wf/ and .claude/agents/wf-publish.md are machinery:
+                         # they change through this process item, not a rule_changes path (FLOW-14)
   - {rule: FLOW-14, change: amend, paths: [docs/development/process.md, .github/workflows/main.yml]}
 concepts: [ci, tier1, no-design, program-sync, program-trunk, enforcement, sync-gate, workflow]
 related: [program-north-star.md, design-approved-rule-changes.md, tier1-static-checks.md,
