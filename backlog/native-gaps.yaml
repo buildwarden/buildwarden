@@ -1293,3 +1293,30 @@ gaps:
       (2026-11-22, attended). Native validation ran at 190b092, before the version-query change
       (fa732c3..1b3fb70). From finch's source, `finch version` exits non-zero with the VM stopped;
       unverified on a real finch. Filed by cloud/20261122T180143Z.
+  - id: native-loop-fixes-macbook
+    host: macos-any
+    status: open
+    what: >-
+      On the macbook under launchd, after native-loop-fixes merges: (1) a run whose session leaves
+      background work or ends without its digest is recorded failed ("session ended unfinished"), its
+      gate stamp does not move, and the next run with work names .scratch/leftover/<run>/ in its prompt
+      and records what it holds; (2) a move of only program/componentization wakes the gate; (3) a gone
+      program item's branch is deleted by the cleanup with no FLOW-16 note, a clean detached worktree is
+      removed and a non-worktree .scratch directory is named; (4) install-macos.sh check reports the
+      scheduled wake, warns with finch's VM stopped and with an unsigned dist/warden, and FAILs a clone
+      without Entire's git hooks; (5) cargo resolves through rustup with no ~/.local/bin link.
+    design: docs/design/native-loop-fixes.md
+    note: >-
+      Tracked, not blocking (design native_validation, a5): the wrapper runs from main only. Added at
+      x1-design (cloud/20261123T195428Z, 2026-11-23). Run on main after the merge.
+  - id: native-loop-fixes-windows
+    host: windows-any
+    status: open
+    what: >-
+      Under Git Bash on the Windows desktop, after native-loop-fixes merges: the digest check and stamp
+      (the process sweep is skipped there, and the reason says so), the program-trunk fingerprint, and
+      the cleanup of a gone program branch, a detached worktree and a non-worktree .scratch directory.
+    design: docs/design/native-loop-fixes.md
+    note: >-
+      Tracked, not blocking (design native_validation, a5). Added at x1-design
+      (cloud/20261123T195428Z, 2026-11-23). Run on main after the merge.

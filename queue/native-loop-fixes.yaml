@@ -4,22 +4,40 @@ priority: 1
 kind: process
 status: in_progress
 round: process
-phase: 1
+phase: 2
 design: docs/design/native-loop-fixes.md
 branch: feat/native-loop-fixes
 areas:
   - loop
   - rules
+declared: a5aed35
 alters_relationships: null
+design_review: required
 source: 'Jeff, 2026-11-23 attended macbook session (a readiness survey of the Mac native loop for the componentization program). One consolidated bugfix, at Jeff''s word, to keep churn low: a meta-item on the loop''s own health, so its design stays lean (one design document, one PR; no case-by-case rounds). (1) Unattended -p sessions ended their turn waiting on run_in_background builds and exited with them still running (runs 20261120T125213Z, 600 s background-wait ceiling, and 20261123T124004Z), losing the night''s evidence to a leftover; the skill forbids only asking a question and waiting. (2) native-tick.sh moves gate-macbook.json past such a run (rc 0) and hands the leftover to no later session. (3) workflow-native Branch setup forks from origin/main, where a program item''s branch forks from `wf trunk`. (4) The second-repository procedure has no Branch setup form and no form for a worktree kept from an earlier night (worktree add fails; reuse with merge --ff-only). (5) native-run.sh refuses .scratch/<owner>/<repo>/<item>/{tools,dist} paths and go -C into them. (6) The gate fingerprint (queue/hosts.go) hashes only each repository''s trunk, never its program_trunk, so a program-trunk move wakes no native machine. (7) Cleanup''s branch -d tests a program item''s branch against main once its remote branch is gone, leaving a FLOW-16 leftover note every night; detached validation worktrees and non-worktree .scratch directories are neither removed nor named. (8) native-tick.sh''s PATH lacks the rustup proxies (/opt/homebrew/opt/rustup/bin, ~/.cargo/bin) the relay needs; linked into ~/.local/bin on the macbook as a stopgap. (9) `entire status` reports the Claude Code hooks in .claude/settings.json out of date. (10) `pmset -g ... | grep -q` under pipefail exits 141 (install-macos.sh:135 falsely warns of no scheduled wake; native-tick.sh:286''s AC-power check can falsely skip a run). (11) loop-profile.yaml has no native.check for the macbook hosts (finch VM running, qemu present, warden signed with the virtualization entitlement) and wf native -check does not check the clones'' Entire git hooks. Not included: an allow rule for cargo (a scratch Makefile covers relay steps; a new permission is reserved to Jeff under FLOW-20).'
 steps:
   - id: x1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-design-review
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261123T195428Z
-      expires: 2026-11-23T21:54:35.135192082Z
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - x2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -27,7 +45,59 @@ budget:
   spent:
     runs: 1
     steps: 1
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: 'How an unattended session waits on a case longer than the Bash tool''s 10-minute ceiling (design: Questions a1; Design 1). Proceeding with (A): a command that fits the ceiling runs in the foreground; a longer one runs in the background and the session waits for it in repeated bounded waits until it exits, or stops it and records the case as not run, before writing its digest. If the wait tool it needs is one settings.native.json does not allow, that is an allowlist gap under Blocked on Jeff, and this item adds no permission; the wrapper''s digest check (Design 2) is the backstop either way.'
+    options:
+      - '(A) as stated: foreground when it fits, otherwise background with bounded waits, or stopped and recorded as not run'
+      - (B) foreground only, long cases split into scratch Makefile targets each under 10 minutes; multi-hour installs cannot split
+      - '(C) the wrapper runs long cases itself: a second driver of validation outside the skill'
+    recommended: (A) foreground when it fits, otherwise wait in bounded waits or stop and record
+  - id: a2
+    kind: assumed
+    status: open
+    question: 'Flagged: FLOW-16 is a rule FLOW-20 reserves to Jeff (pushing). Whether a program item''s local branch on a native machine is contained in trunk when its program trunk contains it (design: Questions a2; Design 7). Proceeding with (A): yes, by FLOW-20, which makes the program trunk the item''s trunk for its merge; no FLOW-16 wording change; the wrapper sets the branch''s upstream to origin/<wf trunk> and runs git branch -d, git''s safe form.'
+    options:
+      - '(A) as stated: contained in its program trunk, by FLOW-20; no wording change'
+      - '(B) amend FLOW-16 to say its trunk (for a program item, its program trunk, FLOW-20): a second rule change in this review'
+      - (C) keep testing against main, with the nightly leftover note
+    recommended: (A) contained in its program trunk, by FLOW-20, no wording change
+  - id: a3
+    kind: assumed
+    status: open
+    question: 'Flagged: it widens the shapes the unattended launcher native-run.sh accepts (design: Questions a3; Design 5). Proceeding with (A): accept .scratch/<owner>/<repo>/<item>/tools/<path>, .scratch/<owner>/<repo>/<item>/dist/warden* and go -C .scratch/<owner>/<repo>/<item> test, only where <owner>/<repo> has a clone at .dev/checkouts/<owner>/<repo> and the worktree''s common directory is that clone''s; the tracked-file, no . or .. and not-tools/workflow/ checks stay; no allow rule changes.'
+    options:
+      - '(A) as stated: second-repository worktrees under the same checks'
+      - (B) scratch Makefiles only, each an allowlist gap for Jeff
+      - (C) a separate launcher for second repositories
+    recommended: (A) second-repository worktrees under the same checks
+  - id: a4
+    kind: assumed
+    status: open
+    question: 'Non-worktree directories under .scratch/ (design: Questions a4; Design 7; Defaults and overrides). Proceeding with (A): each is named in the leftovers, and one unchanged for BW_SCRATCH_DAYS (default 7) is removed; the listed repositories'' <owner> directories and .scratch/leftover/ are excluded.'
+    options:
+      - (A) named, and removed after BW_SCRATCH_DAYS (default 7)
+      - '(B) named only: the nightly note Jeff found'
+      - '(C) removed at the next run: a crashed session''s scratch logs go before anyone reads them'
+    recommended: (A) named, and removed after 7 days
+  - id: a5
+    kind: assumed
+    status: open
+    question: 'Native validation tracked, not blocking (design: Questions a5; Validation plan). Proceeding with (A): macos-any and windows-any tracked, with backlog entries native-loop-fixes-macbook and native-loop-fixes-windows for the first scheduled runs after the merge, as native-loop-followups and native-refresh-scoped did.'
+    options:
+      - '(A) tracked: the first scheduled runs after the merge'
+      - (B) a blocking f6-validate-macos-any step run attended from a branch worktree; the wrapper resets its own checkout to main, so only the install check, wf native -check, the launcher and the gate could run from the branch
+    recommended: (A) tracked
+  - id: a6
+    kind: assumed
+    status: open
+    question: 'A missing Entire git hook in the dedicated checkout or a clone fails wf native -check (design: Questions a6; Design 11). Proceeding with (A): FAIL, naming entire enable in that directory, since a commit there without the hooks is not linked to its session (FLOW-18).'
+    options:
+      - (A) FAIL
+      - (B) warn
+    recommended: (A) FAIL
 history:
   - at: 2026-11-23T19:44:39Z
     by: human/jeff
@@ -41,3 +111,12 @@ history:
   - at: 2026-11-23T19:54:35Z
     by: cloud/20261123T195428Z
     event: claimed x1-design until 2026-11-23T21:54:35Z
+  - at: 2026-11-23T20:03:41Z
+    by: cloud/20261123T195428Z
+    event: 'declared at a5aed35: design_review unset -> required'
+  - at: 2026-11-23T20:05:02Z
+    by: cloud/20261123T195428Z
+    event: done x1-design
+  - at: 2026-11-23T20:05:02Z
+    by: cloud/20261123T195428Z
+    event: entered phase 2 (implement)
