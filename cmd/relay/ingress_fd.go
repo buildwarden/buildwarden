@@ -97,6 +97,19 @@ func NewFDIngress(cfg FDIngressConfig) (*FDIngress, error) {
 		},
 	})
 
+	// No TIME-WAIT. A SYN that reuses the 4-tuple of a connection in
+	// TIME-WAIT is handed by gVisor only to a listening endpoint, never to
+	// the forwarder below, so with its default of 60 s a guest that picks a
+	// source port again would be ignored for a minute, though GUEST-6 has
+	// the connection accepted. TIME-WAIT guards against a delayed segment of
+	// the old connection on a path that reorders; the socket pair to the
+	// guest delivers in order, so it buys nothing here.
+	timeWait := tcpip.TCPTimeWaitTimeoutOption(0)
+	if err := s.SetTransportProtocolOption(tcp.ProtocolNumber, &timeWait); err != nil {
+		s.Close()
+		return nil, fmt.Errorf("setting the TCP TIME-WAIT timeout: %v", err)
+	}
+
 	if err := s.CreateNIC(nicID, ep); err != nil {
 		return nil, fmt.Errorf("creating NIC: %v", err)
 	}
