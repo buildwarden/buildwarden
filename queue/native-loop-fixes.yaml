@@ -1,0 +1,60 @@
+feature: native-loop-fixes
+title: 'Native loop fixes: an unattended session finishes its background work, the gate and cleanup follow the program trunks, and a second repository''s steps run as the skill writes them'
+priority: 1
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/native-loop-fixes.md
+branch: feat/native-loop-fixes
+areas:
+  - loop
+  - rules
+alters_relationships: null
+source: >-
+  Jeff, 2026-11-23 attended macbook session (a readiness survey of the Mac native loop for the
+  componentization program). One consolidated bugfix, at Jeff's word, to keep churn low: a meta-item on the
+  loop's own health, so its design stays lean (one design document, one PR; no case-by-case rounds).
+  (1) Unattended -p sessions ended their turn waiting on run_in_background builds and exited with
+  them still running (runs 20261120T125213Z, 600 s background-wait ceiling, and 20261123T124004Z),
+  losing the night's evidence to a leftover; the skill forbids only asking a question and waiting.
+  (2) native-tick.sh moves gate-macbook.json past such a run (rc 0) and hands the leftover to no later
+  session. (3) workflow-native Branch setup forks from origin/main, where a program item's branch forks
+  from `wf trunk`. (4) The second-repository procedure has no Branch setup form and no form for a
+  worktree kept from an earlier night (worktree add fails; reuse with merge --ff-only). (5) native-run.sh
+  refuses .scratch/<owner>/<repo>/<item>/{tools,dist} paths and go -C into them. (6) The gate fingerprint
+  (queue/hosts.go) hashes only each repository's trunk, never its program_trunk, so a program-trunk move
+  wakes no native machine. (7) Cleanup's branch -d tests a program item's branch against main once its
+  remote branch is gone, leaving a FLOW-16 leftover note every night; detached validation worktrees and
+  non-worktree .scratch directories are neither removed nor named. (8) native-tick.sh's PATH lacks the
+  rustup proxies (/opt/homebrew/opt/rustup/bin, ~/.cargo/bin) the relay needs; linked into ~/.local/bin
+  on the macbook as a stopgap. (9) `entire status` reports the Claude Code hooks in .claude/settings.json
+  out of date. (10) `pmset -g ... | grep -q` under pipefail exits 141 (install-macos.sh:135 falsely warns
+  of no scheduled wake; native-tick.sh:286's AC-power check can falsely skip a run). (11) loop-profile.yaml
+  has no native.check for the macbook hosts (finch VM running, qemu present, warden signed with the
+  virtualization entitlement) and wf native -check does not check the clones' Entire git hooks. Not
+  included: an allow rule for cargo (a scratch Makefile covers relay steps; a new permission is reserved
+  to Jeff under FLOW-20).
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 2
+    steps: 6
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-23T19:44:39Z
+    by: human/jeff
+    event: queued at position 1
+  - at: 2026-11-23T20:30:00Z
+    by: human/jeff
+    event: renamed from native-unattended-foreground and extended with the other native loop fixes into one item (Jeff, attended); estimate 6 steps, 2 runs; areas loop, rules
