@@ -4,22 +4,40 @@ priority: 3
 kind: process
 status: in_progress
 round: process
-phase: 1
+phase: 2
 design: docs/design/sync-pr-tier1.md
 branch: feat/sync-pr-tier1
 areas:
   - build
   - tier1
+declared: f5b2117
 alters_relationships: null
+design_review: required
 source: 'Jeff, 2026-11-23 attended human session: PR #140 (sync/program-168cf9503d4b, main into program/componentization) failed tier1 with a FLOW-01 MUST on driver/layercache_test.go, which came from #139 where FLOW-01 passed under no-design. main.yml skips FLOW-01 on a push since a push spans merged PRs that already passed it, but judges a sync PR''s diff as new work. #140 was labeled no-design on Jeff''s word as the stopgap.'
 steps:
   - id: x1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-design-review
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261123T232256Z-2
-      expires: 2026-11-24T01:24:16.179509097Z
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - x2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -27,7 +45,51 @@ budget:
   spent:
     runs: 1
     steps: 1
-questions: []
+questions:
+  - id: q1
+    kind: assumed
+    status: open
+    question: 'Flagged: departs from FLOW-01''s label-only exemption, which Jeff applied by hand on #140, and relaxes a check on a PR the loop merges (FLOW-20''s reserved rules). How tier1 judges a program sync PR (design Decision 1).'
+    options:
+      - '(a) as its merge''s push: full diff, every check, -no-design'
+      - (b) only the resolution against the clean merge tree
+      - '(c) unchanged: Jeff labels each failing sync no-design'
+    recommended: (a)
+  - id: q2
+    kind: assumed
+    status: open
+    question: 'Flagged: narrows where FLOW-14''s automated check runs. The main''s enforcement comparison on a sync PR (design Decision 3).'
+    options:
+      - (a) skipped, as on a push
+      - (b) run with the sync's second parent (main's commit) as base
+      - (c) run as now, failing on any approved main relaxation
+    recommended: (a)
+  - id: q3
+    kind: assumed
+    status: open
+    question: How CI recognizes a sync PR (design Decision 2).
+    options:
+      - (a) by its shape, through a stateless wf sync-shape sharing SyncHead's code
+      - (b) by the head ref name sync/program-* alone
+      - (c) inline shell in main.yml
+    recommended: (a)
+  - id: q4
+    kind: assumed
+    status: open
+    question: A sync resolution that edits a rule, machinery or rule-running workflow path (design Decision 4).
+    options:
+      - (a) wf sync-program -head refuses it and the sync escalates (a15 (b))
+      - (b) CI judges it as any PR, with no escalation
+      - (c) allowed under the tier-2 review of the resolution
+    recommended: (a)
+  - id: q5
+    kind: assumed
+    status: open
+    question: The rule text (design Decision 5).
+    options:
+      - (a) amend FLOW-01 and FLOW-14 to name the push and sync exemptions
+      - (b) leave the wording, as the push exemption has been
+    recommended: (a)
 history:
   - at: 2026-11-23T22:11:34Z
     by: human/jeff
@@ -38,3 +100,15 @@ history:
   - at: 2026-11-23T23:24:16Z
     by: cloud/20261123T232256Z-2
     event: claimed x1-design until 2026-11-24T01:24:16Z
+  - at: 2026-11-23T23:32:41Z
+    by: cloud/20261123T232256Z-2
+    event: 'declared at e7757e5: design_review unset -> required'
+  - at: 2026-11-23T23:33:06Z
+    by: cloud/20261123T232256Z-2
+    event: 'declared at f5b2117: nothing changed'
+  - at: 2026-11-23T23:33:57Z
+    by: cloud/20261123T232256Z-2
+    event: done x1-design
+  - at: 2026-11-23T23:33:57Z
+    by: cloud/20261123T232256Z-2
+    event: entered phase 2 (implement)
