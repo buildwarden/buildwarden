@@ -67,9 +67,10 @@ check_host() {
 # check_clones runs wf native -check, built from this checkout, on the
 # workflow branch as origin has it: each clone of a repository hosts.yaml
 # lists for the machine is at .dev/checkouts/<owner>/<repo>, names that
-# repository and is clean, and each profile file's toolchain_check and the
-# native.check of each host the machine serves pass (LOOP-05). A missing
-# clone is reported with the command for the owner; nothing is cloned.
+# repository and is clean, it and the checkout have Entire's git hooks
+# (FLOW-18), and each profile file's toolchain_check and the native.check of
+# each host the machine serves pass (LOOP-05). A missing clone is reported
+# with the command for the owner; nothing is cloned.
 check_clones() {
 	local tmp
 	tmp=$(mktemp -d)
