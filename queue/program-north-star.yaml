@@ -59,15 +59,15 @@ steps:
     needs:
       - x4-state
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261122T180143Z
+      expires: 2026-11-23T02:37:00.727394314Z
 budget:
   estimate:
     runs: 2
     steps: 12
   spent:
     runs: 1
-    steps: 3
+    steps: 4
 questions: []
 history:
   - at: 2026-11-21T19:26:09Z
@@ -124,3 +124,6 @@ history:
   - at: 2026-11-23T00:36:53Z
     by: human/jeff
     event: done x4-state
+  - at: 2026-11-23T00:37:00Z
+    by: cloud/20261122T180143Z
+    event: claimed x4-close until 2026-11-23T02:37:00Z
