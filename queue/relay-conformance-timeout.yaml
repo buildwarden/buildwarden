@@ -2,9 +2,10 @@ feature: relay-conformance-timeout
 title: Relay conformance runs fail intermittently on a relay connection timeout
 priority: 3
 follows: seam-specs
+trunk: main
 status: in_progress
 round: feature
-phase: 0
+phase: 1
 design: docs/design/relay-conformance-timeout.md
 branch: feat/relay-conformance-timeout
 repos:
@@ -16,10 +17,17 @@ steps:
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261123T105717Z
-      expires: 2026-11-23T13:09:18.811053262Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -41,3 +49,12 @@ history:
   - at: 2026-11-23T11:09:18Z
     by: cloud/20261123T105717Z
     event: claimed f0-branch-setup until 2026-11-23T13:09:18Z
+  - at: 2026-11-23T11:10:20Z
+    by: cloud/20261123T105717Z
+    event: done f0-branch-setup
+  - at: 2026-11-23T11:10:20Z
+    by: cloud/20261123T105717Z
+    event: entered phase 1 (design)
+  - at: 2026-11-23T11:10:20Z
+    by: cloud/20261123T105717Z
+    event: 'trunk in buildwarden/buildwarden: main (FLOW-20)'
