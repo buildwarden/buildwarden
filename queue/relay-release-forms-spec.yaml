@@ -44,15 +44,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261123T232256Z-5
+      expires: 2026-11-24T01:24:25.218283261Z
 budget:
   estimate:
     runs: 3
     steps: 18
   spent:
-    runs: 1
-    steps: 2
+    runs: 2
+    steps: 3
 questions:
   - id: a1
     kind: assumed
@@ -208,3 +208,6 @@ history:
   - at: 2026-11-23T22:55:46Z
     by: human/jeff
     event: 'estimate raised from 12 steps, 2 runs to 18 steps, 3 runs on Jeff''s word: the redo starts over (12 for a fresh design, plus the 2 already spent, plus 4 for the driver-contract change)'
+  - at: 2026-11-23T23:24:25Z
+    by: cloud/20261123T232256Z-5
+    event: claimed f1-design-r2 until 2026-11-24T01:24:25Z

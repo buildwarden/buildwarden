@@ -51,7 +51,7 @@ None.
 | 7 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 8 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
 | 9 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 2 / 9 |
-| 10 | relay-release-forms-spec | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | designs | 1 design | f1-design-r2 (cloud) | - | - | 2 / 18 |
+| 10 | relay-release-forms-spec | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | designs | 1 design | f1-design-r2 (cloud, leased to cloud/20261123T232256Z-5) | - | - | 3 / 18 |
 
 ## Workers
 
