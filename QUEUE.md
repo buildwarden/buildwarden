@@ -48,6 +48,7 @@ None.
 | 4 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 5 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
 | 6 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 2 / 9 |
+| 7 | relay-release-forms-spec | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | undeclared | 0 branch-setup | f0-branch-setup (cloud, leased to cloud/20261123T105717Z) | - | - | 1 / 12 |
 
 ## Workers
 
@@ -65,45 +66,45 @@ Open features that are not disjoint. Process items are outside the relations (FL
 | relay-conformance-timeout, prebuilt-artifacts | colliding | prebuilt-artifacts is undeclared |
 | relay-conformance-timeout, workdir-in-context | near | driver-core reaches relay |
 | relay-conformance-timeout, relay-collector-failure-fails-open | colliding | buildwarden/buildwarden-specs has no area map |
+| relay-conformance-timeout, relay-release-forms-spec | colliding | buildwarden/buildwarden-specs has no area map |
 | relay-conformance-timeout, specs-prerelease-tags | colliding | buildwarden/buildwarden-specs has no area map |
 | relay-conformance-timeout, vm-from-host-path | colliding | vm-from-host-path is undeclared |
-| relay-conformance-timeout, relay-release-forms-spec | colliding | buildwarden/buildwarden-specs has no area map |
 | relay-conformance-timeout, configuration-bugfixes | colliding | configuration-bugfixes is undeclared |
 | relay-conformance-timeout, runtime-former-values-removal | colliding | runtime-former-values-removal is undeclared |
 | relay-conformance-timeout, auto-tidy-pull-request | colliding | auto-tidy-pull-request is undeclared |
 | relay-conformance-timeout, relay-exit-code-unreadable | colliding | area relay |
 | prebuilt-artifacts, workdir-in-context | colliding | prebuilt-artifacts is undeclared |
 | prebuilt-artifacts, relay-collector-failure-fails-open | colliding | prebuilt-artifacts is undeclared |
-| prebuilt-artifacts, vm-from-host-path | colliding | prebuilt-artifacts is undeclared |
 | prebuilt-artifacts, relay-release-forms-spec | colliding | prebuilt-artifacts is undeclared |
+| prebuilt-artifacts, vm-from-host-path | colliding | prebuilt-artifacts is undeclared |
 | prebuilt-artifacts, configuration-bugfixes | colliding | configuration-bugfixes is undeclared |
 | prebuilt-artifacts, runtime-former-values-removal | colliding | prebuilt-artifacts is undeclared |
 | prebuilt-artifacts, auto-tidy-pull-request | colliding | auto-tidy-pull-request is undeclared |
 | prebuilt-artifacts, relay-exit-code-unreadable | colliding | prebuilt-artifacts is undeclared |
 | workdir-in-context, relay-collector-failure-fails-open | near | driver-core reaches executor |
-| workdir-in-context, vm-from-host-path | colliding | vm-from-host-path is undeclared |
 | workdir-in-context, relay-release-forms-spec | colliding | relay-release-forms-spec is undeclared |
+| workdir-in-context, vm-from-host-path | colliding | vm-from-host-path is undeclared |
 | workdir-in-context, configuration-bugfixes | colliding | configuration-bugfixes is undeclared |
 | workdir-in-context, runtime-former-values-removal | colliding | runtime-former-values-removal is undeclared |
 | workdir-in-context, auto-tidy-pull-request | colliding | auto-tidy-pull-request is undeclared |
 | workdir-in-context, relay-exit-code-unreadable | near | driver-core reaches relay |
+| relay-collector-failure-fails-open, relay-release-forms-spec | colliding | buildwarden/buildwarden-specs has no area map |
 | relay-collector-failure-fails-open, specs-prerelease-tags | colliding | buildwarden/buildwarden-specs has no area map |
 | relay-collector-failure-fails-open, vm-from-host-path | colliding | vm-from-host-path is undeclared |
-| relay-collector-failure-fails-open, relay-release-forms-spec | colliding | buildwarden/buildwarden-specs has no area map |
 | relay-collector-failure-fails-open, configuration-bugfixes | colliding | configuration-bugfixes is undeclared |
 | relay-collector-failure-fails-open, runtime-former-values-removal | colliding | runtime-former-values-removal is undeclared |
 | relay-collector-failure-fails-open, auto-tidy-pull-request | colliding | auto-tidy-pull-request is undeclared |
 | relay-collector-failure-fails-open, relay-exit-code-unreadable | colliding | area relay |
-| specs-prerelease-tags, relay-release-forms-spec | colliding | buildwarden/buildwarden-specs has no area map |
-| vm-from-host-path, relay-release-forms-spec | colliding | relay-release-forms-spec is undeclared |
-| vm-from-host-path, configuration-bugfixes | colliding | configuration-bugfixes is undeclared |
-| vm-from-host-path, runtime-former-values-removal | colliding | runtime-former-values-removal is undeclared |
-| vm-from-host-path, auto-tidy-pull-request | colliding | auto-tidy-pull-request is undeclared |
-| vm-from-host-path, relay-exit-code-unreadable | colliding | vm-from-host-path is undeclared |
+| relay-release-forms-spec, specs-prerelease-tags | colliding | buildwarden/buildwarden-specs has no area map |
+| relay-release-forms-spec, vm-from-host-path | colliding | relay-release-forms-spec is undeclared |
 | relay-release-forms-spec, configuration-bugfixes | colliding | configuration-bugfixes is undeclared |
 | relay-release-forms-spec, runtime-former-values-removal | colliding | relay-release-forms-spec is undeclared |
 | relay-release-forms-spec, auto-tidy-pull-request | colliding | auto-tidy-pull-request is undeclared |
 | relay-release-forms-spec, relay-exit-code-unreadable | colliding | relay-release-forms-spec is undeclared |
+| vm-from-host-path, configuration-bugfixes | colliding | configuration-bugfixes is undeclared |
+| vm-from-host-path, runtime-former-values-removal | colliding | runtime-former-values-removal is undeclared |
+| vm-from-host-path, auto-tidy-pull-request | colliding | auto-tidy-pull-request is undeclared |
+| vm-from-host-path, relay-exit-code-unreadable | colliding | vm-from-host-path is undeclared |
 | configuration-bugfixes, runtime-former-values-removal | colliding | configuration-bugfixes is undeclared |
 | configuration-bugfixes, auto-tidy-pull-request | colliding | auto-tidy-pull-request is undeclared |
 | configuration-bugfixes, relay-exit-code-unreadable | colliding | configuration-bugfixes is undeclared |
@@ -124,9 +125,8 @@ Open features that are not disjoint. Process items are outside the relations (FL
 |---|---|---|---|---|---|
 | 1 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
 | 2 | program-land | process | buildwarden/buildwarden | - | 5 |
-| 7 | specs-prerelease-tags | tracked | buildwarden/buildwarden-specs | - | 2 |
-| 8 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
-| 9 | relay-release-forms-spec | feature | buildwarden/buildwarden, buildwarden/buildwarden-specs | undeclared | 12 |
+| 8 | specs-prerelease-tags | tracked | buildwarden/buildwarden-specs | - | 2 |
+| 9 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
 | 10 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
 | 11 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
 | 12 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |

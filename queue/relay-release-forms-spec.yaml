@@ -1,8 +1,8 @@
 feature: relay-release-forms-spec
 title: 'Seam 8: specify the relay''s release forms (form names, file roles, manifest and hash) before M6 adopts a release'
-priority: 9
+priority: 7
 program: true
-status: queued
+status: in_progress
 round: feature
 phase: 0
 design: docs/design/relay-release-forms-spec.md
@@ -18,15 +18,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261123T105717Z
+      expires: 2026-11-23T13:34:18.535174881Z
 budget:
   estimate:
     runs: 2
     steps: 12
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-11-20T22:53:31Z
@@ -38,3 +38,9 @@ history:
   - at: 2026-11-22T23:39:04Z
     by: human/jeff
     event: 'program item (FLOW-20): program: true (program-north-star x4-state, on Jeff''s word)'
+  - at: 2026-11-23T11:34:18Z
+    by: cloud/20261123T105717Z
+    event: started (FLOW-05)
+  - at: 2026-11-23T11:34:18Z
+    by: cloud/20261123T105717Z
+    event: claimed f0-branch-setup until 2026-11-23T13:34:18Z
