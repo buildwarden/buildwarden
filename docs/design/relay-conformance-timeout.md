@@ -433,7 +433,18 @@ check.
 
 ## Design review
 
-(None yet.)
+- r1, 2026-11-23: approved at e0a1b27. Jeff approved the design, as read at
+  630651f, in the attended session (workflow-human).
+  - Decisions:
+    - a1 (a), TIME-WAIT 0 on both capturing stacks;
+    - a2 (a), no spec change or suite case here;
+    - a3 (a), a4 (a) and a5 (a), as recommended (batch).
+  - Changes folded in, at e0a1b27: the harness's next release is
+    `conformance/v0.2.1`, not v0.1.1. buildwarden-specs#6 has since made
+    the CHANGELOG's head v0.2.0.
+  - Security note read: GLOBAL-06's relay clause, posture unchanged.
+  - read at 630651f
+  - sitting: 22:06-22:09 UTC, asks: 5 (1 a batch covering a3 to a5)
 
 ## Consolidation
 
