@@ -1,0 +1,34 @@
+feature: sync-pr-tier1
+title: 'Tier 1 judges a program sync PR as it judges a push: FLOW-01 measured only on the sync''s own resolution'
+priority: 2
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/sync-pr-tier1.md
+branch: feat/sync-pr-tier1
+areas:
+  - build
+  - tier1
+alters_relationships: null
+source: 'Jeff, 2026-11-23 attended human session: PR #140 (sync/program-168cf9503d4b, main into program/componentization) failed tier1 with a FLOW-01 MUST on driver/layercache_test.go, which came from #139 where FLOW-01 passed under no-design. main.yml skips FLOW-01 on a push since a push spans merged PRs that already passed it, but judges a sync PR''s diff as new work. #140 was labeled no-design on Jeff''s word as the stopgap.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 4
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-23T22:11:34Z
+    by: human/jeff
+    event: queued at position 2

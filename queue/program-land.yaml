@@ -1,6 +1,6 @@
 feature: program-land
 title: 'Land the componentization program: one squash merge per repository from program/componentization to its trunk, the final tags, and FLOW-20 retired (program-north-star Decision 12)'
-priority: 2
+priority: 4
 kind: process
 status: queued
 round: process
