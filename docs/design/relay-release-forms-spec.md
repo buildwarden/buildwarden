@@ -675,6 +675,39 @@ repository, specification first (LOOP-02):
 
 ## Design review
 
+- r1, 2026-11-23: changes. Read at 40f6c52, in the attended session
+  (workflow-human). Jeff sent the design back before a1 to a12 were asked:
+
+  Start over from first principles (Jeff, 2026-11-23 review r1). Drivers
+  dictate the relay environment they need to enforce the boundary on their
+  build environment. (1) The native relay binary per OS/arch is the source
+  distribution: always released, pinned by the release manifest's hash, the
+  case of last resort. (2) Prebuilt shapes (OCI image, VM-specific images,
+  unikernel) are the binary wheels: each is specified as its own versioned
+  addition only once it is straightforward to output as part of the relay's
+  own releases; version 1 defines the core (manifest and hash, the native
+  binaries and roles, the binary's launch interface, what the relay requires
+  of any environment, e.g. entropy for RELAY-03) and no shapes up front. (3)
+  A driver resolves its relay by a configurable preference list of shapes,
+  which configuration requires to be a subset of the shapes known compatible
+  with that driver, falling back to self-building its environment from the
+  native binary; self-built is also selectable explicitly; the fallback is a
+  named default, never silent (GLOBAL-09 to GLOBAL-11). (4) Self-build
+  recipes live with the drivers, or in the drivers' shared utilities library
+  (the kit) where shareable. (5) Reproducibility of self-built environments
+  is not required for validation. (6) Trust: the manifest of release
+  artifacts and hashes stands as the root; a self-built environment is
+  first-class (the pinned binary's hash plus the driver's recipe). (7)
+  Program order: M6 first means every driver self-builds from the Rust
+  relay's binary release, shapes adopted driver by driver later. (8) The
+  driver contract changes by design to carry the compatible-shapes
+  declaration and the preference list: specs/driver-contract/v1.md,
+  conformance/driver/ and the kit's driver/relaysource (K1's four form names
+  become the binary plus an extensible set of shapes). Also revisit a6
+  (whether the ledger records which relay path ran) and the umbrella's seam
+  8 wording in componentization.md. Effectively starting over: the questions
+  a1 to a12 are replaced; budget raised on Jeff's word.
+
 ## Consolidation
 
 ## Rollback notes
