@@ -15,7 +15,7 @@ machines:
   - name: macbook
     hosts: [macos-vz, macos-qemu, macos-finch, qemu-any, container-any, macos-any]
     repositories: [buildwarden/buildwarden, buildwarden/buildwarden-driver-container, buildwarden/buildwarden-driver-qemu,
-                   buildwarden/buildwarden-driver-vz]
+                   buildwarden/buildwarden-driver-vz, buildwarden/buildwarden-relay]
     note: >-
       Jeff's MacBook Pro (arm64). Asleep or away at times; launchd runs a missed slot on wake.
       Holds qemu-any because the qemu driver runs only on aarch64 hosts (2026-10-30).
@@ -24,7 +24,7 @@ machines:
   - name: windows-desktop
     hosts: [windows-hyperv, container-any, linux-kvm, windows-any]
     repositories: [buildwarden/buildwarden, buildwarden/buildwarden-driver-container, buildwarden/buildwarden-driver-hyperv,
-                   buildwarden/buildwarden-driver-firecracker]
+                   buildwarden/buildwarden-driver-firecracker, buildwarden/buildwarden-relay]
     note: >-
       Always-on Windows desktop. Takes any-OS native work that runs here (a container runtime),
       sharing container-any with macbook, and serves windows-any (Jeff, 2026-11-20).
