@@ -1,5 +1,3 @@
-sha: 1e6a32d1154549033a0e3d48961714468235a14e
-ci: red
-run: https://github.com/buildwarden/buildwarden/actions/runs/45084139450
-red_since: 1e6a32d1154549033a0e3d48961714468235a14e
+sha: 5b0a000d883ca99734f0d2655c7a697e9fb00ef0
+ci: green
 up_to_date: required

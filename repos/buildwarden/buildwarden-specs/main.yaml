@@ -1,6 +1,3 @@
-sha: 70457f146de283bf9722bb473099e8cb466dca1f
-ci: red
-run: https://github.com/buildwarden/buildwarden-specs/actions/runs/45086692060
-red_since: 70457f146de283bf9722bb473099e8cb466dca1f
-followup: relay-conformance-timeout
+sha: ab9303c7729ca926d9a9186fc075dafc2b20952d
+ci: green
 up_to_date: not-required
