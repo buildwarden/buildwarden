@@ -4,6 +4,7 @@
 gaps:
   - id: qemu-windows-guest-package
     host: macos-qemu
+    status: deferred
     what: The shared Windows guest package and prepare-time tuning on qemu.
     design: docs/design/hyperv-windows-prepare.md
     note: >-
@@ -84,7 +85,9 @@ gaps:
       two detached-prepare-windows-exe-qemu builds (4m timeout, no --image, from prepared layers made today
       at 16:09Z and 22:42Z) started the relay and the build VM and timed out like before; too short to read
       more into. No ISO reachable. Logs: native/macos-qemu/2026-11-20/.
-    status: open
+      2026-11-23 (human/jeff, attended macbook session): deferred at Jeff's word. The minimum is native
+      on native; a cross-OS build (a Windows guest under qemu on the Mac) is a nice-to-have. Native
+      sessions do not wake or retry for it; Jeff reopens it.
   - id: qemu-linux-exclusive-trust
     host: macos-qemu
     what: A qemu Linux guest with exclusive trust.
@@ -480,6 +483,7 @@ gaps:
       Logs and the run script: native/linux-kvm/2026-11-02/lan-resolver/.
   - id: build-link-subnet-qemu-windows
     host: macos-qemu
+    status: deferred
     what: A qemu Windows guest build on the new default relay-to-build link 100.127.255.252/30 (warden-run.ps1 from the per-build WARDEN seed passes --gateway=100.127.255.253 --ip=100.127.255.254/30; the relay, which takes the link from the claim and addresses its build interface, answers there), and again with [vm] build_link set to a non-default /30 such as 100.126.255.252/30 (no rebuild; design r3).
     design: docs/design/build-link-subnet.md
     note: >-
@@ -511,9 +515,12 @@ gaps:
       (no code change on main since 0cd3c02).
       2026-11-20 (host:macos-qemu/macbook.20261120T224036Z, unattended, main be13847): not run. qemu Windows
       builds still fail on main (#131 changed only the detached prepare start; qemu-windows-guest-package).
-    status: open
+      2026-11-23 (human/jeff, attended macbook session): deferred at Jeff's word. The minimum is native
+      on native; a cross-OS build (a Windows guest under qemu on the Mac) is a nice-to-have. Native
+      sessions do not wake or retry for it; Jeff reopens it.
   - id: hyperv-relay-per-build-channel-qemu-windows
     host: macos-qemu
+    status: deferred
     what: A qemu Windows guest build whose warden-run.log shows initialize --gateway=<relay> with no --ip (warden-run.ps1 no longer passes it, design r2 Decision 8) and whose NIC ends on the relay's lease (DHCP Enabled Yes, PrefixOrigin Dhcp, the link's guest address).
     design: docs/design/hyperv-relay-per-build-channel.md
     note: >-
@@ -535,7 +542,9 @@ gaps:
       (no code change on main since 0cd3c02).
       2026-11-20 (host:macos-qemu/macbook.20261120T224036Z, unattended, main be13847): not run. qemu Windows
       builds still fail on main (qemu-windows-guest-package), and warden-run.log stays unreadable here.
-    status: open
+      2026-11-23 (human/jeff, attended macbook session): deferred at Jeff's word. The minimum is native
+      on native; a cross-OS build (a Windows guest under qemu on the Mac) is a nice-to-have. Native
+      sessions do not wake or retry for it; Jeff reopens it.
   - id: security-suite-tier2-macos-vz
     host: macos-vz
     what: The first tier-2 run of the security suite's vz cases (make security-test DRIVER=vz) on the branch or main, with the oracle control case passing and the run's report written under reports/security/macos-vz/ (ids and outcomes only).
@@ -615,6 +624,7 @@ gaps:
     status: done
   - id: baked-asset-staleness-qemu-windows
     host: macos-qemu
+    status: deferred
     what: A qemu Windows guest build refused before any VM on an unstamped (or stale) qemu relay kernel and initramfs, naming tools/relay-vm/build-initramfs.sh, and succeeding after the rebuild writes their .source stamps.
     design: docs/design/baked-asset-staleness.md
     note: >-
@@ -633,7 +643,9 @@ gaps:
       design-only (f68a8b1), and qemu Windows builds still fail on main.
       2026-11-20 (host:macos-qemu/macbook.20261120T224036Z, unattended, main be13847): not run. The branch is
       still design-only (f68a8b1), and qemu Windows builds still fail on main.
-    status: open
+      2026-11-23 (human/jeff, attended macbook session): deferred at Jeff's word. The minimum is native
+      on native; a cross-OS build (a Windows guest under qemu on the Mac) is a nice-to-have. Native
+      sessions do not wake or retry for it; Jeff reopens it.
   - id: build-vm-busybox-qemu-direct-boot
     host: qemu-any
     status: done
@@ -707,7 +719,7 @@ gaps:
       reopens this entry.
   - id: driver-contract-qemu-windows
     host: macos-qemu
-    status: open
+    status: deferred
     what: >-
       A qemu Windows build (warden build --driver qemu --guest-os windows) on a warden whose build
       runs through warden's own build sequence: warden stages build.ps1, starts the collector with
@@ -734,6 +746,9 @@ gaps:
       2026-11-20 (host:macos-qemu/macbook.20261120T224036Z, unattended, main be13847): not run. driver-contract
       has not merged (feat/driver-contract 9b3ba28, in Publish at cloud step f6-consolidate), and qemu
       Windows builds still fail on main.
+      2026-11-23 (human/jeff, attended macbook session): deferred at Jeff's word. The minimum is native
+      on native; a cross-OS build (a Windows guest under qemu on the Mac) is a nice-to-have. Native
+      sessions do not wake or retry for it; Jeff reopens it.
   - id: runtime-cli-project-path-windows
     host: container-any
     status: done
@@ -1046,7 +1061,7 @@ gaps:
       case runs only on the Windows desktop, and container-any woke the macbook's gate for it every night.
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
-    status: open
+    status: deferred
     what: >-
       A qemu Windows guest build (--guest-os windows) stages dist/warden-io-windows-arm64.exe found by
       the lookup (host-files.json names it), and is refused before any VM boots, with the fix naming
@@ -1063,9 +1078,12 @@ gaps:
       feat/prebuilt-artifacts is still design-only (49b513a), and qemu Windows builds still fail on main.
       2026-11-20 (host:macos-qemu/macbook.20261120T224036Z, unattended, main be13847): not run.
       feat/prebuilt-artifacts is still design-only (49b513a), and qemu Windows builds still fail on main.
+      2026-11-23 (human/jeff, attended macbook session): deferred at Jeff's word. The minimum is native
+      on native; a cross-OS build (a Windows guest under qemu on the Mac) is a nice-to-have. Native
+      sessions do not wake or retry for it; Jeff reopens it.
   - id: detached-prepare-windows-exe-qemu
     host: macos-qemu
-    status: open
+    status: deferred
     what: >-
       A qemu Windows guest build whose prepared layer is past [vm] image_refresh_after prints the
       "refreshing it in the background" line and its detached prepare runs from the warden that was
@@ -1107,6 +1125,9 @@ gaps:
       retried; the later run on main be13847 did not hit it). The session then waited on the detached
       prepare past Claude Code's 600 s background-wait ceiling and exited uncommitted. Logs:
       native/macos-qemu/2026-11-20/dpwe-b4f86e2-*.
+      2026-11-23 (human/jeff, attended macbook session): deferred at Jeff's word. The minimum is native
+      on native; a cross-OS build (a Windows guest under qemu on the Mac) is a nice-to-have. Native
+      sessions do not wake or retry for it; Jeff reopens it.
   - id: workdir-in-context-windows
     host: windows-any
     status: open
