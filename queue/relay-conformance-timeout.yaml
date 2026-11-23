@@ -39,7 +39,7 @@ steps:
   - id: f2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -58,51 +58,56 @@ budget:
     steps: 8
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Flagged: the relay''s TCP behaviour on the build-environment-to-relay boundary (GLOBAL-06), though not its posture. Both capturing stacks (the Go relay''s host mode, NewFDIngress, and the harness''s netstack.Capture) set gVisor''s TIME-WAIT timeout to 0, a fixed value with no flag or key, so a SYN reusing the 4-tuple of a connection the relay closed reaches the tcp.Forwarder instead of being dropped for 60 s (design D1).'
     options:
       - 0, no TIME-WAIT on the capturing stack
       - a short TIME-WAIT such as 1 s (a shorter stall, still timing-dependent)
       - leave the relay; make the harness never reuse a source port (hides a real GUEST-6 defect)
     recommended: 0, no TIME-WAIT on the capturing stack
+    answer: (a) TIME-WAIT 0 on both capturing stacks (Jeff, 2026-11-23, review r1)
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Flagged: a reading of a seam''s requirement (GUEST-6). No specification change and no new relay-guest-api suite case in this item; a case that reconnects from a fixed source port is offered as a follow-up (design D3).'
     options:
       - none here; tier-0 tests in both repositories pin the fix; offer the case as a follow-up
       - add the case to relay-guest-api here (needs its release, Jeff's tag, and a pin move)
     recommended: none here; tier-0 tests in both repositories pin the fix; offer the case as a follow-up
+    answer: (a) none here; a fixed-source-port case only as a follow-up if filed (Jeff, 2026-11-23, review r1)
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: The oci launcher bounds the runtime's start of the container by CommandLimit (60 s) and reports it as the runtime's, keeps the relay's StartLimit (30 s) from the container running, and records and prints each start's phases on failure (design D2).
     options:
       - as D2
       - record the phases only and keep the 30 s bound until a second occurrence names the cause
       - one reported retry of docker run (rejected by TEST-04)
     recommended: as D2
+    answer: as recommended (batch), Jeff, 2026-11-23
   - id: a4
     kind: assumed
-    status: open
+    status: confirmed
     question: 'No pin moves in this item: the Go relay fix alone makes buildwarden''s relay job deterministic; the harness changes reach buildwarden when conformance/v0.1.1 is tagged (Jeff''s) and pinned later (design D4).'
     options:
       - no pin move here
       - wait for Jeff's conformance/v0.1.1 tag and move the pin in this item
     recommended: no pin move here
+    answer: as recommended (batch), Jeff, 2026-11-23
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: tools/vz-image-prep/netfwd.go captures a VM's connections with a gVisor forwarder too and has the same latent stall; it is left as it is and named in the Archive summary (design D5).
     options:
       - leave it
       - file a follow-up item now
       - fix it here (adds the driver/vz area and blocking macos-vz validation)
     recommended: leave it
+    answer: as recommended (batch), Jeff, 2026-11-23
 history:
   - at: 2026-11-22T21:27:52Z
     by: human/jeff
@@ -140,3 +145,24 @@ history:
   - at: 2026-11-23T11:34:03Z
     by: cloud/20261123T105717Z
     event: entered phase 2 (plan)
+  - at: 2026-11-23T22:09:20Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: (a) TIME-WAIT 0 on both capturing stacks (Jeff, 2026-11-23, review r1)'
+  - at: 2026-11-23T22:09:20Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: (a) none here; a fixed-source-port case only as a follow-up if filed (Jeff, 2026-11-23, review r1)'
+  - at: 2026-11-23T22:09:21Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: as recommended (batch), Jeff, 2026-11-23'
+  - at: 2026-11-23T22:09:21Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: as recommended (batch), Jeff, 2026-11-23'
+  - at: 2026-11-23T22:09:21Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: as recommended (batch), Jeff, 2026-11-23'
+  - at: 2026-11-23T22:09:21Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-24T00:09:21Z
+  - at: 2026-11-23T22:09:21Z
+    by: human/jeff
+    event: done f2-design-review
