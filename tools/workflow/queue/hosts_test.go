@@ -126,6 +126,71 @@ func TestGateSweepsGapsOnlyWhenSomethingMoved(t *testing.T) {
 	}
 }
 
+// TestFingerprintProgramTrunk: a program trunk's move changes the
+// fingerprint of a machine that lists its repository, and the gate sweeps
+// on it; one of a repository the machine does not list changes nothing
+// (FLOW-09, FLOW-20).
+func TestFingerprintProgramTrunk(t *testing.T) {
+	repo, _ := gitRepo(t)
+	clone := filepath.Join(repo, ".dev", "checkouts", "o", "relay")
+	git := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	if err := os.MkdirAll(clone, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git(clone, "init", "-q")
+	git(clone, "commit", "-q", "--allow-empty", "-m", "one")
+	git(clone, "update-ref", "refs/remotes/origin/main", "HEAD")
+	git(clone, "update-ref", "refs/remotes/origin/program/p", "HEAD")
+	s := own(nativeState(), "o/here")
+	for i := range s.Config.Repositories {
+		if n := s.Config.Repositories[i].Name; n == "o/here" || n == "o/relay" {
+			s.Config.Repositories[i].ProgramTrunk = "program/p"
+		}
+	}
+	s.Gaps = []Gap{{ID: "g1", Host: "macos-vz", Status: "open"}}
+	mac, _ := s.Machine("mac")
+	before, err := s.fingerprint(mac, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamp := &GateStamp{Print: before, At: now}
+	// The program trunk absent, then present: it moved.
+	git(repo, "update-ref", "refs/remotes/origin/program/p", "HEAD")
+	after, _ := s.fingerprint(mac, repo)
+	if after == before {
+		t.Fatal("the fingerprint did not change when the program trunk moved")
+	}
+	g, err := s.Gate(mac, repo, stamp, 7, now.Add(time.Hour))
+	if err != nil || !g.Run ||
+		!strings.Contains(g.Reasons[0], "a program trunk or a waiting branch moved") {
+		t.Fatalf("gate after a program-trunk move = %+v, %v; want a sweep", g, err)
+	}
+	// o/relay is not listed: its program trunk's move changes nothing.
+	git(clone, "commit", "-q", "--allow-empty", "-m", "two")
+	git(clone, "update-ref", "refs/remotes/origin/program/p", "HEAD")
+	if again, _ := s.fingerprint(mac, repo); again != after {
+		t.Error("the fingerprint changed when an unlisted repository's program " +
+			"trunk moved")
+	}
+	// Once listed, it counts.
+	mac.Repositories = []string{"o/here", "o/relay"}
+	listed, _ := s.fingerprint(mac, repo)
+	git(clone, "commit", "-q", "--allow-empty", "-m", "three")
+	git(clone, "update-ref", "refs/remotes/origin/program/p", "HEAD")
+	if moved, _ := s.fingerprint(mac, repo); moved == listed {
+		t.Error("the fingerprint did not change when a listed repository's " +
+			"program trunk moved")
+	}
+}
+
 func TestStampRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sub", "stamp.json")
 	if st, err := ReadStamp(path); st != nil || err != nil {
