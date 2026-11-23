@@ -530,6 +530,47 @@ of which fails that night's steps. Enforcement: none changes; `wf native
 8. `.claude/settings.json` by `entire agent add claude-code` (fix 9).
 9. `make test`, `make lint`; push (FLOW-17).
 
+Done, x2-implement, 2026-11-23, one commit per task:
+
+1. 572f687: the skill's **Never (unattended)** background rule,
+   **Arguments**' Unfinished line, **Work**'s Branch setup from `wf trunk`,
+   later-step and kept-worktree forms for both repositories (with
+   `native-run.sh` named for a second repository's scripts), and
+   **Close**'s `<run>-host-<machine>.md`.
+2. b320471: `native-tick.sh`. The sweep, digest check and leftover save
+   run after `claude` exits (`check_finished`); the stamp moves on `worked`
+   only and is removed otherwise; `hand_on` and `handed_off`; `dist/wf` and
+   the clone list before `clean_worktrees`, which tests a branch against
+   `wf trunk`'s trunk, removes clean detached worktrees and names or ages
+   out non-worktree directories; PATH; the `pmset` capture. Two additions
+   beyond **Design**: the EXIT trap keeps `reset_workflow` as a fallback for
+   a run that ended before the post-session check (so a leftover is never
+   reset away), and a non-worktree directory that holds a `.git` is named
+   but never removed. One defect found and fixed in passing: `fetch`'s bare
+   `return`, called from the EXIT trap, returned the script's exit status
+   (bash 4+), so a failed run could never push its status. Tested against
+   a scratch bare remote with a fake `claude`: finished, background work
+   left (two processes killed), no digest, stray workflow changes (saved,
+   then handed on and marked by the next worked run), and a gated idle
+   run's cleanup (a program item's gone branch deleted against
+   `origin/program/componentization`; an unmerged branch with no queue
+   file named; clean and dirty detached worktrees; old, new and
+   `.git`-holding scratch directories).
+3. 44485f9: `native-run.sh` and `native_test.go`'s accepted and refused
+   second-repository cases.
+4. ce79895: `queue/hosts.go` and `TestFingerprintProgramTrunk`.
+5. 035666e: `install-macos.sh` and `TestNoPipeIntoGrepQ`. The test's
+   pattern is `\| *grep +-[a-zA-Z]*q`, so it also catches `-Eq`
+   (`install-macos.sh:100`), which **Design**'s `[a-z]*` would miss.
+6. f7d9a10: `wf native -check`'s Entire hook check and
+   `TestNativeCheckEntireHooks`.
+7. 03ed9cb: FLOW-09 and PROFILE-01, in the approved wording.
+8. 095c42d: `entire agent add claude-code` with Entire CLI 0.12.2; only
+   the SessionStart line changed.
+9. a89fda2 (line wraps for `lll`), c5131a9 (puts back the
+   `tools/workflow/cmd/wf/wf` binary `main` tracks, which a local build
+   had overwritten in f7d9a10). `make test` and `make lint` green.
+
 ## Design review
 
 - r1, 2026-11-23: approved at a5aed35. Jeff approved the design as read at
