@@ -1,0 +1,33 @@
+feature: native-unattended-foreground
+title: An unattended native session never ends its turn while background work runs, and a run that saved a leftover does not advance the gate stamp
+priority: 1
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/native-unattended-foreground.md
+branch: feat/native-unattended-foreground
+areas:
+  - loop
+alters_relationships: null
+source: 'Jeff, 2026-11-23 attended macbook session: native-tick runs 20261120T125213Z and 20261123T124004Z ended with ''claude exited 0'' while run_in_background builds were still running (Claude Code -p ends the session at end of turn; 600 s background-wait ceiling), losing the night''s evidence to a leftover; native-tick.sh moves gate-macbook.json past the run anyway (rc 0) and hands the leftover to no later session'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 4
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-23T19:44:39Z
+    by: human/jeff
+    event: queued at position 1
