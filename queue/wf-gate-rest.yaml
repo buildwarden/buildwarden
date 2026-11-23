@@ -2,7 +2,7 @@ feature: wf-gate-rest
 title: The loop's merge gate reads pull requests over REST, so the cloud can pass it; and wf's built binary leaves the repository
 priority: 1
 kind: process
-status: queued
+status: in_progress
 round: process
 phase: 1
 design: docs/design/wf-gate-rest.md
@@ -18,17 +18,23 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261123T232256Z
+      expires: 2026-11-24T01:23:36.637714204Z
 budget:
   estimate:
     runs: 1
     steps: 5
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-11-23T22:11:34Z
     by: human/jeff
     event: queued at position 1
+  - at: 2026-11-23T23:23:36Z
+    by: cloud/20261123T232256Z
+    event: started (FLOW-05)
+  - at: 2026-11-23T23:23:36Z
+    by: cloud/20261123T232256Z
+    event: claimed x1-design until 2026-11-24T01:23:36Z
