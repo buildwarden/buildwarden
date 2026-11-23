@@ -19,7 +19,7 @@ repositories:
     program_trunk: program/componentization
   - name: buildwarden/buildwarden-specs  # not adopted: no profile
     trunk: main
-    # program_trunk: program/componentization once buildwarden-specs#5 merges and the trunk is cut
+    program_trunk: program/componentization
   - name: buildwarden/buildwarden-relay  # not adopted: no profile
     trunk: main
     program_trunk: program/componentization
