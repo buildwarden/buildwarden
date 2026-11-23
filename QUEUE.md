@@ -44,7 +44,7 @@ None.
 
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | relay-conformance-timeout | fix (follows seam-specs) | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay | 3 implement | f3-implement (cloud) | - | - | 4 / 8 |
+| 1 | relay-conformance-timeout | fix (follows seam-specs) | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay | 3 implement | f3-implement (cloud, leased to cloud/20261123T232256Z-3) | - | - | 5 / 8 |
 | 2 | wf-gate-rest | process | - | buildwarden/buildwarden | - | 1 design | x1-design (cloud, leased to cloud/20261123T232256Z) | - | - | 8 / 5 |
 | 3 | sync-pr-tier1 | process | - | buildwarden/buildwarden | - | 1 design | x1-design (cloud, leased to cloud/20261123T232256Z-2) | - | - | 1 / 4 |
 | 6 | finch-version-starts-vm | fix (follows driver-contract) | - | buildwarden/buildwarden | undeclared | 1 design | f1-design (cloud, leased to cloud/20261123T232256Z-4) | - | - | 2 / 8 |
