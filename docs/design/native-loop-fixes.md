@@ -532,6 +532,16 @@ of which fails that night's steps. Enforcement: none changes; `wf native
 
 ## Design review
 
+- r1, 2026-11-23: approved at a5aed35. Jeff approved the design as read at
+  a5aed35, in the attended session.
+  - The assumed questions a1 to a6 are answered (A), each the
+    recommendation. Jeff: they read reasonable, and they are re-evaluated
+    later if found incorrect.
+  - Each rule change was asked on its own:
+    - rule change FLOW-09 approved at a5aed35
+    - rule change PROFILE-01 approved at a5aed35
+  - Nothing was folded in.
+
 ## Consolidation
 
 ## Rollback notes
