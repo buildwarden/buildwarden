@@ -46,10 +46,9 @@ Nothing in the last 7 days. Call any back with a blocking question or a follow-u
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | config-lookup-test-symlinked-tmp | fix (follows project-config-trust) | - | buildwarden/buildwarden | cli, designs | 8 close | f8-close (cloud) | - | [#134](https://github.com/buildwarden/buildwarden/pull/134) | 10 / 7 |
 | 2 | driver-contract | feature | - | buildwarden/buildwarden | undeclared | 8 close | f8-close (cloud) | - | [#135](https://github.com/buildwarden/buildwarden/pull/135) | 40 / 30 |
-| 3 | program-north-star | process | - | buildwarden/buildwarden | - | 4 close | x4-close (cloud, leased to cloud/20261122T180143Z) | - | [#136](https://github.com/buildwarden/buildwarden/pull/136) | 4 / 12 |
-| 7 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
-| 8 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
-| 9 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 2 / 9 |
+| 6 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
+| 7 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
+| 8 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 2 / 9 |
 
 ## Workers
 
@@ -142,13 +141,13 @@ Open features that are not disjoint. Process items are outside the relations (FL
 
 | Pri | Item | Kind | Repositories | Areas | Est. steps |
 |---|---|---|---|---|---|
-| 4 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
-| 5 | program-land | process | buildwarden/buildwarden | - | 5 |
-| 6 | relay-conformance-timeout | fix (follows seam-specs) | buildwarden/buildwarden, buildwarden/buildwarden-specs | undeclared | 8 |
-| 10 | specs-prerelease-tags | tracked | buildwarden/buildwarden-specs | - | 2 |
-| 11 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
-| 12 | relay-release-forms-spec | feature | buildwarden/buildwarden, buildwarden/buildwarden-specs | undeclared | 12 |
-| 13 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
-| 14 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
-| 15 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
-| 16 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |
+| 3 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
+| 4 | program-land | process | buildwarden/buildwarden | - | 5 |
+| 5 | relay-conformance-timeout | fix (follows seam-specs) | buildwarden/buildwarden, buildwarden/buildwarden-specs | undeclared | 8 |
+| 9 | specs-prerelease-tags | tracked | buildwarden/buildwarden-specs | - | 2 |
+| 10 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
+| 11 | relay-release-forms-spec | feature | buildwarden/buildwarden, buildwarden/buildwarden-specs | undeclared | 12 |
+| 12 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
+| 13 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
+| 14 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
+| 15 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |

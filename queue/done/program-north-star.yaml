@@ -1,9 +1,8 @@
 feature: program-north-star
 title: 'The componentization program is the north star: prioritize and parallelize for it, even across interface breaks, until it completes'
-priority: 3
 kind: process
 state_step: 'Jeff''s setup, after the merge (program-north-star, Implementation plan, State step and What only Jeff can do, once): (1) config.yaml program_trunk: program/componentization on buildwarden/buildwarden, buildwarden/buildwarden-specs and each program repository he created, with hosts.yaml lines; (2) create each program trunk at main''s head on his word, in a new repository only once its CI and flow18 are on main and required (a18); (3) resumes: on each open hold; (4) program: true on driver-contract and relay-release-forms-spec; (5) file program-land (held) and specs-prerelease-tags; (6) program/records.yaml and the README schema; (7) wf status, QUEUE.md, wf commit. Outside the repository: create the program repositories (private, CI and flow18 on main, App, auto-delete head branches), merge specs-prerelease-tags, set program-trunk and tag rulesets, confirm the App may merge, change the nightly prompt''s ''Never merge''.'
-status: in_progress
+status: done
 round: process
 phase: 4
 design: docs/design/program-north-star.md
@@ -55,12 +54,12 @@ steps:
   - id: x4-close
     phase: 4
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - x4-state
     lease:
-      claimed_by: cloud/20261122T180143Z
-      expires: 2026-11-23T02:37:00.727394314Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -127,3 +126,9 @@ history:
   - at: 2026-11-23T00:37:00Z
     by: cloud/20261122T180143Z
     event: claimed x4-close until 2026-11-23T02:37:00Z
+  - at: 2026-11-23T00:37:09Z
+    by: cloud/20261122T180143Z
+    event: done x4-close
+  - at: 2026-11-23T00:37:09Z
+    by: cloud/20261122T180143Z
+    event: closed; feature done
