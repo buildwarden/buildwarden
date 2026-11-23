@@ -23,15 +23,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261123T232256Z-4
+      expires: 2026-11-24T01:26:14.869494496Z
 budget:
   estimate:
     runs: 1
     steps: 8
   spent:
     runs: 1
-    steps: 1
+    steps: 2
 questions: []
 history:
   - at: 2026-11-23T22:15:02Z
@@ -55,3 +55,6 @@ history:
   - at: 2026-11-23T23:26:11Z
     by: cloud/20261123T232256Z-4
     event: 'trunk in buildwarden/buildwarden: main (FLOW-20)'
+  - at: 2026-11-23T23:26:14Z
+    by: cloud/20261123T232256Z-4
+    event: claimed f1-design until 2026-11-24T01:26:14Z
