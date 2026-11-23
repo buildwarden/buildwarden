@@ -1,8 +1,8 @@
 feature: config-lookup-test-symlinked-tmp
 title: 'TestConfigFileLookupOrder fails on macOS: it expects the unresolved t.TempDir path, and LoadConfig returns the working directory os.Getwd resolves (/var -> /private/var)'
-priority: 1
 follows: project-config-trust
-status: in_progress
+trunk: main
+status: done
 round: feature
 phase: 8
 design: docs/design/config-lookup-test-symlinked-tmp.md
@@ -105,10 +105,10 @@ steps:
   - id: f8-close
     phase: 8
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261123T105717Z
-      expires: 2026-11-23T13:08:21.572102156Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -233,3 +233,12 @@ history:
   - at: 2026-11-23T11:08:21Z
     by: cloud/20261123T105717Z
     event: claimed f8-close until 2026-11-23T13:08:21Z
+  - at: 2026-11-23T11:08:55Z
+    by: cloud/20261123T105717Z
+    event: done f8-close
+  - at: 2026-11-23T11:08:55Z
+    by: cloud/20261123T105717Z
+    event: closed; feature done
+  - at: 2026-11-23T11:08:55Z
+    by: cloud/20261123T105717Z
+    event: 'trunk in buildwarden/buildwarden: main (FLOW-20)'
