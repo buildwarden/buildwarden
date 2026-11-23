@@ -2,9 +2,10 @@ feature: relay-release-forms-spec
 title: 'Seam 8: specify the relay''s release forms (form names, file roles, manifest and hash) before M6 adopts a release'
 priority: 7
 program: true
+trunk: program/componentization
 status: in_progress
 round: feature
-phase: 0
+phase: 1
 design: docs/design/relay-release-forms-spec.md
 branch: feat/relay-release-forms-spec
 repos:
@@ -16,10 +17,17 @@ steps:
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261123T105717Z
-      expires: 2026-11-23T13:34:18.535174881Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -44,3 +52,12 @@ history:
   - at: 2026-11-23T11:34:18Z
     by: cloud/20261123T105717Z
     event: claimed f0-branch-setup until 2026-11-23T13:34:18Z
+  - at: 2026-11-23T11:35:14Z
+    by: cloud/20261123T105717Z
+    event: done f0-branch-setup
+  - at: 2026-11-23T11:35:14Z
+    by: cloud/20261123T105717Z
+    event: entered phase 1 (design)
+  - at: 2026-11-23T11:35:14Z
+    by: cloud/20261123T105717Z
+    event: 'trunk in buildwarden/buildwarden: program/componentization (FLOW-20)'
