@@ -44,7 +44,7 @@ None.
 
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | wf-gate-rest | process | - | buildwarden/buildwarden | - | 1 design | x1-design (cloud, leased to cloud/20261123T232256Z) | - | - | 5 / 5 |
+| 1 | wf-gate-rest | process | - | buildwarden/buildwarden | - | 1 design | x1-design (cloud, leased to cloud/20261123T232256Z) | - | - | 6 / 5 |
 | 5 | relay-conformance-timeout | fix (follows seam-specs) | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay | 2 plan | f2-plan (cloud) | - | - | 3 / 8 |
 | 7 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 8 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
