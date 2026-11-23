@@ -5,13 +5,24 @@ program: true
 trunk: program/componentization
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/relay-release-forms-spec.md
 branch: feat/relay-release-forms-spec
 repos:
   - buildwarden/buildwarden
   - buildwarden/buildwarden-specs
-alters_relationships: null
+work:
+  - repo: buildwarden/buildwarden-specs
+    branch: feat/relay-release-forms-spec
+    first: true
+    trunk: program/componentization
+areas:
+  - designs
+seams:
+  - relay-release-forms
+declared: 40f6c52
+alters_relationships: true
+design_review: required
 source: 'Filed on Jeff''s word, 2026-11-20, as driver-contract''s plan task 38 (its assumed question a11, answered (a)): the componentization umbrella lists seam 8 (relay release forms: each form, host-mode binary per platform, unikernel image, appliance image, OCI image, with a published hash, and the devices a relay VM needs) among the seams that get a specification, but no phase writes it; K1 defines the four form names and four file roles as provisional Go constants of the kit (driver/relaysource) and writes no seam 8 text. This S-track program item (FLOW-20) writes the specification, in buildwarden/buildwarden-specs with its conformance, before M6 adopts a relay release. Areas undeclared until its design.'
 steps:
   - id: f0-branch-setup
@@ -24,10 +35,26 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261123T105717Z
-      expires: 2026-11-23T13:35:24.563156932Z
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -35,7 +62,112 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: 'Flagged: component design (security posture, a new contract). The release''s manifest and its published hash as the trust root of a relay release: one manifest relay-release.json per release, its SHA-256 the published hash; a launcher pins version and hash, checks the manifest against the pin and every file or image digest against the manifest before starting anything, never takes the hash from where it fetched the manifest; a signature allowed, not required. Design, Decisions 3 and 4, Questions a1.'
+    options:
+      - (a) as stated
+      - (b) as (a), with a required signature over the manifest that launchers verify
+      - (c) per-file hashes pinned by the consumer, no manifest hash
+      - (d) hashes published beside the files and fetched with them
+    recommended: '(a): one reviewable value per adopted release that binds every file; (b) can be added compatibly'
+  - id: a2
+    kind: assumed
+    status: open
+    question: 'Flagged: component design (the contract between every relay release and every driver). The launch interface fixed per form by the specification: host-binary --mode=host --fd=<n> --claim-addr=<addr> and WARDEN_CLAIM_TOKEN; oci-image its entrypoint, WARDEN_CLAIM_TOKEN, port 8301; VM forms the warden.<key>=<value> words on the kernel command line or in the relay seed (WARDENRELAY), the manifest naming which. Design, Decision 5, Questions a2.'
+    options:
+      - (a) as stated
+      - (b) argument and command-line templates in the manifest
+      - (c) a new form-neutral vocabulary for the Rust relay
+    recommended: '(a): drop-in releases, no template engine in launchers, RELAY-08 checkable in one document'
+  - id: a3
+    kind: assumed
+    status: open
+    question: 'Flagged: component design (the seam''s contract; the entropy requirement is the relay''s key posture, RELAY-03). The devices a relay VM needs: boot by kernel (and initramfs) or UEFI disk; two NICs, build link first; an entropy source required for every VM form, named by the form (virtio device, or processor or firmware where the hypervisor has none); a console; the seed''s optical drive when read; least memory and vCPUs; no vsock in v1. Design, Decision 6, Questions a3.'
+    options:
+      - (a) as stated
+      - (b) entropy required for the unikernel only
+      - (c) a virtio entropy device required in every case
+      - (d) vsock declared now as an optional claim device, ahead of S4
+      - (e) NIC order upstream first
+    recommended: '(a): what qemu, firecracker and Hyper-V give the Go relay VM today and what M0 found Hermit needs'
+  - id: a4
+    kind: assumed
+    status: open
+    question: Strategy. Form and role names are K1's (settled by driver-contract Decision 11 and a11, not asked); a unikernel carries kernel and an optional initramfs (Hermit's loader plus relay, M0), and a released appliance carries no binary role. Design, Decision 2, Questions a4.
+    options:
+      - (a) as stated
+      - (b) a unikernel as one kernel file only
+      - (c) a released appliance may carry binary for the launcher to append
+    recommended: (a)
+  - id: a5
+    kind: assumed
+    status: open
+    question: Strategy. Each form states in the manifest which relay-claim mode's requirements it meets; unikernel meets host mode's build-link requirements (settled by relay-claim's Conformance section and umbrella Decision 12). Design, Decision 7, Questions a5.
+    options:
+      - (a) in the manifest, per form
+      - (b) in the document only, per form name
+    recommended: (a)
+  - id: a6
+    kind: assumed
+    status: open
+    question: 'Strategy. Nothing recorded in the ledger (the relay''s form, version or hash): that is a seam 4 change the umbrella names for no phase before M6. Design, Decision 8, Questions a6.'
+    options:
+      - (a) none here, left to M6 or its own item
+      - (b) add them to the environment record now
+    recommended: (a)
+  - id: a7
+    kind: assumed
+    status: open
+    question: Strategy. The Go relay is a known divergence (no manifest, :latest, unreleased appliance assets, relay appended per build, warden.net default); its release configuration is not changed. Design, Decision 10, Questions a7.
+    options:
+      - (a) as stated
+      - (b) the Go relay's release publishes a manifest now (release configuration, Jeff's)
+    recommended: '(a): retired at M6; the Rust relay''s M2 and M3 releases are the first producers'
+  - id: a8
+    kind: assumed
+    status: open
+    question: Strategy. buildwarden/buildwarden adopts the specification later, by a reconciliation item adopt relay-release-forms at <version> (LOOP-07) carrying the GLOBAL-08 and tier-1 seams change, the pin, the book row and relaysource's provisional note; here only the design. Design, Decision 11, Questions a8.
+    options:
+      - (a) as stated
+      - (b) pin, amend GLOBAL-08 and tier 1's seams, and add the book row in this item
+    recommended: (a)
+  - id: a9
+    kind: assumed
+    status: open
+    question: Strategy. The suite checks a release (schema, published hash, files, roles, digests, platform names, and a launch case for host-binary and oci-image in the Linux sandbox); VM launch and launcher requirements are listed as not machine-checked (VM launcher settled by seam-specs a6, not asked). Design, Decision 9, Questions a9.
+    options:
+      - (a) as stated
+      - (b) static release checks only, no launch case
+      - (c) a launcher case in the driver suite now
+    recommended: (a)
+  - id: a10
+    kind: assumed
+    status: open
+    question: Needs privileged work (CI and release configuration, Jeff's); asked in the design review. The specs repository's release and implementations workflows name the six directories; this item's specs PR does not touch .github/, and the first pre-release waits for them. Design, Decision 12, Questions a10.
+    options:
+      - (a) Jeff adds the directory, best inside specs-prerelease-tags, reading the list from the Makefile's SPECS
+      - (b) this item's specs PR changes the workflows and goes to specs main by Jeff's merge
+      - (c) added by hand when he next touches the workflows
+    recommended: (a)
+  - id: a11
+    kind: assumed
+    status: open
+    question: Strategy. A relay states its version in the manifest only (prebuilt-artifacts leaves this to seam 8); directory relay-release-forms, prefix FORM, manifest relay-release.json. Design, Questions a11.
+    options:
+      - (a) as stated
+      - (b) each file also states the version in itself, as prebuilt-artifacts Decision 4 does for executables
+    recommended: (a)
+  - id: a12
+    kind: assumed
+    status: open
+    question: 'Strategy. No default for a missing boot-channel value: a launcher gives warden.net and every key its form reads; a release refuses to start without one; the Go init''s dhcp default is a known divergence. Design, Defaults and overrides, Questions a12.'
+    options:
+      - (a) as stated
+      - (b) the specification keeps dhcp as the default
+    recommended: '(a): every driver already passes the word (GLOBAL-11)'
 history:
   - at: 2026-11-20T22:53:31Z
     by: human/jeff
@@ -64,3 +196,18 @@ history:
   - at: 2026-11-23T11:35:24Z
     by: cloud/20261123T105717Z
     event: claimed f1-design until 2026-11-23T13:35:24Z
+  - at: 2026-11-23T11:48:14Z
+    by: cloud/20261123T105717Z
+    event: 'declared at 4c9f451: areas declared: designs; seams +relay-release-forms; alters_relationships unset -> true; design_review unset -> required; work +buildwarden/buildwarden-specs (first)'
+  - at: 2026-11-23T11:48:14Z
+    by: cloud/20261123T105717Z
+    event: 'trunk in buildwarden/buildwarden-specs: program/componentization (FLOW-20)'
+  - at: 2026-11-23T11:48:35Z
+    by: cloud/20261123T105717Z
+    event: 'declared at 40f6c52: nothing changed'
+  - at: 2026-11-23T11:49:53Z
+    by: cloud/20261123T105717Z
+    event: done f1-design
+  - at: 2026-11-23T11:49:53Z
+    by: cloud/20261123T105717Z
+    event: entered phase 2 (plan)
