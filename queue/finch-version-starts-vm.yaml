@@ -5,17 +5,17 @@ follows: driver-contract
 trunk: main
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/finch-version-starts-vm.md
 branch: feat/finch-version-starts-vm
-alters_relationships: null
-source: >-
-  native driver-contract-runtime-check-finch on main c52926df (host:macos-finch/macbook.20261123T220740Z): finch v1.19.0 starts a stopped VM on 'finch version' and exits 0 after ~11.8 s, so warden build --runtime finch and warden doctor kill the query at 10 s, report '`finch version` failed', and leave the VM starting (Running afterwards); the next build passes. The design's premise that 'finch version' exits non-zero with the VM stopped does not hold. Logs: native/macos-finch/2026-11-23/runtime-check.log
-  Jeff's decision (2026-11-23, attended macbook session): the check uses `finch vm status` as its
-  confirmation that the finch binary works and the VM is available, in place of `finch version`. A VM
-  that is not running is started only when the run is attended (a person at a terminal), with the start
-  shown; unattended, warden refuses up front with the fixable error and the `finch vm start` hint, as
-  today.
+areas:
+  - driver/container
+  - book
+  - designs
+declared: e6ef4a7
+alters_relationships: false
+design_review: required
+source: 'native driver-contract-runtime-check-finch on main c52926df (host:macos-finch/macbook.20261123T220740Z): finch v1.19.0 starts a stopped VM on ''finch version'' and exits 0 after ~11.8 s, so warden build --runtime finch and warden doctor kill the query at 10 s, report ''`finch version` failed'', and leave the VM starting (Running afterwards); the next build passes. The design''s premise that ''finch version'' exits non-zero with the VM stopped does not hold. Logs: native/macos-finch/2026-11-23/runtime-check.log Jeff''s decision (2026-11-23, attended macbook session): the check uses `finch vm status` as its confirmation that the finch binary works and the VM is available, in place of `finch version`. A VM that is not running is started only when the run is attended (a person at a terminal), with the start shown; unattended, warden refuses up front with the fixable error and the `finch vm start` hint, as today.'
 steps:
   - id: f0-branch-setup
     phase: 0
@@ -27,10 +27,34 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-validate-macos-finch
+    phase: 6
+    affinity: host:macos-finch
     status: pending
     lease:
-      claimed_by: cloud/20261123T232256Z-4
-      expires: 2026-11-24T01:26:14.869494496Z
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design Validation plan; FLOW-09), on the branch after consolidation, on macOS with finch v1.19.0 or later. (1) VM Running: finch vm status prints Running (record exit code and time); warden doctor --runtime finch and warden doctor print container runtime: finch and ok; a default build succeeds and its ledger verifies. (2) finch vm stop; finch vm status prints Stopped (exit code, time); run it three times, the VM is still Stopped. (3) Unattended (the session''s own shell; record that /dev/tty does not open): with the VM stopped, time warden build --runtime finch is refused within 2 s with "container runtime finch is installed but its VM is not running (`finch vm status`: Stopped)" and the finch vm start hint, leaves no output directory, and the VM is still Stopped; the same with nothing named. (4) VM stopped: time warden doctor --runtime finch and time warden doctor are each blocked within 2 s naming the state, exit 1 with no ok, VM still Stopped; the same under script -q /dev/null (a controlling terminal): doctor does not start it. (5) Attended, simulated with script -q /dev/null dist/warden build --runtime finch ... (or by Jeff at a terminal if the session cannot run script): with the VM stopped, the build prints the start line and finch''s output, the VM is Running, and the build succeeds and verifies; the same with nothing named. (6) go test ./driver/container/... passes on macOS. Do not run finch vm remove or finch vm init. Leave the VM Running, as found. Evidence under native/macos-finch/<date>/.'
+  - id: f2-design-review
+    phase: 2
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -38,7 +62,57 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: 'Flagged: it defines Jeff''s "attended" (2026-11-23) for the first time, and option B is a change to the driver-contract seam. A run is attended when the container driver has a controlling terminal (design Decision 3): /dev/tty (macOS, Linux) or CONIN$ (Windows) opens; warden passes nothing, no setting. warden runs the driver with pipes for its standard streams, so the driver cannot test them itself.'
+    options:
+      - '(A) as stated: the driver''s controlling terminal, no seam change'
+      - '(B) warden tests its own stdin and stderr with isatty and passes attended in run''s request: a change to specs/driver-contract/v1.md'
+      - (C) an explicit setting, [driver.container] start_vm
+    recommended: (A) as stated
+  - id: a2
+    kind: assumed
+    status: open
+    question: 'Linux finch keeps `finch version` (design Decision 2): by runtime.GOOS, Linux finch, which has no VM and no vm command, is checked with its version query as on main and never started; macOS and Windows use finch vm status. No fallback from vm status to finch version.'
+    options:
+      - (A) as stated
+      - (B) vm status on every host, falling back to finch version when it fails
+    recommended: (A) as stated
+  - id: a3
+    kind: assumed
+    status: open
+    question: 'warden doctor never starts finch''s VM (design Decision 6): it reports a stopped finch as blocked with the start hint, attended or not; Jeff''s "the run" is read as a build or shell, and doctor is a check (UX-04).'
+    options:
+      - (A) as stated
+      - (B) doctor at a terminal starts it as a build does
+    recommended: (A) as stated
+  - id: a4
+    kind: assumed
+    status: open
+    question: 'Flagged: departs from driver-contract Decision 26 (Jeff, 2026-11-22: the probe makes no engine call; an engine that is down fails at the build''s first call, leaving the output directory) for finch, on a reading of Jeff''s 2026-11-23 "refuses up front". The unattended refusal of a stopped finch is in the probe of run, before any output directory; the attended start is in run, outside the probe''s 30 s limit (design Decision 4).'
+    options:
+      - '(A) as stated: refuse in the probe, start in run'
+      - '(B) Decision 26''s placement: the probe asks nothing; run''s first engine call refuses or starts, leaving the output directory'
+    recommended: (A) as stated
+  - id: a5
+    kind: assumed
+    status: open
+    question: Detection with nothing named passes a stopped finch over like any runtime that is down, and an attended build starts finch's VM only when no runtime is up and finch is installed with its VM Stopped (design Decision 7).
+    options:
+      - (A) as stated
+      - '(B) finch first means finch: an attended build starts its VM even when podman or docker is up'
+      - (C) detection never starts a VM; only a named finch is started
+    recommended: (A) as stated
+  - id: a6
+    kind: assumed
+    status: open
+    question: 'The attended `finch vm start` has no time limit of its own (design Decision 4): the person at the terminal sees its output and can interrupt it.'
+    options:
+      - (A) as stated
+      - (B) a limit such as 120 s, a new default with no override
+    recommended: (A) as stated
 history:
   - at: 2026-11-23T22:15:02Z
     by: host:macos-finch/macbook.20261123T220740Z
@@ -67,3 +141,15 @@ history:
   - at: 2026-11-23T23:40:00Z
     by: human/jeff
     event: 'decided: the runtime check confirms finch with `finch vm status` (binary works, VM available); a stopped VM is started only when attended, refused with the fix unattended (recorded in source for f1-design)'
+  - at: 2026-11-23T23:29:18Z
+    by: cloud/20261123T232256Z-4
+    event: 'declared at cbaeacb: areas declared: driver/container, book, designs; alters_relationships unset -> false; design_review unset -> required'
+  - at: 2026-11-23T23:33:03Z
+    by: cloud/20261123T232256Z-4
+    event: 'declared at e6ef4a7: nothing changed'
+  - at: 2026-11-23T23:33:31Z
+    by: cloud/20261123T232256Z-4
+    event: done f1-design
+  - at: 2026-11-23T23:33:31Z
+    by: cloud/20261123T232256Z-4
+    event: entered phase 2 (plan)
