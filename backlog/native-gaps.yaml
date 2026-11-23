@@ -263,6 +263,13 @@ gaps:
       finding: `go test ./cmd/warden` fails on darwin/arm64 on main (TestConfigFileLookupOrder, /var vs
       /private/var), refiled as config-lookup-test-symlinked-tmp (follows project-config-trust); still fails
       on be13847. Logs: native/qemu-any/2026-11-20/.
+      2026-11-23 (host:qemu-any/macbook.20261123T220740Z, unattended, main c52926df, which carries #135's
+      driver/qemu rework (driver.go, settings.go, driver/host.go, hostlock); QEMU 11.1.1, relay initramfs
+      rebuilt from main with `make relay-vm`): Linux half re-passed. `warden build --driver qemu --image
+      ~/Library/Caches/warden/images/alpine_3_21.qcow2` (HTTP fetch of the main APKINDEX, 488115 bytes)
+      SUCCEEDED; `inspect --verify-disks`: ENVIRONMENT vm-disk-chain/v1 payload verified, qemu linux/arm64,
+      disk alpine_3_21.qcow2 sha256:ebaef97d702d `local` [ok], 5 seed files, 11 signatures valid, all
+      channels closed. Windows half: see qemu-windows-guest-package. Logs: native/qemu-any/2026-11-23/main-disk.log.
     status: open
   - id: hyperv-eval-image-verify-disks
     host: windows-hyperv
@@ -1192,6 +1199,8 @@ gaps:
       Tracked, not blocking (design Validation plan, tier 2). No driver tree is edited; the checks
       are runtime- and OS-independent Go, covered by tier 0 on Linux. Run on the branch once
       Implement is done, or on main after it merges.
+      2026-11-23 (host:macos-finch/macbook.20261123T220740Z, unattended, main c52926df): not run.
+      feat/workdir-in-context is still 24376c0 (design only), under the FLOW-20 hold (q1).
   - id: loop-native-lead-macos-wrapper
     host: macos-vz
     status: open
@@ -1216,6 +1225,11 @@ gaps:
       2026-11-20T22:40:36Z after the 2026-11-21T12:40Z run (which pushed its digest), as designed:
       record_status does not push an unchanged outcome (native-tick.sh:140). Still open: no led
       item, so native-push.sh is unexercised, and no run with the session remote unset.
+      2026-11-23 (host:macos-vz/macbook.20261123T220740Z, unattended, main c52926df, the first run under
+      #141's wrapper): started by the wrapper after wf gate found work; wf next offered no step to any of
+      this machine's hosts (no led item), so native-push.sh is still unexercised, and no run with the
+      session remote unset. native/status/macbook.yaml read the 12:40Z run's "session left uncommitted
+      workflow changes", which macbook.attended-20261123T160000Z recorded from its leftover.
   - id: loop-native-lead-windows-wrapper
     host: windows-hyperv
     status: open
@@ -1293,6 +1307,18 @@ gaps:
       (2026-11-22, attended). Native validation ran at 190b092, before the version-query change
       (fa732c3..1b3fb70). From finch's source, `finch version` exits non-zero with the VM stopped;
       unverified on a real finch. Filed by cloud/20261122T180143Z.
+      2026-11-23 (host:macos-finch/macbook.20261123T220740Z, unattended, main c52926df, finch v1.19.0, the
+      only runtime installed): (3) VM running: named and detected doctor print `container runtime: finch`
+      and ok (0.24 s, 0.15 s); a build SUCCEEDED. (1) VM stopped: the build fails with the fixable "installed
+      but not running (`finch version` failed)" error, "finch vm start" and the pointer to warden doctor, in
+      10.05 s; the output directory holds driver.json and inputs/. (2) VM stopped: named doctor blocked with
+      the same error and hint (10.03 s), detected doctor too (4.55 s); no slow hint. But the premise is wrong:
+      finch v1.19.0 STARTS a stopped VM on `finch version` and exits 0 after ~11.8 s, so warden's 10 s bound
+      kills the query mid-start, says "failed", and the VM is Running afterwards (the next build or doctor
+      passes). Filed as finch-version-starts-vm (follows driver-contract). (4) case 6 not run: two concurrent
+      builds, SIGKILL of warden and its driver and a second HOME are outside this session's allowlisted forms.
+      Detection order not checkable: no podman or docker here. Kept open for case 6 and for the fix.
+      Log: native/macos-finch/2026-11-23/runtime-check.log.
   - id: native-loop-fixes-macbook
     host: macos-any
     status: open
@@ -1309,6 +1335,16 @@ gaps:
     note: >-
       Tracked, not blocking (design native_validation, a5): the wrapper runs from main only. Added at
       x1-design (cloud/20261123T195428Z, 2026-11-23). Run on main after the merge.
+      2026-11-23 (host:macos-any/macbook.20261123T220740Z, unattended, main c52926df, the first run after
+      #141): (4) `install-macos.sh check` passes as found, "a scheduled wake is set", Entire hooks ok in the
+      checkout and all four clones; with dist/warden unsigned it warns on the macos-vz profile check (re-signed
+      after). With finch's VM stopped it does NOT warn: the container-any check's `finch info`
+      (install-macos.sh:58) runs first and finch v1.19.0 starts the VM, so the macos-finch check sees Running
+      (see finch-version-starts-vm). The FAIL for a clone without Entire's hooks was not run (it would edit
+      the owner's clone). (5) not checkable: ~/.local/bin/cargo is still there, ahead of rustup's on the
+      wrapper's PATH (native-tick.sh:76); needs Jeff to remove it. (1)-(3) not observable yet: no unfinished
+      run, program-trunk-only move or gone program branch since the merge. Log:
+      native/macos-any/2026-11-23/native-loop-fixes.log.
   - id: native-loop-fixes-windows
     host: windows-any
     status: open

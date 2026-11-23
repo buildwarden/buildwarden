@@ -1,0 +1,34 @@
+feature: finch-version-starts-vm
+title: The container runtime check reports a stopped finch VM that its own query is starting
+priority: 6
+follows: driver-contract
+status: queued
+round: feature
+phase: 0
+design: docs/design/finch-version-starts-vm.md
+branch: feat/finch-version-starts-vm
+alters_relationships: null
+source: 'native driver-contract-runtime-check-finch on main c52926df (host:macos-finch/macbook.20261123T220740Z): finch v1.19.0 starts a stopped VM on ''finch version'' and exits 0 after ~11.8 s, so warden build --runtime finch and warden doctor kill the query at 10 s, report ''`finch version` failed'', and leave the VM starting (Running afterwards); the next build passes. The design''s premise that ''finch version'' exits non-zero with the VM stopped does not hold. Logs: native/macos-finch/2026-11-23/runtime-check.log'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 8
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-23T22:15:02Z
+    by: host:macos-finch/macbook.20261123T220740Z
+    event: queued at position 6 (asked 5)
+  - at: 2026-11-23T22:15:02Z
+    by: host:macos-finch/macbook.20261123T220740Z
+    event: 'repos and areas taken from driver-contract: it has none'

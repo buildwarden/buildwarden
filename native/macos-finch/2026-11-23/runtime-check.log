@@ -1,0 +1,70 @@
+# driver-contract-runtime-check-finch, host:macos-finch/macbook.20261123T220740Z, unattended
+# main c52926df (PR #135 merged as 136be787), dist/warden from `make build` + `make sign`
+# finch v1.19.0 (nerdctl v2.2.2, containerd v2.2.1), the only runtime installed (no podman, no docker)
+
+## (3) VM running
+$ finch vm status
+Running
+$ time dist/warden doctor --driver container --runtime finch
+config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+container runtime: finch
+ok
+real 0.237s
+$ time dist/warden doctor
+container runtime: finch
+ok
+real 0.151s
+$ dist/warden build --runtime finch -q -o .scratch/dcrc/out-running .scratch/dcrc/ctx   # alpine:3.21, HTTPS wget of APKINDEX
+[warden] Allocating network... / Starting relay... / Starting build container... / Executing build... / Tearing down environment...
+warden: build SUCCEEDED (output: .scratch/dcrc/out-running)
+
+## (1) VM stopped, build
+$ finch vm stop   -> Stopped
+$ native-run.sh WARDEN_CTR_CLI=finch -- dist/warden build --runtime finch -o .scratch/dcrc/out-stopped .scratch/dcrc/ctx
+[warden] driver container: container runtime finch is installed but not running (`finch version` failed)
+warden: build FAILED
+[warden] ERROR: container runtime finch is installed but not running (`finch version` failed)
+  To fix: start its VM: finch vm start (or finch vm init the first time); warden doctor checks it
+exit 1
+$ ls .scratch/dcrc/out-stopped
+driver.json  inputs/
+# second trial, timed:
+$ finch vm stop; time dist/warden build --runtime finch -q -o .scratch/dcrc/out-stopped2 .scratch/dcrc/ctx
+(same error and hint)
+real 10.054s
+$ finch vm status
+Running            <-- the probe started the VM
+
+## (2) VM stopped, doctor
+# first try, right after (1): the VM was already Running again, so doctor said ok (0.18 s).
+$ finch vm stop; time dist/warden doctor --driver container --runtime finch
+[warden] ERROR: --runtime names the container runtime finch, which is installed but not running (`finch version` failed)
+  To fix: start its VM: finch vm start (or finch vm init the first time), or pass --runtime another runtime, or leave it out
+real 10.032s
+$ finch vm status
+Running
+$ finch vm stop; time dist/warden doctor
+[warden] ERROR: container runtime finch is installed but not running (`finch version` failed)
+  To fix: start its VM: finch vm start (or finch vm init the first time)
+real 4.548s
+$ finch vm status
+Running
+
+## Root cause
+$ finch vm stop; finch vm status
+Stopped
+$ time finch version
+Client: Version v1.19.0 ... Server: containerd v2.2.1, runc 1.4.0
+real 11.836s, exit 0
+$ finch vm status
+Running
+# finch v1.19.0 starts a stopped VM on `finch version` (and on `finch info`) and exits 0 once it is up
+# (~11.8 s here). The design's premise ("`finch version` exits non-zero with the VM stopped", from
+# finch's source) does not hold on this finch. warden's 10 s bound kills the query mid-start and
+# reports "`finch version` failed"; the VM finishes starting anyway, so the next build or doctor
+# passes. No slow hint seen: the VM answers after the 10 s bound, not within 3-10 s.
+
+## (4) case 6: not run this session (needs two concurrent builds, SIGKILL of warden and its driver,
+## and a second HOME, outside this session's allowlisted forms). Detection order: only finch installed.
+
+# finch VM left Running, as found.

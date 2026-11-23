@@ -1,0 +1,26 @@
+# native-loop-fixes-macbook, host:macos-any/macbook.20261123T220740Z, unattended, main c52926df (#141 merged)
+## (4) tools/workflow/native/install-macos.sh check
+# as found (finch VM running, dist/warden signed by make sign): every line ok but
+  warn  no check for host macos-any on macOS
+  ok    a scheduled wake is set
+Ready.
+# Entire hooks: ok in the checkout and all four clones.
+# with `finch vm stop` and `codesign --remove-signature dist/warden`:
+  warn  no check for host macos-any on macOS
+  warn  buildwarden/buildwarden macos-vz: sh -c codesign -d --entitlements - dist/warden 2>&1 | grep -q com.apple.security.virtualization
+Ready.
+$ finch vm status
+Running
+# The unsigned warden warns. The stopped VM does NOT warn: the container-any check
+# (install-macos.sh:58, `finch info`) runs first and finch v1.19.0 starts the stopped VM, so the
+# later macos-finch profile check (`finch vm status | grep -qx Running`) sees Running.
+# FAIL for a clone without Entire's hooks: not run (would mean removing hooks from the owner's clone).
+# dist/warden re-signed with `make sign` afterwards.
+## (5) cargo
+$ which -a cargo
+/Users/jeff/.local/bin/cargo
+/opt/homebrew/opt/rustup/bin/cargo
+# ~/.local/bin/cargo is still there, and native-tick.sh:76 puts ~/.local/bin first, so "no
+# ~/.local/bin link" cannot be checked until Jeff removes it.
+## (1)-(3): not observable this run (no unfinished run, program-trunk-only move or gone program
+## branch since the merge).

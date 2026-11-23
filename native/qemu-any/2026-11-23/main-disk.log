@@ -1,0 +1,20 @@
+# qemu-environment-descriptors Linux half, host:qemu-any/macbook.20261123T220740Z, unattended
+# main c52926df (since be13847: #135 reworked driver/qemu/driver.go, settings.go, driver/host.go, hostlock)
+# QEMU 11.1.1, relay initramfs rebuilt from main with `make relay-vm`, dist/warden from `make build` + `make sign`
+$ cat .scratch/qed/ctx/build.sh   # same as native/qemu-any/2026-11-13/build.sh
+$ dist/warden build --driver qemu --image ~/Library/Caches/warden/images/alpine_3_21.qcow2 --timeout 15m -o .scratch/qed/out-disk .scratch/qed/ctx
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+[warden] preparing build environment...
+[warden] starting relay...
+[warden] starting build...
+[warden] running...
+nameserver 100.127.255.253
+fetched 488115 bytes
+warden: build SUCCEEDED (output: .scratch/qed/out-disk)
+$ dist/warden inspect --verify-disks .scratch/qed/out-disk
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+    qemu linux/arm64
+    disk     alpine_3_21.qcow2  197.5 MB  sha256:ebaef97d702d  local  [ok]
+    seed     5 per-build files
+  SIGNATURES: All 11 signatures valid
+  COMPLETENESS: All channels closed
