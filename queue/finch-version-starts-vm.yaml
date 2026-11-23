@@ -9,7 +9,13 @@ phase: 1
 design: docs/design/finch-version-starts-vm.md
 branch: feat/finch-version-starts-vm
 alters_relationships: null
-source: 'native driver-contract-runtime-check-finch on main c52926df (host:macos-finch/macbook.20261123T220740Z): finch v1.19.0 starts a stopped VM on ''finch version'' and exits 0 after ~11.8 s, so warden build --runtime finch and warden doctor kill the query at 10 s, report ''`finch version` failed'', and leave the VM starting (Running afterwards); the next build passes. The design''s premise that ''finch version'' exits non-zero with the VM stopped does not hold. Logs: native/macos-finch/2026-11-23/runtime-check.log'
+source: >-
+  native driver-contract-runtime-check-finch on main c52926df (host:macos-finch/macbook.20261123T220740Z): finch v1.19.0 starts a stopped VM on 'finch version' and exits 0 after ~11.8 s, so warden build --runtime finch and warden doctor kill the query at 10 s, report '`finch version` failed', and leave the VM starting (Running afterwards); the next build passes. The design's premise that 'finch version' exits non-zero with the VM stopped does not hold. Logs: native/macos-finch/2026-11-23/runtime-check.log
+  Jeff's decision (2026-11-23, attended macbook session): the check uses `finch vm status` as its
+  confirmation that the finch binary works and the VM is available, in place of `finch version`. A VM
+  that is not running is started only when the run is attended (a person at a terminal), with the start
+  shown; unattended, warden refuses up front with the fixable error and the `finch vm start` hint, as
+  today.
 steps:
   - id: f0-branch-setup
     phase: 0
@@ -58,3 +64,6 @@ history:
   - at: 2026-11-23T23:26:14Z
     by: cloud/20261123T232256Z-4
     event: claimed f1-design until 2026-11-24T01:26:14Z
+  - at: 2026-11-23T23:40:00Z
+    by: human/jeff
+    event: 'decided: the runtime check confirms finch with `finch vm status` (binary works, VM available); a stopped VM is started only when attended, refused with the fix unattended (recorded in source for f1-design)'
