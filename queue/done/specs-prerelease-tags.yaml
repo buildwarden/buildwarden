@@ -1,7 +1,6 @@
 feature: specs-prerelease-tags
 title: The specifications repository's release workflow accepts program-trunk pre-release tags and publishes them with --prerelease (program-north-star Decision 16, a17)
-priority: 8
-status: in_progress
+status: done
 round: tracked
 phase: 2
 design: docs/design/specs-prerelease-tags.md
@@ -21,7 +20,7 @@ steps:
   - id: t2-merge
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -49,3 +48,9 @@ history:
   - at: 2026-11-23T22:09:43Z
     by: human/jeff
     event: entered phase 2 (merge)
+  - at: 2026-11-23T22:09:54Z
+    by: human/jeff
+    event: done t2-merge
+  - at: 2026-11-23T22:09:54Z
+    by: human/jeff
+    event: closed; feature done

@@ -22,7 +22,6 @@ None.
 ### Not counted: queued, tracked, or not yet due
 
 - **wf-state-migration-step**: design review (`x1-design`, FLOW-19)
-- **specs-prerelease-tags** (tracked): buildwarden/buildwarden-specs, your merge (`t2-merge`)
 
 ### Held
 
@@ -49,7 +48,6 @@ None.
 | 5 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
 | 6 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 2 / 9 |
 | 7 | relay-release-forms-spec | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | designs | 2 plan | f2-design-review (human) | - | - | 2 / 12 |
-| 8 | specs-prerelease-tags | tracked | - | buildwarden/buildwarden-specs | - | 2 merge | t2-merge (human) | your merge | - | 1 / 2 |
 
 ## Workers
 
@@ -68,7 +66,6 @@ Open features that are not disjoint. Process items are outside the relations (FL
 | relay-conformance-timeout, workdir-in-context | near | driver-core reaches relay |
 | relay-conformance-timeout, relay-collector-failure-fails-open | colliding | buildwarden/buildwarden-specs has no area map |
 | relay-conformance-timeout, relay-release-forms-spec | colliding | buildwarden/buildwarden-specs has no area map |
-| relay-conformance-timeout, specs-prerelease-tags | colliding | buildwarden/buildwarden-specs has no area map |
 | relay-conformance-timeout, vm-from-host-path | colliding | vm-from-host-path is undeclared |
 | relay-conformance-timeout, configuration-bugfixes | colliding | configuration-bugfixes is undeclared |
 | relay-conformance-timeout, runtime-former-values-removal | colliding | runtime-former-values-removal is undeclared |
@@ -89,13 +86,11 @@ Open features that are not disjoint. Process items are outside the relations (FL
 | workdir-in-context, auto-tidy-pull-request | colliding | auto-tidy-pull-request is undeclared |
 | workdir-in-context, relay-exit-code-unreadable | near | driver-core reaches relay |
 | relay-collector-failure-fails-open, relay-release-forms-spec | colliding | buildwarden/buildwarden-specs has no area map |
-| relay-collector-failure-fails-open, specs-prerelease-tags | colliding | buildwarden/buildwarden-specs has no area map |
 | relay-collector-failure-fails-open, vm-from-host-path | colliding | vm-from-host-path is undeclared |
 | relay-collector-failure-fails-open, configuration-bugfixes | colliding | configuration-bugfixes is undeclared |
 | relay-collector-failure-fails-open, runtime-former-values-removal | colliding | runtime-former-values-removal is undeclared |
 | relay-collector-failure-fails-open, auto-tidy-pull-request | colliding | auto-tidy-pull-request is undeclared |
 | relay-collector-failure-fails-open, relay-exit-code-unreadable | colliding | area relay |
-| relay-release-forms-spec, specs-prerelease-tags | colliding | buildwarden/buildwarden-specs has no area map |
 | relay-release-forms-spec, vm-from-host-path | colliding | vm-from-host-path is undeclared |
 | relay-release-forms-spec, configuration-bugfixes | colliding | configuration-bugfixes is undeclared |
 | relay-release-forms-spec, runtime-former-values-removal | colliding | runtime-former-values-removal is undeclared |
@@ -124,8 +119,8 @@ Open features that are not disjoint. Process items are outside the relations (FL
 |---|---|---|---|---|---|
 | 1 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
 | 2 | program-land | process | buildwarden/buildwarden | - | 5 |
-| 9 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
-| 10 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
-| 11 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
-| 12 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
-| 13 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |
+| 8 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
+| 9 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
+| 10 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
+| 11 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
+| 12 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |

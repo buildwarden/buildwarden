@@ -1,6 +1,6 @@
 feature: vm-from-host-path
 title: A Dockerfile FROM naming a host path boots that host file as the VM disk (qemu, firecracker), and a FROM that does not translate silently boots the default image (security fix)
-priority: 9
+priority: 8
 status: queued
 round: feature
 phase: 0
