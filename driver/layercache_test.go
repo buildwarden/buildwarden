@@ -49,23 +49,31 @@ func TestLayerCacheRecordedProvenanceReused(t *testing.T) {
 }
 
 func TestLayerCacheInvalidation(t *testing.T) {
-	want := hashString(t, "changed!")
-	rewrite := func(t *testing.T, disk string) { writeFile(t, disk, "changed!") }
+	// "changed!" is as long as "original", so only the mtime tells a same-size
+	// rewrite apart; "changed content" also changes the size. Two writes a few
+	// milliseconds apart can share an mtime on Windows, so a case that relies on
+	// mtime sets it explicitly.
+	sameSize := func(t *testing.T, disk string) {
+		writeFile(t, disk, "changed!")
+		later := time.Now().Add(time.Hour)
+		if err := os.Chtimes(disk, later, later); err != nil {
+			t.Fatal(err)
+		}
+	}
 	tests := []struct {
-		name   string
-		mutate func(t *testing.T, disk string)
-		parent string
+		name    string
+		content string
+		mutate  func(t *testing.T, disk string)
+		parent  string
 	}{
-		{name: "content and size", mutate: rewrite},
-		{name: "mtime only", mutate: func(t *testing.T, disk string) {
-			rewrite(t, disk)
-			// Same size as before is still caught by mtime.
-			later := time.Now().Add(time.Hour)
-			if err := os.Chtimes(disk, later, later); err != nil {
-				t.Fatal(err)
-			}
-		}},
-		{name: "parent changed", parent: strings.Repeat("2", 64), mutate: rewrite},
+		{name: "content and size", content: "changed content",
+			mutate: func(t *testing.T, disk string) {
+				writeFile(t, disk, "changed content")
+			}},
+		{name: "mtime only", content: "changed!", mutate: sameSize},
+		// The file is untouched: a different parent alone forces the re-hash.
+		{name: "parent changed", content: "original", parent: strings.Repeat("2", 64),
+			mutate: func(*testing.T, string) {}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -82,7 +90,7 @@ func TestLayerCacheInvalidation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if info.SHA256 != want {
+			if want := hashString(t, tt.content); info.SHA256 != want {
 				t.Fatalf("sha = %s, want re-hash %s", info.SHA256, want)
 			}
 			if info.Source.Kind != ledger.SourceLocal {
