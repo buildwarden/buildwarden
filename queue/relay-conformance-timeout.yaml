@@ -5,13 +5,21 @@ follows: seam-specs
 trunk: main
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/relay-conformance-timeout.md
 branch: feat/relay-conformance-timeout
 repos:
   - buildwarden/buildwarden
   - buildwarden/buildwarden-specs
-alters_relationships: null
+work:
+  - repo: buildwarden/buildwarden-specs
+    branch: feat/relay-conformance-timeout
+    trunk: main
+areas:
+  - relay
+declared: 630651f
+alters_relationships: false
+design_review: required
 source: 'Filed on Jeff''s word, 2026-11-22 (attended), and released from the FLOW-20 hold by him: a test-determinism fix (TEST-04) for main''s CI, ahead of new work since it turns PRs red. The relay job of conformance.yml failed three times with unchanged relay code and passed on re-runs: GUEST-34 on relay-host, ''a connection to the relay''s 10.100.0.1:80: context deadline exceeded'' (PR #135 at e8297df, job 137346008112; PR #136 at f17d7e7, job 137353768984), and GUEST-55, ''relay container not running within 30 s'' (PR #135 at 3efd1fe). See https://github.com/buildwarden/buildwarden/pull/135#issuecomment-7085519553.'
 steps:
   - id: f0-branch-setup
@@ -24,10 +32,26 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261123T105717Z
-      expires: 2026-11-23T13:10:30.120828963Z
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -35,7 +59,50 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: 'Flagged: the relay''s TCP behaviour on the build-environment-to-relay boundary (GLOBAL-06), though not its posture. Both capturing stacks (the Go relay''s host mode, NewFDIngress, and the harness''s netstack.Capture) set gVisor''s TIME-WAIT timeout to 0, a fixed value with no flag or key, so a SYN reusing the 4-tuple of a connection the relay closed reaches the tcp.Forwarder instead of being dropped for 60 s (design D1).'
+    options:
+      - 0, no TIME-WAIT on the capturing stack
+      - a short TIME-WAIT such as 1 s (a shorter stall, still timing-dependent)
+      - leave the relay; make the harness never reuse a source port (hides a real GUEST-6 defect)
+    recommended: 0, no TIME-WAIT on the capturing stack
+  - id: a2
+    kind: assumed
+    status: open
+    question: 'Flagged: a reading of a seam''s requirement (GUEST-6). No specification change and no new relay-guest-api suite case in this item; a case that reconnects from a fixed source port is offered as a follow-up (design D3).'
+    options:
+      - none here; tier-0 tests in both repositories pin the fix; offer the case as a follow-up
+      - add the case to relay-guest-api here (needs its release, Jeff's tag, and a pin move)
+    recommended: none here; tier-0 tests in both repositories pin the fix; offer the case as a follow-up
+  - id: a3
+    kind: assumed
+    status: open
+    question: The oci launcher bounds the runtime's start of the container by CommandLimit (60 s) and reports it as the runtime's, keeps the relay's StartLimit (30 s) from the container running, and records and prints each start's phases on failure (design D2).
+    options:
+      - as D2
+      - record the phases only and keep the 30 s bound until a second occurrence names the cause
+      - one reported retry of docker run (rejected by TEST-04)
+    recommended: as D2
+  - id: a4
+    kind: assumed
+    status: open
+    question: 'No pin moves in this item: the Go relay fix alone makes buildwarden''s relay job deterministic; the harness changes reach buildwarden when conformance/v0.1.1 is tagged (Jeff''s) and pinned later (design D4).'
+    options:
+      - no pin move here
+      - wait for Jeff's conformance/v0.1.1 tag and move the pin in this item
+    recommended: no pin move here
+  - id: a5
+    kind: assumed
+    status: open
+    question: tools/vz-image-prep/netfwd.go captures a VM's connections with a gVisor forwarder too and has the same latent stall; it is left as it is and named in the Archive summary (design D5).
+    options:
+      - leave it
+      - file a follow-up item now
+      - fix it here (adds the driver/vz area and blocking macos-vz validation)
+    recommended: leave it
 history:
   - at: 2026-11-22T21:27:52Z
     by: human/jeff
@@ -61,3 +128,15 @@ history:
   - at: 2026-11-23T11:10:30Z
     by: cloud/20261123T105717Z
     event: claimed f1-design until 2026-11-23T13:10:30Z
+  - at: 2026-11-23T11:33:10Z
+    by: cloud/20261123T105717Z
+    event: 'declared at 630651f: areas declared: relay; alters_relationships unset -> false; design_review unset -> required; work +buildwarden/buildwarden-specs'
+  - at: 2026-11-23T11:33:10Z
+    by: cloud/20261123T105717Z
+    event: 'trunk in buildwarden/buildwarden-specs: main (FLOW-20)'
+  - at: 2026-11-23T11:34:03Z
+    by: cloud/20261123T105717Z
+    event: done f1-design
+  - at: 2026-11-23T11:34:03Z
+    by: cloud/20261123T105717Z
+    event: entered phase 2 (plan)
