@@ -145,9 +145,10 @@ type launcherCase struct {
 func TestNativeRun(t *testing.T) {
 	launcher, repo := launcherSetup(t)
 	const (
-		x = ".scratch/t/tools/x.sh"
-		w = ".scratch/t/dist/warden"
-		a = "WARDEN_A=1"
+		x  = ".scratch/t/tools/x.sh"
+		w  = ".scratch/t/dist/warden"
+		a  = "WARDEN_A=1"
+		s2 = ".scratch/w/r/i"
 	)
 	args := func(a ...string) []string { return a }
 	tests := []launcherCase{
@@ -184,6 +185,24 @@ func TestNativeRun(t *testing.T) {
 		{"other repository", args("--", ".scratch/o/tools/x.sh"), "", 2},
 		{"warden without variable", args("--", w), "", 2},
 		{"script name with space", args("--", ".scratch/t/x.sh foo/tools/bar"), "", 2},
+		// A second repository's worktree, .scratch/<owner>/<repo>/<item>.
+		{"second script", args("--", s2+"/tools/x.sh"), "w-x WARDEN_A=\n", 0},
+		{"second warden", args(a, "--", s2+"/dist/warden"), "w-warden WARDEN_A=1\n", 0},
+		{"second, no clone", args("--", ".scratch/n/r/i/tools/x.sh"), "", 2},
+		{"second warden, no clone", args(a, "--", ".scratch/n/r/i/dist/warden"), "", 2},
+		{"second, other repository", args("--", ".scratch/w/r/j/tools/x.sh"), "", 2},
+		{"second warden, other repository", args(a, "--", ".scratch/w/r/j/dist/warden"),
+			"", 2},
+		{"second untracked", args("--", s2+"/tools/y.sh"), "", 2},
+		{"second tools/workflow", args("--", s2+"/tools/workflow/z.sh"), "", 2},
+		{"second dotdot path", args("--", s2+"/tools/../tools/x.sh"), "", 2},
+		{"second dotdot name", args("--", ".scratch/w/../r/tools/x.sh"), "", 2},
+		{"two components", args("--", ".scratch/w/r/tools/x.sh"), "", 2},
+		{"four components", args("--", s2+"/k/tools/x.sh"), "", 2},
+		{"go -C second, other repository", args(a, "--", "go", "-C", ".scratch/w/r/j",
+			"test"), "", 2},
+		{"go -C second, no clone", args(a, "--", "go", "-C", ".scratch/n/r/i", "test"),
+			"", 2},
 	}
 	// An untracked file named "x*" matches the tracked x.sh as a glob.
 	// Windows file names cannot hold "*".
@@ -225,6 +244,7 @@ func TestNativeRunGo(t *testing.T) {
 	tests := []launcherCase{
 		{"go test", args(a, "--", "go", "test", p), "ok", 0},
 		{"go -C test", args(a, "--", "go", "-C", ".scratch/t", "test", p), "ok", 0},
+		{"go -C second", args(a, "--", "go", "-C", ".scratch/w/r/i", "test", p), "ok", 0},
 		{"variable empty", args("WARDEN_A=", "--", "go", "test", p), "--- FAIL", 1},
 	}
 	for _, tc := range tests {
@@ -270,8 +290,9 @@ func checkRefusal(t *testing.T, stderr string) {
 // untracked tools/x* (not on Windows) and an untracked stub dist/warden. .scratch/p is a plain
 // directory whose tools/x.sh the main repository tracks; .scratch/o is a
 // separate repository that tracks its tools/x.sh. The root holds untracked
-// stubs dist/warden-x and warden. Every stub prints its name and
-// WARDEN_A, and exits with WARDEN_EXIT.
+// stubs dist/warden-x and warden. secondRepos adds the second
+// repositories' worktrees. Every stub prints its name and WARDEN_A, and
+// exits with WARDEN_EXIT.
 func newLauncherRepo(t *testing.T) string {
 	t.Helper()
 	repo := t.TempDir()
@@ -329,7 +350,58 @@ func newLauncherRepo(t *testing.T) string {
 	git("-C", filepath.Join(".scratch", "o"), "init", "-q")
 	git("-C", filepath.Join(".scratch", "o"), "add", "tools")
 	git("-C", filepath.Join(".scratch", "o"), "commit", "-q", "-m", "stub")
+	secondRepos(t, repo, git, stub, write)
 	return repo
+}
+
+// secondRepos adds to newLauncherRepo's repository a clone of a second
+// repository at .dev/checkouts/w/r, tracking tools/x.sh, tools/workflow/z.sh
+// and the package gopkg, with its worktree .scratch/w/r/i holding an
+// untracked tools/y.sh and dist/warden; .scratch/w/r/j, a worktree of the
+// main repository, which tracks tools/x.sh too, with an untracked
+// dist/warden; and .scratch/n/r/i, a worktree of a repository with no clone
+// under .dev/checkouts, tracking tools/x.sh, with an untracked dist/warden.
+func secondRepos(t *testing.T, repo string, git func(...string),
+	stub func(string, ...string), write func(string, ...string)) {
+	t.Helper()
+	clone := filepath.Join(".dev", "checkouts", "w", "r")
+	stub("w-x", ".dev", "checkouts", "w", "r", "tools", "x.sh")
+	stub("w-z", ".dev", "checkouts", "w", "r", "tools", "workflow", "z.sh")
+	write("module example.test/second\n\ngo 1.21\n", ".dev", "checkouts", "w", "r", "go.mod")
+	write("package gopkg\n\nimport (\n\t\"os\"\n\t\"testing\"\n)\n\n"+
+		"func TestVar(t *testing.T) {\n\tif os.Getenv(\"WARDEN_A\") == \"\" {\n"+
+		"\t\tt.Fatal(\"WARDEN_A unset\")\n\t}\n}\n",
+		".dev", "checkouts", "w", "r", "gopkg", "v_test.go")
+	git("-C", clone, "init", "-q")
+	git("-C", clone, "add", "tools", "go.mod", "gopkg")
+	git("-C", clone, "commit", "-q", "-m", "second")
+	git("-C", clone, "worktree", "add", "-q", "--detach",
+		filepath.Join("..", "..", "..", "..", ".scratch", "w", "r", "i"))
+	stub("w-y", ".scratch", "w", "r", "i", "tools", "y.sh")
+	stub("w-warden", ".scratch", "w", "r", "i", "dist", "warden")
+	git("worktree", "add", "-q", "--detach", filepath.Join(".scratch", "w", "r", "j"))
+	stub("j-warden", ".scratch", "w", "r", "j", "dist", "warden")
+
+	// A repository outside the checkout, whose worktree sits where a clone's
+	// would, but with no clone at .dev/checkouts/n/r.
+	far := t.TempDir()
+	cmd := exec.Command("git", "init", "-q", far)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	if err := os.MkdirAll(filepath.Join(far, "tools"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "#!/bin/sh\necho n-x\n"
+	err := os.WriteFile(filepath.Join(far, "tools", "x.sh"), []byte(body), 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	git("-C", far, "add", "tools")
+	git("-C", far, "commit", "-q", "-m", "far")
+	git("-C", far, "worktree", "add", "-q", "--detach",
+		filepath.Join(repo, ".scratch", "n", "r", "i"))
+	stub("n-warden", ".scratch", "n", "r", "i", "dist", "warden")
 }
 
 // runLauncher runs the launcher with sh in dir and returns its stdout, stderr
@@ -397,6 +469,46 @@ func TestNativeClonesRules(t *testing.T) {
 		}
 		if got := any(s.Permissions.Deny, c.command); got != c.denied {
 			t.Errorf("%q denied %v, want %v", c.command, got, c.denied)
+		}
+	}
+}
+
+// TestNoPipeIntoGrepQ: no native script pipes a command into grep -q. Under
+// pipefail grep -q exits at its first match, the writer takes SIGPIPE on its
+// next write, and the pipeline exits 141, which read as "no match"
+// (docs/design/native-loop-fixes.md, fix 10). The scripts capture the output
+// first and test it with case or a match.
+func TestNoPipeIntoGrepQ(t *testing.T) {
+	scripts, err := filepath.Glob("*.sh")
+	if err != nil || len(scripts) == 0 {
+		t.Fatalf("no native scripts: %v", err)
+	}
+	shape := regexp.MustCompile(`\| *grep +-[a-zA-Z]*q`)
+	for _, f := range scripts {
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(raw), "\n") {
+			if shape.MatchString(line) {
+				t.Errorf("%s:%d pipes into grep -q: %s", f, i+1,
+					strings.TrimSpace(line))
+			}
+		}
+	}
+	// The shape is what the test looks for.
+	for _, c := range []struct {
+		line string
+		want bool
+	}{
+		{`pmset -g batt | grep -q "AC Power"`, true},
+		{`printf '%s' "$auth" | grep -Eq x`, true},
+		{`pmset -g sched |grep -qi wake`, true},
+		{`grep -qx 'status: done' "$q"`, false},
+		{`ls | grep x`, false},
+	} {
+		if got := shape.MatchString(c.line); got != c.want {
+			t.Errorf("%q: matched %v, want %v", c.line, got, c.want)
 		}
 	}
 }

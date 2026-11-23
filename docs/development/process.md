@@ -576,9 +576,9 @@ per host in the design:
 Native sessions drain their host's steps and backlog in batches, testing `main` plus
 every waiting branch in one sitting rather than one session per feature. Each
 native machine also runs a scheduled session that starts an agent only when a
-host step it serves is ready, or when `main` or a waiting branch has moved since
-its last sweep of open backlog entries, and never while the human has not
-confirmed the priority order; it starts from trunk, is bound by the
+host step it serves is ready, or when a trunk, a program trunk or a waiting
+branch of a repository it lists has moved since its last finished sweep of open
+backlog entries, and never while the human has not confirmed the priority order; it starts from trunk, is bound by the
 unattended loop's limits (FLOW-13) and records what it did in the digest.
 Every scheduled run, including one that stops before an agent starts, also
 records the machine's outcome and a one-line reason in `native/status/<machine>.yaml` on the `workflow` branch, so a

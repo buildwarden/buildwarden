@@ -19,7 +19,8 @@ repo="$(cd "$(dirname "$0")/../../.." && pwd)"
 label=com.buildwarden.native-tick
 plist="$HOME/Library/LaunchAgents/$label.plist"
 state="$HOME/Library/Application Support/buildwarden-native"
-export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:/opt/homebrew/bin:/usr/local/bin:$PATH"
+# The wrapper's PATH (native-tick.sh): ~/.local/bin, rustup's proxies, mise, Homebrew.
+export PATH="$HOME/.local/bin:/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$HOME/.local/share/mise/shims:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 problems=0
 ok() { printf '  ok    %s\n' "$*"; }
@@ -66,9 +67,10 @@ check_host() {
 # check_clones runs wf native -check, built from this checkout, on the
 # workflow branch as origin has it: each clone of a repository hosts.yaml
 # lists for the machine is at .dev/checkouts/<owner>/<repo>, names that
-# repository and is clean, and each profile file's toolchain_check and the
-# native.check of each host the machine serves pass (LOOP-05). A missing
-# clone is reported with the command for the owner; nothing is cloned.
+# repository and is clean, it and the checkout have Entire's git hooks
+# (FLOW-18), and each profile file's toolchain_check and the native.check of
+# each host the machine serves pass (LOOP-05). A missing clone is reported
+# with the command for the owner; nothing is cloned.
 check_clones() {
 	local tmp
 	tmp=$(mktemp -d)
@@ -97,7 +99,10 @@ check() {
 	fi
 	if command -v claude >/dev/null; then
 		auth=$(claude auth status 2>/dev/null)
-		if printf '%s' "$auth" | grep -Eq '"loggedIn": *true'; then
+		# Matched in the shell, not by a pipe into grep -q, which exits 141
+		# under pipefail when grep stops reading early.
+		logged_in='"loggedIn": *true'
+		if [[ $auth =~ $logged_in ]]; then
 			ok "claude is logged in"
 		elif [ -n "$auth" ]; then
 			bad "claude is not logged in: run 'claude' once and sign in"
@@ -105,7 +110,10 @@ check() {
 			warn "could not read 'claude auth status': make sure claude is logged in"
 		fi
 	fi
-	command -v entire >/dev/null && ok "entire: sessions will be recorded (FLOW-18)" ||
+	# The version matters: the Claude Code hooks in .claude/settings.json are
+	# what that version's `entire agent add claude-code` writes.
+	command -v entire >/dev/null &&
+		ok "entire: sessions will be recorded (FLOW-18); $(entire --version 2>/dev/null | sed -n 1p)" ||
 		warn "entire not installed: sessions will not be recorded (FLOW-18)"
 	url=$(git -C "$repo" remote get-url origin 2>/dev/null)
 	case "$url" in
@@ -132,8 +140,11 @@ check() {
 	fi
 	check_clones
 	if [ -f "$plist" ]; then ok "installed: $plist"; else warn "not installed yet"; fi
-	pmset -g sched 2>/dev/null | grep -qi wake && ok "a scheduled wake is set" ||
-		warn "no scheduled wake: sudo pmset repeat wakeorpoweron MTWRFSU ${wake:-04:35}:00"
+	sched=$(pmset -g sched 2>/dev/null)
+	case $(printf '%s' "$sched" | tr '[:upper:]' '[:lower:]') in
+	*wake*) ok "a scheduled wake is set" ;;
+	*) warn "no scheduled wake: sudo pmset repeat wakeorpoweron MTWRFSU ${wake:-04:35}:00" ;;
+	esac
 	[ $problems -eq 0 ] && echo "Ready." || echo "$problems problem(s)."
 }
 
