@@ -45,6 +45,7 @@ None.
 
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
+| 1 | native-loop-fixes | process | - | buildwarden/buildwarden | - | 1 design | x1-design (cloud, leased to cloud/20261123T195428Z) | - | - | 1 / 6 |
 | 4 | relay-conformance-timeout | fix (follows seam-specs) | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay | 2 plan | f2-design-review (human) | - | - | 2 / 8 |
 | 5 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 6 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
@@ -122,7 +123,6 @@ Open features that are not disjoint. Process items are outside the relations (FL
 
 | Pri | Item | Kind | Repositories | Areas | Est. steps |
 |---|---|---|---|---|---|
-| 1 | native-loop-fixes | process | buildwarden/buildwarden | - | 6 |
 | 2 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
 | 3 | program-land | process | buildwarden/buildwarden | - | 5 |
 | 9 | specs-prerelease-tags | tracked | buildwarden/buildwarden-specs | - | 2 |
