@@ -1,0 +1,344 @@
+---
+feature: wf-gate-rest
+status: draft
+drivers: []
+seams: []
+surfaces: []
+repos: []
+merge_first: []
+areas: [loop, build]
+security_boundary: none
+alters_relationships: false
+design_review: required
+native_validation: []
+tier2_gaps: []
+rules: [FLOW-04, FLOW-08, FLOW-10, FLOW-14, FLOW-16, FLOW-17, FLOW-19, FLOW-20, LOOP-09, GLOBAL-10, GLOBAL-11, TEST-02]
+rule_changes: []
+concepts: [workflow, merge-gate, loop-merge, program-sync, github-rest, graphql, pull-request, draft-pr, built-binary, gitignore]
+related: [program-north-star.md, loop-parallel.md, loop-repository.md, native-loop-fixes.md]
+---
+
+# The loop's merge gate reads pull requests over REST, so the cloud can pass it; and wf's built binary leaves the repository
+
+## Problem
+
+Jeff's attended session of 2026-11-23 found that the program sync PR #140
+could not pass `wf check -sync` in the cloud. The merge gate reads the pull
+request with `gh pr view`, which goes through GitHub's GraphQL API, and
+GraphQL answers HTTP 403 in every Claude Code cloud session. The REST API
+works. Confirmed in this session (2026-11-23, gh 2.89.0):
+
+| Call | Result in the cloud |
+|---|---|
+| `gh api graphql -f query='{viewer{login}}'` | HTTP 403: "GitHub GraphQL is not available from Claude Code sessions; use the REST API" |
+| `gh pr view 141 -R buildwarden/buildwarden --json baseRefName,headRefOid,headRefName` (the gate's own call) | HTTP 403, same message |
+| `gh api repos/buildwarden/buildwarden/pulls/141 --jq '.base.ref, .head.sha, .head.ref'` | `main 1b2a17e… feat/native-loop-fixes` |
+
+The 403 message also names the session's routes for what REST lacks:
+`POST /repos/{o}/{r}/pulls/{n}/ccr/ready_for_review` and
+`.../ccr/convert_to_draft`.
+
+Since Publish, Merge and Close are cloud steps (FLOW-04;
+`tools/workflow/queue/lead.go`'s `leadLastPhase`), every loop merge into a
+program trunk is blocked: the program sync, `f7-merge` and an
+`f6-merged-<n>` on a program trunk all fail gate point 1 before anything
+else is read. Past the gate, the merge itself would fail too: the agents
+merge with `gh pr merge`, also GraphQL. And `wf-publish` opens and readies
+PRs with `gh pr create` and `gh pr ready`, both GraphQL, so each
+`f6-open-pr` in the cloud fails its first try and the agent improvises.
+
+The uses, all found by searching `tools/workflow/`, `.claude/skills/` and
+`.claude/agents/` for `gh pr`, `gh api graphql` and `--json` at
+origin/main c52926d:
+
+| # | Where | Call | Kind |
+|---|---|---|---|
+| 1 | `tools/workflow/check/merge.go:54`, `ghCLI.PR` (gate point 1 and 2, sync gate 1 and 2) | `gh pr view <n> -R <r> --json baseRefName,headRefOid,headRefName` | GraphQL |
+| 2 | `.claude/agents/wf-publish.md:49, 51` (`f6-open-pr`, `x2-implement`) | `gh pr create --base <trunk>`, `gh pr create -R <owner>/<name>` | GraphQL |
+| 3 | `.claude/agents/wf-publish.md:66` (republish) | `gh pr ready` | GraphQL |
+| 4 | `.claude/agents/wf-publish.md:88` (return with PR open) | `gh pr ready --undo`, "or the session's draft route" | GraphQL; the route already named |
+| 5 | `.claude/agents/wf-publish.md:105` (`f7-merge`, `f6-merged-<n>`) | `gh pr merge <n> --merge --match-head-commit <pr.head> -R <r>` | GraphQL |
+| 6 | `.claude/agents/wf-publish.md:133` (`sync`) | `gh pr merge N --merge --match-head-commit <head> -R R` | GraphQL |
+| 7 | `.claude/agents/wf-publish.md:142` (sync escalation) | `gh pr close N` | GraphQL |
+| 8 | `.claude/skills/workflow-tick/SKILL.md:255` | names `gh pr merge` as the step before `git fetch` | wording |
+
+Already REST, unchanged: `ghCLI.CheckRuns`
+(`repos/<r>/commits/<sha>/check-runs`), `ghCLI.Required`
+(`repos/<r>/rules/branches/<b>`), `wf-publish.md:91`'s open-and-unmerged
+check, and the tick's trunk check runs and ruleset reads
+(`workflow-tick/SKILL.md:140-142`). Not the loop's to run:
+`workflow-native/SKILL.md:43` and `tools/workflow/native/settings.native.json:89-91`
+deny `gh pr merge`, `gh pr review` and `gh api` on native machines, and
+stay. No shell script under `tools/workflow/` calls `gh`, and
+`docs/development/` names no `gh` command, so no rule's text changes.
+
+Separately, folded in on Jeff's word: `tools/workflow/cmd/wf/wf`, a 6 MB
+built binary, has been tracked since #130 (480e205). Any `go build` run in
+`tools/workflow/cmd/wf/` overwrites it on whatever branch is checked out,
+so it shows as a change on every such branch; `native-loop-fixes`'
+Implement had to restore it by hand. Nothing reads it: the tick and the
+native wrapper build `dist/wf` (`workflow-tick/SKILL.md:60`,
+`native-tick.sh:521`), and `enforcement-check.sh:72` and the install
+checks build into temporary directories.
+
+## Prior art
+
+- **`program-north-star`** (Decisions 9 and 14, a11 (b)) defined the merge
+  gate's nine points, the sync gate, and the merge as `gh pr merge <n>
+  --merge --match-head-commit <head> -R <repo>`: one merge commit per item,
+  refused if the head moved, never a squash, rebase, `--admin`, auto-merge
+  or bypass. Reused unchanged in meaning; only the transport changes. Its
+  task text named `gh pr view --json baseRefName,headRefOid` for points 1
+  and 2; it did not know GraphQL is refused in the cloud.
+- **`loop-parallel`** (the PR kept by a returned item) already settled the
+  draft conversion as "in a cloud session through the session's
+  `convert_to_draft` route for the pull request, elsewhere `gh pr ready
+  --undo`". Reused, and extended to its inverse, `ready_for_review`.
+- **`loop-repository`** gave `gh pr create -R <owner>/<name>` for a second
+  repository's PR; the REST form carries the repository in its path.
+- **`native-loop-fixes`** is where the tracked binary last cost a restore.
+- No archived design overlaps the binary or the `.gitignore` entry.
+
+## Decisions
+
+1. **wf reads the pull request over REST.** `ghCLI.PR` runs `gh api
+   repos/<repo>/pulls/<n> --jq '.base.ref + " " + .head.sha + " " +
+   .head.ref'`. The fields map one to one: `baseRefName` is `.base.ref`,
+   `headRefOid` is `.head.sha`, `headRefName` is `.head.ref` (for a fork's
+   PR both name the branch in the fork). `PRView` and the `GitHub`
+   interface keep their shape, so the gate's points, their names and their
+   messages are unchanged.
+   - *Rejected: try `gh pr view`, then REST on a 403.* A fallback
+     (GLOBAL-10, GLOBAL-11) for no gain: REST works in every environment
+     the gate runs in.
+   - *Rejected: a Go GitHub client in wf.* A new dependency and a second
+     token path, where `gh api` already carries the session's credentials
+     through the proxy.
+2. **The gate reads nothing new.** The task named reviews, check runs and
+   mergeability as what the gate might need. It needs none beyond what it
+   reads now: check runs are already REST; no point reads reviews (FLOW-08
+   asks for no approval, and Decision 9 forbids one as a bypass); and
+   mergeability is GitHub's to enforce at the merge itself, which refuses a
+   closed, conflicting or moved PR (the `sha` parameter, below). Adding a
+   point is a change to the merge gate beyond this item's fix. Assumed, Q1.
+3. **The loop's PR commands use REST, or the session's route where REST
+   has none.** In `wf-publish.md` and `workflow-tick/SKILL.md`:
+
+   | Was | Becomes |
+   |---|---|
+   | `gh pr create --base <trunk>` (and `-R <owner>/<name>`) | `gh api repos/<owner>/<name>/pulls -f title=<title> -f head=<branch> -f base=<trunk> -F body=@<body file> --jq .number` |
+   | `gh pr ready` | `gh api -X POST repos/<owner>/<name>/pulls/<n>/ccr/ready_for_review` |
+   | `gh pr ready --undo`, or the session's draft route | `gh api -X POST repos/<owner>/<name>/pulls/<n>/ccr/convert_to_draft` |
+   | `gh pr merge <n> --merge --match-head-commit <head> -R <r>` | `gh api -X PUT repos/<r>/pulls/<n>/merge -f merge_method=merge -f sha=<head>` |
+   | `gh pr close N` | `gh api -X PATCH repos/<r>/pulls/<N> -f state=closed` |
+
+   The merge's REST form is the same act: `merge_method=merge` writes a
+   merge commit (never a squash or a rebase), and `sha` makes GitHub refuse
+   with 409 when the head is not the one the gate read, as
+   `--match-head-commit` did. Neither form passes `--admin`, deletes a
+   branch, enables auto-merge or approves. A refusal (405 not mergeable,
+   409 head moved) is handled as now: run the check again and stop.
+   - The draft routes exist only in Claude Code sessions. That is where
+     these steps run: Publish, Merge and Close are cloud steps (FLOW-04),
+     and a native machine's settings deny `gh api`. `loop-parallel` already
+     chose the route for the cloud; this design drops the "elsewhere `gh pr
+     ready --undo`" branch, since no step that converts a PR runs
+     elsewhere, and names the one form. Assumed, Q2.
+   - *Rejected: the GitHub MCP server's tools.* Not attached to every
+     session, and the loop's evidence is a command line a later run can
+     repeat.
+   - *Rejected: a `wf merge` subcommand that merges after its own gate.*
+     It would move the merge from the agent into wf, a change to who takes
+     the merge; out of scope for a transport fix.
+4. **A test keeps GraphQL out.** A tier-0 test in `tools/workflow/check`
+   runs `ghCLI` through an injectable runner and asserts `PR` calls `api
+   repos/<r>/pulls/<n>` and parses its output, and that no `ghCLI` method
+   calls `pr` or `graphql`. A second test scans `.claude/agents/*.md` and
+   `.claude/skills/*/SKILL.md` for a command `` `gh pr <verb>`` the loop
+   runs (create, ready, merge, view, close, checks, list, edit) and for
+   `gh api graphql`, and fails naming the file and line; a line saying a
+   settings file *denies* the command (workflow-native's) is not a command
+   the loop runs, and the test passes it by that word. It adds a check;
+   it relaxes none.
+5. **The built binary leaves the repository.** `git rm --cached
+   tools/workflow/cmd/wf/wf`, and `.gitignore` gains
+   `/tools/workflow/cmd/wf/wf` and `/tools/workflow/cmd/wf/wf.exe`, with a
+   comment that wf is built into `dist/` (already ignored). Local copies
+   stay where they are, now untracked.
+
+## Questions
+
+### Blocking
+
+None.
+
+### Assumed
+
+- **Q1. The gate reads nothing new.** Options: (a) keep the gate's nine
+  points as they are, read over REST (recommended: the fix is the
+  transport; GitHub's merge refuses a closed, conflicting or moved PR, and
+  the agent then re-checks and stops); (b) add a point that the PR is open
+  and `mergeable` is true, which the REST response carries for free.
+  Proceeding with (a); confirm. Flagged: it is a decision about the merge
+  gate, a rule FLOW-20 reserves to Jeff.
+- **Q2. The draft and ready conversions name only the session's routes.**
+  Options: (a) `ccr/convert_to_draft` and `ccr/ready_for_review` only, since
+  every step that converts a PR is a cloud step (recommended); (b) keep
+  `loop-parallel`'s "elsewhere `gh pr ready --undo`" branch for a
+  non-cloud session. Proceeding with (a); confirm. Flagged: it departs
+  from `loop-parallel`'s earlier decision.
+
+## Design
+
+**wf (`tools/workflow/check/merge.go`).** `ghCLI` gains a `run` field, a
+function with `exec.Command("gh", ...)`'s signature, nil meaning the real
+`gh`, so the test can inject output. `PR` becomes:
+
+```go
+out, err := g.run("api", "repos/"+repo+"/pulls/"+strconv.Itoa(number),
+	"--jq", `.base.ref + " " + .head.sha + " " + .head.ref`)
+```
+
+with the same three-field parse, and its error message names `gh api
+repos/<r>/pulls/<n>` instead of `gh pr view`. The doc comment on `GitHub`
+says each method reads over REST, because GraphQL is refused in Claude Code
+sessions. `CheckRuns` and `Required` are unchanged. `MergeReady`,
+`SyncReady` and `MergeWaitsOnHuman` are unchanged: they call the interface.
+`wf next`'s readiness of `f7-merge` (through `State.LoopMerges`) reads the
+same gate, so it starts passing in the cloud with no change of its own.
+
+**Agents and skills.** `wf-publish.md`'s five places and
+`workflow-tick/SKILL.md:255` take the forms in Decision 3. The body file
+for `gh api .../pulls` is written beside the checkout (`-F body=@<file>`),
+since a body has newlines and backticks a `-f` argument would mangle. The
+number the call prints is what `pr.number` (or the work entry's `pr`)
+records, as `gh pr create`'s URL was before. Nothing else in those
+sections changes: the order, the gate runs, the `git fetch origin
+<program trunk>` after a merge, and the escalation's text.
+
+**Repository hygiene.** Decision 5.
+
+**What the change reaches, every rule, machinery path and configuration
+key (for the reserved-rule reading, FLOW-20 and `wf-review`'s P2):**
+
+- Rules relied on, none of their text edited: FLOW-08 (the merge gate, the
+  loop's merge into a program trunk), FLOW-20 (the program trunk, the sync
+  and its gate), FLOW-10 (the returned PR kept as a draft), FLOW-04
+  (Publish, Merge and Close stay cloud), FLOW-16 (no branch deleted: the
+  REST merge deletes none, as `gh pr merge` without `--delete-branch` did
+  not), FLOW-17 (no new push), FLOW-14 and LOOP-09 (machinery changes only
+  through a process item, merged by Jeff), GLOBAL-10 and GLOBAL-11 (no
+  fallback added), TEST-02.
+- Machinery paths: `tools/workflow/check/merge.go`, a new
+  `tools/workflow/check/ghcli_test.go` (Decision 4's tests),
+  `.claude/agents/wf-publish.md`, `.claude/skills/workflow-tick/SKILL.md`,
+  and the removal of `tools/workflow/cmd/wf/wf`.
+- Configuration: `.gitignore` (two entries). No `config.yaml` key, no
+  limit or budget, no `.claude/settings*.json` allow or deny list, no
+  ruleset, no CI or release workflow.
+
+**The reserved-rule reading.** The change touches the merge gate's reader
+and the loop's merge command, which `wf-review`'s P2 lists among the rules
+reserved to Jeff ("merging (FLOW-08, LINT-03, the merge gate)"). Read by
+its effect it does not widen what the gate admits: the same points read
+the same fields, and the merge is the same merge commit under the same
+head check. But it does let the cloud loop take merges it could not take
+before, however much that was a defect and not a gate of his. P2 fails
+closed on a doubt, so this design goes to Jeff's review, not the process
+test: `design_review: required`.
+
+**Areas.** `loop` (`tools/workflow/`, `.claude/`) and `build`
+(`.gitignore`), as intake recorded. The area map needs no change.
+
+## Program payoff
+
+Figures from `origin/main`'s first-parent log, the workflow branch's
+`program/records.yaml` and `config.yaml`, and the componentization phase
+table (`componentization.md`):
+
+- **Program syncs.** `main` moved 16 times in the week 2026-11-16..23
+  (first-parent log), on 5 distinct days. Each move the program trunk has
+  not taken needs a sync (FLOW-20); the tick runs one per program trunk
+  when the trunk moves past it, so at least one a day with a move: about
+  **5 syncs a week** for this repository. Each one blocked in the cloud
+  becomes Jeff merging a PR whose gate the loop already judged, or an
+  attended session to do it: an interaction that decides nothing. The
+  records hold 1 sync and 1 loop merge so far, both before this was found.
+- **Program merges.** Phases S2 to S4, K2 to K5 and M1 to M6 remain: 13
+  phases, each with at least one item, and K3, K4 and M6 each with a PR per
+  extracted or reconciled repository (`config.yaml` lists 8 repositories
+  with a program trunk). Counting one merge per phase and one more per
+  repository in K3 (1), K4 (3) and M6 (4) gives **at least 21 loop merges**
+  over the program, each an `f7-merge` or `f6-merged-<n>` that otherwise
+  waits on Jeff's hand.
+- **PR opening.** Every cloud `f6-open-pr` and process `x2-implement` now
+  fails its first `gh pr create` and recovers by improvising: one wasted
+  attempt per PR the cloud opens (up to the 16 a week that reached `main`
+  last week, counting every PR whoever opened it), and a form no later run
+  repeats. Counted as time, not as interactions.
+- **Cost.** One run of about 5 steps (the queue estimate), one short review
+  sitting with Jeff, and no change to the gate's meaning to re-learn.
+
+So about **5 interactions a week that decide nothing**, plus at least 21
+over the program's merges, against one review sitting.
+
+## Defaults and overrides
+
+None. The design adds no default and no override. It adds no fallback, and
+rejects one (Decision 1: GraphQL first, REST on a 403). It drops one
+branch, "elsewhere `gh pr ready --undo`" (Decision 3, Q2), since no step
+that converts a PR runs outside a Claude Code session.
+
+## Cross-driver impact
+
+`drivers` is empty: no driver, relay, executor or collector code changes.
+The change is in the loop's machinery and `.gitignore` only.
+
+## Validation plan
+
+- **Tier 0.** Decision 4's two tests: `ghCLI.PR`'s arguments and parse
+  (three fields, a short output refused), and no `ghCLI` method calling
+  `pr` or `graphql`; the scan of the agents and skills for `gh pr <verb>`
+  and `gh api graphql`, with workflow-native's deny line passed. The
+  existing `merge_test.go` and `mergeproof_test.go` cases run unchanged
+  through `fakeGitHub`, which shows the gate's points are untouched.
+  `make test` and `make lint`.
+- **Tier 1.** `make lint` with tier 1; the removal of a tracked binary and
+  the `.gitignore` entry trip no coupling check (the `build` area is
+  declared).
+- **Live, in this cloud session, before the PR.** `go build` the branch's
+  wf and run `dist/wf check -sync -repository buildwarden/buildwarden -pr
+  <the open sync PR, or #140>` against the real GitHub: point 1 must now
+  read the base instead of failing on a 403 (later points may fail on
+  their own state, which is the gate working). Run each new command of
+  Decision 3 that reads or is harmless on this item's own PR: create it
+  with `gh api .../pulls` (`-F draft=true`), `ccr/ready_for_review`, then
+  `ccr/convert_to_draft` and `ready_for_review` again. The PUT merge is
+  not run here: only Jeff merges a PR to `main` (FLOW-08). Its first use
+  is the next loop merge or sync after the merge, and the tick's digest
+  shows it; a 403 from the proxy there is a finding for this item's
+  follow-up.
+- **Native.** None, `native_validation: []`: native machines run no
+  Publish, Merge or Close step and deny `gh api`; the tracked binary's
+  removal is checked by `git ls-files` in tier 0's run.
+
+## Implementation plan
+
+1. `merge.go`: the injectable runner, `PR` over REST, the comments
+   (FLOW-08's gate unchanged; GLOBAL-10, no fallback).
+2. `ghcli_test.go`: Decision 4's tests (TEST-02).
+3. `wf-publish.md` and `workflow-tick/SKILL.md`: Decision 3's forms, each
+   in place, nothing else reworded (FLOW-14, LOOP-09).
+4. `git rm --cached tools/workflow/cmd/wf/wf`; the `.gitignore` entries.
+5. `make test`, `make lint`, `tools/workflow/flow18-check.sh`; the live
+   checks of the Validation plan, their output in the PR body.
+6. Archive the design and open the PR to `main` with the REST form it
+   introduces (`x2-implement`, LOOP-09); Jeff merges it (FLOW-08).
+
+## Design review
+
+## Consolidation
+
+## Rollback notes
+
+## Archive summary
