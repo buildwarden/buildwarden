@@ -48,15 +48,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261124T174900Z
+      expires: 2026-11-24T20:32:01.165067039Z
 budget:
   estimate:
     runs: 1
     steps: 6
   spent:
     runs: 1
-    steps: 5
+    steps: 6
 questions:
   - id: q1
     kind: assumed
@@ -198,3 +198,6 @@ history:
   - at: 2026-11-24T18:31:49Z
     by: cloud/20261124T174900Z
     event: 'back to design: x2-implement-r2 (FLOW-06): tier 1 FLOW-02 design-front-matter, 16 MUST: rule_changes paths list machinery under tools/workflow/ and .claude/, which ruleChangeProblems refuses (FLOW-14); narrow each entry''s paths to the rule documents and name the enforcement files in the Rule changes text (Jeff re-approves all four at the fold-in, same sitting). Implementation at 2ad43b9 stands.'
+  - at: 2026-11-24T18:32:01Z
+    by: cloud/20261124T174900Z
+    event: claimed x1-design-r3 until 2026-11-24T20:32:01Z
