@@ -13,8 +13,9 @@ design_review: required
 native_validation: []
 tier2_gaps: []
 rules: [FLOW-04, FLOW-08, FLOW-10, FLOW-14, FLOW-16, FLOW-17, FLOW-19, FLOW-20, LOOP-09, GLOBAL-10, GLOBAL-11, TEST-02]
-rule_changes: []
-concepts: [workflow, merge-gate, loop-merge, program-sync, github-rest, graphql, pull-request, draft-pr, built-binary, gitignore]
+rule_changes:
+  - {rule: FLOW-08, change: amend, paths: [docs/development/process.md, tools/workflow/check/merge.go, tools/workflow/check/merge_test.go]}
+concepts: [workflow, merge-gate, loop-merge, program-sync, github-rest, graphql, pull-request, draft-pr, built-binary, gitignore, mergeable-state, branch-protection-bypass]
 related: [program-north-star.md, loop-parallel.md, loop-repository.md, native-loop-fixes.md, program-autonomy.md]
 ---
 
@@ -75,7 +76,9 @@ cloud as it is. Not the loop's to run:
 `workflow-native/SKILL.md:44` and `tools/workflow/native/settings.native.json:90-92`
 deny `gh pr merge`, `gh pr review` and `gh api` on native machines, and
 stay. No shell script under `tools/workflow/` calls `gh`, and
-`docs/development/` names no `gh` command, so no rule's text changes.
+`docs/development/` names no `gh` command, so the transport changes no
+rule's text; point 10 (Decision 2) amends FLOW-08's list of the gate's
+points (Rule changes).
 
 Separately, folded in on Jeff's word: `tools/workflow/cmd/wf/wf`, a 6 MB
 built binary, has been tracked since #130 (480e205). Any `go build` run in
@@ -92,7 +95,9 @@ checks build into temporary directories.
   gate's nine points, the sync gate, and the merge as `gh pr merge <n>
   --merge --match-head-commit <head> -R <repo>`: one merge commit per item,
   refused if the head moved, never a squash, rebase, `--admin`, auto-merge
-  or bypass. Reused unchanged in meaning; only the transport changes. Its
+  or bypass. Reused: the transport changes, and point 10 (Decision 2)
+  keeps its "never a bypass" now that the merge's client-side refusal of
+  a blocked PR is gone with `gh pr merge`. Its
   task text named `gh pr view --json baseRefName,headRefOid` for points 1
   and 2; it did not know GraphQL is refused in the cloud.
 - **`loop-parallel`** (the PR kept by a returned item) already settled the
@@ -106,26 +111,70 @@ checks build into temporary directories.
 
 ## Decisions
 
-1. **wf reads the pull request over REST.** `ghCLI.PR` runs `gh api
-   repos/<repo>/pulls/<n> --jq '.base.ref + " " + .head.sha + " " +
-   .head.ref'`. The fields map one to one: `baseRefName` is `.base.ref`,
+1. **wf reads the pull request over REST, its mergeability with it.**
+   `ghCLI.PR` runs `gh api repos/<repo>/pulls/<n> --jq '.base.ref + " " +
+   .head.sha + " " + .head.ref + " " + (.mergeable_state // "unknown")'`.
+   The first three fields map one to one: `baseRefName` is `.base.ref`,
    `headRefOid` is `.head.sha`, `headRefName` is `.head.ref` (for a fork's
-   PR both name the branch in the fork). `PRView` and the `GitHub`
-   interface keep their shape, so the gate's points, their names and their
-   messages are unchanged.
+   PR both name the branch in the fork). The fourth is new (r3): GitHub's
+   `mergeable_state`, a null read as `unknown`, which `PRView` carries as
+   `Mergeable` for point 10 (Decision 2). The `GitHub` interface keeps its
+   shape, so points 1 to 9, their names and their messages are unchanged.
    - *Rejected: try `gh pr view`, then REST on a 403.* A fallback
      (GLOBAL-10, GLOBAL-11) for no gain: REST works in every environment
      the gate runs in.
    - *Rejected: a Go GitHub client in wf.* A new dependency and a second
      token path, where `gh api` already carries the session's credentials
      through the proxy.
-2. **The gate reads nothing new.** The task named reviews, check runs and
-   mergeability as what the gate might need. It needs none beyond what it
-   reads now: check runs are already REST; no point reads reviews (FLOW-08
-   asks for no approval, and Decision 9 forbids one as a bypass); and
-   mergeability is GitHub's to enforce at the merge itself, which refuses a
-   closed, conflicting or moved PR (the `sha` parameter, below). Adding a
-   point is a change to the merge gate beyond this item's fix. Assumed, Q1.
+2. **The gate gains point 10: GitHub reports the PR mergeable (r3, Jeff's
+   r4 finding; Q1 answered (b)).** A new point of the merge gate and of the
+   sync gate, not an extension of an existing one. Point 3 is about check
+   runs and the checks the ruleset requires; `blocked` also covers what no
+   point reads: a required review or conversation resolution, classic
+   branch protection, any requirement the caller could bypass. Folding it
+   into point 3 would make that point's name and FLOW-08's wording of it
+   false, so the gate names it on its own, as `merge gate 10: GitHub
+   reports the PR mergeable (FLOW-08)` and `sync gate 10: ...` (FLOW-20).
+   - **What it reads.** The `mergeable_state` from point 1's REST read
+     (Decision 1), so no second call when GitHub has computed it. It
+     passes only on `clean`, `unstable` or `has_hooks`, the states in which
+     `gh pr merge` without `--admin` merges; it fails on `blocked`,
+     `dirty`, `behind`, `draft` and every other value, naming the state.
+     `unstable` (a check that is not required failed) still meets point 3,
+     which refuses any failed run, so the gate passes it only where point 3
+     also holds.
+   - **While GitHub computes it.** GitHub answers `mergeable: null` and
+     `mergeable_state: unknown` until a background job has computed it,
+     which a read of the PR starts. On `unknown` the gate reads the PR
+     again, up to 5 reads in all, 2 seconds apart (about 8 seconds at
+     most), and uses the first read that is not `unknown`; a re-read whose
+     head is not the one point 2 read fails the point ("head moved"), and
+     a 5th `unknown` fails it ("GitHub has not computed mergeability"). The
+     agent then stops as on any failed gate; the next tick or step runs the
+     gate again. The loop never merges on `unknown`. The count and the
+     interval are constants, assumed, Q3.
+   - **Why it keeps the refusal.** It is the client-side check `gh pr
+     merge` made, now made by the gate before the merge: a caller whose
+     token could bypass the base branch's policy (the session's admin
+     token, a ruleset bypass actor, an admin under classic protection
+     without enforced admins) sees `blocked` and does not merge, as with
+     `gh` it was refused and told to pass `--admin`. So the loop never
+     merges where it stopped before (`program-north-star` Decision 9).
+     Between the gate and the PUT the window is the one `gh pr merge` had
+     between reading `mergeStateStatus` and its merge mutation, taken at
+     once under the claim (#144); the head is pinned by `sha` (Decision 3).
+   - *Rejected: Q1 (a), the gate reads nothing new.* The process test (r3)
+     showed the REST merge merges a `blocked` PR for a caller that can
+     bypass, so (a) relaxes a check that stopped the loop.
+   - *Rejected: the agent reads `mergeable_state` just before the PUT.* A
+     second reader outside wf, in prose; the gate is wf's, is tested and
+     already runs at that moment.
+   - *Rejected: refuse a program trunk whose ruleset the caller can bypass
+     or that has no ruleset.* It reads only rulesets and the caller's own
+     bypass; a review rule or classic protection would still need GitHub's
+     verdict, which `mergeable_state` is.
+   - *Rejected: merge on `unknown` and let GitHub refuse.* GitHub's PUT
+     does not refuse a bypassing caller, which is the defect.
 3. **The loop's PR commands use REST, or the session's route where REST
    has none.** In `wf-publish.md` and `workflow-tick/SKILL.md`:
 
@@ -137,12 +186,18 @@ checks build into temporary directories.
    | `gh pr merge <n> --merge --match-head-commit <head> -R <r>` | `gh api -X PUT repos/<r>/pulls/<n>/merge -f merge_method=merge -f sha=<head>` |
    | `gh pr close N` | `gh api -X PATCH repos/<r>/pulls/<N> -f state=closed` |
 
-   The merge's REST form is the same act: `merge_method=merge` writes a
-   merge commit (never a squash or a rebase), and `sha` makes GitHub refuse
-   with 409 when the head is not the one the gate read, as
-   `--match-head-commit` did. Neither form passes `--admin`, deletes a
-   branch, enables auto-merge or approves. A refusal (405 not mergeable,
-   409 head moved) is handled as now: run the check again and stop.
+   The merge's REST form is the same act once the gate's point 10 has
+   passed (Decision 2): `merge_method=merge` writes a merge commit (never a
+   squash or a rebase), and `sha` makes GitHub refuse with 409 when the
+   head is not the one the gate read, as `--match-head-commit` did. The
+   PUT alone lacks `gh pr merge`'s client-side refusal of a `BLOCKED` PR
+   (r3); point 10, run at once before it, is that refusal, so the PUT is
+   taken only where `gh pr merge` would have merged. Neither form passes
+   `--admin`, deletes a branch, enables auto-merge or approves. A refusal
+   (405 not mergeable, 409 head moved) is handled as now: run the check
+   again and stop. `wf-publish.md`'s merge and sync steps say the PUT is
+   taken only after `wf check` passed, point 10 included, and never on a
+   failed or `unknown` point 10.
    - The draft routes exist only in Claude Code sessions. That is where
      these steps run: Publish, Merge and Close are cloud steps (FLOW-04),
      and a native machine's settings deny `gh api`. `loop-parallel` already
@@ -179,17 +234,15 @@ None.
 
 ### Assumed
 
-- **Q1. The gate reads nothing new.** Options: (a) keep the gate's nine
-  points as they are, read over REST (recommended: the fix is the
-  transport; GitHub's merge refuses a closed, conflicting or moved PR, and
-  the agent then re-checks and stops); (b) add a point that the PR is open
-  and `mergeable` is true, which the REST response carries for free.
-  Proceeding with (a); confirm. Not flagged (r2): it was flagged as a
-  decision about the merge gate, a rule FLOW-20 reserved to Jeff; under
-  FLOW-20 as #144 left it, (a) neither removes nor narrows a point of the
-  gate, so it meets no reserved clause, and it touches no security
-  boundary or seam and departs from no earlier decision
-  (`program-north-star`'s points are kept).
+- **Q1. Does the gate read the PR's mergeability?** Options: (a) keep the
+  gate's nine points as they are, read over REST; (b) add a point that
+  GitHub reports the PR mergeable, from the same REST response's
+  `mergeable_state`. Proceeded with (a) in r1 and r2; reopened by the
+  process test (r3), which found (a) drops `gh pr merge`'s refusal of a
+  `BLOCKED` PR for a caller that can bypass. **Answered (b)** (Jeff,
+  2026-11-24, r4): point 10 passes only on `clean`, `unstable` or
+  `has_hooks`, re-reads a bounded number of times while `unknown`, and
+  never merges on `unknown` (Decision 2).
 - **Q2. The draft and ready conversions name only the session's routes.**
   Options: (a) `ccr/convert_to_draft` and `ccr/ready_for_review` only, since
   every step that converts a PR is a cloud step (recommended); (b) keep
@@ -197,7 +250,20 @@ None.
   non-cloud session. Proceeding with (a); confirm. Flagged: it departs
   from `loop-parallel`'s earlier decision (FLOW-19), and is answered on its
   own. It meets no reserved clause of FLOW-20: it names where the loop
-  converts a PR, and widens nothing.
+  converts a PR, and widens nothing. **Answered (a)** (Jeff, 2026-11-24,
+  attended): `loop-parallel`'s "elsewhere `gh pr ready --undo`" branch is
+  dropped.
+- **Q3. How long point 10 waits on `unknown`.** Options: (a) up to 5 reads
+  2 seconds apart, constants in `merge.go` (recommended: GitHub usually
+  computes mergeability within a few seconds of the first read, the wait
+  is short enough for `wf next`, which runs the gate through
+  `State.LoopMerges`, and a later tick retries anyway); (b) one read,
+  refusing on `unknown` and leaving the retry to the next tick (a wasted
+  merge step on most first reads); (c) a `config.yaml` key (a setting no
+  one needs to tune, GLOBAL-09). Proceeding with (a); confirm. Not
+  flagged: either way the gate never merges on `unknown`, so the choice
+  touches no security boundary or seam, and departs from no earlier
+  decision; Jeff named the bound, not its size (r4).
 
 ## Design
 
@@ -212,13 +278,27 @@ out, err := g.run("api", "repos/"+repo+"/pulls/"+strconv.Itoa(number),
 	"--jq", `.base.ref + " " + .head.sha + " " + .head.ref`)
 ```
 
-with the same three-field parse, and its error message names `gh api
-repos/<r>/pulls/<n>` instead of `gh pr view`. The doc comment on `GitHub`
+with a four-field parse (the fourth into `PRView.Mergeable`), and its
+error message names `gh api repos/<r>/pulls/<n>` instead of `gh pr view`.
+
+Point 10 is `(*checker).gateMergeable(view PRView)`, called by `MergeReady`
+after `gateHead` (only when points 1 and 2 held, as the later points are)
+and by `SyncReady` after its point 2 checks. It passes on `view.Mergeable`
+in `clean`, `unstable`, `has_hooks`; on `unknown` it sleeps
+`mergeableWait` (2 s, a package variable the tests set to zero) and calls
+`github().PR` again, at most `mergeableReads` (5) reads in all counting
+point 1's, and fails when a re-read's head differs from `view.Head` or the
+last read is still `unknown`; any other state fails at once. Its message
+names the state and the number of reads, e.g. `mergeable_state blocked`
+or `mergeable_state unknown after 5 reads`. `MergeReady`'s and
+`SyncReady`'s doc comments list point 10. The doc comment on `GitHub`
 says each method reads over REST, because GraphQL is refused in Claude Code
-sessions. `CheckRuns` and `Required` are unchanged. `MergeReady`,
-`SyncReady` and `MergeWaitsOnHuman` are unchanged: they call the interface.
+sessions. `CheckRuns` and `Required` are unchanged. `MergeWaitsOnHuman` is
+unchanged; `MergeReady` and `SyncReady` change only by point 10's call.
 `wf next`'s readiness of `f7-merge` (through `State.LoopMerges`) reads the
-same gate, so it starts passing in the cloud with no change of its own.
+same gate, so it starts passing in the cloud with no change of its own,
+and offers `f7-merge` only while point 10 holds; on `unknown` it waits
+the bounded re-reads (Q3), at most about 8 seconds per loop merge read.
 `MergeReady`'s doc comment says the loop merges "pinned to the head point 2
 read, with `--match-head-commit`"; it becomes "with the merge's `sha`", the
 REST form's head check (row 9), and nothing else in it changes.
@@ -226,7 +306,9 @@ REST form's head check (row 9), and nothing else in it changes.
 **Agents and skills.** `wf-publish.md`'s places (rows 2 to 7, 5a
 included) and `workflow-tick/SKILL.md:268` take the forms in Decision 3;
 row 5a's and row 8's sentences name the REST merge where they named `gh pr
-merge`. The body file
+merge`, and the merge and sync steps say the PUT follows only a passing
+`wf check`, point 10 included, never a failed or `unknown` one (Decision
+3). The body file
 for `gh api .../pulls` is written beside the checkout (`-F body=@<file>`),
 since a body has newlines and backticks a `-f` argument would mangle. The
 number the call prints is what `pr.number` (or the work entry's `pr`)
@@ -263,15 +345,18 @@ a decision here:
 **What the change reaches, every rule, machinery path and configuration
 key (for the reserved-rule reading, FLOW-20 and `wf-review`'s P2):**
 
-- Rules relied on, none of their text edited: FLOW-08 (the merge gate, the
-  loop's merge into a program trunk), FLOW-20 (the program trunk, the sync
+- Rules: FLOW-08 amended, its gate's list gaining point 10 and the sync's
+  sentence naming it (Rule changes). Relied on, their text not edited:
+  FLOW-20 (the program trunk, the sync
   and its gate), FLOW-10 (the returned PR kept as a draft), FLOW-04
   (Publish, Merge and Close stay cloud), FLOW-16 (no branch deleted: the
   REST merge deletes none, as `gh pr merge` without `--delete-branch` did
   not), FLOW-17 (no new push), FLOW-14 and LOOP-09 (machinery changes only
   through a process item, merged by Jeff), GLOBAL-10 and GLOBAL-11 (no
   fallback added), TEST-02.
-- Machinery paths: `tools/workflow/check/merge.go`, a new
+- Machinery paths: `docs/development/process.md` (FLOW-08's text),
+  `tools/workflow/check/merge.go`, `tools/workflow/check/merge_test.go`
+  (point 10's cases and the fixture's `Mergeable`), a new
   `tools/workflow/check/ghcli_test.go` (Decision 4's tests),
   `.claude/agents/wf-publish.md`, `.claude/skills/workflow-tick/SKILL.md`,
   and the removal of `tools/workflow/cmd/wf/wf`.
@@ -290,14 +375,18 @@ it; `wf-review`'s P2).** Read by effect, clause by clause:
   could not take before, whatever worker or machinery takes it", so moving
   the gate's reader and the merge command to REST is not a widening of the
   loop's authority.
-- *Removes or narrows a point of the merge gate:* no. The nine points and
-  the sync gate's points read the same three fields (Decision 1's
-  one-to-one map), check runs and the ruleset over the same REST calls, and
-  point 4 the same fetched program trunk; their names and messages do not
-  change, and `merge_test.go` and `mergeproof_test.go` run unchanged
-  through `fakeGitHub`. The merge stays a merge commit refused when the
-  head moved (`merge_method=merge`, `sha`), with no `--admin`, bypass,
-  approval or auto-merge (Decision 3). No point is added either (Q1).
+- *Removes or narrows a point of the merge gate:* no; it adds one. Points
+  1 to 9 and the sync gate's points read the same three fields (Decision
+  1's one-to-one map), check runs and the ruleset over the same REST calls,
+  and point 4 the same fetched program trunk; their names and messages do
+  not change, and `merge_test.go`'s and `mergeproof_test.go`'s cases run
+  as they are, with `fakeGitHub`'s fixture reading `clean`. Point 10
+  (Decision 2) keeps the refusal `gh pr merge` made on the client for a
+  `BLOCKED` PR, which the PUT alone dropped (r3): with it, the loop takes
+  no merge it would not have taken with `gh`, whatever the caller could
+  bypass. The merge stays a merge commit refused when the head moved
+  (`merge_method=merge`, `sha`), with no `--admin`, bypass, approval or
+  auto-merge (Decision 3).
 - *Two merges into one program trunk at once:* no. #144's serialization is
   in `wf next` and the tick, which this change does not touch, and the REST
   merge is taken at the same point under the same claim.
@@ -311,8 +400,10 @@ it; `wf-review`'s P2).** Read by effect, clause by clause:
   `--delete-branch` did not.
 - *Security:* no rule about security is touched, and `security_boundary`
   is `none`.
-- *A check that stops the loop relaxed or removed:* no. A refusal from
-  GitHub still makes the agent re-check and stop; Decision 4 adds a check.
+- *A check that stops the loop relaxed or removed:* no. `gh pr merge`'s
+  client-side refusal moves into the gate as point 10, which also refuses
+  `unknown`; a refusal from GitHub still makes the agent re-check and
+  stop; Decision 4 adds a check.
 - *A limit, budget or permission raised:* no. No `config.yaml` key, no
   `.claude/settings*.json` allow or deny list (`.claude/settings.json`
   allows no `gh` command by name, and the native deny of `gh api` stays).
@@ -323,16 +414,12 @@ it; `wf-review`'s P2).** Read by effect, clause by clause:
   narrows where they are named, to the cloud where they run, and widens
   nothing.
 
-So the change touches none of the reserved rules, and on Jeff's word
-(2026-11-24, attended) the design goes to the process test, not his
-review: `design_review: process-test`. Its first draft read the same change
-as reserved because the cloud loop would take merges it could not take
-before; FLOW-20's wording at the time reserved any change to a rule about
-merging, and #144 has since said that a program-trunk merge the loop may
-already take is not such a one. Two points remain for the process test's
-session to weigh: Q2 is flagged as a departure from `loop-parallel`'s
-earlier decision (FLOW-19), which is not a reserved clause but is answered
-on its own; and the first live REST merge is not run before Jeff's merge
+So the change touches none of the reserved rules by relaxing one; it
+amends FLOW-08, a loop rule, by adding a gate point, which a process item
+may do (FLOW-14, LOOP-09) and which needs a review (FLOW-19, a design with
+`rule_changes`). `design_review` is `required`: the process test (r3)
+doubted P2, and Jeff's review (r4) asked for point 10 and re-reviews only
+this delta. The first live REST merge is not run before Jeff's merge
 (Validation plan), so its proof is the next loop merge's record.
 
 **Areas.** `loop` (`tools/workflow/`, `.claude/`) and `build`
@@ -364,18 +451,29 @@ table (`componentization.md`):
   attempt per PR the cloud opens (up to the 16 a week that reached `main`
   last week, counting every PR whoever opened it), and a form no later run
   repeats. Counted as time, not as interactions.
-- **Cost.** One run of about 5 steps (the queue estimate), one process
-  test session in place of a review sitting with Jeff (r2), Q2 answered on
-  its own, Jeff's merge of the PR to `main`, and no change to the gate's
-  meaning to re-learn.
+- **Cost.** One run of about 5 steps (the queue estimate) plus this
+  redesign (r3, one step); the process test that did not pass (r3) and
+  Jeff's two short reviews, r4 and the re-review of this delta; Q2 and Q3
+  answered; Jeff's merge of the PR to `main`. One more point of the gate
+  to learn, which says in its message what GitHub reported, and up to
+  about 8 seconds of waiting on a loop merge GitHub has not computed yet
+  (Q3).
+- **What point 10 adds besides the fix.** The three merges Jeff took by
+  hand (#140, #142, buildwarden-specs#7, r3's P1) would each have passed
+  it; a PR GitHub reports `blocked` or `dirty` now stops at the gate with
+  GitHub's reason instead of at the merge's 405.
 
 So about **5 interactions a week that decide nothing**, plus at least 21
-over the program's merges, against one process test session, one answer
-and one merge of Jeff's.
+over the program's merges, against one process test, two reviews, two
+answers and one merge of Jeff's.
 
 ## Defaults and overrides
 
-None. The design adds no default and no override. It adds no fallback, and
+One default, no override: point 10 re-reads an `unknown` `mergeable_state`
+up to 5 reads, 2 seconds apart, constants in `merge.go` (Decision 2,
+assumed as Q3; not a `config.yaml` key, GLOBAL-09). The design adds no
+fallback: after the last read the gate refuses, and the merge is never
+taken on `unknown`. It
 rejects one (Decision 1: GraphQL first, REST on a 403). It drops one
 branch, "elsewhere `gh pr ready --undo`" (Decision 3, Q2), since no step
 that converts a PR runs outside a Claude Code session.
@@ -385,15 +483,77 @@ that converts a PR runs outside a Claude Code session.
 `drivers` is empty: no driver, relay, executor or collector code changes.
 The change is in the loop's machinery and `.gitignore` only.
 
+## Rule changes
+
+**FLOW-08 (amend).** Severity MUST and check `automated`, before and after.
+Paths: `docs/development/process.md` (the rule's text),
+`tools/workflow/check/merge.go` (its enforcement, `MergeReady` and
+`SyncReady`), `tools/workflow/check/merge_test.go` (its tests).
+
+Current, the gate's list and the sync's sentence:
+
+> 8. each pull request its design names to merge first has merged;
+> 9. the rule-change clearance passes.
+>
+> The *program sync* is a pull request whose head merges the trunk into
+> the program trunk. The loop merges it once points 1 to 4 pass, where the
+> head in point 2 is the one the sync step recorded and point 4 also needs
+> the head to contain the trunk, and point 5 on its conflict-resolution
+> commit when it had one (FLOW-20).
+
+Proposed:
+
+> 8. each pull request its design names to merge first has merged;
+> 9. the rule-change clearance passes;
+> 10. GitHub reports the pull request mergeable by its base branch's
+>     protection for any caller, read before the merge (`mergeable_state`
+>     `clean`, `unstable` or `has_hooks`), never while it is still being
+>     computed.
+>
+> The *program sync* is a pull request whose head merges the trunk into
+> the program trunk. The loop merges it once points 1 to 4 and 10 pass,
+> where the head in point 2 is the one the sync step recorded and point 4
+> also needs the head to contain the trunk, and point 5 on its
+> conflict-resolution commit when it had one (FLOW-20).
+
+The rest of FLOW-08 is unchanged.
+
+*Why the feature needs it.* Moving the merge from `gh pr merge` to the
+REST PUT (Decision 3) drops the client-side refusal of a `BLOCKED` PR, and
+the session's token can bypass (r3). The gate is FLOW-08's, so the point
+that keeps the refusal is written into its list, not only into wf.
+
+*What the enforcement change does.* `MergeReady` and `SyncReady` gain
+`gateMergeable` (Design), which reads the `mergeable_state` from point 1's
+REST read, re-reads a bounded number of times while it is `unknown`, and
+fails the point on anything but `clean`, `unstable` or `has_hooks`. `wf
+check -step` and `wf check -sync` print it as `merge gate 10` and `sync
+gate 10`; `wf next` offers a loop merge only while it holds. It adds a
+check and relaxes none.
+
 ## Validation plan
 
 - **Tier 0.** Decision 4's two tests: `ghCLI.PR`'s arguments and parse
-  (three fields, a short output refused), and no `ghCLI` method calling
-  `pr` or `graphql`; the scan of the agents and skills for `gh pr <verb>`
-  and `gh api graphql`, with workflow-native's deny line passed. The
-  existing `merge_test.go` and `mergeproof_test.go` cases run unchanged
-  through `fakeGitHub`, which shows the gate's points are untouched.
-  `make test` and `make lint`.
+  (four fields, a null `mergeable_state` read as `unknown`, a short output
+  refused), and no `ghCLI` method calling `pr` or `graphql`; the scan of
+  the agents and skills for `gh pr <verb>` and `gh api graphql`, with
+  workflow-native's deny line passed. Point 10, in `merge_test.go`
+  through `fakeGitHub`, which gains a queue of states its `PR` returns in
+  turn, with `mergeableWait` zero, each for `MergeReady` and for
+  `SyncReady`:
+  - a `blocked` PR refused, naming `blocked`, with every other point
+    passing (the bypass case: the fake answers as GitHub does for any
+    caller);
+  - a `dirty` PR refused, naming `dirty`;
+  - an `unknown` PR refused after 5 reads, naming `unknown`, and `PR`
+    called exactly 5 times;
+  - `unknown` then `clean` passes on the 2nd read;
+  - `unknown` then a read with another head refused ("head moved");
+  - `behind` and `draft` refused; `clean`, `unstable` and `has_hooks`
+    each pass.
+  The existing `merge_test.go` and `mergeproof_test.go` cases run as they
+  are, the fixture reading `clean`, which shows points 1 to 9 are
+  untouched. `make test` and `make lint`.
 - **Tier 1.** `make lint` with tier 1; the removal of a tracked binary and
   the `.gitignore` entry trip no coupling check (the `build` area is
   declared).
@@ -401,10 +561,15 @@ The change is in the loop's machinery and `.gitignore` only.
   wf and run `dist/wf check -sync -repository buildwarden/buildwarden -pr
   <the open sync PR, or #140>` against the real GitHub: point 1 must now
   read the base instead of failing on a 403 (later points may fail on
-  their own state, which is the gate working). Run each new command of
+  their own state, which is the gate working), and point 10 must print
+  the state GitHub reports. Run each new command of
   Decision 3 that reads or is harmless on this item's own PR: create it
   with `gh api .../pulls` (`-F draft=true`), `ccr/ready_for_review`, then
-  `ccr/convert_to_draft` and `ready_for_review` again. The PUT merge is
+  `ccr/convert_to_draft` and `ready_for_review` again, reading
+  `mergeable_state` with Decision 1's `--jq` after each: `draft` while a
+  draft, then what `main`'s protection gives (`blocked` while its required
+  checks or review are pending), the live case of a refused state. The PUT
+  merge is
   not run here: only Jeff merges a PR to `main` (FLOW-08). Its first use
   is the next loop merge or sync after the merge, and the tick's digest
   shows it; a 403 from the proxy there is a finding for this item's
@@ -415,17 +580,24 @@ The change is in the loop's machinery and `.gitignore` only.
 
 ## Implementation plan
 
-1. `merge.go`: the injectable runner, `PR` over REST, the comments
-   (FLOW-08's gate unchanged; GLOBAL-10, no fallback).
-2. `ghcli_test.go`: Decision 4's tests (TEST-02).
-3. `wf-publish.md` and `workflow-tick/SKILL.md`: Decision 3's forms, each
+1. `merge.go`: the injectable runner, `PR` over REST with
+   `mergeable_state` (Decision 1), point 10's `gateMergeable` in
+   `MergeReady` and `SyncReady` with its bounded re-reads (Decision 2,
+   Q3), the comments (FLOW-08 as amended; GLOBAL-10, no fallback).
+2. `ghcli_test.go`: Decision 4's tests; `merge_test.go`: the fake's queue
+   of states, the fixture's `clean`, and point 10's cases (Validation
+   plan) (TEST-02).
+3. `process.md`: FLOW-08's amendment, worded as Rule changes approves it
+   and nothing else (FLOW-14, LOOP-09).
+4. `wf-publish.md` and `workflow-tick/SKILL.md`: Decision 3's forms, each
    in place (the Problem table's rows 2 to 8, 5a included, at their #144
-   line numbers), nothing else reworded (FLOW-14, LOOP-09); `MergeReady`'s
-   doc comment (row 9).
-4. `git rm --cached tools/workflow/cmd/wf/wf`; the `.gitignore` entries.
-5. `make test`, `make lint`, `tools/workflow/flow18-check.sh`; the live
+   line numbers), and the merge and sync steps' "only after a passing
+   `wf check`, point 10 included", nothing else reworded (FLOW-14,
+   LOOP-09); `MergeReady`'s doc comment (row 9).
+5. `git rm --cached tools/workflow/cmd/wf/wf`; the `.gitignore` entries.
+6. `make test`, `make lint`, `tools/workflow/flow18-check.sh`; the live
    checks of the Validation plan, their output in the PR body.
-6. Archive the design and open the PR to `main` with the REST form it
+7. Archive the design and open the PR to `main` with the REST form it
    introduces (`x2-implement`, LOOP-09); Jeff merges it (FLOW-08).
 
 ## Design review
@@ -496,6 +668,14 @@ The change is in the loop's machinery and `.gitignore` only.
   answered (b)). A bypass-capable caller (the session's admin token) must
   never merge where the loop stopped before (program-north-star Decision 9).
   Everything else in the design stands; q2 (A) answered.
+  Redone in `x1-design-r3`: Decision 2 rewritten as gate point 10, a new
+  point of the merge gate and the sync gate rather than an extension of
+  point 3 (its reasons there), with bounded re-reads on `unknown` (Q3,
+  assumed) and never a merge on `unknown`; Decision 1 reads
+  `mergeable_state`; Decision 3 says the PUT follows point 10; Q1 answered
+  (b), Q2 (a); FLOW-08 amended (`rule_changes`, Rule changes); the
+  reserved-rule reading, tests, Implementation plan and payoff cost
+  updated. Not yet reviewed: Jeff re-reviews this delta from 947bc42.
 
 ## Consolidation
 
