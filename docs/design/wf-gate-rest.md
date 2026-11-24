@@ -677,6 +677,15 @@ check and relaxes none.
   reserved-rule reading, tests, Implementation plan and payoff cost
   updated. Not yet reviewed: Jeff re-reviews this delta from 947bc42.
 
+- r5, 2026-11-24: approved at 692681a. Jeff re-reviewed r4's delta (gate
+  point 10, Decisions 1 to 3, the FLOW-08 amendment and q3) in the
+  attended session.
+  - rule change FLOW-08 approved at 692681a
+  - q1 (b), the mergeable_state check (r4); q2 (A) (Jeff, 2026-11-24);
+    q3 (A), 5 reads 2 s apart.
+  - read at 692681a
+  - sitting: 19:40-19:42 UTC, asks: 3
+
 ## Consolidation
 
 ## Rollback notes
