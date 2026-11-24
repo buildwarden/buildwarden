@@ -39,7 +39,7 @@ steps:
   - id: x2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -58,7 +58,7 @@ budget:
     steps: 5
   spent:
     runs: 2
-    steps: 4
+    steps: 5
 questions:
   - id: q1
     kind: assumed
@@ -80,13 +80,14 @@ questions:
     answer: (A) the session routes only (Jeff, 2026-11-24, attended); loop-parallel's 'elsewhere gh pr ready --undo' branch is dropped
   - id: q3
     kind: assumed
-    status: open
+    status: confirmed
     question: 'How long gate point 10 waits while GitHub reports mergeable_state unknown (design Q3). Proceeding with A; confirm. Not flagged: every option refuses on unknown, so none touches a security boundary or seam, and none departs from an earlier decision (Jeff named the bound, not its size, r4).'
     options:
       - (A) up to 5 reads 2 seconds apart, constants in merge.go
       - (B) one read, refuse on unknown, the next tick retries
       - (C) a config.yaml key
     recommended: (A) up to 5 reads 2 seconds apart, constants in merge.go
+    answer: (A) up to 5 reads 2 s apart, constants in merge.go (Jeff, 2026-11-24, r5)
 history:
   - at: 2026-11-23T22:11:34Z
     by: human/jeff
@@ -169,3 +170,12 @@ history:
   - at: 2026-11-24T19:32:12Z
     by: cloud/20261124T191409Z
     event: entered phase 2 (implement)
+  - at: 2026-11-24T19:33:39Z
+    by: human/jeff
+    event: 'assumed question q3 confirmed: (A) up to 5 reads 2 s apart, constants in merge.go (Jeff, 2026-11-24, r5)'
+  - at: 2026-11-24T19:33:39Z
+    by: human/jeff
+    event: claimed x2-design-review until 2026-11-24T21:33:39Z
+  - at: 2026-11-24T19:33:39Z
+    by: human/jeff
+    event: done x2-design-review
