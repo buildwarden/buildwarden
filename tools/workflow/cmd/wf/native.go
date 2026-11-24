@@ -142,12 +142,19 @@ func nativePrepare(s *queue.State, m *queue.Machine, o opts) error {
 	return nil
 }
 
-// nativeCheck is wf native -check, the install scripts' check of the clones
-// and the profiles' commands. It prints ok, warn and FAIL lines and fails
-// when any check does.
+// nativeCheck is wf native -check, the install scripts' check of the clones,
+// their Entire git hooks and the profiles' commands. It prints ok, warn and
+// FAIL lines and fails when any check does.
 func nativeCheck(s *queue.State, m *queue.Machine, o opts) error {
 	c := &installCheck{}
 	present := c.clones(s, m, o)
+	for _, r := range present {
+		dir := o.repo
+		if r != s.Config.Repository {
+			dir = filepath.Join(o.repo, ".dev", "checkouts", filepath.FromSlash(r))
+		}
+		c.entireHooks(dir)
+	}
 	if c.problems == 0 {
 		cs, err := listedCheckouts(s, m, o)
 		if err != nil {
@@ -208,6 +215,40 @@ func (c *installCheck) clones(s *queue.State, m *queue.Machine, o opts) []string
 		}
 	}
 	return present
+}
+
+// entireHookNames are the git hooks Entire 0.12.2's `entire enable` installs; a
+// commit in a checkout without them is not linked to its session (FLOW-18).
+var entireHookNames = []string{"prepare-commit-msg", "commit-msg", "post-commit",
+	"post-rewrite", "pre-push"}
+
+// entireHooks checks that each of entireHookNames is in the checkout dir's hooks
+// directory (git rev-parse --git-path hooks, which follows core.hooksPath)
+// and names entire. A miss is a FAIL naming the command that installs them
+// (a6 of docs/design/native-loop-fixes.md).
+func (c *installCheck) entireHooks(dir string) {
+	where := filepath.ToSlash(dir)
+	hooks, err := git(dir, "rev-parse", "--git-path", "hooks")
+	if err != nil {
+		c.report(false, "Entire git hooks in %s: %v", where, err)
+		return
+	}
+	if !filepath.IsAbs(hooks) {
+		hooks = filepath.Join(dir, hooks)
+	}
+	var missing []string
+	for _, h := range entireHookNames {
+		raw, err := os.ReadFile(filepath.Join(hooks, h))
+		if err != nil || !strings.Contains(strings.ToLower(string(raw)), "entire") {
+			missing = append(missing, h)
+		}
+	}
+	if len(missing) > 0 {
+		c.report(false, "Entire git hooks in %s: %s missing or not Entire's; run "+
+			"entire enable in %s (FLOW-18)", where, strings.Join(missing, ", "), where)
+		return
+	}
+	c.report(true, "Entire git hooks in %s", where)
 }
 
 // profile runs the checkout's toolchain_check, which must pass, and the

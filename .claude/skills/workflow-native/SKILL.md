@@ -27,8 +27,14 @@ Arguments:
   the prompt says **sessions not recorded** (FLOW-18), take no led step this
   run, validate as usual, and put that line first in the digest file. When it
   names **leftovers** (a `.scratch/` worktree or branch the wrapper's cleanup
-  kept, FLOW-16), list them under **Notes** in the digest. With nothing else
-  to do, end the run without claiming anything.
+  kept, FLOW-16), list them under **Notes** in the digest. When it says
+  **Unfinished** (an earlier run ended unfinished, and the wrapper saved its
+  workflow changes under `.scratch/leftover/<run>/`: `uncommitted.patch`,
+  `untracked.tar` and `commits/`), read them, record the evidence they hold
+  on their steps and backlog entries as `dist/wf done`, `dist/wf release` or
+  a backlog note, and name the run under **Notes**; the wrapper released
+  that run's leases, and removes the directory once this run ends finished.
+  With nothing else to do, end the run without claiming anything.
 
 ## Never (unattended)
 
@@ -47,6 +53,14 @@ Also: never take `human` or `cloud` steps, never ask a question and wait (record
 it in the queue and the digest instead), and never change anything on the
 machine outside the checkout, the documented caches, and the VMs, images and
 containers this session creates. And:
+
+- never end the run while a command this session started in the
+  background is still running: a command that fits the Bash tool's
+  timeout runs in the foreground; a longer one is waited for, in bounded
+  waits, until it exits, or stopped and its case recorded as not run
+  (release the step, or keep the backlog entry open, with the reason),
+  before the digest is written. The wrapper counts a run whose digest it
+  cannot find, or that left a background process, as unfinished;
 
 - no step of an item with an open blocking question or a spent runaway
   budget, which `wf next` now enforces for every worker but a human (FLOW-07,
@@ -138,9 +152,23 @@ plan names and `make deadcode` where the backlog asks for it.
 
 Led steps (Branch setup through Guide of an item this host leads) and any
 other design or implementation step with host affinity: check out the
-feature branch in a worktree `.scratch/<item>` (`git worktree add
-.scratch/<item> feat/<item>`, or `-b feat/<item> origin/main` at Branch
-setup), never in the wrapper's checkout, which stays on `main`. Dispatch to
+feature branch in a worktree `.scratch/<item>`, never in the wrapper's
+checkout, which stays on `main`:
+
+- Branch setup: run `dist/wf trunk -state .dev/workflow -feature <item>`
+  first and use its first field, `<trunk>`, literally (no command
+  substitution, which the allowlist matcher cannot see through): `git
+  worktree add .scratch/<item> -b feat/<item> origin/<trunk>`. A program
+  item's trunk is its program trunk (FLOW-20).
+- A later step, no worktree yet: `git worktree add .scratch/<item>
+  feat/<item>`.
+- A worktree kept from an earlier night (the wrapper keeps it while the
+  item is open): no `worktree add`; `git -C .scratch/<item> merge
+  --ff-only origin/feat/<item>`. A refused fast-forward (local commits not
+  pushed) is pushed first with `native-push.sh`, or the step released with
+  the reason; never a reset or a force-push (FLOW-17).
+
+Dispatch to
 the phase agent as in `workflow-tick` step 2.4, telling it the worktree, and
 finish as in its step 2.5. On this machine every commit of the branch is
 `git -C .scratch/<item> commit -F ../<item>.msg`, the message written to
@@ -148,14 +176,26 @@ finish as in its step 2.5. On this machine every commit of the branch is
 (FLOW-17), is `tools/workflow/native/native-push.sh <item>`, which pushes
 only the checked-out `feat/<item>` of an item in progress, fast-forward only.
 A branch of the item in a second repository it works in is worked in that
-repository's clone: `git -C .dev/checkouts/<owner>/<repo> fetch origin`, then
-`git -C .dev/checkouts/<owner>/<repo> worktree add
-../../../../.scratch/<owner>/<repo>/<item> feat/<item>`, committed with `git
--C .scratch/<owner>/<repo>/<item> commit -F ../<item>.msg` (the message at
-`.scratch/<owner>/<repo>/<item>.msg`) and pushed with
-`tools/workflow/native/native-push.sh <item> <owner>/<repo>`; no other git
-command runs in the clone, which the wrapper resets to its trunk at its next
-run.
+repository's clone, after `git -C .dev/checkouts/<owner>/<repo> fetch
+origin`:
+
+- Branch setup: `dist/wf trunk -state .dev/workflow -feature <item>
+  -repository <owner>/<repo>`, its first field used literally as above, then
+  `git -C .dev/checkouts/<owner>/<repo> worktree add -b feat/<item>
+  ../../../../.scratch/<owner>/<repo>/<item> origin/<trunk>`.
+- A later step, no worktree yet: `git -C .dev/checkouts/<owner>/<repo>
+  worktree add ../../../../.scratch/<owner>/<repo>/<item> feat/<item>`.
+- A worktree kept from an earlier night: no `worktree add`; `git -C
+  .scratch/<owner>/<repo>/<item> merge --ff-only origin/feat/<item>`, a
+  refused fast-forward handled as above.
+
+It is committed with `git -C .scratch/<owner>/<repo>/<item> commit -F
+../<item>.msg` (the message at `.scratch/<owner>/<repo>/<item>.msg`) and
+pushed with `tools/workflow/native/native-push.sh <item> <owner>/<repo>`;
+its scripts run as `tools/workflow/native/native-run.sh --
+.scratch/<owner>/<repo>/<item>/tools/<path> ...`, as for this repository's.
+No other git command runs in the clone, which the wrapper resets to its
+trunk at its next run.
 
 Keep the lease while working: before each phase-agent dispatch, and at each
 checkpoint push, when less than half the lease is left, renew it with
@@ -218,8 +258,10 @@ release of stale leases never frees an attended session's, so a lease left
 here runs to its expiry. Finish with a summary per branch.
 
 Unattended: write the run's own file,
-`.dev/workflow/digest/<YYYY-MM-DD>/<UTC start>-host-<machine>.md`
-(America/Los_Angeles date), starting with a
+`.dev/workflow/digest/<YYYY-MM-DD>/<run>-host-<machine>.md`
+(America/Los_Angeles date; `<run>` is the part of the session id after
+`<machine>.`, e.g. `20261122T124005Z-host-macbook.md`, which is how the
+wrapper finds it), starting with a
 `## Run host:<machine>/<timestamp>` heading (after the "sessions not recorded
 (FLOW-18)" line when the prompt has it), and run
 `dist/wf digest -state .dev/workflow`, which builds the day's page; checked
