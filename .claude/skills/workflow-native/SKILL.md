@@ -34,14 +34,16 @@ Arguments:
   on their steps and backlog entries as `dist/wf done`, `dist/wf release` or
   a backlog note, and name the run under **Notes**; the wrapper released
   that run's leases, and removes the directory once this run ends finished.
-  With nothing else to do, end the run without claiming anything.
+  When it names **tags due**, do them first (**Tags**). With nothing else
+  to do, end the run without claiming anything.
 
 ## Never (unattended)
 
 The `workflow-tick` skill's Never list applies, without its loop merges: no
 merge of any PR, into a trunk or a program trunk, no approval or
 auto-merge (`settings.native.json` denies `gh pr merge`); no push to `main`
-or a program trunk, no tag, force-push or remote branch delete; no edits to
+or a program trunk, no tag but a due one, by `native-tag.sh` (**Tags**), no
+force-push or remote branch delete; no edits to
 `docs/development/`, `.claude/` or `tools/workflow/`, except a rule change the
 feature's design review approved, in its `paths` (FLOW-14), and never a loop
 rule or its enforcement (LOOP-09); no secrets in prompts; no change to a
@@ -68,7 +70,8 @@ containers this session creates. And:
 - no push but by `dist/wf commit` (the workflow branch) and
   `tools/workflow/native/native-push.sh <name>` (a feature branch, FLOW-17),
   or `native-push.sh <name> <owner>/<repo>` for a branch in a second
-  repository's clone;
+  repository's clone, and `tools/workflow/native/native-tag.sh
+  <owner>/<repo> <tag>` (a due tag);
 - no `git -C ... commit -m`: a commit message goes in `.scratch/<name>.msg`
   and is committed with `git -C .scratch/<name> commit -F ../<name>.msg`,
   never `-m`, and never `git -C ... log --grep push`, because the deny
@@ -119,6 +122,31 @@ on its trunk (`dist/wf native -state .dev/workflow -repo . -machine <machine>
 -check`), and never clone one. Pass `-checkouts .dev/checkouts` to every `wf`
 command that takes `-repo`. `wf next` offers this machine only the steps
 of repositories it lists (FLOW-04).
+
+## Tags
+
+Attended or unattended, before the batch and outside the native budget
+(nothing from Merge on counts, FLOW-13): `dist/wf tags-due -state
+.dev/workflow -machine <machine>` lists the tags the cloud recorded as due
+in the repositories this machine lists, one a line as
+`<repo>\t<tag>\t<commit>\t<program trunk>\t<due since>`. For each, in order:
+
+1. `tools/workflow/native/native-tag.sh <repo> <tag>`, from the checkout
+   root. It creates the tag only as `wf tags-due` lists it: an annotated
+   tag at the due commit, pushed create-only with this machine's
+   credentials, which starts the repository's release workflow.
+2. On success: `dist/wf record -state .dev/workflow -worker $W -kind tag
+   -repository <repo> -head <commit> -ref <tag> -note "created by
+   native-tag.sh"`, then `dist/wf commit -state .dev/workflow -worker $W -m
+   "tag <repo> <tag>" program/records.yaml`.
+3. Refused with "the remote already has <tag> at <commit>" and that commit
+   is the due one: another machine created it. Record it as in 2; `wf
+   record` refusing it as already recorded means it is recorded. Go on.
+4. Any other refusal, or the remote's tag at another commit: the tag stays
+   due. List it under **Blocked on Jeff** with the refusal line, and notify
+   Jeff (the PushNotification tool when available). No retry by another
+   route, and never a `git tag` or `git push` of a tag by hand
+   (GLOBAL-10, FLOW-17).
 
 ## Collect the batch
 
@@ -266,7 +294,8 @@ wrapper finds it), starting with a
 (FLOW-18)" line when the prompt has it), and run
 `dist/wf digest -state .dev/workflow`, which builds the day's page; checked
 against LOOP-06's list before the commit, with
-**Moved** (per host and branch: what ran, pass or fail, evidence; for each
+**Moved** (each tag created, with its repository and commit; per host and
+branch: what ran, pass or fail, evidence; for each
 queue step, the item with its kind and FLOW-05 class, and the branch head it
 left; a **Specification changes** line under a step that
 changed a specification, LOOP-02; on a review step's line, tier 1's result and
@@ -274,7 +303,7 @@ the tier-2 findings counted by severity, with the report's path, LINT-05;
 each lead this run set or cleared, with `wf new -lead` or `wf lead`, from its
 history line),
 **Blocked on Jeff** (anything this machine cannot do: a missing tool, a
-failure that needs a decision), **Follow-ups filed** (each as
+failure that needs a decision, each tag `native-tag.sh` refused), **Follow-ups filed** (each as
 "<slug> (follows <item>)", so Jeff can say otherwise; "none" when none),
 **Spent** (steps and
 backlog entries against the native budget, a led step counting one like a
