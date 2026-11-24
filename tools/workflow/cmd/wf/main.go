@@ -433,14 +433,11 @@ func main() {
 }
 
 func run(cmd string, args []string, now time.Time) error {
-	if cmd == "main" {
-		return mainCmd(args)
-	}
-	if cmd == "rules" {
-		return rulesCmd(args)
-	}
-	if cmd == "sync-shape" {
-		return syncShapeCmd(args)
+	// These read no queue and parse their own flags.
+	if own, ok := map[string]func([]string) error{
+		"main": mainCmd, "rules": rulesCmd, "sync-shape": syncShapeCmd,
+	}[cmd]; ok {
+		return own(args)
 	}
 	o := opts{now: now}
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
@@ -1006,8 +1003,9 @@ func guardedSync(s *queue.State, repo, dir, branch, head string) error {
 			short12(head), err)
 	}
 	if len(guarded) > 0 {
-		return fmt.Errorf("%s resolves %s, which FLOW-14 guards: a sync resolution may "+
-			"not edit them; escalate (FLOW-20)", short12(head), strings.Join(guarded, ", "))
+		return fmt.Errorf("%s resolves %s, which FLOW-14 guards: a sync resolution "+
+			"may not edit them; escalate (FLOW-20)", short12(head),
+			strings.Join(guarded, ", "))
 	}
 	return nil
 }

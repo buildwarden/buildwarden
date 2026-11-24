@@ -668,8 +668,8 @@ func syncParents(dir, base, head, trunk string) ([]string, []string, error) {
 			return nil, nil, err
 		}
 		if !in {
-			why = append(why, fmt.Sprintf("%s's %s parent %s is not in %s", short(head),
-				p.which, short(p.commit), p.ref))
+			why = append(why, fmt.Sprintf("%s's %s parent %s is not in %s",
+				short(head), p.which, short(p.commit), p.ref))
 		}
 	}
 	return ps, why, nil

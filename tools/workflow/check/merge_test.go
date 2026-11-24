@@ -557,6 +557,9 @@ func shapeRepo(t *testing.T, mainFiles, progFiles, resolve map[string]string,
 // resolution; GuardedResolution names the resolution's paths FLOW-14 guards
 // (FLOW-01, FLOW-14, FLOW-20, Decisions 2 and 4 of sync-pr-tier1).
 func TestSyncShape(t *testing.T) {
+	ci := func(lint, build string) map[string]string {
+		return map[string]string{shapeCI: shapeWorkflow(lint, build)}
+	}
 	for name, tc := range map[string]struct {
 		main, prog, resolve map[string]string
 		resolution, guarded []string
@@ -593,23 +596,23 @@ func TestSyncShape(t *testing.T) {
 			guarded:    []string{".claude/agents/a.md"},
 		},
 		"a resolved conflict in a workflow's tier1 job": {
-			main:       map[string]string{shapeCI: shapeWorkflow("make lint && m", "make build")},
-			prog:       map[string]string{shapeCI: shapeWorkflow("make lint && p", "make build")},
-			resolve:    map[string]string{shapeCI: shapeWorkflow("make lint && mp", "make build")},
+			main:       ci("make lint && m", "make build"),
+			prog:       ci("make lint && p", "make build"),
+			resolve:    ci("make lint && mp", "make build"),
 			resolution: []string{shapeCI},
 			guarded:    []string{shapeCI},
 		},
 		"a resolution edit of a workflow's tier1 job": {
 			main:       map[string]string{"main.txt": "m\n"},
 			prog:       map[string]string{"prog.txt": "p\n"},
-			resolve:    map[string]string{shapeCI: shapeWorkflow("make lint || true", "make build")},
+			resolve:    ci("make lint || true", "make build"),
 			resolution: []string{shapeCI},
 			guarded:    []string{shapeCI},
 		},
 		"a resolution edit of a workflow outside a rule-running job": {
 			main:       map[string]string{"main.txt": "m\n"},
 			prog:       map[string]string{"prog.txt": "p\n"},
-			resolve:    map[string]string{shapeCI: shapeWorkflow("make lint", "make build -j2")},
+			resolve:    ci("make lint", "make build -j2"),
 			resolution: []string{shapeCI},
 		},
 	} {
@@ -654,7 +657,8 @@ func TestSyncShapeRefuses(t *testing.T) {
 		"a second parent not in the trunk": {"program/p", branch, head, "other",
 			"second parent"},
 		"a branch whose hex does not prefix the second parent": {"program/p",
-			"sync/program-" + strings.Repeat("0", 12), head, "main", "does not start with"},
+			"sync/program-" + strings.Repeat("0", 12), head, "main",
+			"does not start with"},
 		"a branch that is not a sync branch": {"program/p", "feat/x", head, "main",
 			"is not sync/program-<sha>"},
 	} {
@@ -674,6 +678,7 @@ func TestSyncShapeRefuses(t *testing.T) {
 	}
 	if got, err := GuardedResolution(w, "", head, []string{".claude/a"}); err != nil ||
 		got != nil {
-		t.Errorf("GuardedResolution of a repository that has not adopted: %q, %v", got, err)
+		t.Errorf("GuardedResolution of a repository that has not adopted: %q, %v", got,
+			err)
 	}
 }
