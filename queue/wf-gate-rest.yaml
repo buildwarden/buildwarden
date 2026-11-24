@@ -1,10 +1,10 @@
 feature: wf-gate-rest
 title: The loop's merge gate reads pull requests over REST, so the cloud can pass it; and wf's built binary leaves the repository
-priority: 1
+priority: 2
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 1
 design: docs/design/wf-gate-rest.md
 branch: feat/wf-gate-rest
 areas:
@@ -22,19 +22,10 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: x2-design-review
-    phase: 2
-    affinity: human
-    status: pending
-    lease:
-      claimed_by: ""
-      expires: null
-  - id: x2-implement
-    phase: 2
+  - id: x1-design-r2
+    phase: 1
     affinity: cloud
     status: pending
-    needs:
-      - x2-design-review
     lease:
       claimed_by: ""
       expires: null
@@ -105,3 +96,6 @@ history:
   - at: 2026-11-24T00:21:22Z
     by: cloud/20261123T232256Z
     event: 'spend corrected from 8 steps to 1: the tick''s claim loop re-claimed x1-design 7 more times under the same worker at 23:23:36-56Z before any work ran (wf next re-offers a worker its own leased step); one design step was taken'
+  - at: 2026-11-24T19:14:09Z
+    by: human/jeff
+    event: 'back to design: Jeff, 2026-11-24 (attended): the loop''s process test takes this review instead of Jeff, now that program-autonomy (#144) narrowed FLOW-20''s reserved reading (a change to how the loop takes program-trunk merges is reserved only when it weakens the gate); set design_review: process-test, design otherwise unchanged'
