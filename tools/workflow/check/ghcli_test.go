@@ -45,8 +45,10 @@ func fakeGH(out string) (ghCLI, *[][]string) {
 // (wf-gate-rest Decision 1).
 func TestGhCLIPR(t *testing.T) {
 	for out, want := range map[string]PRView{
-		"program/x abc123 feat/demo clean\n": {"program/x", "abc123", "feat/demo", "clean"},
-		"main def456 sync/program-1 unknown": {"main", "def456", "sync/program-1", "unknown"},
+		"program/x abc123 feat/demo clean\n": {
+			"program/x", "abc123", "feat/demo", "clean"},
+		"main def456 sync/program-1 unknown": {
+			"main", "def456", "sync/program-1", "unknown"},
 	} {
 		g, calls := fakeGH(out)
 		got, err := g.PR("o/r", 42)
@@ -54,11 +56,13 @@ func TestGhCLIPR(t *testing.T) {
 			t.Fatalf("%q: %+v, %v; want %+v", out, got, err, want)
 		}
 		args := (*calls)[0]
-		if args[0] != "gh" || args[1] != "api" || args[2] != "repos/o/r/pulls/42" {
+		if strings.Join(args[:3], " ") != "gh api repos/o/r/pulls/42" {
 			t.Fatalf("PR ran %v, want gh api repos/o/r/pulls/42", args)
 		}
-		if jq := args[len(args)-1]; !strings.Contains(jq, `.mergeable_state // "unknown"`) {
-			t.Fatalf("PR's --jq %q does not read a null mergeable_state as unknown", jq)
+		jq := args[len(args)-1]
+		if !strings.Contains(jq, `.mergeable_state // "unknown"`) {
+			t.Fatalf("PR's --jq %q does not read a null mergeable_state as "+
+				"unknown", jq)
 		}
 	}
 	for _, out := range []string{"", "main abc123 feat/demo", "a b c d e"} {
@@ -81,7 +85,8 @@ func TestGhCLIRestOnly(t *testing.T) {
 		t.Fatalf("%d calls, want 3", len(*calls))
 	}
 	for _, args := range *calls {
-		if args[1] != "api" || slices.Contains(args, "graphql") || slices.Contains(args, "pr") {
+		if args[1] != "api" || slices.Contains(args, "graphql") ||
+			slices.Contains(args, "pr") {
 			t.Errorf("gh %s: not a REST read", strings.Join(args[1:], " "))
 		}
 	}

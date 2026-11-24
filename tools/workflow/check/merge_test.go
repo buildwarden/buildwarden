@@ -570,14 +570,17 @@ func checkMergeable(t *testing.T, point string,
 			case got == nil:
 				t.Fatalf("no %s in %v", point, rs)
 			case got.OK != tc.pass:
-				t.Fatalf("%s passed %v, want %v: %s", point, got.OK, tc.pass, got.Info)
+				t.Fatalf("%s passed %v, want %v: %s", point, got.OK, tc.pass,
+					got.Info)
 			case !strings.Contains(got.Info, tc.names):
-				t.Fatalf("%s says %q, want it to name %q", point, got.Info, tc.names)
+				t.Fatalf("%s says %q, want it to name %q", point, got.Info,
+					tc.names)
 			case gh.reads != tc.reads:
 				t.Fatalf("%d reads of the PR, want %d", gh.reads, tc.reads)
 			}
 			if tc.pass != OK(rs) {
-				t.Fatalf("the gate passed %v, want %v: %s", OK(rs), tc.pass, failures(rs))
+				t.Fatalf("the gate passed %v, want %v: %s", OK(rs), tc.pass,
+					failures(rs))
 			}
 		})
 	}
