@@ -1,6 +1,6 @@
 ---
 feature: wf-gate-rest
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -691,3 +691,48 @@ check and relaxes none.
 ## Rollback notes
 
 ## Archive summary
+
+Implemented 2026-11-24 in `x2-implement` (process item, attended), after
+Jeff approved r3 at 692681a (r5).
+
+- **Built.** `ghCLI.PR` reads `gh api repos/<r>/pulls/<n>` (base, head,
+  head branch and `mergeable_state`, a null read as `unknown`) through an
+  injectable `command`; `CheckRuns` and `Required` were already REST.
+  `MergeReady` and `SyncReady` end with point 10, `gateMergeable`: it
+  passes on `clean`, `unstable` or `has_hooks`, re-reads an `unknown`
+  state up to 5 reads 2 seconds apart, and fails on any other state, on a
+  re-read with another head, and on a 5th `unknown`. FLOW-08 lists point
+  10 and the program sync names it. `wf-publish.md` opens PRs with `gh api
+  .../pulls`, readies and drafts them with the session's
+  `ccr/ready_for_review` and `ccr/convert_to_draft`, merges with `PUT
+  .../pulls/<n>/merge` (`merge_method=merge`, `sha`) only after a passing
+  `wf check`, point 10 included, and closes with `PATCH state=closed`; the
+  tick skill names the merge's `PUT`. `tools/workflow/cmd/wf/wf` is
+  untracked and ignored, with `wf.exe`.
+- **Decisions taken:** REST only, no GraphQL-then-REST fallback; point 10
+  as a new point of both gates rather than part of point 3 (Q1 (b), Jeff,
+  r4), so a caller able to bypass the branch's protection never merges
+  where `gh pr merge` refused; the session's routes as the only draft and
+  ready forms (Q2 (a)); 5 reads 2 s apart as constants (Q3 (a)).
+- **Rejected:** a Go GitHub client; the GitHub MCP tools; a `wf merge`
+  subcommand; the agent reading `mergeable_state` before the PUT; refusing
+  program trunks whose ruleset the caller can bypass; merging on
+  `unknown`.
+- **Validated.** Tier 0: `ghcli_test.go` (the REST call and its four-field
+  parse, no `ghCLI` method running `gh pr` or `graphql`, and a scan of
+  `.claude/agents/*.md` and `.claude/skills/*/SKILL.md` that fails on any
+  `gh pr <verb>` or `gh api graphql` outside a line saying a settings file
+  denies it); point 10's cases in `merge_test.go` for both gates, the
+  existing cases unchanged with the fixture reading `clean`. Live in the
+  cloud: the branch's `wf check -sync ... -pr 140` read point 1 over REST
+  (the 403 is gone) and point 10 refused the merged PR's null state as
+  `unknown` after 5 reads. The PR to `main` was opened with the REST form.
+  The PUT merge first runs at the next loop merge or sync after Jeff's
+  merge.
+- **For a future design touching these concepts.** GraphQL is refused in
+  Claude Code sessions; every `gh` call the loop makes is REST or a
+  session `ccr/` route, and `TestAgentsUseREST` keeps it so. The REST merge
+  does not refuse a policy-blocked PR for a caller that can bypass it;
+  point 10 is that refusal, and any new merge path must run it first.
+  `mergeable_state` is null on a merged or closed PR, which point 10 reads
+  as `unknown` and refuses.
