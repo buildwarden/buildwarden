@@ -49,7 +49,7 @@ None.
 
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | sync-pr-tier1 | process | - | buildwarden/buildwarden | - | 2 implement | x2-implement (cloud) | - | - | 2 / 4 |
+| 1 | sync-pr-tier1 | process | - | buildwarden/buildwarden | - | 2 implement | x2-implement (cloud, leased to cloud/20261124T191409Z-2) | - | - | 3 / 4 |
 | 2 | wf-gate-rest | process | - | buildwarden/buildwarden | - | 2 implement | x2-process-test (cloud, leased to cloud/20261124T191409Z) | - | - | 3 / 5 |
 | 5 | finch-version-starts-vm | fix (follows driver-contract) | - | buildwarden/buildwarden | driver/container, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 8 |
 | 6 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
