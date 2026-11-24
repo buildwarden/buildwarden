@@ -53,12 +53,11 @@ None.
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | wf-gate-rest | process | - | buildwarden/buildwarden | - | 2 implement | x2-design-review (human) | - | - | 1 / 5 |
 | 2 | sync-pr-tier1 | process | - | buildwarden/buildwarden | - | 2 implement | x2-design-review (human) | - | - | 1 / 4 |
-| 3 | relay-conformance-timeout | fix (follows seam-specs) | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay | 8 close | f8-close (cloud, leased to cloud/20261124T174900Z) | - | [#143](https://github.com/buildwarden/buildwarden/pull/143) | 17 / 17 |
-| 6 | finch-version-starts-vm | fix (follows driver-contract) | - | buildwarden/buildwarden | driver/container, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 8 |
-| 7 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
-| 8 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
-| 9 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 2 / 9 |
-| 10 | relay-release-forms-spec | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | designs, specs, conformance, driver-core, driver/container, cli, book | 2 plan | f2-design-review (human) | - | - | 3 / 18 |
+| 5 | finch-version-starts-vm | fix (follows driver-contract) | - | buildwarden/buildwarden | driver/container, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 8 |
+| 6 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
+| 7 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
+| 8 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 2 / 9 |
+| 9 | relay-release-forms-spec | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | designs, specs, conformance, driver-core, driver/container, cli, book | 2 plan | f2-design-review (human) | - | - | 3 / 18 |
 
 ## Workers
 
@@ -73,15 +72,6 @@ Open features that are not disjoint. Process items are outside the relations (FL
 
 | Items | Relation | Why |
 |---|---|---|
-| relay-conformance-timeout, prebuilt-artifacts | colliding | prebuilt-artifacts is undeclared |
-| relay-conformance-timeout, workdir-in-context | near | driver-core reaches relay |
-| relay-conformance-timeout, relay-collector-failure-fails-open | colliding | buildwarden/buildwarden-specs has no area map |
-| relay-conformance-timeout, relay-release-forms-spec | colliding | buildwarden/buildwarden-specs has no area map |
-| relay-conformance-timeout, vm-from-host-path | colliding | vm-from-host-path is undeclared |
-| relay-conformance-timeout, configuration-bugfixes | colliding | configuration-bugfixes is undeclared |
-| relay-conformance-timeout, runtime-former-values-removal | colliding | runtime-former-values-removal is undeclared |
-| relay-conformance-timeout, auto-tidy-pull-request | colliding | auto-tidy-pull-request is undeclared |
-| relay-conformance-timeout, relay-exit-code-unreadable | colliding | area relay |
 | finch-version-starts-vm, prebuilt-artifacts | colliding | prebuilt-artifacts is undeclared |
 | finch-version-starts-vm, workdir-in-context | near | driver/container reaches driver-core |
 | finch-version-starts-vm, relay-collector-failure-fails-open | near | driver/container reaches executor |
@@ -139,10 +129,10 @@ Open features that are not disjoint. Process items are outside the relations (FL
 
 | Pri | Item | Kind | Repositories | Areas | Est. steps |
 |---|---|---|---|---|---|
-| 4 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
-| 5 | program-land | process | buildwarden/buildwarden | - | 5 |
-| 11 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
-| 12 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
-| 13 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
-| 14 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
-| 15 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |
+| 3 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
+| 4 | program-land | process | buildwarden/buildwarden | - | 5 |
+| 10 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
+| 11 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
+| 12 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
+| 13 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
+| 14 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |
