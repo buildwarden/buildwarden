@@ -338,6 +338,39 @@ func (f *Feature) PendingRefresh() *Step {
 	return nil
 }
 
+// MergePhase is the item's round's merge phase: a feature's 7, a process
+// item's 3, a tracked item's 2 (FLOW-08).
+func (f *Feature) MergePhase() int {
+	switch f.Round {
+	case "process":
+		return 3
+	case "tracked":
+		return 2
+	}
+	return 7
+}
+
+// Budgeted reports whether a claim of the step counts against the item's
+// work budget and the run's, and whether the runaway check may hold it
+// (FLOW-13): only a step before the item's Merge phase, other than an
+// f6-merged-<n> and the first claim of a refresh, changes the item's
+// repositories. From Merge on (a merge or its confirmation, Close and its
+// state step) nothing counts. A refresh's first claim is caused by other
+// items' merges; claimed again, it counts like any retried step, so one
+// that keeps failing still ends at the runaway check.
+func Budgeted(f *Feature, st *Step) bool {
+	return st.Phase < f.MergePhase() && !isMergedFirst(st) &&
+		(!IsRefresh(st) || f.claimedBefore(st))
+}
+
+// pendingBudgeted reports whether the item has a pending step whose claim
+// counts (Budgeted): the only steps a runaway budget holds (FLOW-13).
+func (f *Feature) pendingBudgeted() bool {
+	return slices.ContainsFunc(f.Steps, func(st Step) bool {
+		return st.Status == "pending" && Budgeted(f, &st)
+	})
+}
+
 // AtMerge reports whether the item waits for the human's merge: it is in
 // progress at its round's merge phase (FLOW-08).
 func (f *Feature) AtMerge() bool {

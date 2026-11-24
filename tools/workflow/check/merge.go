@@ -114,7 +114,9 @@ var protectedRe = regexp.MustCompile(`^(GLOBAL-06|SEC-[0-9]+|RELAY-0[1235]|FLOW-
 // MergeReady is the merge gate of a pull request into a program trunk
 // (FLOW-08, FLOW-20): it checks the item's pull request in repo against
 // TrunkFor, and each failure names its point. The loop merges only while
-// every point holds, on the head point 2 read, with --match-head-commit.
+// every point holds, on the head point 2 read, with --match-head-commit, at
+// once after the gate passes under its claim: point 4 fetches the program
+// trunk and reads its head as origin has it then.
 func MergeReady(env Env, f *queue.Feature, repo string) []Result {
 	c := newChecker(env, f)
 	if !c.ready() {
@@ -297,9 +299,19 @@ func (c *checker) gateChecks(head string) {
 			strings.Join(required, ", "))))
 }
 
-// gateContains checks point 4: the head contains the program trunk's head.
+// gateContains checks point 4: the head contains the program trunk's head,
+// fetched first, so that under the loop merge's claim the gate reads the
+// program trunk as it is when the loop merges (FLOW-08). Another loop merge
+// in the repository is not taken meanwhile (wf next's serialization), and a
+// head that moved anyway fails the merge pinned to the head.
 func (c *checker) gateContains(head string) {
 	const name = "merge gate 4: the branch contains the program trunk (FLOW-08)"
+	ref := c.at.against
+	if _, err := c.git("fetch", "-q", "origin",
+		"+refs/heads/"+ref+":refs/remotes/origin/"+ref); err != nil {
+		c.add(name, false, "the program trunk not fetched: %v", err)
+		return
+	}
 	_, err := c.git("merge-base", "--is-ancestor", c.trunk(), head)
 	c.add(name, err == nil, "%s is an ancestor of %s", c.trunk(), short(head))
 }

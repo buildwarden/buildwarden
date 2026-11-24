@@ -30,6 +30,11 @@
 # in its prompt; once a run told of them ends worked, the copy is deleted and
 # the saved one marked handed.
 #
+# A tag the cloud recorded as due in a repository the machine lists wakes the
+# gate (a "tag" line), and the prompt names each ("Tags due: <repo> <tag>,
+# ..."); the session creates them with native-tag.sh before its batch
+# (FLOW-17).
+#
 # The session's worker is host:<name>/<machine>.<run>, and its claims hold a
 # 20-hour lease it renews while it works (FLOW-04). Before the gate the
 # wrapper releases every lease an earlier scheduled session of this machine
@@ -459,6 +464,15 @@ handed_off() {
 	done
 }
 
+# tags_due prints the prompt's sentence naming the tags the gate's output
+# ($1) lists as due ("tag\t<repo>\t<tag>" lines), or nothing when it lists
+# none (FLOW-17).
+tags_due() {
+	local due
+	due=$(printf '%s\n' "$1" | awk -F '\t' '$1 == "tag" { printf "%s%s %s", sep, $2, $3; sep = ", " }')
+	[ -z "$due" ] || printf ' Tags due: %s.' "$due"
+}
+
 # shellcheck disable=SC2329 # called from the EXIT trap
 on_exit() {
 	local rc=$?
@@ -546,6 +560,7 @@ release_leases -machine "$machine" -stale -current "$machine.$run" \
 stage="gate"
 
 stamp="$state/gate-$machine.json"
+gate_out=""
 if [ "${BW_FORCE:-}" = 1 ]; then
 	echo "gate: skipped (BW_FORCE=1)"
 else
@@ -587,6 +602,7 @@ skip=""
 [ -z "$stale" ] || skip=" Stale hosts: $stale (native.prepare failed); skip their steps and gaps this run and say why in the digest."
 leftovers=""
 [ -z "$leftover" ] || leftovers=" Leftovers: $leftover."
+tags=$(tags_due "$gate_out")
 unfinished=""
 for r in $handed; do
 	unfinished="$unfinished Unfinished: run $r ended unfinished; its saved workflow changes are in .scratch/leftover/$r/."
@@ -600,7 +616,7 @@ dist/wf gate -state .dev/workflow -repo . -machine "$machine" -stamp "$stamp.pen
 set +e
 session_started=1
 # Only the session carries BW_NATIVE_SESSION, so the sweep finds what it left.
-BW_NATIVE_SESSION="$machine.$run" claude -p "Invoke the workflow-native skill with the arguments \"unattended $machine\" and follow it exactly. Worker session id: $machine.$run.$skip$leftovers$unfinished$recorded" \
+BW_NATIVE_SESSION="$machine.$run" claude -p "Invoke the workflow-native skill with the arguments \"unattended $machine\" and follow it exactly. Worker session id: $machine.$run.$tags$skip$leftovers$unfinished$recorded" \
 	--settings tools/workflow/native/settings.native.json \
 	--permission-mode acceptEdits \
 	--max-turns "${BW_MAX_TURNS:-400}"

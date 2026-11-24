@@ -335,8 +335,10 @@ type GateStamp struct {
 }
 
 // Gate decides whether machine m has native work: a ready step for one of its
-// hosts, or open backlog gaps on its hosts when main or a waiting branch has
-// moved since the last session (stamp), or when sweepDays have passed since it.
+// hosts, a tag due in a repository it lists (a "tag" reason with the
+// repository and the tag, whatever the stamp, FLOW-17), or open backlog gaps
+// on its hosts when main or a waiting branch has moved since the last session
+// (stamp), or when sweepDays have passed since it.
 // While the human has not confirmed the priority order it is idle, with that
 // reason, as the cloud is (FLOW-13).
 func (s *State) Gate(m *Machine, repo string, last *GateStamp, sweepDays int,
@@ -346,13 +348,7 @@ func (s *State) Gate(m *Machine, repo string, last *GateStamp, sweepDays int,
 			"idle\tthe priority order is not confirmed (FLOW-13)"}}, nil
 	}
 	g := &Gate{}
-	for _, h := range m.Hosts {
-		if p, _ := s.Next("host:"+h+"/"+m.Name+".gate", now); p != nil {
-			g.Run = true
-			g.Reasons = append(g.Reasons, fmt.Sprintf("step\thost:%s\t%s\t%s", h,
-				p.Feature.Feature, p.Step.ID))
-		}
-	}
+	s.readyWork(m, g, now)
 	serves := s.unheld(m, g)
 	var open []string
 	for _, gap := range s.Gaps {
@@ -387,6 +383,25 @@ func (s *State) Gate(m *Machine, repo string, last *GateStamp, sweepDays int,
 		g.Reasons = append(g.Reasons, "idle\tno host step ready and no open gaps")
 	}
 	return g, nil
+}
+
+// readyWork adds to the gate what wakes the machine whatever the stamp: a
+// ready step for one of its hosts, and a tag due in a repository it lists
+// (FLOW-17).
+func (s *State) readyWork(m *Machine, g *Gate, now time.Time) {
+	for _, h := range m.Hosts {
+		if p, _ := s.Next("host:"+h+"/"+m.Name+".gate", now); p != nil {
+			g.Run = true
+			g.Reasons = append(g.Reasons, fmt.Sprintf("step\thost:%s\t%s\t%s", h,
+				p.Feature.Feature, p.Step.ID))
+		}
+	}
+	for _, r := range Due(s.Records, "") {
+		if slices.Contains(s.Lists(m), r.Repo) {
+			g.Run = true
+			g.Reasons = append(g.Reasons, fmt.Sprintf("tag\t%s\t%s", r.Repo, r.Ref))
+		}
+	}
 }
 
 // unheld returns the machine's hosts that no in-progress process item holds;
