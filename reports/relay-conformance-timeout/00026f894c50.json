@@ -1,0 +1,75 @@
+{
+ "feature": "relay-conformance-timeout",
+ "branch": "feat/relay-conformance-timeout",
+ "head": "00026f894c50",
+ "heads": {
+  "buildwarden/buildwarden": "00026f894c50",
+  "buildwarden/buildwarden-specs": "34121cc7874a"
+ },
+ "base": "168cf9503d4b",
+ "base_note": "merge base with origin/main c52926d (buildwarden); buildwarden-specs merge base with its origin/main ab9303c",
+ "round": "feature",
+ "step": "f4-review",
+ "worker": "cloud/20261123T232256Z-3",
+ "previous_report": null,
+ "design": "docs/design/relay-conformance-timeout.md, approved r1 at e0a1b27; plan ac1b3c6",
+ "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings advisory, never block on their own (LINT-03)",
+ "tier1": {
+  "result": "green",
+  "make_lint": "pass (linux, PATH=$HOME/go/bin): golangci-lint 0 issues in root, tools/workflow, tools/tier1; tier1 168cf9503d4b...00026f894c50: 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed",
+  "make_lint_per_platform": "GOOS=darwin make lint: pass, 0 issues (the diff touches //go:build unix files cmd/relay/ingress_fd.go and its test)",
+  "make_test": "pass: exit 0, 39 ok lines, no FAIL; cmd/relay ok; TestFDIngressTakesAReusedSourcePort passes with -count=1",
+  "specs_make_check": "buildwarden-specs at 34121cc: make check exit 0 (check-docs, vet, test incl. relay-guest-api/cases 64.8s, coverage, modules, tidy, speccheck release from origin/main ok)",
+  "make_enforcement": "not needed: the branch changes neither tools/tier1/ nor tools/workflow/check/ in either repository",
+  "wf_check": "dist/wf check: ok clean branch heads (both repositories); rule changes cleared (FLOW-14) in both: no rule or enforcement changed; queue records what the design declares (as declared at 630651f); diff inside the declared areas [relay]; specs: undeclared, no path outside; make lint/test skipped without -run (run above); report lines missing before this report",
+  "trial_merge": "ok trial merge with finch-version-starts-vm (a report, FLOW-10): clean. git merge-tree origin/main HEAD clean in both repositories",
+  "areas_check": "tools/tier1/area-edges.sh | dist/wf areas -check -rev HEAD -edges -: no difference from HEAD at 00026f8",
+  "relay_oci_conformance": "not run here (no Docker daemon); the PR's conformance.yml runs it"
+ },
+ "findings": [
+  {
+   "id": 1,
+   "rule": "TEST-04",
+   "severity": "MUST",
+   "check": "agent-judgment",
+   "status": "open",
+   "repo": "buildwarden/buildwarden-specs",
+   "head": "34121cc7874a",
+   "file": "conformance/launch/relay_test.go",
+   "line": 255,
+   "also": [
+    "conformance/launch/relay_test.go:244",
+    "conformance/launch/relay_test.go:245",
+    "conformance/launch/relay_test.go:266"
+   ],
+   "finding": "TestContainerPID's failure cases run containerPID with a 300 ms wall-clock limit, and two of their outcomes depend on the runner spawning the fake runtime fast enough: 'listed, no process' requires listed to be recorded, i.e. two runs of the shell script (plus the 20 ms poll) to complete inside 300 ms; 'run exited' requires the in.done branch of the select, but if the first inspect takes over 300 ms both in.done and ctx.Done are ready and select picks either, giving the timeout message. That is wall-clock on the success path of an assertion, which TEST-04 forbids and which the design's Validation plan rules out ('wall-clock used only as a failure bound'). It passed 100/100 here under 4-core CPU load, so the margin is wide, but this item exists to remove a timing-dependent outcome.",
+   "fix": "Make the outcome follow the fake's call count, not the clock: give every case a one-minute limit; for 'run exited' that alone makes it deterministic (in.done is closed before the call); for the two timeout cases pass a parent context the test cancels once the fake's count file reaches the number of answers (or have the fake write a marker the test waits on), and assert the message without the limit's value or with the one-minute value."
+  }
+ ],
+ "counts": {
+  "MUST": 1,
+  "MUST-review": 0,
+  "SHOULD": 0,
+  "MAY": 0
+ },
+ "suppressions": [],
+ "suppressions_note": "no previous report; none carried over",
+ "follow_ups": [],
+ "scope": "buildwarden/buildwarden: git diff origin/main...feat/relay-conformance-timeout at 00026f8, 3 files +739 (cmd/relay/ingress_fd.go +13, cmd/relay/ingress_fd_test.go +200, the design +526); merge base 168cf95, origin/main c52926d. buildwarden/buildwarden-specs: git diff origin/main...34121cc, 6 files +303/-9 (conformance/netstack, conformance/launch, CHANGELOG, go.work), merge base with its origin/main ab9303c (cd9a82e merged it in). Judged against the design as approved in r1 at e0a1b27 and the plan at ac1b3c6.",
+ "rule_index": "Headers extracted from docs/development/*.md (LINT-01); the branch changes no rule. Reached: GLOBAL-03, GLOBAL-04, GLOBAL-06, GLOBAL-09, GLOBAL-10, GLOBAL-11, RELAY-04, RELAY-08, TEST-02, TEST-04, TEST-05, UX-01, FLOW-03, FLOW-14, FLOW-15.",
+ "judged_clean": [
+  "GLOBAL-06 / security_boundary env-relay: the diff stays within the design's Security note. cmd/relay's change is one gVisor option on the guest-facing FD ingress stack (ingress_fd.go:107-111); that stack opens no TCP to anything (its only dial is gonet.DialUDP for DHCP), so upstream connections are untouched. No new listener or egress path, no key/CA/trust-store, SSRF filter, netns/iptables or socketpair topology change. Posture unchanged; a late segment of a closed connection is reset, as for any closed connection.",
+  "RELAY-04: host mode only, stated in the design; container and vm modes take connections on kernel sockets and are unchanged.",
+  "RELAY-08: no flag, environment variable, seed entry or kernel command-line key; the value is a constant, not a relay setting.",
+  "GLOBAL-09 to GLOBAL-11: the three values in the diff (relay TIME-WAIT 0, harness capturing-stack TIME-WAIT 0, containerLimit = CommandLimit 60 s) are each listed in Defaults and overrides; no merge or fallback added. ociState is a diagnostic on the failure path, not a second path.",
+  "GLOBAL-03: Capture's panic (netstack.go:208) is on a failure that cannot occur (New registers TCP, which takes the option), not an ordinary failure, and Capture has no error return; the Go relay returns the error and closes the stack. The relay's %v there matches its neighbours and tcpip.Error is not a Go error.",
+  "GLOBAL-04 / TEST-02: both fixed-port reconnection tests fail on the code without the fix (checked: cmd/relay 'connection 2 from port 40000: context deadline exceeded' after 10 s; conformance/netstack FAIL after 10 s) and pass with it; cmd/relay's passes 30/30 under -race. Their 10 s is a failure bound only.",
+  "TEST-05: no specification or suite change (D3); the harness's v0.2.1 CHANGELOG entry and go.work replace line follow the specs README; make check (speccheck modules, release) passes.",
+  "UX-01 / FLOW-15: no user-facing surface and no component flow changes, as the design says.",
+  "Design conformance: D1 (both stacks, comment, construction fails on refusal), D2 (CommandLimit bound, phases recorded and printed with the inspect state, 'never running' wording, StartLimit unchanged in WaitListening) and D4 (no pin move) are implemented as approved."
+ ],
+ "informational": [
+  "ociState (conformance/launch/relay.go:355) runs on context.Background with CommandLimit, so a failed start whose runtime hangs adds up to 60 s and ignores the case's own cancellation; acceptable for a failure-path diagnostic, noted only.",
+  "Implement's notes: relay-oci conformance not run locally (no Docker daemon), left to the PR's conformance.yml; repeated runs 0/300 (GUEST-46) and 0/3000 (GUEST-34) with D1."
+ ]
+}

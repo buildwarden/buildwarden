@@ -5,7 +5,7 @@ follows: seam-specs
 trunk: main
 status: in_progress
 round: feature
-phase: 4
+phase: 5
 design: docs/design/relay-conformance-timeout.md
 branch: feat/relay-conformance-timeout
 repos:
@@ -62,10 +62,17 @@ steps:
   - id: f4-review
     phase: 4
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f5-guide
+    phase: 5
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261123T232256Z-3
-      expires: 2026-11-24T02:15:56.930717972Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -207,3 +214,9 @@ history:
   - at: 2026-11-24T00:15:56Z
     by: cloud/20261123T232256Z-3
     event: claimed f4-review until 2026-11-24T02:15:56Z
+  - at: 2026-11-24T00:36:17Z
+    by: cloud/20261123T232256Z-3
+    event: done f4-review
+  - at: 2026-11-24T00:36:17Z
+    by: cloud/20261123T232256Z-3
+    event: entered phase 5 (guide)
