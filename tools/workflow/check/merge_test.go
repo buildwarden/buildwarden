@@ -476,3 +476,25 @@ func TestSyncReadyResolution(t *testing.T) {
 		t.Fatalf("a reviewed resolution: %s", failures(rs))
 	}
 }
+
+// TestMergeReadyFetchesTheProgramTrunk: point 4 reads the program trunk as
+// origin has it when the gate runs, not the ref last fetched, so a program
+// trunk that moved since fails it (FLOW-08, D1 of program-autonomy).
+func TestMergeReadyFetchesTheProgramTrunk(t *testing.T) {
+	g := gateFixture(t, design, nil)
+	stale := fullHead(t, g.work, "origin/"+programTrunk)
+	git(t, g.work, "checkout", "-q", "-b", "moved", "origin/"+programTrunk)
+	_ = os.WriteFile(filepath.Join(g.work, "moved.txt"), []byte("x\n"), 0o644)
+	git(t, g.work, "add", "moved.txt")
+	git(t, g.work, "commit", "-q", "-m", "moved")
+	git(t, g.work, "push", "-q", "origin", "moved:"+programTrunk)
+	git(t, g.work, "update-ref", "refs/remotes/origin/"+programTrunk, stale)
+	git(t, g.work, "checkout", "-q", "feat/demo")
+	rs := MergeReady(g.env, g.f, hereRepo)
+	if OK(rs) || !strings.Contains(failures(rs), "merge gate 4") {
+		t.Fatalf("a program trunk moved since the last fetch: %s", failures(rs))
+	}
+	if got := fullHead(t, g.work, "origin/"+programTrunk); got == stale {
+		t.Fatal("the gate did not fetch the program trunk")
+	}
+}

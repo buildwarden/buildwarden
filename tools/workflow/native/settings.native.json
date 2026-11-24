@@ -31,6 +31,7 @@
       "Bash(dist/wf:*)",
       "Bash(./dist/wf:*)",
       "Bash(tools/workflow/*)",
+      "Bash(tools/workflow/native/native-tag.sh:*)",
       "Bash(make:*)",
       "Bash(go:*)",
       "Bash(mise:*)",

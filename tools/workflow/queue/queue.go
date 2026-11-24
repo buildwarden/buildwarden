@@ -1630,19 +1630,21 @@ func (s *State) spentBudget(f *Feature) bool {
 }
 
 // Runaway reports whether an open item is a runaway that escalates to the
-// human (FLOW-13): it has spent its runaway budget, and it is not a program
-// item that has not been re-estimated yet, whose first runaway the loop
-// answers with wf reestimate (FLOW-20). A done item never is.
+// human (FLOW-13): it has spent its runaway budget, a pending step of it
+// would count (Budgeted), and it is not a program item that has not been
+// re-estimated yet, whose first runaway the loop answers with wf reestimate
+// (FLOW-20). A done item never is, and neither is one whose pending steps
+// are all from Merge on: the runaway check holds none of them.
 func (s *State) Runaway(f *Feature) bool {
-	return s.spentBudget(f) && !s.NeedsReestimate(f)
+	return s.spentBudget(f) && f.pendingBudgeted() && !s.NeedsReestimate(f)
 }
 
 // NeedsReestimate reports whether a program item has spent its runaway
-// budget for the first time: the tick raises its estimate with wf
-// reestimate before it claims anything else, and it waits on no one
-// (FLOW-13, FLOW-20).
+// budget for the first time with a pending step that would count
+// (Budgeted): the tick raises its estimate with wf reestimate before it
+// claims anything else, and it waits on no one (FLOW-13, FLOW-20).
 func (s *State) NeedsReestimate(f *Feature) bool {
-	return f.Program && s.spentBudget(f) && f.Reestimates() == 0
+	return f.Program && s.spentBudget(f) && f.pendingBudgeted() && f.Reestimates() == 0
 }
 
 // Reestimate raises the item's step estimate to its spend so far and logs

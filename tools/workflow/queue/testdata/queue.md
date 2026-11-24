@@ -21,7 +21,7 @@ None.
 
 - **asked**: blocking question q1: Which base? (recommended: a)
 - **review**: design review (`f2-design-review`, FLOW-19)
-- **merging**: runaway budget, 11 of 5 estimated steps spent (FLOW-13)
+- **review**: runaway budget, 11 of 5 estimated steps spent (FLOW-13)
 
 ### Not counted: queued, tracked, or not yet due
 
@@ -37,7 +37,7 @@ None.
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | asked | feature | - | - | undeclared | 1 design | f1-design (cloud, leased to cloud/run) | - | - | 0 / 7 |
-| 2 | review | feature | - | - | undeclared | 2 plan | f2-design-review (human), f6-provision-windows-hyperv (human) | - | - | 0 / 7 |
+| 2 | review | feature | - | - | undeclared | 2 plan | f2-design-review (human), f6-provision-windows-hyperv (human) | - | - | 11 / 5 |
 | 3 | merging | feature | - | - | undeclared | 7 merge | f7-merge (cloud) | your merge | #42 | 11 / 5 |
 
 ## Relations
