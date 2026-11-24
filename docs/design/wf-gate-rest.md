@@ -489,6 +489,14 @@ The change is in the loop's machinery and `.gitignore` only.
     `gh api` covers the REST merge; no push, tag, limit or security rule is
     reached).
 
+- r4, 2026-11-24: changes. Jeff, 2026-11-24, review after the failed process test: the REST merge must
+  keep gh pr merge's client-side refusal of a BLOCKED PR. The gate's PR read
+  over REST refuses the merge unless mergeable_state is clean, unstable or
+  has_hooks (read in wf check's PR view, gate point added; q1 reopened and
+  answered (b)). A bypass-capable caller (the session's admin token) must
+  never merge where the loop stopped before (program-north-star Decision 9).
+  Everything else in the design stands; q2 (A) answered.
+
 ## Consolidation
 
 ## Rollback notes
