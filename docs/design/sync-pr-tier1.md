@@ -1,6 +1,6 @@
 ---
 feature: sync-pr-tier1
-status: draft
+status: archived
 drivers: []              # CI configuration, rule text and the loop's sync check; no driver tree is reached
 seams: []                # no GLOBAL-08 seam changes
 surfaces: []             # CI and `wf` are the loop's tools, not a user-facing surface of the product
@@ -485,6 +485,94 @@ approved `main` relaxation (**Problem**).
 
 ## Consolidation
 
+A process item has no Publish phase and no consolidation pass (FLOW-03).
+The design predates #144 (program-autonomy); Implement merged `origin/main`
+at `66e6f67` (#141, #143, #144) into the branch with a merge commit, with
+no conflict. #144 reaches the same code in three places, and none changes
+this design: `check/merge.go`'s gate point 4 now fetches the program trunk
+(`gateContains`, `MergeReady` only; `SyncHead`, `SyncReady` and the sync's
+point 4 are untouched); `wf-publish.md`'s merge text serializes loop merges
+and forbids tag pushes (the `f7-merge` bullet and the closing paragraph; the
+`sync` paragraph, where this design's sentence goes, is unchanged); and the
+sync procedure itself is unchanged, so Decision 6 stands as written.
+
 ## Rollback notes
 
+Revert the PR's merge commit on `main`. Nothing on the `workflow` branch
+depends on it: no record kind, configuration key or queue field is added.
+After a revert a sync PR whose range has no design fails FLOW-01 again
+until labelled `no-design`, and `wf sync-program -head` records a guarded
+resolution again, as before.
+
 ## Archive summary
+
+Implemented 2026-11-24 on `feat/sync-pr-tier1` as a process item
+(`x2-implement`, cloud worker `cloud/20261124T191409Z-2`), after design
+review r1, Jeff's, approved at `f5b2117`. One PR, this repository only.
+
+- **Built: D1 and D3, CI judges a sync PR as its merge's push**
+  (`.github/workflows/main.yml`, the `tier1` job). A `program sync` step,
+  only on a same-repository PR from `sync/program-*` into `program/*`,
+  builds `wf` and runs `wf sync-shape`; on exit 0 it sets `sync=true`, the
+  `tier1` step's `FLAGS` passes `-no-design`, and **main's enforcement** is
+  skipped. Any other exit leaves the PR judged as any PR.
+- **Built: D2, recognition by shape** (`check/merge.go`, `cmd/wf`).
+  `check.SyncShape(repo, base, branch, head, trunk)` checks the branch
+  name, the two parents, the first in the PR's base and the second in the
+  trunk and named by the branch, and returns the resolution: each path where
+  the head's tree differs from `git merge-tree --write-tree`'s, and each
+  path that merge leaves conflicted. A head of another shape is a
+  `*check.NotSyncError` naming every failed condition. `syncHead` and
+  `cleanMerge` reuse its helpers (`syncParents`, `resolution`,
+  `mergeTree`), and `syncHead` keeps its equal-first-parent check. `wf
+  sync-shape` is stateless and exits 0 (`sync <head> merges <second> into
+  <first>`, and `resolves <paths>` when there is a resolution), 1 (`not a
+  sync: <condition>` per line) or 2 (usage or git).
+- **Built: D4, a guarded resolution is refused**
+  (`check.GuardedResolution`, `cmd/wf`'s `guardedSync`). A resolution path
+  is guarded when the profile at either parent classifies it as a rule or
+  machinery path, or it is a workflow file whose change from the clean
+  merge tree to the head touches a rule-running job. `wf sync-shape` exits
+  1 on it; `wf sync-program -head` refuses it and records nothing, and
+  `wf-publish.md` treats that refusal as a conflict to escalate.
+- **Rule changes**, as approved at `f5b2117`: FLOW-01 (the push and program
+  sync exemptions, and where the sync's resolution is judged) and FLOW-14
+  (the enforcement comparison does not run on a sync), both in
+  `docs/development/process.md`. `CONTRIBUTING.md`'s **No design** bullet
+  says so.
+- **Deviations, within D2 and D4.** `wf sync-shape` takes `-profile FILE`
+  (the profile file's path in the checkout, required): with no queue state
+  it has no `config.yaml` entry to read it from, as `wf rules -profile`.
+  A conflicted workflow file in a resolution is guarded outright: git's
+  merge tree holds it with conflict markers, so there is no clean version
+  to compare its jobs with, and FLOW-20 keeps the program trunk off
+  `.github/`. `run`'s stateless commands (`main`, `rules`, `sync-shape`)
+  are dispatched from one table (LINT-02's gocyclo).
+- **Decisions taken.** Judge the sync as its merge's push, on its full diff
+  with every other check (Q1 (a)); skip the enforcement comparison on it
+  (Q2 (a)); recognize it by its shape through `wf sync-shape`, sharing
+  `SyncHead`'s code (Q3 (a)); refuse and escalate a guarded resolution (Q4
+  (a)); write both exemptions into FLOW-01 and FLOW-14 (Q5 (a)).
+- **Rejected.** Judging only the resolution against the clean merge tree;
+  labelling each failing sync, by Jeff or by the loop; recognizing a sync by
+  its head ref name alone; inline shell in `main.yml`; running the
+  enforcement comparison against the second parent, or as before; letting CI
+  fall back alone on a guarded resolution, or allowing it under the tier-2
+  review.
+- **Validated.** Tier 0 and tier 1 (`make test`, `make lint`, `make
+  enforcement TIER1_BASE=origin/main`): `TestSyncShape`,
+  `TestSyncShapeRefuses`, `TestSyncProgramRefusesGuarded`,
+  `TestSyncShapeCommand`, with `TestSyncReady` and the `SyncHead` tests
+  unchanged. `wf sync-shape` recognizes both real syncs so far, #140
+  (`sync/program-168cf9503d4b`) and #142 (`sync/program-c52926df9fbe`),
+  with exit 0. Live: the first sync PR after the merge shows its `program
+  sync` step's decision, `tier1` with `-no-design`, and **main's
+  enforcement** skipped.
+- **For future designs touching `ci`, `tier1`, `no-design`,
+  `program-sync`, `program-trunk`, `enforcement`, `sync-gate` or
+  `workflow`:** CI and the sync gate share one definition of a sync's shape
+  (`syncParents`); change it in `check/merge.go`, never in `main.yml`. A
+  sync is exempt from FLOW-01's automated half and from the enforcement
+  comparison only while its resolution edits no FLOW-14-guarded path, and
+  the loop never records one that does; the resolution's design question is
+  its tier-2 review's (sync gate point 5).
