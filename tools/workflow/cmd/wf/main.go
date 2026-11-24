@@ -327,8 +327,10 @@
 // candidate fails validation or puts an item outside its areas.
 //
 // gate is the scheduled native session's go/no-go (FLOW-09): it exits 0 when
-// machine M (hosts.yaml) has a ready host step, or open backlog gaps and main
-// or a waiting branch moved since the stamp; 3 when idle. -record writes the
+// machine M (hosts.yaml) has a ready host step, a tag due in a repository it
+// lists (a "tag" line with the repository and the tag, FLOW-17), or open
+// backlog gaps and main or a waiting branch moved since the stamp; 3 when
+// idle. -record writes the
 // stamp after a finished session.
 //
 // budget prints the steps one run may take: run_budget, or with -native the
@@ -557,8 +559,7 @@ func run(cmd string, args []string, now time.Time) error {
 		"sync-program": syncProgram, "record": record, "program-body": programBody,
 		"reestimate": reestimate, "review-human": reviewHuman, "tag-next": tagNext,
 		"tags-due": tagsDue, "gate": gate, "budget": budget, "migrate": migrate,
-		"stale": stale,
-		"declare": declareItem, "relate": relate, "relations": relations,
+		"stale": stale, "declare": declareItem, "relate": relate, "relations": relations,
 		"digest": digest, "areas": areasCmd, "native": native,
 	}
 	for _, c := range []string{"claim", "release", "renew", "done"} {
