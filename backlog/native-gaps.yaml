@@ -1071,6 +1071,9 @@ gaps:
       49b513a (design only), under the FLOW-20 hold.
       2026-11-23 (Jeff's request, macbook.attended-20261123T160000Z): host container-any -> windows-any; the
       case runs only on the Windows desktop, and container-any woke the macbook's gate for it every night.
+      2026-11-24 (host:windows-any/windows-desktop.20261124T231002Z, unattended, main 66e6f670): not run.
+      main moved (#137 to #144), but feat/prebuilt-artifacts is still 49b513a (design only), under the
+      FLOW-20 hold (q1).
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: deferred
@@ -1190,6 +1193,8 @@ gaps:
       FLOW-20 hold.
       2026-11-23 (Jeff's request, macbook.attended-20261123T160000Z): host container-any -> windows-any; the
       case runs only on the Windows desktop, and container-any woke the macbook's gate for it every night.
+      2026-11-24 (host:windows-any/windows-desktop.20261124T231002Z, unattended, main 66e6f670): not run.
+      feat/workdir-in-context is still 24376c0 (design only), under the FLOW-20 hold (q1).
   - id: workdir-in-context-macos
     host: macos-finch
     status: open
@@ -1376,3 +1381,16 @@ gaps:
     note: >-
       Tracked, not blocking (design native_validation, a5). Added at x1-design
       (cloud/20261123T195428Z, 2026-11-23). Run on main after the merge.
+      2026-11-24 (host:windows-any/windows-desktop.20261124T231002Z, unattended, main 66e6f670, Git Bash):
+      partly observed; kept open. The first Windows session since #141 merged: the 2026-11-23T23:10Z run
+      and the 05:10Z, 11:10Z and 17:10Z runs today stopped before the gate ("no clone of
+      buildwarden/buildwarden-driver-container", LOOP-05), and the clone is now there (wf native -check: all
+      eight clones clean, on origin, with Entire's hooks). Seen: hand_on under Git Bash copied nine saved
+      leftovers (runs 20261103T111001Z to 20261115T231002Z) to .scratch/leftover/<run>/ and the prompt named
+      each as Unfinished; all nine are empty (uncommitted.patch 0 bytes, no commits, untracked.tar the
+      10240-byte empty archive), so nothing to record from them. The gate woke on "a trunk, a program trunk or
+      a waiting branch moved", but main moved too (#137 to #144), so the program-trunk fingerprint is not
+      isolated. The cleanup noted nothing: .scratch/ held only leftover/, and no gone program branch or
+      detached worktree was here. Not yet observable from inside a session: the digest check, the stamp and
+      the "sweep skipped" reason run after it exits; the next windows-desktop run reads them in this run's
+      log (logs/20261124T231002Z.log under ~/.local/state/buildwarden-native) and native/status/windows-desktop.yaml.
