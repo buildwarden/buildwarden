@@ -1,11 +1,11 @@
 feature: relay-conformance-timeout
 title: Relay conformance runs fail intermittently on a relay connection timeout
-priority: 5
+priority: 3
 follows: seam-specs
 trunk: main
 status: in_progress
 round: feature
-phase: 7
+phase: 8
 design: docs/design/relay-conformance-timeout.md
 branch: feat/relay-conformance-timeout
 repos:
@@ -18,6 +18,7 @@ work:
       number: 8
       ci: green
       head: 4d95ad85552eb4c6c0a96837a43d25eb440447be
+    merged: 9ccdfd74824eff13d9a3c90956949d4c0e74d94b
     trunk: main
 areas:
   - relay
@@ -136,6 +137,13 @@ steps:
       expires: null
   - id: f7-merge
     phase: 7
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
     affinity: cloud
     status: pending
     lease:
@@ -357,3 +365,12 @@ history:
   - at: 2026-11-24T01:05:24Z
     by: cloud/20261123T232256Z-3
     event: entered phase 7 (merge)
+  - at: 2026-11-24T17:33:36Z
+    by: cloud/20261124T105659Z
+    event: buildwarden/buildwarden-specs merged as 9ccdfd7 (FLOW-08)
+  - at: 2026-11-24T17:33:36Z
+    by: cloud/20261124T105659Z
+    event: done f7-merge
+  - at: 2026-11-24T17:33:36Z
+    by: cloud/20261124T105659Z
+    event: entered phase 8 (close)
