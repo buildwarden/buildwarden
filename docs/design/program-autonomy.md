@@ -334,6 +334,22 @@ after the merge, on specs, where the bypass is in place.
 
 ## Design review
 
+- r1, 2026-11-24: approved at 8739c23. Jeff approved the design as read
+  at 8739c23, in the attended session (workflow-human).
+  - Each rule change was asked on its own:
+    - rule change FLOW-08 approved at 8739c23
+    - rule change FLOW-13 approved at 8739c23
+    - rule change FLOW-17 approved at 8739c23
+    - rule change FLOW-20 approved at 8739c23
+  - q1 (a): tags are created with the REST refs API. Jeff confirms the
+    session policy allows it.
+  - q2 (a): the reserved reading is narrowed.
+  - q3 yes: program-trunk rulesets require their checks and up-to-date
+    branches, with no approving review. Jeff sets them up.
+  - q4 and q5 as recommended (batch).
+  - Nothing was folded in.
+  - sitting: 17:59-18:08 UTC, asks: 9 (1 a batch covering q4 and q5)
+
 ## Consolidation
 
 ## Rollback notes
