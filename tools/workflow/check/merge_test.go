@@ -2,8 +2,10 @@ package check
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -496,5 +498,182 @@ func TestMergeReadyFetchesTheProgramTrunk(t *testing.T) {
 	}
 	if got := fullHead(t, g.work, "origin/"+programTrunk); got == stale {
 		t.Fatal("the gate did not fetch the program trunk")
+	}
+}
+
+// shapeCI is a workflow with a rule-running job, tier1 (it runs make lint),
+// and one that runs no rule, build.
+const shapeCI = ".github/workflows/ci.yml"
+
+func shapeWorkflow(lint, build string) string {
+	return "jobs:\n  tier1:\n    steps:\n      - run: " + lint + "\n" +
+		"  build:\n    steps:\n      - run: " + build + "\n"
+}
+
+// shapeRepo is a repository whose main and program/p fork from a base that
+// has this repository's profile and shapeCI, each side then committing its
+// files, and whose branch sync/program-<main, 12> merges main into
+// program/p. resolve, written after the merge, concludes a conflict or, on
+// a clean merge, amends the merge with an edit of its own. It returns the
+// checkout, the sync head and main's head.
+func shapeRepo(t *testing.T, mainFiles, progFiles, resolve map[string]string,
+) (string, string, string) {
+	t.Helper()
+	w := t.TempDir()
+	git(t, w, "init", "-q", "-b", "main")
+	writeProfile(t, w)
+	put := func(files map[string]string) {
+		for p, text := range files {
+			full := filepath.Join(w, filepath.FromSlash(p))
+			_ = os.MkdirAll(filepath.Dir(full), 0o755)
+			if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		git(t, w, "add", "-A")
+	}
+	put(map[string]string{shapeCI: shapeWorkflow("make lint", "make build"),
+		"shared.txt": "a\nb\nc\n"})
+	git(t, w, "commit", "-q", "-m", "base")
+	git(t, w, "checkout", "-q", "-b", "program/p")
+	put(progFiles)
+	git(t, w, "commit", "-q", "-m", "program item")
+	git(t, w, "checkout", "-q", "main")
+	put(mainFiles)
+	git(t, w, "commit", "-q", "-m", "process item")
+	mainSHA := fullHead(t, w, "main")
+	git(t, w, "checkout", "-q", "-b", "sync/program-"+mainSHA[:12], "program/p")
+	if err := gitCmd(w, "merge", "-q", "--no-ff", "--no-edit", "main").Run(); err != nil {
+		put(resolve)
+		git(t, w, "commit", "-q", "--no-edit")
+	} else if len(resolve) > 0 {
+		put(resolve)
+		git(t, w, "commit", "-q", "--amend", "--no-edit")
+	}
+	return w, fullHead(t, w, "HEAD"), mainSHA
+}
+
+// TestSyncShape: CI recognizes a program sync by its shape and returns its
+// resolution; GuardedResolution names the resolution's paths FLOW-14 guards
+// (FLOW-01, FLOW-14, FLOW-20, Decisions 2 and 4 of sync-pr-tier1).
+func TestSyncShape(t *testing.T) {
+	for name, tc := range map[string]struct {
+		main, prog, resolve map[string]string
+		resolution, guarded []string
+	}{
+		"a clean sync": {
+			main: map[string]string{"main.txt": "m\n"},
+			prog: map[string]string{"prog.txt": "p\n"},
+		},
+		"a resolved conflict on an ordinary path": {
+			main:       map[string]string{"shared.txt": "a\nm\nc\n"},
+			prog:       map[string]string{"shared.txt": "a\np\nc\n"},
+			resolve:    map[string]string{"shared.txt": "a\nm\np\nc\n"},
+			resolution: []string{"shared.txt"},
+		},
+		"a resolved conflict under tools/tier1/": {
+			main:       map[string]string{"tools/tier1/x.go": "m\n"},
+			prog:       map[string]string{"tools/tier1/x.go": "p\n"},
+			resolve:    map[string]string{"tools/tier1/x.go": "mp\n"},
+			resolution: []string{"tools/tier1/x.go"},
+			guarded:    []string{"tools/tier1/x.go"},
+		},
+		"a resolved conflict under docs/development/": {
+			main:       map[string]string{"docs/development/r.md": "m\n"},
+			prog:       map[string]string{"docs/development/r.md": "p\n"},
+			resolve:    map[string]string{"docs/development/r.md": "mp\n"},
+			resolution: []string{"docs/development/r.md"},
+			guarded:    []string{"docs/development/r.md"},
+		},
+		"a resolved conflict under .claude/": {
+			main:       map[string]string{".claude/agents/a.md": "m\n"},
+			prog:       map[string]string{".claude/agents/a.md": "p\n"},
+			resolve:    map[string]string{".claude/agents/a.md": "mp\n"},
+			resolution: []string{".claude/agents/a.md"},
+			guarded:    []string{".claude/agents/a.md"},
+		},
+		"a resolved conflict in a workflow's tier1 job": {
+			main:       map[string]string{shapeCI: shapeWorkflow("make lint && m", "make build")},
+			prog:       map[string]string{shapeCI: shapeWorkflow("make lint && p", "make build")},
+			resolve:    map[string]string{shapeCI: shapeWorkflow("make lint && mp", "make build")},
+			resolution: []string{shapeCI},
+			guarded:    []string{shapeCI},
+		},
+		"a resolution edit of a workflow's tier1 job": {
+			main:       map[string]string{"main.txt": "m\n"},
+			prog:       map[string]string{"prog.txt": "p\n"},
+			resolve:    map[string]string{shapeCI: shapeWorkflow("make lint || true", "make build")},
+			resolution: []string{shapeCI},
+			guarded:    []string{shapeCI},
+		},
+		"a resolution edit of a workflow outside a rule-running job": {
+			main:       map[string]string{"main.txt": "m\n"},
+			prog:       map[string]string{"prog.txt": "p\n"},
+			resolve:    map[string]string{shapeCI: shapeWorkflow("make lint", "make build -j2")},
+			resolution: []string{shapeCI},
+		},
+	} {
+		w, head, mainSHA := shapeRepo(t, tc.main, tc.prog, tc.resolve)
+		res, err := SyncShape(w, "program/p", "sync/program-"+mainSHA[:12], head, "main")
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		if !slices.Equal(res, tc.resolution) {
+			t.Errorf("%s: resolution %q, want %q", name, res, tc.resolution)
+		}
+		guarded, err := GuardedResolution(w, profilePath, head, res)
+		if err != nil || !slices.Equal(guarded, tc.guarded) {
+			t.Errorf("%s: guarded %q, %v, want %q", name, guarded, err, tc.guarded)
+		}
+	}
+}
+
+// TestSyncShapeRefuses: a head that is not a sync's shape is a
+// *NotSyncError naming the failed condition; a git that cannot read the
+// head is another error (FLOW-01, Decision 2 of sync-pr-tier1).
+func TestSyncShapeRefuses(t *testing.T) {
+	w, head, mainSHA := shapeRepo(t, map[string]string{"main.txt": "m\n"},
+		map[string]string{"prog.txt": "p\n"}, nil)
+	branch := "sync/program-" + mainSHA[:12]
+	git(t, w, "branch", "other", "main~1")
+	git(t, w, "checkout", "-q", "-b", "extra", head)
+	_ = os.WriteFile(filepath.Join(w, "extra.txt"), []byte("x\n"), 0o644)
+	git(t, w, "add", "extra.txt")
+	git(t, w, "commit", "-q", "-m", "extra")
+	extra := fullHead(t, w, "HEAD")
+	for name, tc := range map[string]struct {
+		base, branch, head, trunk, want string
+	}{
+		"a single-parent head": {"program/p", "sync/program-" + mainSHA[:12], mainSHA,
+			"main", "is not a merge of two commits"},
+		"an extra commit on top of the merge": {"program/p", branch, extra, "main",
+			"is not a merge of two commits"},
+		"a first parent not in the base": {"other", branch, head, "main",
+			"first parent"},
+		"a second parent not in the trunk": {"program/p", branch, head, "other",
+			"second parent"},
+		"a branch whose hex does not prefix the second parent": {"program/p",
+			"sync/program-" + strings.Repeat("0", 12), head, "main", "does not start with"},
+		"a branch that is not a sync branch": {"program/p", "feat/x", head, "main",
+			"is not sync/program-<sha>"},
+	} {
+		_, err := SyncShape(w, tc.base, tc.branch, tc.head, tc.trunk)
+		var ns *NotSyncError
+		if !errors.As(err, &ns) || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want a NotSyncError with %q", name, err, tc.want)
+		}
+	}
+	_, err := SyncShape(w, "program/p", branch, strings.Repeat("d", 40), "main")
+	var ns *NotSyncError
+	if err == nil || errors.As(err, &ns) {
+		t.Errorf("an unknown head: %v, want git's error", err)
+	}
+	if _, err := GuardedResolution(w, "missing.yaml", head, []string{"x"}); err == nil {
+		t.Error("GuardedResolution with no profile at either parent passed")
+	}
+	if got, err := GuardedResolution(w, "", head, []string{".claude/a"}); err != nil ||
+		got != nil {
+		t.Errorf("GuardedResolution of a repository that has not adopted: %q, %v", got, err)
 	}
 }

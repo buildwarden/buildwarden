@@ -1,6 +1,7 @@
 package check
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -567,48 +568,303 @@ func SyncHead(env Env, repo, head string) (branch string, clean bool, err error)
 }
 
 // syncHead returns the trunk commit the sync head merges, its second
-// parent, and whether the merge is clean, or why it is not a sync head.
+// parent, and whether the merge is clean, or why it is not a sync head. It
+// reads the shape as SyncShape does (syncParents), with origin/<program
+// trunk> as the base, and is stricter: the first parent is that head itself.
 func (c *checker) syncHead(head string) (string, bool, error) {
 	pt := c.state().Config.ProgramTrunkOf(c.at.name)
 	if pt == "" {
 		return "", false, fmt.Errorf("config.yaml records no program trunk for %s",
 			c.at.name)
 	}
-	parents, err := c.git("rev-list", "--parents", "-n", "1", head)
-	if err != nil {
-		return "", false, err
-	}
-	ps := strings.Fields(parents)
-	if len(ps) != 3 {
-		return "", false, fmt.Errorf("%s is not a merge of two commits", short(head))
-	}
 	ptHead, err := c.git("rev-parse", "origin/"+pt)
 	if err != nil {
 		return "", false, err
 	}
-	if ps[1] != ptHead {
+	ps, why, err := syncParents(c.dir(), "origin/"+pt, head, "origin/"+c.at.trunk)
+	if err != nil {
+		return "", false, err
+	}
+	if ps == nil {
+		return "", false, errors.New(why[0])
+	}
+	if ps[0] != ptHead {
 		return "", false, fmt.Errorf("%s's first parent %s is not origin/%s %s: the "+
 			"head carries more than the sync's merge, or the program trunk moved",
-			short(head), short(ps[1]), pt, short(ptHead))
+			short(head), short(ps[0]), pt, short(ptHead))
 	}
-	_, err = c.git("merge-base", "--is-ancestor", ps[2], "origin/"+c.at.trunk)
-	if err != nil {
-		return "", false, fmt.Errorf("%s's second parent %s is not in origin/%s",
-			short(head), short(ps[2]), c.at.trunk)
+	if len(why) > 0 {
+		return "", false, errors.New(why[0])
 	}
-	return ps[2], c.cleanMerge(head, ps[1], ps[2]), nil
+	return ps[1], c.cleanMerge(head, ps[0], ps[1]), nil
 }
 
 // cleanMerge reports whether head's tree is the one git's own merge of the
 // two parents writes, with no conflict: a merge with no resolution in it. A
 // git that cannot say is read as a resolution, which needs its review.
 func (c *checker) cleanMerge(head, a, b string) bool {
-	tree, err := c.git("merge-tree", "--write-tree", a, b)
-	if err != nil {
-		return false
+	res, err := resolution(c.dir(), head, a, b)
+	return err == nil && len(res) == 0
+}
+
+// NotSyncError says why a head is not a program sync's: each condition of
+// SyncShape it fails.
+type NotSyncError struct {
+	Why []string
+}
+
+func (e *NotSyncError) Error() string { return strings.Join(e.Why, "; ") }
+
+// SyncShape is a program sync's pull request as CI recognizes it (FLOW-01,
+// FLOW-20): head, on branch sync/program-<hex>, is a merge of exactly two
+// parents, the first an ancestor of base (the pull request's base commit on
+// the program trunk), the second an ancestor of trunk whose hash starts with
+// <hex>. repo is the checkout. It returns the resolution: each path where
+// head's tree differs from git's own merge of the two parents, and each
+// path that merge leaves conflicted, sorted. A head of another shape is a
+// *NotSyncError naming every condition it fails; any other error is git's,
+// and says nothing about the shape.
+func SyncShape(repo, base, branch, head, trunk string) ([]string, error) {
+	m := syncBranchRe.FindStringSubmatch(branch)
+	var why []string
+	if m == nil {
+		why = append(why, fmt.Sprintf("the branch %s is not sync/program-<sha>", branch))
 	}
-	own, err := c.git("rev-parse", head+"^{tree}")
-	return err == nil && strings.Fields(tree)[0] == own
+	ps, more, err := syncParents(repo, base, head, trunk)
+	if err != nil {
+		return nil, err
+	}
+	why = append(why, more...)
+	if ps != nil && m != nil && !strings.HasPrefix(ps[1], m[1]) {
+		why = append(why, fmt.Sprintf("the second parent %s does not start with the "+
+			"branch's %s", short(ps[1]), m[1]))
+	}
+	if len(why) > 0 {
+		return nil, &NotSyncError{Why: why}
+	}
+	return resolution(repo, head, ps[0], ps[1])
+}
+
+// syncParents reads the shape SyncShape and syncHead share: head's two
+// parents, the first an ancestor of base and the second of trunk. It returns
+// the parents, nil when head is not a merge of two, and each condition that
+// fails; an error is git's.
+func syncParents(dir, base, head, trunk string) ([]string, []string, error) {
+	out, err := gitAt(dir, "rev-list", "--parents", "-n", "1", head)
+	if err != nil {
+		return nil, nil, err
+	}
+	ps := strings.Fields(out)[1:]
+	if len(ps) != 2 {
+		return nil, []string{fmt.Sprintf("%s is not a merge of two commits", short(head))},
+			nil
+	}
+	var why []string
+	for _, p := range []struct{ commit, ref, which string }{
+		{ps[0], base, "first"}, {ps[1], trunk, "second"},
+	} {
+		in, err := ancestorAt(dir, p.commit, p.ref)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !in {
+			why = append(why, fmt.Sprintf("%s's %s parent %s is not in %s", short(head),
+				p.which, short(p.commit), p.ref))
+		}
+	}
+	return ps, why, nil
+}
+
+// resolution returns the paths where head's tree differs from git's own
+// merge of a and b, with each path that merge leaves conflicted, sorted.
+func resolution(dir, head, a, b string) ([]string, error) {
+	tree, conflicted, err := mergeTree(dir, a, b)
+	if err != nil {
+		return nil, err
+	}
+	diff, err := gitAt(dir, "diff", "--name-only", "--no-renames", "-z", tree, head)
+	if err != nil {
+		return nil, err
+	}
+	paths := conflicted
+	for _, p := range strings.Split(diff, "\x00") {
+		if p != "" && !slices.Contains(paths, p) {
+			paths = append(paths, p)
+		}
+	}
+	slices.Sort(paths)
+	return paths, nil
+}
+
+// mergeTree is git's own merge of a and b: the tree it writes, conflict
+// markers and all, and the paths it leaves conflicted.
+func mergeTree(dir, a, b string) (string, []string, error) {
+	cmd := exec.Command("git", "merge-tree", "--write-tree", "--name-only",
+		"--no-messages", a, b)
+	cmd.Dir = dir
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	// Exit status 1 is a merge with conflicts: the tree, then the files.
+	var exit *exec.ExitError
+	if err != nil && (!errors.As(err, &exit) || exit.ExitCode() != 1) || lines[0] == "" {
+		return "", nil, fmt.Errorf("git merge-tree --write-tree %s %s: %v: %s", short(a),
+			short(b), err, strings.TrimSpace(stderr.String()))
+	}
+	var conflicted []string
+	for _, p := range lines[1:] {
+		if p != "" && !slices.Contains(conflicted, p) {
+			conflicted = append(conflicted, p)
+		}
+	}
+	return lines[0], conflicted, nil
+}
+
+// GuardedResolution returns the paths of a sync's resolution that FLOW-14
+// guards, which a sync resolution may not edit (FLOW-01, FLOW-20): a rule or
+// machinery path of the classification built from the profile file at
+// either of head's parents, or a workflow file whose change from git's own
+// merge of the parents to head touches a rule-running job
+// (workflowGuardChanged). repo is the checkout and profile the profile
+// file's path in it; empty, the repository has not adopted and guards
+// nothing. A profile at neither parent, or a workflow that does not parse
+// on either side, is an error: the caller cannot say, and fails closed.
+func GuardedResolution(repo, profile, head string, paths []string) ([]string, error) {
+	if profile == "" || len(paths) == 0 {
+		return nil, nil
+	}
+	out, err := gitAt(repo, "rev-list", "--parents", "-n", "1", head)
+	if err != nil {
+		return nil, err
+	}
+	ps := strings.Fields(out)[1:]
+	if len(ps) != 2 {
+		return nil, fmt.Errorf("%s is not a merge of two commits", short(head))
+	}
+	var ks []classifier
+	for _, p := range ps {
+		text, err := blobAt(repo, p, profile)
+		if err != nil {
+			return nil, err
+		}
+		if text == nil {
+			continue
+		}
+		name := profile + " at " + short(p)
+		prof, err := ParseProfile(name, text)
+		if err != nil {
+			return nil, err
+		}
+		k, err := newClassifier(name, profile, prof.Rules)
+		if err != nil {
+			return nil, err
+		}
+		ks = append(ks, k)
+	}
+	if len(ks) == 0 {
+		return nil, fmt.Errorf("the profile file %s is at neither parent of %s", profile,
+			short(head))
+	}
+	tree, conflicted, err := mergeTree(repo, ps[0], ps[1])
+	if err != nil {
+		return nil, err
+	}
+	var guarded []string
+	for _, p := range paths {
+		hit, err := guardedPath(repo, ks, tree, head, p, slices.Contains(conflicted, p))
+		if err != nil {
+			return nil, err
+		}
+		if hit {
+			guarded = append(guarded, p)
+		}
+	}
+	return guarded, nil
+}
+
+// guardedPath reports whether one resolution path is guarded by any of the
+// classifications ks; a workflow file is compared from tree to head. A
+// conflicted workflow file is guarded: git's own merge left it with conflict
+// markers, so there is no clean version to compare with, and FLOW-20 keeps
+// the program trunk off .github/, so it should not conflict there at all.
+func guardedPath(repo string, ks []classifier, tree, head, p string, conflicted bool,
+) (bool, error) {
+	for _, k := range ks {
+		if k.kindOf(p) != ordinary {
+			return true, nil
+		}
+	}
+	if !strings.HasPrefix(p, workflowsDir) ||
+		!strings.HasSuffix(p, ".yml") && !strings.HasSuffix(p, ".yaml") {
+		return false, nil
+	}
+	if conflicted {
+		return true, nil
+	}
+	before, err := blobAt(repo, tree, p)
+	if err != nil {
+		return false, err
+	}
+	after, err := blobAt(repo, head, p)
+	if err != nil {
+		return false, err
+	}
+	for _, k := range ks {
+		if k.runs == nil {
+			continue
+		}
+		changed, err := workflowGuardChanged(k.runs, before, after)
+		if err != nil {
+			return false, fmt.Errorf("%s: %w", p, err)
+		}
+		if changed {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// blobAt is the file at path in rev, nil when rev has none there.
+func blobAt(dir, rev, path string) ([]byte, error) {
+	ls, err := gitAt(dir, "ls-tree", rev, "--", path)
+	if err != nil || ls == "" {
+		return nil, err
+	}
+	cmd := exec.Command("git", "cat-file", "blob", rev+":"+path)
+	cmd.Dir = dir
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git cat-file blob %s:%s: %v: %s", short(rev), path, err,
+			strings.TrimSpace(stderr.String()))
+	}
+	return out, nil
+}
+
+// gitAt runs git in dir and returns its trimmed output.
+func gitAt(dir string, args ...string) (string, error) {
+	return (&checker{env: Env{Repo: dir}, f: &queue.Feature{}}).git(args...)
+}
+
+// ancestorAt reports whether a is an ancestor of b in dir. Exit status 1 is
+// "not an ancestor"; any other failure is an error, never read as one.
+func ancestorAt(dir, a, b string) (bool, error) {
+	cmd := exec.Command("git", "merge-base", "--is-ancestor", a, b)
+	cmd.Dir = dir
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	var exit *exec.ExitError
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.As(err, &exit) && exit.ExitCode() == 1:
+		return false, nil
+	}
+	return false, fmt.Errorf("git merge-base --is-ancestor %s %s: %v: %s", a, b, err,
+		strings.TrimSpace(stderr.String()))
 }
 
 // SyncReady is the program sync's gate (FLOW-08, FLOW-20, Decision 14): the
