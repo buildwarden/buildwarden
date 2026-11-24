@@ -270,6 +270,11 @@ gaps:
       SUCCEEDED; `inspect --verify-disks`: ENVIRONMENT vm-disk-chain/v1 payload verified, qemu linux/arm64,
       disk alpine_3_21.qcow2 sha256:ebaef97d702d `local` [ok], 5 seed files, 11 signatures valid, all
       channels closed. Windows half: see qemu-windows-guest-package. Logs: native/qemu-any/2026-11-23/main-disk.log.
+      2026-11-24 (host:qemu-any/macbook.20261124T124005Z, unattended, main c52926df): not rerun. main has not
+      moved since the 2026-11-23 run, and program/componentization (5b0a000d) differs from it only in
+      tools/workflow, so the 2026-11-23 Linux pass stands. The Windows half waits on qemu-windows-guest-package,
+      which Jeff deferred on 2026-11-23, so this entry cannot close on its own; Jeff can defer it or split off
+      the Windows half.
     status: open
   - id: hyperv-eval-image-verify-disks
     host: windows-hyperv
@@ -1201,6 +1206,8 @@ gaps:
       Implement is done, or on main after it merges.
       2026-11-23 (host:macos-finch/macbook.20261123T220740Z, unattended, main c52926df): not run.
       feat/workdir-in-context is still 24376c0 (design only), under the FLOW-20 hold (q1).
+      2026-11-24 (host:macos-finch/macbook.20261124T124005Z, unattended, main c52926df): not run, nothing
+      changed. feat/workdir-in-context is still 24376c0 (design only), under the FLOW-20 hold (q1).
   - id: loop-native-lead-macos-wrapper
     host: macos-vz
     status: open
@@ -1230,6 +1237,10 @@ gaps:
       this machine's hosts (no led item), so native-push.sh is still unexercised, and no run with the
       session remote unset. native/status/macbook.yaml read the 12:40Z run's "session left uncommitted
       workflow changes", which macbook.attended-20261123T160000Z recorded from its leftover.
+      2026-11-24 (host:macos-vz/macbook.20261124T124005Z, unattended, main c52926df): this 12:40Z run started
+      under launchd after wf gate found work (native/status/macbook.yaml: 2026-11-23T22:07:40Z worked, "claude
+      exited 0"). wf next offered no step to any of this machine's hosts (every item blocked on a human step,
+      none led), so native-push.sh is still unexercised, and no run with the session remote unset.
   - id: loop-native-lead-windows-wrapper
     host: windows-hyperv
     status: open
@@ -1319,6 +1330,9 @@ gaps:
       builds, SIGKILL of warden and its driver and a second HOME are outside this session's allowlisted forms.
       Detection order not checkable: no podman or docker here. Kept open for case 6 and for the fix.
       Log: native/macos-finch/2026-11-23/runtime-check.log.
+      2026-11-24 (host:macos-finch/macbook.20261124T124005Z, unattended, main c52926df): not run. main has not
+      moved, and the fix is design-only (feat/finch-version-starts-vm e6ef4a70, waiting on human step
+      f2-design-review). Case 6 is still outside this session's allowlisted forms.
   - id: native-loop-fixes-macbook
     host: macos-any
     status: open
@@ -1345,6 +1359,12 @@ gaps:
       wrapper's PATH (native-tick.sh:76); needs Jeff to remove it. (1)-(3) not observable yet: no unfinished
       run, program-trunk-only move or gone program branch since the merge. Log:
       native/macos-any/2026-11-23/native-loop-fixes.log.
+      2026-11-24 (host:macos-any/macbook.20261124T124005Z, unattended, main c52926df): nothing new observable.
+      (1) the 2026-11-23T22:07:40Z run is recorded worked, and this prompt named no leftover or unfinished run;
+      (2) program/componentization last moved at 22:34Z (5b0a000d), but feature branches moved too
+      (23:30Z-00:54Z), so this run's wake does not isolate a program-trunk-only move; (3) no .scratch/
+      directory and no gone program branch here (local branches: four old feat/fix branches, none a program
+      item's). (5) not checkable: this session cannot read ~/.local/bin (ls blocked outside the checkout).
   - id: native-loop-fixes-windows
     host: windows-any
     status: open
