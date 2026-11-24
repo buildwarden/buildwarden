@@ -1,6 +1,6 @@
 ---
 feature: program-autonomy
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -601,6 +601,99 @@ rulesets of Q3.
 
 ## Consolidation
 
+A process item has no Publish phase and no consolidation pass (FLOW-03).
+Nothing landed on `main` since the fork: the branch forked at `505da76`
+(#143, relay-conformance-timeout), which was still `origin/main` when the
+PR was opened, so no merge was needed.
+
 ## Rollback notes
 
+Revert the PR's merge commit on `main`. The `workflow` branch then holds
+two things the reverted `wf` does not know: `tag-due` records in
+`program/records.yaml` (an unknown kind; remove them, or create each tag
+on Jeff's word and record it as `tag`, before the next `wf validate`) and
+`hosts.yaml`'s nine repositories for `windows-desktop` (harmless; keep or
+narrow at Jeff's word). The run budgets and runaway holds go back to
+counting every claim. Jeff's rulesets (Q3, Q7) need no change on a revert.
+
 ## Archive summary
+
+Implemented 2026-11-24 on `feat/program-autonomy` as a process item
+(`x2-implement-r2` and `x2-implement-r3`, cloud worker
+`cloud/20261124T174900Z`), after design reviews r1 (`8739c23`), r3
+(`f0bddeb`) and r4 (`94225f9`, the `rule_changes` paths fold-in), all
+Jeff's in one attended sitting. One PR, this repository only.
+
+- **Built: D1, one loop merge at a time per repository** (`queue/next.go`,
+  `queue/commit.go`, `check/merge.go`). `mergeBusy` refuses a loop merge
+  step (`f7-merge`, `f6-merged-<n>` on a program trunk) in `wf next` and
+  `MayClaim` while another one in the same unmerged repository holds a live
+  lease, and `wf next` names the other merge. Gate point 4 fetches the
+  program trunk before reading it, so `wf check -step` under the claim checks
+  the head the merge goes into. `wf-publish.md` and the tick merge at once
+  after the gate, pinned to the head.
+- **Built: D2, the reserved reading** (FLOW-20, `wf-review.md`'s P2 list).
+  "Merging" is merging to a trunk and "tags" release tags without a suffix;
+  program-trunk merges and pre-release tags are reserved only by effect.
+- **Built: D3, due tags created by native sessions** (`queue/records.go`,
+  `check/tags.go`, `cmd/wf`, `queue/hosts.go`, `native/native-tag.sh`,
+  `native/native-tick.sh`, `settings.native.json`). The `tag-due` record
+  kind, with a refusal of a second `tag-due` or `tag` for one repository and
+  tag; `wf tag-next -due -worker W` records each tag it names at the head it
+  checked, and counts a due tag as taken; `wf tags-due [-machine M]`; the
+  native gate's `tag` reason wakes a machine that lists a due tag's
+  repository; `native-tick.sh` passes "Tags due" into the prompt;
+  `native-tag.sh` creates an annotated tag at the due commit, create only,
+  one refspec without `+`, after its refusals; the allow entry
+  `Bash(tools/workflow/native/native-tag.sh:*)`, denies unchanged (Q6). The
+  tick makes tags due and creates none; the native skill does due tags first,
+  outside its budget.
+- **Built: D4, budgets before Merge** (`queue/phases.go`, `queue/next.go`,
+  `queue/queue.go`, `queue/limits.go`). `Budgeted(f, st)`: a claim counts
+  only for a step before the Merge phase, not `f6-merged-<n>`, not a
+  refresh's first claim; `Runaway`, `NeedsReestimate` and the unattended
+  hold apply only to a pending budgeted step, so `QUEUE.md` and the
+  waiting-on-human count drop an item whose only pending steps are from
+  Merge on. The tick's run budget skips the same steps.
+- **Rule changes**, as approved at `94225f9` (FLOW-17's wording at
+  `f0bddeb`, the others at `8739c23`): FLOW-08 (serialization and the
+  recheck), FLOW-13 (budgets before Merge), FLOW-17 (tags created only by a
+  native session's tag script), FLOW-20 (the reserved reading).
+- **Deviations, within D3.** `wf tags-due` prints a fifth field, the time
+  the tag was made due, which goes into the tag's message and the tick's
+  Notes; `native-tag.sh` creates a tag of this repository from the checkout
+  itself, as `native-push.sh`'s one-argument form does.
+- **Decisions taken.** Keep all nine gate points and add per-repository
+  serialization plus a recheck under the claim, with program-trunk rulesets
+  as a second guard (D1, Q3); narrow the reserved list by effect (D2, Q2);
+  due tags recorded in `program/records.yaml` and created by the next native
+  run with Jeff's credentials (D3, Q1 (c)); every step from Merge on
+  unbudgeted, the loop merge included (D4, Q4); `wf-gate-rest` and
+  `sync-pr-tier1` stay with Jeff now (Q5); `windows-desktop` lists all nine
+  repositories (Q7 (a)).
+- **Rejected.** GitHub's merge queue, a lock file on the program trunk and
+  cross-repository serialization (D1); dropping merging and tags from the
+  reserved list (D2); the REST refs API and a git push of a tag from the
+  cloud (both refused by the session's proxy, r2's finding), a dispatched tag
+  workflow per repository, a separate `tags-due.yaml`, a native-gap host
+  step and a queue step for tags (D3); exempting only confirmations from the
+  budget (D4); a broadened git-push allow for native sessions (Q6 (c)).
+- **Validated.** Tier 0 and tier 1 (`make test`, `make lint`), including
+  `native-tag.sh` against a local bare remote (`TestNativeTag`). No native
+  host and no tier-2 gap. Live: the first due tag after the merge, created
+  by the next `windows-desktop` run once Jeff's setup is in place.
+- **For future designs touching `workflow`, `merge-gate`, `program-trunk`,
+  `loop-merge`, `pre-release`, `tag`, `budget`, `runaway`,
+  `reserved-rules`, `process-test`, `tag-due` or `native-session`:** a
+  cloud session creates no tag by any route; a tag the loop takes exists
+  first as a `tag-due` record and is created only by `native-tag.sh`, and a
+  due tag counts as taken for `tag-next`. Two loop merges never run in one
+  repository at once, and the gate is re-run on the fetched program trunk
+  under the claim. Budgets and runaway holds count only steps before Merge
+  (`Budgeted`). A change to the loop's program-trunk merges or pre-release
+  tags is Jeff's only by its effect on the gate, the serialization or
+  tag immutability.
+- **After the merge**, at `x4-state` (the State step section above):
+  `hosts.yaml` lists all nine repositories for `windows-desktop`,
+  `wf validate`, and Jeff's setup outside the repositories (the clones, the
+  release-tags rulesets, the program-trunk rulesets).
