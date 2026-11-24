@@ -1,6 +1,6 @@
 # Written by native-tick.sh; see the workflow README. One line of reason, no logs (FLOW-18).
 machine: windows-desktop
-last_run: 2026-11-23T23:10:03Z
-outcome: failed
-reason: "stop: no clone of buildwarden/buildwarden-driver-container at .dev/checkouts/buildwarden/buildwarden-driver-container (L"
-since: 2026-11-23T23:10:03Z
+last_run: 2026-11-24T23:10:02Z
+outcome: worked
+reason: "claude exited 0; skipped windows-hyperv (native.prepare failed)"
+since: 2026-11-24T23:10:02Z
