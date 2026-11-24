@@ -45,6 +45,8 @@ None.
 - merge buildwarden/buildwarden #140 at `5b0a000`: Jeff merged the program sync PR #140 (main 168cf95 into program/componentization) himself, as 5b0a000, after labeling no-design on his word; the loop's gate (wf check -sync) could not run in the cloud (GraphQL 403, wf-gate-rest) (human/jeff, 2026-11-23)
 - sync buildwarden/buildwarden sync/program-c52926df9fbe at `a3415f8`: sync/program-c52926df9fbe pushed at a3415f80c3b0: a clean merge (cloud/20261123T232256Z, 2026-11-23)
 - sync buildwarden/buildwarden-specs sync/program-ab9303c7729c at `15671eb`: sync/program-ab9303c7729c pushed at 15671eb77f2d: a clean merge (cloud/20261123T232256Z, 2026-11-23)
+- merge buildwarden/buildwarden #142 at `10d1f99`: Jeff merged the program sync PR buildwarden#142 as 10d1f99; the loop's gate (wf check -sync) cannot run in the cloud until wf-gate-rest lands (human/jeff, 2026-11-24)
+- merge buildwarden/buildwarden-specs #7 at `2de04f3`: Jeff merged the program sync PR buildwarden-specs#7 as 2de04f3; the loop's gate (wf check -sync) cannot run in the cloud until wf-gate-rest lands (human/jeff, 2026-11-24)
 
 ## Active
 

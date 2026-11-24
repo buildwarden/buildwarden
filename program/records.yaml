@@ -26,3 +26,17 @@
   head: 15671eb77f2d7225a271347ec41e483467a02d14
   ref: sync/program-ab9303c7729c
   note: 'sync/program-ab9303c7729c pushed at 15671eb77f2d: a clean merge'
+- at: 2026-11-24T17:34:05Z
+  by: human/jeff
+  kind: merge
+  repo: buildwarden/buildwarden
+  head: 10d1f99e8e3c
+  ref: '#142'
+  note: Jeff merged the program sync PR buildwarden#142 as 10d1f99; the loop's gate (wf check -sync) cannot run in the cloud until wf-gate-rest lands
+- at: 2026-11-24T17:34:05Z
+  by: human/jeff
+  kind: merge
+  repo: buildwarden/buildwarden-specs
+  head: 2de04f3a1805
+  ref: '#7'
+  note: Jeff merged the program sync PR buildwarden-specs#7 as 2de04f3; the loop's gate (wf check -sync) cannot run in the cloud until wf-gate-rest lands
