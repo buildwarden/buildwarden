@@ -2,9 +2,10 @@ feature: program-autonomy
 title: While the program runs, the loop merges into program trunks and cuts pre-release tags without Jeff, and budgets only steps that change the repositories
 priority: 3
 kind: process
+state_step: 'hosts.yaml: windows-desktop lists all nine repositories under repositories (buildwarden, buildwarden-relay, buildwarden-ai-workflow, buildwarden-specs, buildwarden-driver-container, -qemu, -vz, -hyperv, -firecracker); macbook unchanged (q7 (a)). Then dist/wf validate -state .dev/workflow passes, and dist/wf native -state .dev/workflow -repo . -machine windows-desktop -check passes once Jeff has cloned the added repositories.'
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/program-autonomy.md
 branch: feat/program-autonomy
 areas:
@@ -14,6 +15,10 @@ declared: 94225f9
 alters_relationships: null
 design_review: required
 source: 'Jeff, 2026-11-24 attended, an emergent batch of three process changes: (1) PR merges into the trunk branches (program trunks) during the program are auto-approved like direct pushes; only merges to main need Jeff''s authorization; the safest way under growing parallelism is the loop''s call (e.g. keep the merge gate, merge commits pinned to the head, serialize merges per repository, re-check up-to-date). This also bears on wf-gate-rest and sync-pr-tier1, whose reviews went to Jeff because merging is reserved to him under FLOW-20. (2) Pre-production tags and releases (-dev.N, -rc.N) are auto-approved; Jeff added the Claude app''s bypass to buildwarden-specs'' release-tags ruleset and will add it to the other repositories (buildwarden, relay, ai-workflow and the five drivers). Finding the same day: a cloud session''s tag push gets HTTP 403 from the session''s git proxy itself (no X-Github-Request-Id on the receive-pack response), before GitHub''s ruleset, so the design must choose how the loop creates tags (e.g. a tag workflow dispatched over REST, native sessions, or the REST refs API if the session policy allows it). (3) Step limits (FLOW-13 budgets and the runaway check) apply only to steps that change the public repositories, never to state or status: every step after a merge or ship (merge confirmation, close, state steps, records, digests) is never budgeted and never held on a runaway; relay-conformance-timeout''s close was held on one (16 of 8) the same day.'
+pr:
+  number: 144
+  ci: green
+  head: 22db063a9fc70ff046e6812a4bfa7ac1a5ff0eaa
 steps:
   - id: x1-design
     phase: 1
@@ -60,12 +65,19 @@ steps:
   - id: x2-implement-r3
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - x2-design-review-r3
     lease:
-      claimed_by: cloud/20261124T174900Z
-      expires: 2026-11-24T20:32:38.852940562Z
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -235,3 +247,12 @@ history:
   - at: 2026-11-24T18:32:38Z
     by: cloud/20261124T174900Z
     event: claimed x2-implement-r3 until 2026-11-24T20:32:38Z
+  - at: 2026-11-24T18:43:57Z
+    by: cloud/20261124T174900Z
+    event: done x2-implement-r3
+  - at: 2026-11-24T18:43:57Z
+    by: cloud/20261124T174900Z
+    event: entered phase 3 (merge)
+  - at: 2026-11-24T18:43:58Z
+    by: human/jeff
+    event: 'state step recorded: hosts.yaml: windows-desktop lists all nine repositories under repositories (buildwarden, buildwarden-relay, buildwarden-ai-workflow, buildwarden-specs, buildwarden-driver-container, -qemu, -vz, -hyperv, -firecracker); macbook unchanged (q7 (a)). Then dist/wf validate -state .dev/workflow passes, and dist/wf native -state .dev/workflow -repo . -machine windows-desktop -check passes once Jeff has cloned the added repositories.'
