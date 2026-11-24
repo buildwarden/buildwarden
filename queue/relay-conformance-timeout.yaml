@@ -124,15 +124,15 @@ steps:
     needs:
       - f6-consolidate-r2
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261123T232256Z-3
+      expires: 2026-11-24T02:54:33.044794553Z
 budget:
   estimate:
     runs: 1
     steps: 8
   spent:
     runs: 2
-    steps: 15
+    steps: 16
 questions:
   - id: a1
     kind: assumed
@@ -333,3 +333,6 @@ history:
   - at: 2026-11-24T00:54:30Z
     by: cloud/20261123T232256Z-3
     event: done f6-consolidate-r2
+  - at: 2026-11-24T00:54:33Z
+    by: cloud/20261123T232256Z-3
+    event: claimed f6-open-pr-r2 until 2026-11-24T02:54:33Z
