@@ -4,11 +4,13 @@
 #
 #   tools/workflow/native/native-run.sh [WARDEN_X=value ...] -- <command> [args]
 #
-# Run from the checkout root. Accepted commands:
-#   - .scratch/<name>/tools/<path>, with or without assignments: a tracked
-#     file of the worktree .scratch/<name>, outside its tools/workflow/;
-#   - with at least one assignment, also .scratch/<name>/dist/warden*,
-#     dist/warden*, ./warden*, go test ... and go -C .scratch/<name> test ...
+# Run from the checkout root. A worktree <wt> is .scratch/<name>, a worktree
+# of this repository, or .scratch/<owner>/<repo>/<item>, a worktree of the
+# second repository's clone at .dev/checkouts/<owner>/<repo>. Accepted commands:
+#   - <wt>/tools/<path>, with or without assignments: a tracked file of the
+#     worktree <wt>, outside its tools/workflow/;
+#   - with at least one assignment, also <wt>/dist/warden*, dist/warden*,
+#     ./warden*, go test ... and go -C <wt> test ...
 #
 # Why it exists: settings.native.json allows tools/workflow/*, so this script
 # needs no new allow rule. The Claude Code matcher does not match an allow rule
@@ -22,7 +24,7 @@
 # Every refusal is one line on stderr and exit 2, before anything runs;
 # otherwise the command is exec'd, so its output and exit status are its own.
 
-shapes='accepted: [WARDEN_X=value ...] -- .scratch/<name>/tools/<path> [args]; WARDEN_X=value ... -- .scratch/<name>/dist/warden*|dist/warden*|./warden*|go test ...|go -C .scratch/<name> test ...'
+shapes='accepted: [WARDEN_X=value ...] -- <wt>/tools/<path> [args]; WARDEN_X=value ... -- <wt>/dist/warden*|dist/warden*|./warden*|go test ...|go -C <wt> test ...; <wt> is .scratch/<name> or .scratch/<owner>/<repo>/<item>'
 
 refuse() {
 	echo "native-run.sh: $1; $shapes" >&2
@@ -41,6 +43,30 @@ valid_name() {
 	'' | . | .. | */*) return 1 ;;
 	esac
 	return 0
+}
+
+# second_worktree checks .scratch/$1, $1 being <owner>/<repo>/<item>: three
+# valid names, a git checkout at .dev/checkouts/<owner>/<repo>, and the
+# worktree its own top level with that clone's common directory, so it is a
+# branch of that repository and not a directory the session made.
+second_worktree() {
+	owner=${1%%/*}
+	rest2=${1#*/}
+	r=${rest2%%/*}
+	item=${rest2#*/}
+	if [ "$owner/$r/$item" != "$1" ] || ! valid_name "$owner" || ! valid_name "$r" ||
+		! valid_name "$item"; then
+		refuse ".scratch/$1 is not .scratch/<owner>/<repo>/<item>"
+	fi
+	clone=.dev/checkouts/$owner/$r
+	c_top=$(git -C "$clone" rev-parse --show-toplevel 2>/dev/null) || refuse "no clone of $owner/$r at $clone"
+	[ "$(norm "$c_top")" = "$(norm "$clone")" ] || refuse "$clone is not a clone's top level"
+	wt=.scratch/$1
+	wt_top=$(git -C "$wt" rev-parse --show-toplevel 2>/dev/null) || refuse "$wt is not a git worktree"
+	[ "$(norm "$wt_top")" = "$(norm "$wt")" ] || refuse "$wt is not a worktree's top level"
+	wt_common=$(cd "$wt" && norm "$(git rev-parse --git-common-dir)") || refuse "$wt is not a git worktree"
+	c_common=$(cd "$clone" && norm "$(git rev-parse --git-common-dir)") || refuse "$clone is not a git checkout"
+	[ "$wt_common" = "$c_common" ] || refuse "$wt is not a worktree of $clone"
 }
 
 top=$(git rev-parse --show-toplevel 2>/dev/null) || refuse "not in a git checkout"
@@ -93,11 +119,12 @@ done
 
 case $cmd in
 .scratch/*/tools/*)
+	# The worktree is what precedes the first /tools/: .scratch/<name> or
+	# .scratch/<owner>/<repo>/<item>.
 	rest=${cmd#.scratch/}
-	name=${rest%%/*}
+	name=${rest%%/tools/*}
 	path=${rest#"$name"/tools/}
-	[ "$path" != "$rest" ] || refuse "$cmd is not .scratch/<name>/tools/<path>"
-	valid_name "$name" || refuse "$cmd: bad worktree name"
+	[ "$path" != "$rest" ] || refuse "$cmd is not <wt>/tools/<path>"
 	# An empty, "." or ".." component could leave the worktree or dodge the
 	# workflow/ check below.
 	case /$path/ in
@@ -105,15 +132,21 @@ case $cmd in
 	esac
 	# A branch's loop tooling reaches the loop only by merge (FLOW-14).
 	[ "${path%%/*}" != workflow ] || refuse "$cmd is under the branch's tools/workflow/"
-	# The target must be a tracked file of a worktree of this repository, so
-	# it is a branch's code and not a file the session wrote. A plain
-	# directory under .scratch/ resolves to the main checkout, hence the
-	# top-level check.
+	# The target must be a tracked file of a worktree of this repository or
+	# of a listed clone, so it is a branch's code and not a file the session
+	# wrote. A plain directory under .scratch/ resolves to the main
+	# checkout, hence the top-level check.
 	wt=.scratch/$name
-	wt_top=$(git -C "$wt" rev-parse --show-toplevel 2>/dev/null) || refuse "$wt is not a git worktree"
-	[ "$(norm "$wt_top")" = "$(norm "$wt")" ] || refuse "$wt is not a worktree's top level"
-	wt_common=$(cd "$wt" && norm "$(git rev-parse --git-common-dir)") || refuse "$wt is not a git worktree"
-	[ "$wt_common" = "$(norm "$(git rev-parse --git-common-dir)")" ] || refuse "$wt is not a worktree of this repository"
+	case $name in
+	*/*) second_worktree "$name" ;;
+	*)
+		valid_name "$name" || refuse "$cmd: bad worktree name"
+		wt_top=$(git -C "$wt" rev-parse --show-toplevel 2>/dev/null) || refuse "$wt is not a git worktree"
+		[ "$(norm "$wt_top")" = "$(norm "$wt")" ] || refuse "$wt is not a worktree's top level"
+		wt_common=$(cd "$wt" && norm "$(git rev-parse --git-common-dir)") || refuse "$wt is not a git worktree"
+		[ "$wt_common" = "$(norm "$(git rev-parse --git-common-dir)")" ] || refuse "$wt is not a worktree of this repository"
+		;;
+	esac
 	# Literal, so an untracked "x*" does not match a tracked x.sh as a glob.
 	git -C "$wt" --literal-pathspecs ls-files --error-unmatch -- "tools/$path" >/dev/null 2>&1 || refuse "tools/$path is not tracked in $wt"
 	;;
@@ -122,11 +155,14 @@ case $cmd in
 	case $cmd in
 	.scratch/*/dist/warden*)
 		rest=${cmd#.scratch/}
-		name=${rest%%/*}
+		name=${rest%%/dist/*}
 		bin=${rest#"$name"/dist/}
-		valid_name "$name" || refuse "$cmd: bad worktree name"
 		case $bin in
-		*/*) refuse "$cmd is not .scratch/<name>/dist/warden*" ;;
+		*/*) refuse "$cmd is not <wt>/dist/warden*" ;;
+		esac
+		case $name in
+		*/*) second_worktree "$name" ;;
+		*) valid_name "$name" || refuse "$cmd: bad worktree name" ;;
 		esac
 		;;
 	dist/warden* | ./warden*)
@@ -139,11 +175,12 @@ case $cmd in
 			:
 		elif [ "$w2" = -C ] && [ "$w4" = test ]; then
 			case $w3 in
-			.scratch/*) valid_name "${w3#.scratch/}" || refuse "go -C $w3: not .scratch/<name>" ;;
-			*) refuse "go -C $w3: not .scratch/<name>" ;;
+			.scratch/*/*) second_worktree "${w3#.scratch/}" ;;
+			.scratch/*) valid_name "${w3#.scratch/}" || refuse "go -C $w3: not <wt>" ;;
+			*) refuse "go -C $w3: not <wt>" ;;
 			esac
 		else
-			refuse "go is accepted only as go test or go -C .scratch/<name> test"
+			refuse "go is accepted only as go test or go -C <wt> test"
 		fi
 		;;
 	*) refuse "$cmd is not an accepted command" ;;

@@ -15,9 +15,20 @@
 # native/status/<machine>.yaml on the workflow branch (FLOW-09): outcome
 # worked, idle, skipped or failed, with a one-line reason. It is pushed only
 # when the outcome or reason changes, or the last push is a day old, so idle
-# nights do not churn the branch. Workflow changes a session left uncommitted
-# or unpushed are saved under $BW_STATE_DIR/leftover/<run>/ and reported as a
-# failure, never reset away.
+# nights do not churn the branch.
+#
+# A session's run is worked only when it finished: its digest file,
+# digest/*/<run>-host-<machine>.md, is on origin/workflow, it left no
+# background process (each carries BW_NATIVE_SESSION=<machine>.<run>, and the
+# wrapper sends TERM to those it finds; skipped under Git Bash, whose ps shows
+# no environment) and no workflow changes. Otherwise the run is failed
+# ("session ended unfinished: ..."), and the gate stamp does not move, so the
+# next run's gate compares against the last finished run. Workflow changes a
+# session left uncommitted or unpushed are saved under
+# $BW_STATE_DIR/leftover/<run>/, never reset away, and handed on: the next
+# run copies them to .scratch/leftover/<run>/ before the gate and names them
+# in its prompt; once a run told of them ends worked, the copy is deleted and
+# the saved one marked handed.
 #
 # The session's worker is host:<name>/<machine>.<run>, and its claims hold a
 # 20-hour lease it renews while it works (FLOW-04). Before the gate the
@@ -26,12 +37,20 @@
 # started ends, it releases every lease that session still holds. Before the
 # gate it also removes each .scratch/ worktree whose item is done or whose
 # branch is gone from origin, and its local branch, with git's safe forms
-# only: a worktree with changes and a branch git branch -d refuses are kept
-# and named in the status reason and the session's prompt (FLOW-16).
+# only: git branch -d tests the branch against the item's own trunk (wf
+# trunk, its program trunk for a program item, FLOW-20). A worktree with
+# changes and a branch git branch -d refuses are kept and named in the status
+# reason and the session's prompt (FLOW-16). A clean detached worktree (a
+# validation of a ref) is removed, a dirty one named; a directory under
+# .scratch/ that is no worktree is named, and removed once nothing in it has
+# changed for BW_SCRATCH_DAYS, except .scratch/leftover/ and the <owner>
+# directories of the repositories the machine lists.
 #
 # Environment (all optional):
 #   BW_MIN_FREE_GB  free disk needed to start (default 40)
 #   BW_SWEEP_DAYS   re-sweep open backlog gaps after this many days (default 7)
+#   BW_SCRATCH_DAYS remove a non-worktree .scratch/ directory unchanged this
+#                   many days (default 7)
 #   BW_MAX_TURNS    turn cap for the agent session (default 400)
 #   BW_STATE_DIR    stamp, lock and logs (default ~/Library/Application Support/buildwarden-native
 #                   on macOS, ~/.local/state/buildwarden-native elsewhere)
@@ -51,8 +70,10 @@ log="$state/logs/$run.log"
 exec >>"$log" 2>&1
 echo "native-tick $machine $run in $repo"
 
-# launchd starts with a bare PATH; pick up Homebrew, mise and ~/.local/bin.
-export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:/opt/homebrew/bin:/usr/local/bin:$PATH"
+# launchd starts with a bare PATH; pick up ~/.local/bin (the owner's own
+# overrides), rustup's proxies (Homebrew's keg-only rustup, then rustup-init's
+# ~/.cargo/bin), ahead of a Homebrew rust formula, then mise and Homebrew.
+export PATH="$HOME/.local/bin:/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$HOME/.local/share/mise/shims:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 # One session per machine at a time; a stale lock (no live pid) is taken over.
 lock="$state/lock"
@@ -66,6 +87,9 @@ fi
 echo $$ >"$lock/pid"
 
 outcome="" reason="" stage="setup" session_started="" leftover="" dirty_worktree=""
+# finish_checked: the post-session check has saved any workflow leftover.
+# handed: the runs whose saved leftover this run's prompt named.
+finish_checked="" handed="" clones="" unfinished_why=""
 # skip and stop end the run with a fixed one-line reason, so an unchanged
 # situation writes an unchanged status file.
 skip() { outcome=skipped reason="skip: $1"; echo "$reason"; exit 0; }
@@ -81,10 +105,12 @@ epoch() {
 
 # fetch runs git fetch, retrying a network or auth failure with backoff
 # (2s, 4s, 8s): GitHub refuses a valid key now and then for a few seconds.
+# Its returns are explicit: a bare return in a function the EXIT trap calls
+# returns the status the script exited with, in bash 4 and later.
 fetch() {
 	local delay
 	for delay in 2 4 8 0; do
-		git fetch -q "$@" && return
+		git fetch -q "$@" && return 0
 		[ "$delay" -eq 0 ] && return 1
 		echo "fetch $* failed; retrying in ${delay}s"
 		sleep "$delay"
@@ -106,6 +132,7 @@ save_leftover() {
 
 # reset_workflow returns 1, after saving them, when a session left changes or
 # unpushed commits in the workflow checkout.
+# shellcheck disable=SC2329 # called from the EXIT trap
 reset_workflow() {
 	local wt="$1"
 	if [ -n "$(git -C "$wt" status --porcelain)" ] ||
@@ -124,7 +151,9 @@ record_status() {
 	if [ ! -d "$wt" ]; then
 		git worktree add -q -B workflow "$wt" origin/workflow || return
 	fi
-	if ! reset_workflow "$wt"; then
+	# The post-session check saves a session's leftover; this catches a run
+	# that ended before that check did.
+	if [ -z "$finish_checked" ] && ! reset_workflow "$wt"; then
 		outcome=failed reason="session left uncommitted workflow changes"
 	fi
 	f="$wt/native/status/$machine.yaml"
@@ -187,23 +216,80 @@ release_leases() {
 # note_leftover adds one note to leftover, the cleanup's "; "-separated list.
 note_leftover() { leftover="${leftover:+$leftover; }$1"; }
 
+# item_trunk prints the trunk wf trunk gives item, in repository $2 when
+# given (FLOW-20), or nothing when wf trunk fails (no queue file).
+item_trunk() {
+	local out
+	out=$(dist/wf trunk -state .dev/workflow -feature "$1" ${2:+-repository "$2"} 2>/dev/null) ||
+		return 0
+	printf '%s\n' "${out%%"$(printf '\t')"*}"
+}
+
+# old_scratch succeeds when nothing under directory $1 has changed for
+# BW_SCRATCH_DAYS days.
+old_scratch() {
+	[ -z "$(find "$1" -mtime "-${BW_SCRATCH_DAYS:-7}" -print -quit 2>/dev/null)" ]
+}
+
+# clean_scratch_dir names a directory under .scratch/ that is no worktree,
+# and removes it once old_scratch holds (a4 of docs/design/native-loop-fixes.md),
+# unless it holds a git checkout, whose work rm -rf would lose.
+clean_scratch_dir() {
+	if old_scratch "$1" && [ -z "$(find "$1" -name .git -print -quit 2>/dev/null)" ]; then
+		rm -rf "$1" && {
+			echo "cleanup: removed $1 (not a worktree, unchanged for ${BW_SCRATCH_DAYS:-7} days)"
+			return
+		}
+	fi
+	note_leftover "scratch directory $1 is not a worktree"
+}
+
 # clean_worktrees removes each worktree under .scratch/ on a branch
 # feat/<item> whose item is done or whose branch is gone from origin after the
 # prune fetch, and then the local branch, with git's safe forms only
-# (FLOW-16). With no argument it cleans the dedicated checkout's worktrees,
-# .scratch/<name>; with <owner>/<repo>, those of that repository's clone,
-# .scratch/<owner>/<repo>/<name>, each note naming the repository.
+# (FLOW-16): git branch -d tests it against the item's trunk, set as its
+# upstream when that is not the clone's own trunk. A clean detached worktree
+# is removed, a dirty one named; a directory that is no worktree goes to
+# clean_scratch_dir. With no argument it cleans the dedicated checkout's
+# worktrees, .scratch/<name>, skipping .scratch/leftover/ and the <owner>
+# directories of the listed repositories; with <owner>/<repo>, those of that
+# repository's clone, .scratch/<owner>/<repo>/<name>, each note naming the
+# repository.
 clean_worktrees() {
-	local d name branch item q clone=. scratch=.scratch/ in=""
+	local d name branch item q t head owners="" clone=. scratch=.scratch/ in=""
+	local tab entry
+	tab=$(printf '\t')
 	if [ -n "${1:-}" ]; then
 		clone=.dev/checkouts/$1 scratch=.scratch/$1/ in=" in $1"
+	else
+		while IFS="$tab" read -r entry _; do
+			[ -n "$entry" ] && owners="$owners ${entry%%/*} "
+		done <<LIST
+$clones
+LIST
 	fi
 	for d in "$scratch"*/; do
 		[ -d "$d" ] || continue
 		name=${d%/}
-		[ "$(git -C "$d" rev-parse --show-prefix 2>/dev/null)" = "" ] || continue
-		[ -f "$d.git" ] || continue
-		branch=$(git -C "$d" symbolic-ref -q --short HEAD) || continue
+		if [ -z "${1:-}" ]; then
+			case " leftover $owners" in
+			*" ${name#.scratch/} "*) continue ;;
+			esac
+		fi
+		if [ "$(git -C "$d" rev-parse --show-prefix 2>/dev/null)" != "" ] || [ ! -f "$d.git" ]; then
+			clean_scratch_dir "$name"
+			continue
+		fi
+		if ! branch=$(git -C "$d" symbolic-ref -q --short HEAD); then
+			if [ -n "$(git -C "$d" status --porcelain)" ]; then
+				note_leftover "detached worktree $name has changes"
+			elif git -C "$clone" worktree remove "$repo/$name"; then
+				echo "cleanup: removed detached worktree $name$in"
+			else
+				note_leftover "detached worktree $name not removed"
+			fi
+			continue
+		fi
 		item=${branch#feat/}
 		[ "$item" != "$branch" ] || continue
 		q=.dev/workflow/queue/$item.yaml
@@ -221,9 +307,27 @@ clean_worktrees() {
 			continue
 		}
 		echo "cleanup: removed $name ($branch$in)"
-		git -C "$clone" branch -d "$branch" ||
-			note_leftover "branch $branch$in not deleted (not merged; FLOW-16)"
+		t=$(item_trunk "$item" "${1:-}")
+		head=$(git -C "$clone" symbolic-ref -q --short HEAD || true)
+		if [ -n "$t" ] && [ "$t" != "$head" ]; then
+			git -C "$clone" branch -q --set-upstream-to="origin/$t" "$branch" ||
+				note_leftover "branch $branch$in: cannot test against origin/$t"
+		fi
+		if ! git -C "$clone" branch -d "$branch"; then
+			if [ -n "$t" ]; then
+				note_leftover "branch $branch$in not deleted (not merged into $t; FLOW-16)"
+			else
+				note_leftover "branch $branch$in not deleted (not merged; FLOW-16; its trunk not read)"
+			fi
+		fi
 	done
+}
+
+# list_clones reads, into clones, the second repositories the machine lists
+# and their trunks, one "<owner>/<repo>\t<trunk>" line each.
+list_clones() {
+	clones=$(dist/wf native -state .dev/workflow -repo . -machine "$machine" -clones) ||
+		stop "wf native -clones failed"
 }
 
 # reset_clones resets each clone of a second repository the machine lists,
@@ -232,10 +336,8 @@ clean_worktrees() {
 # also cleans the clone's worktrees. A clone that is not there stops the
 # run: its owner makes it (LOOP-05).
 reset_clones() {
-	local list name trunk c tab
+	local name trunk c tab
 	tab=$(printf '\t')
-	list=$(dist/wf native -state .dev/workflow -repo . -machine "$machine" -clones) ||
-		stop "wf native -clones failed"
 	while IFS="$tab" read -r name trunk; do
 		[ -n "$name" ] || continue
 		c=.dev/checkouts/$name
@@ -248,7 +350,7 @@ reset_clones() {
 		git -C "$c" worktree prune
 		[ "${1:-}" != cleanup ] || clean_worktrees "$name"
 	done <<LIST
-$list
+$clones
 LIST
 }
 
@@ -258,6 +360,103 @@ with_leftover() {
 	[ -n "$leftover" ] || return 0
 	reason="$reason; $leftover"
 	[ -z "$dirty_worktree" ] || outcome=failed
+}
+
+# sweep sends TERM to each process still carrying BW_NATIVE_SESSION=$1 after
+# the session exits, and prints how many it signalled, or "skipped" where ps
+# shows no environment (Git Bash). The process list is read whole first, so
+# no filter's own command line matches.
+sweep() {
+	local tag="BW_NATIVE_SESSION=$1" procs pid rest n=0 f env nl
+	nl=$(printf '\n.')
+	nl=${nl%.}
+	case $(uname -s) in
+	Darwin)
+		procs=$(ps -axeww -o pid=,command= 2>/dev/null) || { echo skipped; return; }
+		while read -r pid rest; do
+			[ "$pid" != $$ ] || continue
+			case " $rest " in
+			*" $tag "*) kill -TERM "$pid" 2>/dev/null && n=$((n + 1)) ;;
+			esac
+		done <<PROCS
+$procs
+PROCS
+		;;
+	Linux)
+		for f in /proc/[0-9]*/environ; do
+			pid=${f#/proc/}
+			pid=${pid%/environ}
+			[ "$pid" != $$ ] || continue
+			env=$({ tr '\0' '\n' <"$f"; } 2>/dev/null) || continue
+			case "$nl$env$nl" in
+			*"$nl$tag$nl"*) kill -TERM "$pid" 2>/dev/null && n=$((n + 1)) ;;
+			esac
+		done
+		;;
+	*)
+		echo skipped
+		return
+		;;
+	esac
+	echo "$n"
+}
+
+# check_finished sets unfinished_why to why the session that just exited did
+# not finish, or to nothing when it did: no digest file of this run on origin/workflow, a
+# background process sweep killed, or workflow changes it left (saved by
+# reset_workflow, then reset away so the lease release runs on origin's
+# branch). A failed fetch cannot confirm it, which counts as unfinished.
+check_finished() {
+	local wt=.dev/workflow swept files why=""
+	cd "$repo"
+	swept=$(sweep "$machine.$run")
+	case $swept in
+	skipped) echo "sweep skipped (no process environment on $(uname -s))" >&2 ;;
+	0) ;;
+	*) why="killed $swept background processes the session left" ;;
+	esac
+	if ! fetch origin workflow; then
+		why="${why:+$why; }cannot confirm the session finished"
+	else
+		files=$(git -C "$wt" ls-tree -r --name-only origin/workflow -- digest/ 2>/dev/null || true)
+		case "/$(printf '%s' "$files" | tr '\n' '/')/" in
+		*"/$run-host-$machine.md/"*) ;;
+		*) why="${why:+$why; }no digest file on origin/workflow" ;;
+		esac
+	fi
+	if ! reset_workflow "$wt"; then
+		why="${why:+$why; }left uncommitted workflow changes"
+		git -C "$wt" reset -q --hard origin/workflow
+		git -C "$wt" clean -fdq
+	fi
+	finish_checked=1
+	[ "$swept" != skipped ] || [ -z "$why" ] || why="$why; sweep skipped"
+	unfinished_why=$why
+}
+
+# hand_on copies each saved leftover not yet marked handed to
+# .scratch/leftover/<run>/ and lists those runs in handed, for the prompt.
+hand_on() {
+	local d r
+	for d in "$state/leftover/"*/; do
+		if [ ! -d "$d" ] || [ -e "$d/handed" ]; then continue; fi
+		r=$(basename "$d")
+		rm -rf ".scratch/leftover/$r"
+		mkdir -p .scratch/leftover
+		cp -R "${d%/}" ".scratch/leftover/$r" || continue
+		handed="${handed:+$handed }$r"
+	done
+}
+
+# handed_off deletes the copies of the leftovers this run was told of, and
+# marks the saved ones handed; called once the run ended worked.
+handed_off() {
+	local r
+	for r in $handed; do
+		rm -rf ".scratch/leftover/$r"
+		: >"$state/leftover/$r/handed"
+		echo "hand-on: run $r's leftover recorded; marked handed"
+	done
 }
 
 # shellcheck disable=SC2329 # called from the EXIT trap
@@ -282,9 +481,14 @@ trap on_exit EXIT
 # Keep a month of logs.
 find "$state/logs" -name '*.log' -mtime +30 -delete 2>/dev/null || true
 
-if [ "${BW_FORCE:-}" != 1 ] && [ "$(uname -s)" = Darwin ] &&
-	! pmset -g batt | grep -q "AC Power"; then
-	skip "on battery"
+# pmset's output is captured first: under pipefail, grep -q exiting on the
+# first match makes pmset's next write SIGPIPE and the pipeline 141.
+if [ "${BW_FORCE:-}" != 1 ] && [ "$(uname -s)" = Darwin ]; then
+	batt=$(pmset -g batt 2>/dev/null || true)
+	case $batt in
+	*"AC Power"*) ;;
+	*) skip "on battery" ;;
+	esac
 fi
 free_gb=$(df -Pk "$repo" | awk 'NR==2 {print int($4/1024/1024)}')
 if [ "$free_gb" -lt "${BW_MIN_FREE_GB:-40}" ]; then
@@ -309,6 +513,13 @@ if [ -d .dev/workflow ]; then
 else
 	git worktree add -q -B workflow .dev/workflow origin/workflow
 fi
+stage="hand-on"
+hand_on
+stage="build wf"
+# Before the cleanup, which reads each item's trunk and the listed clones.
+mkdir -p dist
+(cd tools/workflow && go build -o ../../dist/wf ./cmd/wf)
+list_clones
 stage="worktrees"
 clean_worktrees
 [ -z "$leftover" ] || echo "cleanup: $leftover"
@@ -324,9 +535,6 @@ case $entire_status in
 	echo "flow18: entire status does not name the private sessions remote"
 	;;
 esac
-stage="build wf"
-mkdir -p dist
-(cd tools/workflow && go build -o ../../dist/wf ./cmd/wf)
 stage="clones"
 reset_clones cleanup
 [ -z "$leftover" ] || echo "cleanup: $leftover"
@@ -354,6 +562,7 @@ else
 		reason=$(printf '%s\n' "$gate_out" | awk -F '\t' '$1 == "idle" { print "idle: " $2; exit }')
 		[ -n "$reason" ] || reason="idle: gate found no work"
 		[ -z "$recorded" ] || reason="$reason; sessions not recorded (FLOW-18)"
+		for r in $handed; do reason="$reason; unfinished run $r not yet handed on"; done
 		with_leftover
 		echo "idle: no agent started"
 		exit 0
@@ -378,6 +587,10 @@ skip=""
 [ -z "$stale" ] || skip=" Stale hosts: $stale (native.prepare failed); skip their steps and gaps this run and say why in the digest."
 leftovers=""
 [ -z "$leftover" ] || leftovers=" Leftovers: $leftover."
+unfinished=""
+for r in $handed; do
+	unfinished="$unfinished Unfinished: run $r ended unfinished; its saved workflow changes are in .scratch/leftover/$r/."
+done
 
 command -v claude >/dev/null || stop "claude is not on PATH"
 stage="claude"
@@ -386,30 +599,42 @@ stage="claude"
 dist/wf gate -state .dev/workflow -repo . -machine "$machine" -stamp "$stamp.pending" -record
 set +e
 session_started=1
-claude -p "Invoke the workflow-native skill with the arguments \"unattended $machine\" and follow it exactly. Worker session id: $machine.$run.$skip$leftovers$recorded" \
+# Only the session carries BW_NATIVE_SESSION, so the sweep finds what it left.
+BW_NATIVE_SESSION="$machine.$run" claude -p "Invoke the workflow-native skill with the arguments \"unattended $machine\" and follow it exactly. Worker session id: $machine.$run.$skip$leftovers$unfinished$recorded" \
 	--settings tools/workflow/native/settings.native.json \
 	--permission-mode acceptEdits \
 	--max-turns "${BW_MAX_TURNS:-400}"
 rc=$?
 set -e
 echo "claude exited $rc"
-if [ $rc -eq 0 ]; then
+stage="finish check"
+check_finished
+if [ $rc -eq 0 ] && [ -z "$unfinished_why" ]; then
 	outcome=worked
+	reason="claude exited $rc"
 else
 	outcome=failed
+	reason="claude exited $rc"
+	[ -z "$unfinished_why" ] || reason="session ended unfinished: $unfinished_why; $reason"
+	[ $rc -ne 0 ] || rc=1
 fi
-reason="claude exited $rc"
+echo "$reason"
 [ -z "$stale" ] || reason="$reason; skipped $stale (native.prepare failed)"
 [ -z "$recorded" ] || reason="$reason; sessions not recorded (FLOW-18)"
 with_leftover
 stage="cleanup"
 
+# The stamp records what the last finished session saw; an unfinished run's
+# is dropped, so the next gate compares against the last finished one.
+if [ "$outcome" = worked ]; then
+	mv "$stamp.pending" "$stamp"
+	handed_off
+else
+	rm -f "$stamp.pending"
+fi
+
 # Leave the checkout on main and each clone on its trunk, clean, whatever
 # the session did.
 git switch -q -f main && git reset -q --hard origin/main
 reset_clones
-
-if [ $rc -eq 0 ]; then
-	mv "$stamp.pending" "$stamp"
-fi
 exit $rc
