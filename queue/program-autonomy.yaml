@@ -1,0 +1,34 @@
+feature: program-autonomy
+title: While the program runs, the loop merges into program trunks and cuts pre-release tags without Jeff, and budgets only steps that change the repositories
+priority: 3
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/program-autonomy.md
+branch: feat/program-autonomy
+areas:
+  - loop
+  - rules
+alters_relationships: null
+source: 'Jeff, 2026-11-24 attended, an emergent batch of three process changes: (1) PR merges into the trunk branches (program trunks) during the program are auto-approved like direct pushes; only merges to main need Jeff''s authorization; the safest way under growing parallelism is the loop''s call (e.g. keep the merge gate, merge commits pinned to the head, serialize merges per repository, re-check up-to-date). This also bears on wf-gate-rest and sync-pr-tier1, whose reviews went to Jeff because merging is reserved to him under FLOW-20. (2) Pre-production tags and releases (-dev.N, -rc.N) are auto-approved; Jeff added the Claude app''s bypass to buildwarden-specs'' release-tags ruleset and will add it to the other repositories (buildwarden, relay, ai-workflow and the five drivers). Finding the same day: a cloud session''s tag push gets HTTP 403 from the session''s git proxy itself (no X-Github-Request-Id on the receive-pack response), before GitHub''s ruleset, so the design must choose how the loop creates tags (e.g. a tag workflow dispatched over REST, native sessions, or the REST refs API if the session policy allows it). (3) Step limits (FLOW-13 budgets and the runaway check) apply only to steps that change the public repositories, never to state or status: every step after a merge or ship (merge confirmation, close, state steps, records, digests) is never budgeted and never held on a runaway; relay-conformance-timeout''s close was held on one (16 of 8) the same day.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 6
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-24T17:48:45Z
+    by: human/jeff
+    event: queued at position 3 (asked 1)
