@@ -2,7 +2,7 @@ feature: program-autonomy
 title: While the program runs, the loop merges into program trunks and cuts pre-release tags without Jeff, and budgets only steps that change the repositories
 priority: 3
 kind: process
-status: queued
+status: in_progress
 round: process
 phase: 1
 design: docs/design/program-autonomy.md
@@ -18,17 +18,23 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261124T174900Z
+      expires: 2026-11-24T19:48:52.858606166Z
 budget:
   estimate:
     runs: 1
     steps: 6
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-11-24T17:48:45Z
     by: human/jeff
     event: queued at position 3 (asked 1)
+  - at: 2026-11-24T17:48:52Z
+    by: cloud/20261124T174900Z
+    event: started (FLOW-05)
+  - at: 2026-11-24T17:48:52Z
+    by: cloud/20261124T174900Z
+    event: claimed x1-design until 2026-11-24T19:48:52Z

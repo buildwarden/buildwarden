@@ -53,6 +53,7 @@ None.
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | wf-gate-rest | process | - | buildwarden/buildwarden | - | 2 implement | x2-design-review (human) | - | - | 1 / 5 |
 | 2 | sync-pr-tier1 | process | - | buildwarden/buildwarden | - | 2 implement | x2-design-review (human) | - | - | 1 / 4 |
+| 3 | program-autonomy | process | - | buildwarden/buildwarden | - | 1 design | x1-design (cloud, leased to cloud/20261124T174900Z) | - | - | 1 / 6 |
 | 6 | finch-version-starts-vm | fix (follows driver-contract) | - | buildwarden/buildwarden | driver/container, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 8 |
 | 7 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 8 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
@@ -129,7 +130,6 @@ Open features that are not disjoint. Process items are outside the relations (FL
 
 | Pri | Item | Kind | Repositories | Areas | Est. steps |
 |---|---|---|---|---|---|
-| 3 | program-autonomy | process | buildwarden/buildwarden | - | 6 |
 | 4 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
 | 5 | program-land | process | buildwarden/buildwarden | - | 5 |
 | 11 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
