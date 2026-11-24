@@ -349,6 +349,19 @@ after the merge, on specs, where the bypass is in place.
   - q4 and q5 as recommended (batch).
   - Nothing was folded in.
   - sitting: 17:59-18:08 UTC, asks: 9 (1 a batch covering q4 and q5)
+- r2, 2026-11-24: changes, in the same sitting, after r1's approval.
+  r1 approved at 8739c23 stands except q1 and D3 (Jeff, 2026-11-24, same
+  sitting): cloud sessions cannot create tags at all. A git push of a tag
+  gets HTTP 403 from the session's git proxy, and the REST write paths
+  git/tags and git/refs are refused ('Write access to this GitHub API path
+  is not permitted through this proxy'). Jeff chose native sessions: the
+  cloud loop records each tag wf tag-next names as due, and the next macbook
+  or windows-desktop native session creates it with Jeff's credentials, by
+  git push of an annotated tag at the checked commit, create only, never
+  moved or deleted. Redo D3, q1 and the FLOW-17 amend's wording for that
+  route (the rest of r1, including the FLOW-08, FLOW-13 and FLOW-20 amends,
+  stays approved), say how a due tag is recorded and handed to the native
+  skill, and re-review only that delta.
 
 ## Consolidation
 
