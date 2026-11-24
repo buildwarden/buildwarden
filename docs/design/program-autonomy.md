@@ -23,13 +23,16 @@ rule_changes:
       tools/workflow/queue/limits.go, .claude/skills/workflow-tick/SKILL.md]}
   - {rule: FLOW-17, change: amend, paths: [docs/development/process.md,
       tools/workflow/cmd/wf/main.go, tools/workflow/check/tags.go,
-      .claude/skills/workflow-tick/SKILL.md]}
+      tools/workflow/queue/records.go, tools/workflow/queue/hosts.go,
+      tools/workflow/native/native-tag.sh, tools/workflow/native/native-tick.sh,
+      tools/workflow/native/settings.native.json,
+      .claude/skills/workflow-tick/SKILL.md, .claude/skills/workflow-native/SKILL.md]}
   - {rule: FLOW-20, change: amend, paths: [docs/development/process.md,
       .claude/agents/wf-review.md]}
 concepts: [workflow, merge-gate, program-trunk, loop-merge, pre-release, tag, budget, runaway,
-           reserved-rules, process-test]
+           reserved-rules, process-test, tag-due, native-session]
 related: [componentization.md, program-north-star.md, budgets-active-only.md,
-          merge-confirm-attended.md]
+          merge-confirm-attended.md, loop-native-lead.md]
 ---
 
 # Program autonomy: program-trunk merges, pre-release tags and post-merge budgets
@@ -51,7 +54,10 @@ to decide (Jeff, 2026-11-24):
    the final tag, but a cloud session's `git push` of a tag gets HTTP 403
    from the session's own git proxy, before GitHub's ruleset (no
    `X-Github-Request-Id` on the receive-pack response). Every tag
-   `wf tag-next` names therefore waits for an attended session.
+   `wf tag-next` names therefore waits for an attended session. The
+   REST write paths a cloud session could use instead (`git/refs`,
+   `git/tags`) are refused by the same proxy ("Write access to this
+   GitHub API path is not permitted through this proxy"; r2's finding).
 3. **Budgets.** FLOW-13 counts every claim against the work budget and
    holds every step of a runaway item. `relay-conformance-timeout`'s Close
    was held at 16 of 8 steps after its PR had merged: a hold on a step that
@@ -73,7 +79,14 @@ to decide (Jeff, 2026-11-24):
   no run budget. This makes it a rule and extends it to every step from
   Merge on.
 - `wf tag-next` and `check/tags.go`: the pre-release naming and its
-  checks. Kept unchanged; only how the named tag is created changes.
+  checks. Kept; a tag recorded as due now counts as taken when the next
+  one is named (D3).
+- `loop-native-lead.md` and `native-push.sh`: the one push an unattended
+  native session makes itself, through a script on trunk that refuses
+  everything but its one case, under `settings.native.json`'s push
+  denies. D3's tag script follows the same pattern. `program/records.yaml`
+  (FLOW-20): the program's append-only records, which already carry a
+  repository, a head and a ref, and a `tag` kind.
 
 ## Decisions
 
@@ -122,23 +135,69 @@ authority, raising a budget, relaxing a check). Consequences:
 *Rejected:* dropping merging and tags from the list outright (a change
 that weakened the gate would then pass the process test).
 
-**D3. Tags are created through GitHub's REST refs API, never by git
-push.** A new `wf tag` runs `tag-next`'s checks, then for each tag it names
-calls `POST /repos/<R>/git/refs` with `refs/tags/<tag>` and the exact sha
-it checked. The API refuses an existing ref (422), so a tag can never be
-moved by it; `wf tag` never calls the update or delete endpoints. The ref
-is created by the session's GitHub identity (the Claude app, which Jeff
-gives the release-tags ruleset's bypass), so it triggers `release.yml` as
-a push would. Whether the session's policy permits this call is Jeff's
-(Q1); it has not been tried.
-*Rejected:* a tag workflow in each repository dispatched over REST (nine
-CI/release changes, which are privileged; a `GITHUB_TOKEN`-created tag
-does not trigger `release.yml`, so it needs an App token secret and the
-Actions app's bypass, or a `workflow_call` into each release workflow);
-native sessions pushing tags (latency of their schedule, an offline
-machine holds the program, and the native push script pushes branches
-only, FLOW-17). Working around the proxy's 403 in any other way:
-rejected outright.
+**D3. The cloud loop records each tag as due; the next native session
+creates it.** (r2; replaces r1's REST route, which the cloud session's
+proxy refuses, as it does a git push of a tag.)
+- *Due.* After a loop merge on a program trunk the tick runs
+  `wf tag-next` as today, with a new `-due -worker $W`: for each tag it
+  names, it appends a `tag-due` record to `program/records.yaml` (repo,
+  `head` = the exact commit it checked, `ref` = the tag) and the tick
+  commits it with the step's state. The cloud pushes no tag and calls no
+  tag API. A tag is *due* while it has a `tag-due` record and no `tag`
+  record for the same repository and ref. `wf record` refuses a second
+  `tag-due` or `tag` record for one repository and ref, and `tag-next`
+  counts a due tag as taken (the next is `-dev.2` while `-dev.1` is due;
+  a head with a due pre-release gets none), so a trunk that moves before
+  the tag exists never names one twice.
+- *Handed to the native session.* `wf gate` gains a reason `tag\t<repo>\t<tag>`
+  for each due tag in a repository the machine lists in `hosts.yaml`,
+  and a due tag wakes the machine as a ready step does, whatever the
+  stamp. `native-tick.sh` passes those lines into the session's prompt as
+  "Tags due: ...". A new `wf tags-due -state .dev/workflow -machine <m>`
+  prints `<repo>\t<tag>\t<sha>\t<program trunk>` for the same set. Either
+  machine that lists the repository may create it; there is no claim, as
+  creation is create-only and the loser's push is refused (below).
+- *Created.* The `workflow-native` skill, attended or unattended, does
+  the due tags first, before the batch, outside the native budget (D4:
+  nothing from Merge on counts). For each it runs
+  `tools/workflow/native/native-tag.sh <owner>/<repo> <tag>`, a script on
+  trunk like `native-push.sh`: it refuses a tag that `wf tags-due` does
+  not list, a clone whose origin is another repository, and any further
+  argument; fetches the clone's origin with its tags; refuses when the
+  due commit is not in `origin/<program trunk>`; refuses when the remote
+  already has the tag (`git ls-remote`); creates an annotated tag at the
+  due commit (`git tag -a <tag> <sha> -m "<tag>: due at <record time>,
+  wf tag-next"`), and execs `git push origin refs/tags/<tag>:refs/tags/<tag>`,
+  one refspec, no `+`, no `--force`, so git refuses to replace a tag that
+  appeared meanwhile. The push carries Jeff's credentials on the machine,
+  as `native-push.sh`'s do, so it triggers `release.yml`. The session then
+  runs `wf record -kind tag -repository R -head <sha> -ref <tag>` and
+  commits it with `dist/wf commit`.
+- *Refused.* A remote tag already at the due commit is another machine's:
+  record `tag` (a refusal as a duplicate means it is recorded) and go on.
+  At any other commit, or any other refusal: the tag stays due, the
+  digest lists it under **Blocked on Jeff**, and Jeff is notified. No
+  retry by another route (GLOBAL-10).
+- *Permissions.* `settings.native.json` keeps every push deny; the script
+  is the one new route, as `native-push.sh` is for branches. The exact
+  allow entry is Jeff's (Q6).
+- *Latency.* A tag waits for the next native run on a machine that lists
+  its repository; `windows-desktop` is always on. A consumer's pin moves
+  only to a tag that exists, so `-rc.N`'s "pinned at the latest
+  pre-release" waits with it. Which machines list which repositories is
+  Jeff's setup (Q7).
+*Rejected:* the REST refs API or a git push from the cloud session (both
+refused by its proxy, r2's finding; any workaround of the proxy rejected
+outright); a tag workflow per repository dispatched over REST (as in r1:
+nine privileged CI/release changes, an App token secret and the Actions
+app's bypass); a `program/tags-due.yaml` list (a second file kept in step
+with the records, which already hold repo, head and ref and the `tag`
+record that closes a due one); a host step on the native-gap backlog (a
+gap is keyed to one host while a tag needs a machine that lists a
+repository, it wakes the gate only when a trunk moves or on the sweep,
+and it counts against the native budget); a queue step on the item (the
+tag belongs to the program trunk, not the item, which may be closed, and
+a sync's tags have no item).
 
 **D4. Budgets count only steps before Merge.** A claim counts against the
 item's work budget, and the run's budget, only for a step before the
@@ -161,10 +220,12 @@ None.
 
 - **Q1. How the loop creates tags.** Flagged: tags are a reserved rule
   and the session policy is Jeff's. Options: (a) REST refs API from the
-  cloud session, if its policy allows it; (b) a dispatched tag workflow
-  per repository; (c) native sessions push tags. Recommended: (a); if
-  Jeff's answer is that the policy does not allow it, the design returns
-  to Design for (b) (FLOW-06), with no fallback in code (GLOBAL-10).
+  cloud session; (b) a dispatched tag workflow per repository; (c) native
+  sessions: the cloud records each tag `wf tag-next` names as due, and the
+  next native session creates it with Jeff's credentials, create only
+  (D3). Answer (Jeff, r2, 2026-11-24): (c). (a) was confirmed in r1 and
+  then found refused by the cloud session's proxy, as is a git push of a
+  tag.
 - **Q2. Reading of the reserved list.** Flagged: departs from FLOW-20's
   reserved list as Jeff wrote it. Options: (a) narrow "merging" to a trunk
   and "tags" to release tags without a suffix, the loop's program-trunk
@@ -183,6 +244,33 @@ None.
   his (relaxed check); (b) re-route `wf-gate-rest` to the process test on
   Jeff's word now. Recommended: (a); he is in the session and it is one
   review.
+- **Q6. The allow entry for the tag script.** Flagged: a new permission
+  in `settings.native.json` is Jeff's. Options: (a) add
+  `"Bash(tools/workflow/native/native-tag.sh:*)"` to `allow`, every deny
+  unchanged; the script is already inside the existing
+  `Bash(tools/workflow/*)`, and the named entry makes the tag route
+  explicit, as the list names no other script; (b) rely on
+  `Bash(tools/workflow/*)` alone, no change to the file; (c) allow
+  `Bash(git -C .dev/checkouts/* push origin refs/tags/*)` and narrow the
+  deny `Bash(git -C * push*)` so it does not shadow it (deny wins over
+  allow): `*` spans spaces, so it would admit `--force`, a delete
+  refspec and other refs, which is why `native-push.sh` exists.
+  Recommended: (a).
+- **Q7. Which machines create tags, and as whom.** Flagged: setup on
+  Jeff's machines and rulesets, and `hosts.yaml` is his to edit. A
+  machine creates tags only for the repositories it lists, from its clone
+  at `.dev/checkouts/<owner>/<repo>`; today neither lists
+  `buildwarden-specs` or `buildwarden-ai-workflow`, `windows-desktop` does
+  not list the qemu and vz drivers, and `macbook` not the hyperv and
+  firecracker ones. Options: (a) `windows-desktop` (always on) lists all
+  nine repositories, `macbook` unchanged; (b) both machines list all nine
+  (either creates any tag, at the cost of more backlog sweeps, since a
+  listed trunk that moves re-sweeps the machine's open gaps); (c) add
+  only specs and ai-workflow, to `windows-desktop`. In each, Jeff clones
+  the added repositories on the machine, and each repository's
+  release-tags ruleset lets his account create `-dev.N`, `-rc.N` and the
+  program trunk's final tag (the Claude app's bypass from r1 is no longer
+  used by the loop). Recommended: (a).
 
 ## Design
 
@@ -194,12 +282,30 @@ trunk and runs point 4 against the fetched head, inside the claim.
 pinned to the head, then `wf done`; never two merges in one repository at
 once. Nothing else in the gate changes.
 
-**Tags (D3).** `cmd/wf/main.go` gains `wf tag` with `tag-next`'s flags; it
-reuses `check/tags.go` for the names and checks, prints each tag and sha
-it creates, and fails on any refusal (an existing ref included) without
-retrying. The tick's skill replaces `git tag` / `git push origin <tag>`
-with `dist/wf tag ...`, then `wf record -kind tag` as today. Naming, the
-`-rc` conditions and never-move-or-delete are unchanged.
+**Tags (D3).** Cloud side: `queue/records.go` gains the kind `tag-due`,
+`Due(records, repo)`, and the refusal of a duplicate `tag-due` or `tag`
+for one repository and ref. `check/tags.go`'s `TagNext` and `TagNextRC`
+read due tags with the repository's tags (`nextPre`, the head's
+pre-release check). `cmd/wf/main.go`: `tag-next -due -worker` appends a
+`tag-due` record per tag at the head it checked; new `wf tags-due
+-machine <m>`. The tick's skill replaces `git tag` / `git push origin
+<tag>` with `dist/wf tag-next ... -due -worker $W`, committed with
+`program/records.yaml`, and its Never list says the cloud creates no
+tag; its digest lists the tags made due under **Moved**, and those due
+longer than a day under **Notes**.
+Native side: `queue/hosts.go`'s `Gate` adds a `tag` reason, with
+`Run`, for each due tag in a repository the machine lists. `native-tick.sh`
+adds the gate's `tag` lines to the prompt ("Tags due: <repo> <tag>, ...").
+New `tools/workflow/native/native-tag.sh` (D3's checks; one line on
+stderr and exit 2 for every refusal before anything runs; otherwise git
+push is exec'd). `settings.native.json`: Q6. The `workflow-native`
+skill: a **Tags** section before **Collect the batch** (run
+`wf tags-due`, `native-tag.sh` and `wf record -kind tag` for each,
+refusals as D3 says, attended too); its Never list's "no tag" becomes "no
+tag but a due one, by `native-tag.sh`"; the digest's **Moved** lists each
+tag created, **Blocked on Jeff** each refused. Naming, the `-rc`
+conditions and never-move-or-delete are unchanged. No repository outside
+this one changes; Q7's setup is outside the repositories.
 
 **Budgets (D4).** `next.go`'s claim increments `Spent.Steps` only for a
 budgeted step (new `Budgeted(f, st)`: phase before Merge, not
@@ -215,15 +321,21 @@ steps.
   LOOP-07, LOOP-09, LINT-03, GLOBAL-10.
 - Machinery: `tools/workflow/check/merge.go`, `tools/workflow/check/tags.go`,
   `tools/workflow/queue/next.go`, `tools/workflow/queue/queue.go`,
-  `tools/workflow/queue/limits.go`, `tools/workflow/cmd/wf/main.go`, their
-  tests; `.claude/agents/wf-publish.md`, `.claude/agents/wf-review.md`
-  (P2's list), `.claude/skills/workflow-tick/SKILL.md`.
+  `tools/workflow/queue/limits.go`, `tools/workflow/queue/records.go`,
+  `tools/workflow/queue/hosts.go`, `tools/workflow/cmd/wf/main.go`,
+  `tools/workflow/native/native-tag.sh` (new),
+  `tools/workflow/native/native-tick.sh`, their tests
+  (`native_test.go` included); `.claude/agents/wf-publish.md`,
+  `.claude/agents/wf-review.md` (P2's list),
+  `.claude/skills/workflow-tick/SKILL.md`,
+  `.claude/skills/workflow-native/SKILL.md`.
 - Configuration: no `config.yaml` key changes (`run_budget`,
   `runaway_factor` keep their values; what they count narrows). No
-  `.claude/settings*.json` change. Outside the repository, Jeff's setup:
-  the Claude app's bypass on each repository's release-tags ruleset (done
-  for specs), and Q3's program-trunk rulesets. No CI or release workflow
-  changes.
+  `.claude/settings*.json` change. `tools/workflow/native/settings.native.json`
+  gains one allow entry (Q6), its denies unchanged. `hosts.yaml` on the
+  workflow branch: Jeff's edit (Q7). Outside the repository, Jeff's
+  setup: the clones and release-tags rulesets of Q7, and Q3's
+  program-trunk rulesets. No CI or release workflow changes.
 - Areas: `loop` and `rules`, as intake recorded; the area map needs no
   change. Only this repository.
 
@@ -236,7 +348,8 @@ histories) and `wf-gate-rest`'s count from `componentization.md`:
   count: 13 phases plus the per-repository merges of K3, K4 and M6), each
   naming at least one `-dev.N`; plus one `-rc.N` and one final tag for each
   of the 9 repositories: **at least 39 tags**, each of which today needs an
-  attended session because the cloud's push is refused. At the program's
+  attended session because the cloud's push is refused; under D3 the next
+  native run creates each without Jeff. At the program's
   pace of 3 to 5 loop merges a week, **3 to 5 interactions a week** that
   decide nothing.
 - **Runaway holds after a merge.** One today (relay-conformance-timeout's
@@ -254,8 +367,12 @@ cost: about 6 steps and one review (this sitting).
 
 - The run's and the item's budgets now count only steps before Merge (D4);
   no override, `runaway_factor` and `run_budget` unchanged.
-- Tags are created only by `wf tag` over REST (D3); no fallback to
-  `git push` (GLOBAL-10): a refusal fails the step and shows in the digest.
+- Tags are created only by a native session's `native-tag.sh`, at the
+  commit the `tag-due` record names (D3); no fallback to the cloud, the
+  REST API or another push (GLOBAL-10): a refused tag stays due, shows
+  under **Blocked on Jeff** and notifies him.
+- Which machine creates a due tag: any that lists its repository in
+  `hosts.yaml` (Q7); none is preferred.
 - No other default, override, merge or fallback.
 
 ## Cross-driver impact
@@ -289,15 +406,31 @@ more of its steps" becomes "no unattended run takes more of its steps
 before Merge". Why: D4. Enforcement: `Budgeted` in the claim and in the
 runaway holds.
 
-**FLOW-17** (agent-judgment; unchanged). Current: "or a tag, except a
-pre-release tag or a program trunk's final tag FLOW-20 lets the loop push,
-and a release tag an attended session pushes on the human's word; no tag
-is moved or deleted." Proposed: "or a tag, except a pre-release tag or a
-program trunk's final tag FLOW-20 lets the loop create, which it creates
-only with `wf tag` through GitHub's REST API at the commit `wf tag-next`
-checked, never by a git push, and a release tag an attended session pushes
-on the human's word; no tag is moved or deleted." Why: D3. Enforcement:
-`wf tag` calls only the create endpoint.
+**FLOW-17** (MUST, agent-judgment; unchanged severity and check).
+Current: "or a tag, except a pre-release tag or a program trunk's final
+tag FLOW-20 lets the loop push, and a release tag an attended session
+pushes on the human's word; no tag is moved or deleted. An unattended
+session on a native machine pushes a feature branch only through the
+loop's push script on trunk, which pushes one branch of an item in
+progress, fast-forward only, and the queue state only through the loop's
+state commit; it runs no other push." Proposed: "or a tag, except a
+pre-release tag or a program trunk's final tag FLOW-20 lets the loop
+create, and a release tag an attended session pushes on the human's
+word; no tag is moved or deleted. The loop creates its tags only on a
+native machine: a cloud session records each tag `wf tag-next` names as
+due, at the commit it checked, and pushes none; the next native session
+on a machine that lists the repository creates it, as an annotated tag
+at that commit, through the loop's tag script on trunk, which only
+creates a due tag that the remote does not have, and records it. An
+unattended session on a native machine pushes a feature branch only
+through the loop's push script on trunk, which pushes one branch of an
+item in progress, fast-forward only, a due tag only through the loop's
+tag script, and the queue state only through the loop's state commit; it
+runs no other push." Why: D3. Enforcement: the cloud session's proxy
+refuses every tag write; `settings.native.json` denies every push the
+session runs itself; `native-tag.sh` refuses all but a due tag the
+remote lacks and pushes one refspec without `+`; `wf record` refuses a
+duplicate `tag-due` or `tag`; `tag-next` counts a due tag as taken.
 
 **FLOW-20** (MUST, automated + agent-judgment; unchanged). Current: "...;
 and any change to a rule about security, merging, pushing or tags."
@@ -317,20 +450,35 @@ follows the wording.
 Tier 0: unit tests in `tools/workflow/queue` (a second loop merge in the
 same repository not offered under a live lease, offered in another
 repository; post-Merge claims not counted; a runaway item's Close
-offered), `tools/workflow/check` (the recheck reads the fetched head) and
-`cmd/wf` (`wf tag` builds the create call with the checked sha and refuses
-on 422, against a fake `gh`). Tier 1: `make test`, `make lint`. No native
-host (`native_validation: []`); no tier-2 gap. Live: the first `wf tag`
-after the merge, on specs, where the bypass is in place.
+offered; `wf record` refuses a duplicate `tag-due` or `tag`; the gate
+wakes a machine that lists a due tag's repository, with a `tag` reason,
+and not one that does not; `tags-due` lists only due tags),
+`tools/workflow/check` (the recheck reads the fetched head; `tag-next`
+names `-dev.2` while `-dev.1` is due and none for a head with a due
+pre-release), `cmd/wf` (`tag-next -due` writes one record per tag at the
+checked head) and `tools/workflow/native` (`native-tag.sh` against a
+local bare remote: creates an annotated tag at the due commit; refuses a
+tag not due, one the remote has, a commit outside the program trunk,
+another repository's clone and an extra argument; `native-tick.sh`
+passes the gate's tag lines into the prompt). Tier 1: `make test`,
+`make lint`. No native host (`native_validation: []`): `native-tag.sh`
+is POSIX sh like `native-push.sh`, whose tests in `native_test.go` run in
+tier 1 the same way; no tier-2 gap. Live: the first due tag after the
+merge, created by the next native run once Q7's setup is in place.
 
 ## Implementation plan
 
 1. `queue`: `Budgeted`, the claim count and runaway holds (FLOW-13), tests.
 2. `queue/next.go`: per-repository loop-merge serialization (FLOW-08), tests.
 3. `check/merge.go`: the recheck under the claim (FLOW-08), tests.
-4. `cmd/wf`: `wf tag` over `check/tags.go` (FLOW-17, FLOW-20), tests.
-5. `process.md`: the four amendments, as approved.
-6. `.claude/`: `wf-publish.md`, `wf-review.md` P2, the tick's skill (FLOW-14).
+4. `queue/records.go`, `check/tags.go`, `cmd/wf`: `tag-due` records,
+   `tag-next -due`, `wf tags-due` (FLOW-17, FLOW-20), tests.
+5. `queue/hosts.go` and `tools/workflow/native/`: the gate's `tag` reason,
+   `native-tag.sh`, the prompt line in `native-tick.sh`, Q6's entry in
+   `settings.native.json` (FLOW-17), tests.
+6. `process.md`: the four amendments, as approved.
+7. `.claude/`: `wf-publish.md`, `wf-review.md` P2, the tick's and the
+   native skill (FLOW-14).
 
 ## Design review
 
@@ -362,6 +510,13 @@ after the merge, on specs, where the bypass is in place.
   route (the rest of r1, including the FLOW-08, FLOW-13 and FLOW-20 amends,
   stays approved), say how a due tag is recorded and handed to the native
   skill, and re-review only that delta.
+  - Redone in x1-design-r2: D3 (due records in `program/records.yaml`,
+    the gate's `tag` reason, `native-tag.sh`), Q1's answer (c), the
+    FLOW-17 amendment's wording and paths, and what follows from D3 only:
+    Problem item 2, Prior art, Design's Tags paragraph and what the change
+    reaches, a Defaults line, the Validation and Implementation plans, and
+    the Program payoff's tags line. New: Q6 (the allow entry) and Q7 (the
+    machines and rulesets). Everything else is as approved at 8739c23.
 
 ## Consolidation
 
