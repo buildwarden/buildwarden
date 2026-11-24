@@ -469,6 +469,20 @@ approved `main` relaxation (**Problem**).
 
 ## Design review
 
+- r1, 2026-11-24: approved at f5b2117. Jeff approved the design as read
+  at f5b2117, in the attended session (workflow-human).
+  - Each rule change was asked on its own:
+    - rule change FLOW-01 approved at f5b2117
+    - rule change FLOW-14 approved at f5b2117
+  - Q1 (a), a sync is judged as its merge's push; flagged and asked on its
+    own.
+  - Q2 (a), the enforcement comparison is skipped on a sync; flagged and
+    asked on its own.
+  - Q3 (a), Q4 (a) and Q5 (a), as recommended (batch).
+  - The design predates #144; Implement merges main and reconciles.
+  - Nothing was folded in.
+  - sitting: 19:24-19:31 UTC, asks: 6 (1 a batch covering Q3 to Q5)
+
 ## Consolidation
 
 ## Rollback notes
