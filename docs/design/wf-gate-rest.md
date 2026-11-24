@@ -9,7 +9,7 @@ merge_first: []
 areas: [loop, build]
 security_boundary: none
 alters_relationships: false
-design_review: process-test
+design_review: required
 native_validation: []
 tier2_gaps: []
 rules: [FLOW-04, FLOW-08, FLOW-10, FLOW-14, FLOW-16, FLOW-17, FLOW-19, FLOW-20, LOOP-09, GLOBAL-10, GLOBAL-11, TEST-02]
@@ -440,6 +440,54 @@ The change is in the loop's machinery and `.gitignore` only.
   table's line numbers and rows 5a and 9, `MergeReady`'s doc comment, the
   `command` field's name), Q1 unflagged, Q2 still flagged. Not yet
   reviewed: the process test (`x2-process-test`) follows in phase 2.
+- r3, 2026-11-24: process test not passed at 94dea18 (FLOW-20): P2 doubted,
+  so the design goes to Jeff's review (`design_review: required`). Taken by
+  wf-review in a session that did not write the design, against FLOW-20 and
+  `wf-review`'s P2 as `program-autonomy` (#144) left them on main 66e6f67.
+  - P1, shown: `main`'s first-parent log has 16 moves on 5 days in
+    2026-11-16..23 (checked), so about 5 syncs a week; `program/records.yaml`
+    already holds three merges Jeff took by hand because the gate could not
+    run in the cloud (#140, #142, buildwarden-specs#7), each an interaction
+    that decides nothing; at least 21 program merges ahead (13 phases, plus
+    K3, K4 and M6's per-repository PRs over `config.yaml`'s 8 program
+    repositories), against one run, one test and one merge of Jeff's.
+  - P2, doubted: Decision 3 calls the REST merge "the same act" as `gh pr
+    merge <n> --merge --match-head-commit` without `--admin`, and Decision 2
+    (Q1 (a)) leaves mergeability to "GitHub's merge, which refuses a closed,
+    conflicting or moved PR". They differ for a policy-blocked PR. `gh pr
+    merge` without `--admin` reads the PR's `mergeStateStatus` and refuses a
+    `BLOCKED` one on the client, naming `--admin`, even when the caller could
+    bypass the base branch's policy; the REST `PUT .../pulls/<n>/merge` has
+    no such check and merges for any caller the policy lets bypass (a
+    repository admin under classic branch protection without enforced
+    admins, or a ruleset bypass actor). The session's token is an admin
+    (`repos/buildwarden/buildwarden` `.permissions.admin` is true). In this
+    repository both branch rulesets ("program trunk", "main protection")
+    list no bypass actor and report `current_user_can_bypass: never`, so
+    GitHub refuses there as `gh` did; the other 8 program repositories could
+    not be read from this session, and the design neither states nor checks
+    that their program trunks hold the same. The gate's `Required` reads
+    rulesets only (`rules/branches/<b>`), so a requirement held by classic
+    protection, a review or thread-resolution rule the gate does not read,
+    was stopped only by that client-side refusal. Read by effect, the
+    change can relax a check that stops the loop, and lets the loop take a
+    merge program-north-star's Decision 9 forbids (a bypass) where a
+    repository's protection allows the admin through: a reserved clause of
+    FLOW-20, or at least a doubt of one, and P2 fails closed. A design that
+    keeps the refusal would clear it, for instance by reading the REST
+    response's `mergeable_state` and refusing the merge unless it is
+    `clean`, `unstable` or `has_hooks` (Q1's option (b), or the same check
+    taken by the agent just before the PUT), or by making the gate refuse a
+    program trunk whose ruleset the caller can bypass or that is not
+    ruleset-protected. Either is a change to the gate's reading that Jeff
+    settles; Q1's unflagging rests on the equivalence above and is reopened
+    with it.
+  - P3: the session agrees on P1 and not on P2. Q2 (flagged, a departure
+    from `loop-parallel`) is left open for Jeff and is not part of this
+    finding; nothing else in the reserved-rule reading was found to touch a
+    reserved rule (no settings allow list names `gh`; the native deny of
+    `gh api` covers the REST merge; no push, tag, limit or security rule is
+    reached).
 
 ## Consolidation
 
