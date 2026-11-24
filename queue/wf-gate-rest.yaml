@@ -4,15 +4,15 @@ priority: 2
 kind: process
 status: in_progress
 round: process
-phase: 1
+phase: 2
 design: docs/design/wf-gate-rest.md
 branch: feat/wf-gate-rest
 areas:
   - loop
   - build
-declared: "6316252"
+declared: 94dea18
 alters_relationships: null
-design_review: required
+design_review: process-test
 source: 'Jeff, 2026-11-23 attended human session: the program sync PR #140 could not pass wf check -sync in the cloud, because check/merge.go reads the PR with gh pr view (GraphQL), which returns 403 in Claude Code cloud sessions; REST gh api repos/<o>/<r>/pulls/<n> works. Every program-trunk merge (sync, f7-merge, f6-merged-<n>) is blocked on it in the cloud. Folded in on Jeff''s word: tools/workflow/cmd/wf/wf, the built binary main has tracked since #130, is removed and ignored, since a local go build overwrites it on any branch (native-loop-fixes'' implement had to restore it).'
 steps:
   - id: x1-design
@@ -25,10 +25,26 @@ steps:
   - id: x1-design-r2
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-process-test
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261124T191409Z
-      expires: 2026-11-24T21:14:18.329231939Z
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - x2-process-test
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -40,7 +56,7 @@ questions:
   - id: q1
     kind: assumed
     status: open
-    question: 'Flagged: a decision about the merge gate, a rule FLOW-20 reserves to Jeff. The gate reads nothing new (design Decision 2): its nine points stay as they are, read over REST; GitHub''s merge refuses a closed, conflicting or moved PR (the sha parameter), and the agent then re-checks and stops. Proceeding with A.'
+    question: 'The gate reads nothing new (design Decision 2): its nine points stay as they are, read over REST; GitHub''s merge refuses a closed, conflicting or moved PR (the sha parameter), and the agent then re-checks and stops. Proceeding with A. Not flagged (r2): under FLOW-20 as program-autonomy (#144) left it, A neither removes nor narrows a gate point, so it meets no reserved clause, and it departs from no earlier decision.'
     options:
       - (A) keep the gate's points as they are, read over REST
       - (B) add a point that the PR is open and mergeable, from the same REST response
@@ -102,3 +118,12 @@ history:
   - at: 2026-11-24T19:14:18Z
     by: cloud/20261124T191409Z
     event: claimed x1-design-r2 until 2026-11-24T21:14:18Z
+  - at: 2026-11-24T19:16:28Z
+    by: cloud/20261124T191409Z
+    event: 'declared at 94dea18: design_review required -> process-test'
+  - at: 2026-11-24T19:16:57Z
+    by: cloud/20261124T191409Z
+    event: done x1-design-r2
+  - at: 2026-11-24T19:16:57Z
+    by: cloud/20261124T191409Z
+    event: entered phase 2 (implement)
