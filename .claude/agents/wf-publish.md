@@ -132,8 +132,10 @@ remote-tracking ref; run `make enforcement TIER1_BASE=origin/<trunk>` and
   record the head with `dist/wf sync-program -state <workflow checkout>
   -repo <code checkout> -checkouts .dev/checkouts -repository R -worker <W>
   -head <the merge commit>` (it refuses a head that is not that merge and
-  nothing more, and prints `review` with the report path when the merge
-  resolved a conflict), then push the branch and open its PR to the
+  nothing more, and one whose resolution edits a rule, machinery or
+  rule-running workflow path (FLOW-01); that refusal is a conflict you
+  cannot resolve, and escalates as below. It prints `review` with the
+  report path when the merge resolved a conflict), then push the branch and open its PR to the
   program trunk. A clean merge: once `dist/wf check -state <workflow
   checkout> -repo <code checkout> -checkouts .dev/checkouts -sync
   -repository R -pr N` passes, merge it with `gh pr merge N --merge

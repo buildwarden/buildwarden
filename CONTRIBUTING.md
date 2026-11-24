@@ -99,7 +99,8 @@ golangci-lint config limited to the lines you changed.
   you changed build-tagged files for another platform, also run
   `GOOS=<os> make lint`.
 - **No design.** A change that needs no design (FLOW-01) passes
-  `TIER1_FLAGS=-no-design`; in CI the `no-design` label does the same.
+  `TIER1_FLAGS=-no-design`; in CI the `no-design` label does the same. A
+  push, and a program sync's PR, are not judged on it (FLOW-01).
 - **Design front-matter.** Every `docs/design/*.md` the change adds, modifies
   or renames must have front-matter that passes the same FLOW-02 validator
   `wf` uses, with the file name (without `.md`) as the `feature`. An existing

@@ -63,6 +63,12 @@ for overlap, and cites what it reuses.
 
 The automated part checks that a non-exempt PR links a design document with valid
 front-matter; the agent part judges whether the design actually covers the change.
+Two kinds of change carry only changes already judged on their own PRs, and are
+not judged again: a push to a trunk or a program trunk, and a program sync's PR
+(FLOW-20), which CI recognizes by its shape: a merge of the program trunk and a
+commit of the trunk on its `sync/program-<sha>` branch, whose conflict
+resolution edits no path FLOW-14 guards. The sync's resolution is judged by its
+tier-2 review (FLOW-08, FLOW-20).
 
 ---
 
@@ -778,7 +784,9 @@ and CI also run tier 1 built from the merge base's code with the branch's
 configuration (`tools/tier1/rules.yaml` and `golangci.yml`) against the branch,
 and every finding it reports that the branch's tier 1 no longer reports must be
 on a rule an approved `rule_changes` entry names; Review also runs the merge
-base's `wf check`. A configuration edit is an approved path that Review judges.
+base's `wf check`. A program sync's PR (FLOW-01) is not compared so: each
+enforcement change it carries was compared on its own PR, and its resolution
+edits none of these paths. A configuration edit is an approved path that Review judges.
 The agent part judges whether each edit matches the approved wording.
 
 ---
