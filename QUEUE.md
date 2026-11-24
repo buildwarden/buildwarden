@@ -53,7 +53,7 @@ None.
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | wf-gate-rest | process | - | buildwarden/buildwarden | - | 2 implement | x2-design-review (human) | - | - | 1 / 5 |
 | 2 | sync-pr-tier1 | process | - | buildwarden/buildwarden | - | 2 implement | x2-design-review (human) | - | - | 1 / 4 |
-| 3 | program-autonomy | process | - | buildwarden/buildwarden | - | 2 implement | x2-implement-r2 (cloud) | - | - | 4 / 6 |
+| 3 | program-autonomy | process | - | buildwarden/buildwarden | - | 2 implement | x2-implement-r2 (cloud, leased to cloud/20261124T174900Z) | - | - | 5 / 6 |
 | 6 | finch-version-starts-vm | fix (follows driver-contract) | - | buildwarden/buildwarden | driver/container, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 8 |
 | 7 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 8 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
