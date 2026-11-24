@@ -26,7 +26,8 @@ func TestBudgeted(t *testing.T) {
 		{p, Step{ID: "x4-close", Phase: 4}, false},
 	} {
 		if got := Budgeted(c.f, &c.st); got != c.want {
-			t.Errorf("Budgeted(%s, %s) = %v, want %v", c.f.Feature, c.st.ID, got, c.want)
+			t.Errorf("Budgeted(%s, %s) = %v, want %v", c.f.Feature, c.st.ID, got,
+				c.want)
 		}
 	}
 	f.Log(now, "cloud/run", "claimed f6-refresh until %s", now.Format("2006"))

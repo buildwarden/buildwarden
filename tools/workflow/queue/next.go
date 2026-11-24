@@ -273,6 +273,9 @@ func (s *State) wait(f *Feature, st *Step, worker string, now time.Time) (string
 		return why, refusal{}
 	}
 	if loop {
+		if why := s.mergeBusy(f, st, now); why != "" {
+			return why, refusal{}
+		}
 		if why := s.gateWait(f, st); why != "" {
 			return why, refusal{}
 		}
@@ -343,6 +346,61 @@ func (s *State) gateWait(f *Feature, st *Step) string {
 		strings.Join(waits, ", "), st.ID)
 }
 
+// unmerged are the repositories a merge step or f6-merged-<n> covers that
+// it has not merged in yet.
+func (s *State) unmerged(f *Feature, st *Step) []string {
+	var out []string
+	for _, r := range s.MergeRepos(f, st) {
+		if w := s.workEntry(f, r); w == nil || w.Merged == "" {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// mergeBusy returns why a loop merge waits for another, or "": the loop
+// merges into a program trunk one pull request at a time per repository, so
+// no loop merge step is offered or claimed while another loop merge step in
+// one of its repositories, not merged there yet, holds a live lease
+// (FLOW-08). The claim is a state commit on the workflow branch, so two
+// workers that race for it are serialized by its push.
+func (s *State) mergeBusy(f *Feature, st *Step, now time.Time) string {
+	mine := s.unmerged(f, st)
+	for _, o := range s.Features {
+		for _, other := range s.leasedLoopMerges(o, now) {
+			if other == st {
+				continue
+			}
+			for _, r := range s.unmerged(o, other) {
+				if !slices.Contains(mine, r) {
+					continue
+				}
+				return fmt.Sprintf("the loop merge %s %s in %s, leased to %s: "+
+					"one merge into a program trunk at a time (FLOW-08)",
+					o.Feature, other.ID, r, other.Lease.ClaimedBy)
+			}
+		}
+	}
+	return ""
+}
+
+// leasedLoopMerges are the in-progress item's pending loop merge steps that
+// hold a live lease.
+func (s *State) leasedLoopMerges(f *Feature, now time.Time) []*Step {
+	var out []*Step
+	if f.Status != "in_progress" {
+		return nil
+	}
+	for i := range f.Steps {
+		st := &f.Steps[i]
+		if st.Status == "pending" && st.Lease.Held(now) &&
+			(IsMerge(st) || isMergedFirst(st)) && s.LoopMerges(f, st) {
+			out = append(out, st)
+		}
+	}
+	return out
+}
+
 // isMergedFirst reports whether the step is an f6-merged-<n>.
 func isMergedFirst(st *Step) bool {
 	_, ok := MergedFirst(st)
@@ -373,10 +431,10 @@ func mergeWait(f *Feature) string {
 
 // unattendedHold returns why an unattended worker, any but a human, must not
 // take the item's step yet: an open blocking question (FLOW-07), a spent
-// runaway budget for a step it counts (Budgeted, FLOW-13), or, for a refresh step, a main that main.yaml
-// records red (FLOW-10), which red reports; a refresh is cloud, so only the
-// cloud meets the last. These are not limits; the limits are Guard's, for
-// every worker.
+// runaway budget for a step it counts (Budgeted, FLOW-13), or, for a
+// refresh step, a main that main.yaml records red (FLOW-10), which red
+// reports; a refresh is cloud, so only the cloud meets the last. These are
+// not limits; the limits are Guard's, for every worker.
 //
 // A refresh onto a red main fails on main's failure and is released, and a
 // released step is the first one wf next offers again, ahead of the fix: so

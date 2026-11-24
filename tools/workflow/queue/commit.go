@@ -65,8 +65,10 @@ func (r CommitRequest) wire(s *State) {
 // MayClaim says why the worker may not claim the step: it is not pending, its
 // item has not reached its phase (FLOW-04), someone else holds it, a process
 // item holds the worker, or a limit refuses the claim, whoever the worker is
-// (FLOW-05). A step the worker already holds stays claimable. wf claim and a
-// claim wf commit asks again share it.
+// (FLOW-05), or, for a loop merge, another loop merge in its repository is
+// claimed or the merge gate does not pass (FLOW-08). A step the worker
+// already holds stays claimable. wf claim and a claim wf commit asks again
+// share it.
 func (s *State) MayClaim(f *Feature, st *Step, worker string, now time.Time) error {
 	if st.Status != "pending" {
 		return fmt.Errorf("%s is %s", st.ID, st.Status)
@@ -86,13 +88,28 @@ func (s *State) MayClaim(f *Feature, st *Step, worker string, now time.Time) err
 		return fmt.Errorf("%s may not be claimed: %s", st.ID, why)
 	}
 	if IsMerge(st) || isMergedFirst(st) {
-		if !s.LoopMerges(f, st) {
-			return fmt.Errorf("%s waits for the human's merge and is never claimed "+
-				"(FLOW-08)", st.ID)
-		}
-		if why := s.gateWait(f, st); why != "" && !mine {
-			return fmt.Errorf("%s may not be claimed: it waits on %s", st.ID, why)
-		}
+		return s.mayClaimMerge(f, st, now, mine)
+	}
+	return nil
+}
+
+// mayClaimMerge is MayClaim's test of a merge step: only a loop merge is
+// claimed, and only while no other loop merge in its repository is and the
+// merge gate passes, unless the worker already holds it (FLOW-08).
+func (s *State) mayClaimMerge(f *Feature, st *Step, now time.Time, mine bool) error {
+	if !s.LoopMerges(f, st) {
+		return fmt.Errorf("%s waits for the human's merge and is never claimed "+
+			"(FLOW-08)", st.ID)
+	}
+	if mine {
+		return nil
+	}
+	why := s.mergeBusy(f, st, now)
+	if why == "" {
+		why = s.gateWait(f, st)
+	}
+	if why != "" {
+		return fmt.Errorf("%s may not be claimed: it waits on %s", st.ID, why)
 	}
 	return nil
 }

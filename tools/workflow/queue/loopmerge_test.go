@@ -172,3 +172,68 @@ func TestLoopMergeClaimedAgain(t *testing.T) {
 		}
 	}
 }
+
+// TestLoopMergeOneAtATime: while one item's loop merge into a program trunk
+// is claimed under a live lease, no other loop merge in that repository is
+// offered or claimed, and wf next says why; one in another repository is,
+// and so is the same one once the lease expires (FLOW-08).
+func TestLoopMergeOneAtATime(t *testing.T) {
+	s, p, q := oneAtATime(t)
+	pm, _ := p.Step("f7-merge")
+	if err := s.MayClaim(p, pm, "cloud/a", now); err != nil {
+		t.Fatal(err)
+	}
+	s.Claim(p, pm, "cloud/a", now)
+
+	pick, _ := s.NextFor("r", "cloud/b", now)
+	if pick == nil || pick.Step.ID != "f6-merged-1" {
+		t.Fatalf("pick = %+v, want r's merge in another repository", pick)
+	}
+	pick, blocked := s.NextFor("q", "cloud/b", now)
+	if pick != nil || len(blocked) != 1 ||
+		!strings.Contains(blocked[0].Reason, "the loop merge p f7-merge in "+
+			"buildwarden/buildwarden") ||
+		!strings.Contains(blocked[0].Reason, "one merge into a program trunk at a time") {
+		t.Fatalf("q: pick %+v, blocked %v", pick, blocked)
+	}
+	qm, _ := q.Step("f7-merge")
+	if err := s.MayClaim(q, qm, "cloud/b", now); err == nil ||
+		!strings.Contains(err.Error(), "at a time") {
+		t.Fatalf("MayClaim of a second merge in the repository: %v", err)
+	}
+	if err := s.MayClaim(p, pm, "cloud/a", now); err != nil {
+		t.Fatalf("the holder's own claim: %v", err)
+	}
+	later := pm.Lease.Expires.Add(1)
+	if err := s.MayClaim(q, qm, "cloud/b", later); err != nil {
+		t.Fatalf("after the lease expired: %v", err)
+	}
+}
+
+// oneAtATime is a state with two program items at their merge step in the
+// queue's own repository, p and q, and r at its merged-first step in the
+// specifications repository, each on a program trunk whose gate passes.
+func oneAtATime(t *testing.T) (*State, *Feature, *Feature) {
+	t.Helper()
+	p := mergeWaiting(working("p", 1, 0, "relay"), 42)
+	q := mergeWaiting(working("q", 2, 0, "relay"), 43)
+	r := working("r", 3, 0, "relay")
+	r.Repos = []string{"buildwarden/buildwarden", "buildwarden/buildwarden-specs"}
+	r.Work = []Work{{Repo: "buildwarden/buildwarden-specs", Branch: r.Branch, First: true,
+		PR: &PR{Number: 5}}}
+	advance(r, 6)
+	for i := range r.Steps {
+		if st := &r.Steps[i]; st.Phase == 6 && !isMergedFirst(st) {
+			st.Status = "done"
+		}
+	}
+	p.Program, q.Program, r.Program = true, true, true
+	s := programState(t, p, q, r)
+	for i := range s.Config.Repositories {
+		if s.Config.Repositories[i].Name == "buildwarden/buildwarden-specs" {
+			s.Config.Repositories[i].ProgramTrunk = programTrunk
+		}
+	}
+	s.MergeGate = func(*Feature, string) bool { return true }
+	return s, p, q
+}
