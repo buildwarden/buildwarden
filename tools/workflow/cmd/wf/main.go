@@ -34,7 +34,8 @@
 //	wf program-body -state DIR [-repository OWNER/NAME]
 //	wf reestimate -state DIR -worker W -feature F
 //	wf tag-next -state DIR -repo DIR [-checkouts DIR] [-repository OWNER/NAME]
-//	            [-rc -feature F]
+//	            [-rc -feature F] [-due -worker W]
+//	wf tags-due -state DIR [-machine M]
 //	wf review-human -state DIR -worker W -feature F -why TEXT
 //	wf move     -state DIR -worker human/NAME -feature F -to N [-why TEXT]
 //	wf urgent   -state DIR -worker human/NAME -feature F [-clear]
@@ -157,7 +158,7 @@
 // answered by reestimate, which raises its estimate to its spend so far and
 // is the cloud's only then; status names an item that needs it.
 //
-// tag-next prints the pre-release tags the loop may push on a program
+// tag-next prints the pre-release tags the loop may create on a program
 // trunk's head, vX.Y.Z-dev.N after the latest release without a suffix
 // (<directory>/vX.Y.Z-dev.N per changed specification, the harness first),
 // or "none" with why: the last merge changed no consumable, the head is
@@ -169,7 +170,16 @@
 // repository is open, the head's checks are green, and every module of
 // another configured repository a go.mod at the head requires is pinned at
 // that repository's latest tag, pre-releases included, read in its clone
-// under -checkouts (a17 (a)).
+// under -checkouts (a17 (a)). A tag recorded as due counts as taken, and a
+// head with a pre-release due gets none. tag-next -due -worker W appends a
+// tag-due record for each tag, at the head it checked, and prints "due" with
+// the repository, tag and head: a cloud session creates no tag (FLOW-17).
+// record refuses a second tag-due or tag record for one repository and tag.
+// tags-due prints each tag due (a tag-due record and no tag record for it)
+// in a repository machine M lists in hosts.yaml, or in every repository
+// without -machine: repository, tag, commit, program trunk and when it was
+// recorded due. gate wakes a machine for each, and native-tag.sh, run by
+// the native session, creates only a tag tags-due lists.
 //
 // new -lead, and lead for an item already queued or in progress, name the
 // host name whose machines take a feature's cloud steps of Branch setup
@@ -352,7 +362,8 @@ const usage = "usage: wf " +
 	"validate|status|next|claim|renew|release|check|done|answer|back|new|hold|move|urgent|" +
 	"lead|trunk|" +
 	"state-step|declare|" +
-	"relate|relations|stale|commit|main|digest|areas|gate|budget|migrate|drops [flags]"
+	"relate|relations|stale|commit|main|digest|areas|gate|tags-due|budget|migrate|" +
+	"drops [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
 var errIdle = errors.New("idle")
@@ -366,7 +377,7 @@ type opts struct {
 	repos, areas, seams, adopts, with, message, claimed       string
 	rev, edges, repository                                    string
 	urgent, clear, check, list, clones, prepare, program      bool
-	sync, rc                                                  bool
+	sync, rc, due                                             bool
 	pr                                                        int
 	escalate, ref, since                                      string
 	// given holds the names of the flags the command line set, for a flag
@@ -434,6 +445,8 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.IntVar(&o.pr, "pr", 0, "check -sync: the sync's pull request number")
 	fs.BoolVar(&o.rc, "rc", false, "tag-next: the release candidates, once -feature, "+
 		"the component's last phase, has merged (FLOW-20, a17)")
+	fs.BoolVar(&o.due, "due", false, "tag-next: record each tag as due (a tag-due "+
+		"record at the head checked) for a native session to create (FLOW-17)")
 	fs.StringVar(&o.ref, "ref", "",
 		"record: what the decision is about: a PR (#N), a finding's id, a tag, an item; "+
 			"for a security-note, design or diff")
@@ -494,7 +507,7 @@ func run(cmd string, args []string, now time.Time) error {
 		"new: the position asked for, 1 first, kept as nearly as the item's class allows")
 	fs.IntVar(&o.estSteps, "estimate-steps", 0, "new: estimated steps")
 	fs.IntVar(&o.estRuns, "estimate-runs", 0, "new: estimated runs")
-	fs.StringVar(&o.machine, "machine", "", "gate: the machine's name in hosts.yaml")
+	fs.StringVar(&o.machine, "machine", "", "gate, tags-due: the machine's name in hosts.yaml")
 	fs.StringVar(&o.stamp, "stamp", "", "gate: file recording the last finished session")
 	fs.IntVar(&o.sweepDays, "sweep-days", 7, "gate: re-sweep open gaps after this many days")
 	fs.BoolVar(&o.record, "record", false, "gate: write the stamp instead of deciding")
@@ -543,7 +556,8 @@ func run(cmd string, args []string, now time.Time) error {
 		"lead": lead, "state-step": stateStep, "hold": hold, "trunk": trunkCmd,
 		"sync-program": syncProgram, "record": record, "program-body": programBody,
 		"reestimate": reestimate, "review-human": reviewHuman, "tag-next": tagNext,
-		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
+		"tags-due": tagsDue, "gate": gate, "budget": budget, "migrate": migrate,
+		"stale": stale,
 		"declare": declareItem, "relate": relate, "relations": relations,
 		"digest": digest, "areas": areasCmd, "native": native,
 	}
@@ -1298,26 +1312,31 @@ func reviewHuman(s *queue.State, o opts) error {
 	return s.Save(f)
 }
 
-// tagNext is wf tag-next: the pre-release tags the loop may push on a
+// tagNext is wf tag-next: the pre-release tags the loop may create on a
 // repository's program trunk head, one a line, or why there are none
 // (FLOW-20, Decision 15): the -dev tags, or with -rc the release candidates
-// once -feature, the component's last phase, has merged (a17 (a)). The tick
-// pushes each with git push origin <tag> and records it.
+// once -feature, the component's last phase, has merged (a17 (a)). With
+// -due it appends a tag-due record for each, at the head it checked, and
+// prints "due" lines: the cloud creates no tag, and the next native session
+// on a machine that lists the repository creates each (FLOW-17).
 func tagNext(s *queue.State, o opts) error {
 	repo := o.repository
 	if repo == "" {
 		repo = s.Config.Repository
 	}
-	if o.feature != "" && !o.rc {
+	switch {
+	case o.feature != "" && !o.rc:
 		return fmt.Errorf("tag-next -feature names the last phase of an -rc")
+	case o.due && o.worker == "":
+		return errors.New("tag-next -due needs -worker, who records the tags due")
 	}
-	tagsFor := check.TagNext
+	tagsFor := nextTags
 	if o.rc {
-		tagsFor = func(e check.Env, repo string) ([]string, string, error) {
-			return check.TagNextRC(e, repo, o.feature)
+		tagsFor = func(e check.Env, repo string) ([]string, string, string, error) {
+			return nextRCs(e, repo, o.feature)
 		}
 	}
-	tags, why, err := tagsFor(env(s, o), repo)
+	tags, head, why, err := tagsFor(env(s, o), repo)
 	if err != nil {
 		return err
 	}
@@ -1326,7 +1345,51 @@ func tagNext(s *queue.State, o opts) error {
 		return nil
 	}
 	for _, t := range tags {
-		fmt.Println(t)
+		if !o.due {
+			fmt.Println(t)
+			continue
+		}
+		kind := "-dev"
+		if o.rc {
+			kind = "-rc"
+		}
+		if err := queue.AppendRecord(o.state, queue.Record{At: o.now, By: o.worker,
+			Kind: "tag-due", Feature: o.feature, Repo: repo, Head: head, Ref: t,
+			Note: fmt.Sprintf("wf tag-next %s named it at the head it checked; a "+
+				"native session creates it (FLOW-17)", kind)}); err != nil {
+			return err
+		}
+		fmt.Printf("due\t%s\t%s\t%s\n", repo, t, head)
+	}
+	return nil
+}
+
+// nextTags and nextRCs name the tags tag-next proposes; tests replace them,
+// as they read the GitHub check runs of the head.
+var (
+	nextTags = check.TagNext
+	nextRCs  = check.TagNextRC
+)
+
+// tagsDue is wf tags-due: the tags due in each repository the machine lists
+// in hosts.yaml, or in every repository with no -machine, one a line as
+// repository, tag, commit, program trunk and the time it was recorded due
+// (FLOW-17). native-tag.sh creates only a tag this lists.
+func tagsDue(s *queue.State, o opts) error {
+	repos := []string(nil)
+	if o.machine != "" {
+		m, err := s.Machine(o.machine)
+		if err != nil {
+			return err
+		}
+		repos = s.Lists(m)
+	}
+	for _, r := range queue.Due(s.Records, "") {
+		if repos != nil && !slices.Contains(repos, r.Repo) {
+			continue
+		}
+		fmt.Printf("%s\t%s\t%s\t%s\t%s\n", r.Repo, r.Ref, r.Head,
+			orDash(s.Config.ProgramTrunkOf(r.Repo)), r.At.UTC().Format(time.RFC3339))
 	}
 	return nil
 }
