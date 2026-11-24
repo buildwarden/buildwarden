@@ -4,7 +4,7 @@ priority: 2
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 1
 design: docs/design/wf-gate-rest.md
 branch: feat/wf-gate-rest
 areas:
@@ -29,20 +29,10 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: x2-design-review
-    phase: 2
-    affinity: human
-    status: pending
-    lease:
-      claimed_by: ""
-      expires: null
-    note: 'P2 doubted (FLOW-20): the REST merge (PUT pulls/<n>/merge) drops gh pr merge''s client-side refusal of a BLOCKED PR, so a caller the base branch''s policy lets bypass (the session''s token is an admin) merges where the loop stopped before; the gate''s Required reads rulesets only, and the other program trunks'' protection is unchecked. P1 shown. Design r3 at 65aee5fbf9ec.'
-  - id: x2-implement
-    phase: 2
+  - id: x1-design-r3
+    phase: 1
     affinity: cloud
     status: pending
-    needs:
-      - x2-design-review
     lease:
       claimed_by: ""
       expires: null
@@ -138,3 +128,6 @@ history:
   - at: 2026-11-24T19:27:47Z
     by: cloud/20261124T191409Z
     event: 'x2-process-test: to the human''s design review (FLOW-19, FLOW-20): P2 doubted (FLOW-20): the REST merge (PUT pulls/<n>/merge) drops gh pr merge''s client-side refusal of a BLOCKED PR, so a caller the base branch''s policy lets bypass (the session''s token is an admin) merges where the loop stopped before; the gate''s Required reads rulesets only, and the other program trunks'' protection is unchecked. P1 shown. Design r3 at 65aee5fbf9ec.'
+  - at: 2026-11-24T19:28:03Z
+    by: human/jeff
+    event: 'back to design: Jeff, 2026-11-24, review after the failed process test: the REST merge must keep gh pr merge''s client-side refusal of a BLOCKED PR. The gate''s PR read over REST refuses the merge unless mergeable_state is clean, unstable or has_hooks (read in wf check''s PR view, gate point added; q1 reopened and answered (b)). A bypass-capable caller (the session''s admin token) must never merge where the loop stopped before (program-north-star Decision 9). Everything else in the design stands; q2 (A) answered.'
