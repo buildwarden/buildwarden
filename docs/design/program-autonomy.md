@@ -15,20 +15,10 @@ tier2_gaps: []
 rules: [FLOW-04, FLOW-05, FLOW-08, FLOW-10, FLOW-11, FLOW-13, FLOW-14, FLOW-16, FLOW-17,
         FLOW-19, FLOW-20, LOOP-07, LOOP-09, LINT-03, GLOBAL-10]
 rule_changes:
-  - {rule: FLOW-08, change: amend, paths: [docs/development/process.md,
-      tools/workflow/check/merge.go, tools/workflow/queue/next.go,
-      .claude/agents/wf-publish.md, .claude/skills/workflow-tick/SKILL.md]}
-  - {rule: FLOW-13, change: amend, paths: [docs/development/process.md,
-      tools/workflow/queue/next.go, tools/workflow/queue/queue.go,
-      tools/workflow/queue/limits.go, .claude/skills/workflow-tick/SKILL.md]}
-  - {rule: FLOW-17, change: amend, paths: [docs/development/process.md,
-      tools/workflow/cmd/wf/main.go, tools/workflow/check/tags.go,
-      tools/workflow/queue/records.go, tools/workflow/queue/hosts.go,
-      tools/workflow/native/native-tag.sh, tools/workflow/native/native-tick.sh,
-      tools/workflow/native/settings.native.json,
-      .claude/skills/workflow-tick/SKILL.md, .claude/skills/workflow-native/SKILL.md]}
-  - {rule: FLOW-20, change: amend, paths: [docs/development/process.md,
-      .claude/agents/wf-review.md]}
+  - {rule: FLOW-08, change: amend, paths: [docs/development/process.md]}
+  - {rule: FLOW-13, change: amend, paths: [docs/development/process.md]}
+  - {rule: FLOW-17, change: amend, paths: [docs/development/process.md]}
+  - {rule: FLOW-20, change: amend, paths: [docs/development/process.md]}
 concepts: [workflow, merge-gate, program-trunk, loop-merge, pre-release, tag, budget, runaway,
            reserved-rules, process-test, tag-due, native-session]
 related: [componentization.md, program-north-star.md, budgets-active-only.md,
@@ -444,6 +434,19 @@ or be deleted, or meets another clause above; a merge or tag the loop may
 already take is not one it could not take before, whatever worker or
 machinery takes it." Why: D2. Enforcement: `wf-review.md`'s P2 list
 follows the wording.
+
+**Enforcement files** (named here, not in `rule_changes.paths`, which FLOW-02
+limits to rule documents, FLOW-14):
+- FLOW-08: `tools/workflow/check/merge.go`, `tools/workflow/queue/next.go`,
+  `.claude/agents/wf-publish.md`, `.claude/skills/workflow-tick/SKILL.md`.
+- FLOW-13: `tools/workflow/queue/next.go`, `tools/workflow/queue/queue.go`,
+  `tools/workflow/queue/limits.go`, `.claude/skills/workflow-tick/SKILL.md`.
+- FLOW-17: `tools/workflow/cmd/wf/main.go`, `tools/workflow/check/tags.go`,
+  `tools/workflow/queue/records.go`, `tools/workflow/queue/hosts.go`,
+  `tools/workflow/native/native-tag.sh`, `tools/workflow/native/native-tick.sh`,
+  `tools/workflow/native/settings.native.json`,
+  `.claude/skills/workflow-tick/SKILL.md`, `.claude/skills/workflow-native/SKILL.md`.
+- FLOW-20: `.claude/agents/wf-review.md` (P2's list).
 
 ## Validation plan
 
