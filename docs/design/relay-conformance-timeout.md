@@ -1,6 +1,6 @@
 ---
 feature: relay-conformance-timeout
-status: draft
+status: archived
 drivers: [qemu, vz]      # conservatively (FLOW-02): cmd/relay's host mode, the only mode that
                          # changes, is the relay qemu (a host process, --mode=host) and vz run;
                          # no driver tree changes, and the relay area is shared (areas.yaml implies.shared)
@@ -515,12 +515,143 @@ later-phase native step (`native_validation: []`).
 
 ## Consolidation
 
-Filled in at Publish.
+Publish, 2026-11-24 (FLOW-10, FLOW-15), round 2, on `buildwarden` at
+`a71bdce` and `buildwarden-specs` at `4d95ad8`.
+
+- **What landed on each trunk since the fork.**
+  - `buildwarden`: forked from `main` at `168cf95`; `main` at `c52926d` is
+    merged into the branch at `a71bdce`. The one change between them is
+    #141 (`native-loop-fixes`, a process item: `workflow-native`'s skill,
+    `wf native`, `process.md` and the loop profile). It touches nothing
+    under `cmd/relay/`, `relay/` or `driver/`, so the merge had no conflict
+    and nothing here needed rework.
+  - `buildwarden-specs`: forked from `main` at `70457f1`; `main` at
+    `ab9303c` (#6, `feat/prerelease-tags`: the `release` workflow and
+    `speccheck` accept a program trunk's pre-release tags, and the
+    `CHANGELOG.md` head became v0.2.0) is merged into the branch at
+    `cd9a82e`, before any change (plan task 1). The branch's
+    `conformance/CHANGELOG.md` v0.2.1 entry sits above #6's v0.2.0, and
+    `go.work`'s `replace` names v0.2.1, as the specs README asks. #6 does not
+    touch `conformance/netstack/` or `conformance/launch/`.
+- **Terminology and wording.** The design, code comments and the v0.2.1
+  entry use the same terms: "capturing stack", "TIME-WAIT", "forwarder",
+  "reused source port", "4-tuple"; and for D2 "the runtime's start" against
+  "the relay's own bound, StartLimit". The implementation adds `awaitOCI`
+  (the oci start after `docker run`), `ociPhases` and `ociState` to carry
+  D2's record of phases and the runtime's state; the Design section named
+  only `startOCI` and `containerPID`, which is wording, and the Archive
+  summary names all of them.
+- **FLOW-15 sweep.**
+  - *Dead code.* `make deadcode` on `a71bdce` (linux, darwin, windows):
+    nothing in `cmd/relay/ingress_fd.go`; the functions it lists all predate
+    the fork (`relay.Relay.CAFingerprint` and `Ledger`, `driver/vz`'s
+    cgo-only image-prep, firecracker's and `cmd/relay`'s Linux-only helpers
+    seen from windows, `driver/hyperv`'s `runPSJSON`). The `buildwarden`
+    branch adds no non-test function. In `buildwarden-specs` every added
+    function has a caller: `awaitOCI` and `ociState` from `startOCI`,
+    `ociPhases.String` from the failure's report, `containerLimit` from
+    `awaitOCI`.
+  - *Duplication.* The two fixed-port reconnection tests
+    (`cmd/relay/ingress_fd_test.go`, `conformance/netstack/netstack_test.go`)
+    each build a small client stack and a `connectFrom`. Kept as two on
+    purpose: they are test code in different repositories, against
+    different stacks (a socket pair through `NewFDIngress`, and an
+    in-memory frame link through `Capture`), and `buildwarden` pins
+    `conformance` v0.2.0, so it could not import the harness's helper if it
+    were exported. The D1 comment is repeated beside each option for the
+    same reason. `ociState`'s `inspect --format {{json .State}}` is a
+    different query from `ociInspect`'s `{{.State.Pid}}`, not a copy.
+  - *The overview.* `overview.md`'s relay pseudocode names no TCP timers
+    and no component's flow changes; unchanged.
+- **Seams.** `seams: []`; no specification changes, so no **Specification
+  changes** section (LOOP-02). The `conformance` harness's v0.2.1 is a
+  release of the harness, not of a specification; its tag is Jeff's, and
+  no pin moves here (D4).
+- **Review.** Tier 2 at `00026f894c50`: one MUST, TEST-04 in
+  `buildwarden-specs` (`TestContainerPID`'s failure cases under a 300 ms
+  wall-clock limit), sent back to implement and fixed at `4d95ad8` (each
+  case has a one-minute bound; the two timeout cases cancel once the fake
+  runtime has given its last answer). The re-review at `a71bdce00e18` has
+  no open finding.
+- **Rules proposed:** none. **Follow-ups filed:** none. **Regressions a
+  trunk already has:** none found beyond the ones this item fixes.
+- **`dist/wf check` on `a71bdce`**, its trial-merge lines:
+
+  ```
+  ok   trial merge with finch-version-starts-vm (a report, FLOW-10): clean
+  ```
+
+- **Gates:** `make lint` and `make test` pass on the consolidation commit.
 
 ## Rollback notes
 
-None.
+Revert each repository's branch commits on its own; the two pull requests
+are independent. Reverting `buildwarden`'s restores gVisor's 60 s TIME-WAIT
+in the host-mode relay and the reconnection stall, and nothing else: no
+state, format, flag or ledger record depends on it. Reverting
+`buildwarden-specs`'s before `conformance/v0.2.1` is tagged needs nothing
+more; after the tag, a v0.2.2 would carry the revert, since a released tag
+is not moved.
 
 ## Archive summary
 
-Filled in at Publish.
+Filed 2026-11-22 on Jeff's word and released by him from the FLOW-20 hold
+(a TEST-04 fix for `main`'s CI). Designed 2026-11-23, design review r1
+approved at `e0a1b27` (Jeff); implemented, reviewed twice by tier 2
+(`00026f894c50`: one MUST, TEST-04, fixed; `a71bdce00e18`: none open) and
+published by the cloud loop 2026-11-24. Two pull requests, `buildwarden`'s
+to `main` and `buildwarden-specs`'s to its `main`, neither merged first.
+
+- **Built.**
+  - `buildwarden`, `cmd/relay/ingress_fd.go` `NewFDIngress`: the host-mode
+    relay's gVisor stack sets `tcpip.TCPTimeWaitTimeoutOption(0)` and fails
+    construction if the option is refused. `ingress_fd_test.go`
+    `TestFDIngressTakesAReusedSourcePort` connects twice from one fixed
+    source port over a socket pair and fails at its bound without the fix.
+  - `buildwarden-specs`, `conformance/netstack` `Stack.Capture`: the same
+    option on the harness's capturing stack (the in-process relay's); a
+    dialing stack keeps gVisor's default. `TestCaptureTakesAReusedSourcePort`
+    pins it.
+  - `buildwarden-specs`, `conformance/launch/relay.go`: the oci launcher's
+    `containerPID` waits up to `CommandLimit` (60 s, `containerLimit`) for
+    the runtime to start the container and says, on failure, that the
+    runtime did not start it and the relay under test was never running;
+    the relay's `StartLimit` still runs from the container running.
+    `awaitOCI` records `ociPhases` (run started, first listed, running,
+    claim endpoint answered) and a failed start prints them with
+    `ociState`, the runtime's inspect state. `TestContainerPID` and
+    `TestOCIStartReport` drive it with a fake runtime.
+  - `conformance/CHANGELOG.md` v0.2.1 and `go.work`'s `replace` at v0.2.1;
+    no tag pushed.
+- **Verified.** The two failing cases run repeatedly against the harness's
+  in-process host relay with the committed change: GUEST-46's host case
+  0 failures in 300 runs and GUEST-34's cwd case 0 in 3000, against 11/300
+  and 4/3000 before D1.
+- **Decisions taken:** TIME-WAIT 0 on both capturing stacks (a1, D1); no
+  specification change and no new suite case (a2, D3); the oci runtime's
+  start bounded and reported apart from the relay's (a3, D2); no pin move
+  (a4, D4); `tools/vz-image-prep` left as it is (a5, D5).
+- **Rejected:** a short TIME-WAIT; listeners beside the forwarder; a
+  patched gVisor; a harness that never reuses a source port; a retry or a
+  longer `within`; only raising StartLimit; retrying `docker run`;
+  pre-created containers.
+- **Left open.**
+  - D5: `tools/vz-image-prep/netfwd.go` captures a VM's connections with a
+    gVisor forwarder too and has the same latent 60 s stall on a reused
+    4-tuple. Left as it is (the `driver/vz` area, never seen to fail).
+  - D3: a `relay-guest-api` suite case that reconnects from a fixed source
+    port would catch the defect in any relay. Offered as a follow-up, filed
+    only if Jeff wants it; it needs a release of that suite.
+  - The harness's two changes reach `buildwarden`'s CI only once Jeff tags
+    `conformance/v0.2.1` and the pin moves (D4).
+  - The relay-oci conformance target runs only in the pull request's CI
+    (`conformance.yml`), not in a cloud session, so D2's bound and report
+    are checked there and by tier 0's fake runtime.
+- **For future designs touching `relay`, `host-mode`, `fd-ingress`,
+  `netstack`, `gvisor`, `tcp-time-wait`, `tcp-forwarder` or the
+  `oci-launcher`:** a gVisor `tcp.Forwarder` never sees a SYN that reopens
+  a TIME-WAIT 4-tuple, so any stack that captures with a forwarder must
+  keep no TIME-WAIT (or have a listener), or it stalls a reconnection for
+  60 s. The harness's own timings must not be charged to the component
+  under test: bound the runtime's start by `CommandLimit` and the relay's
+  by `StartLimit`, and report which ran out.
