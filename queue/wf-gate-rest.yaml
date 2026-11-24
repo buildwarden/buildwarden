@@ -50,15 +50,15 @@ steps:
     needs:
       - x2-design-review
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261124T191409Z
+      expires: 2026-11-24T21:33:55.897349653Z
 budget:
   estimate:
     runs: 1
     steps: 5
   spent:
     runs: 2
-    steps: 5
+    steps: 6
 questions:
   - id: q1
     kind: assumed
@@ -179,3 +179,6 @@ history:
   - at: 2026-11-24T19:33:39Z
     by: human/jeff
     event: done x2-design-review
+  - at: 2026-11-24T19:33:55Z
+    by: cloud/20261124T191409Z
+    event: claimed x2-implement until 2026-11-24T21:33:55Z
