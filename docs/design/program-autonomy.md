@@ -586,6 +586,19 @@ rulesets of Q3.
   - read at f0bddeb
   - sitting: 18:13-18:16 UTC, asks: 5
 
+- r4, 2026-11-24: approved at 94225f9. Implement found that tier 1's
+  FLOW-02 check refuses machinery paths in `rule_changes.paths` (16 MUST).
+  Fold-in at 94225f9: each entry's paths narrow to
+  `docs/development/process.md`, and the enforcement files are named in the
+  Rule changes section. The rule wording is unchanged.
+  - rule change FLOW-08 approved at 94225f9
+  - rule change FLOW-13 approved at 94225f9
+  - rule change FLOW-17 approved at 94225f9
+  - rule change FLOW-20 approved at 94225f9
+  - Everything else stands as approved in r1 and r3.
+  - read at 94225f9
+  - sitting: 18:47-18:49 UTC, asks: 1
+
 ## Consolidation
 
 ## Rollback notes
