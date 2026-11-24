@@ -380,8 +380,11 @@ func connectFrom(
 	c := gonet.NewTCPConn(&wq, ep)
 	got, err := io.ReadAll(c)
 	_ = c.Close()
-	if err != nil || string(got) != want {
-		return fmt.Errorf("read %q, %v; want %q", got, err, want)
+	if err != nil {
+		return fmt.Errorf("read %q: %w", got, err)
+	}
+	if string(got) != want {
+		return fmt.Errorf("read %q, want %q", got, want)
 	}
 	tick := time.NewTicker(time.Millisecond)
 	defer tick.Stop()
