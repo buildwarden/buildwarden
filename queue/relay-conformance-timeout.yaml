@@ -5,7 +5,7 @@ follows: seam-specs
 trunk: main
 status: in_progress
 round: feature
-phase: 6
+phase: 3
 design: docs/design/relay-conformance-timeout.md
 branch: feat/relay-conformance-timeout
 repos:
@@ -80,21 +80,10 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: f6-consolidate
-    phase: 6
+  - id: f3-implement-r2
+    phase: 3
     affinity: cloud
     status: pending
-    needs:
-      - f6-merge-main
-    lease:
-      claimed_by: cloud/20261123T232256Z-3
-      expires: 2026-11-24T02:39:54.957251005Z
-  - id: f6-open-pr
-    phase: 6
-    affinity: cloud
-    status: pending
-    needs:
-      - f6-consolidate
     lease:
       claimed_by: ""
       expires: null
@@ -263,3 +252,6 @@ history:
   - at: 2026-11-24T00:39:54Z
     by: cloud/20261123T232256Z-3
     event: claimed f6-consolidate until 2026-11-24T02:39:54Z
+  - at: 2026-11-24T00:40:32Z
+    by: cloud/20261123T232256Z-3
+    event: 'back to implement: f6-consolidate (FLOW-10): the tier-2 MUST TEST-04 in buildwarden-specs at 34121cc (conformance/launch/relay_test.go TestContainerPID failure cases at :244, :245, :255, :266 run under a 300 ms wall-clock limit, so ''listed, no process'' and ''run exited'' depend on the fake runtime''s start speed) is plan-covered work beyond wording: give every case a one-minute limit, and for the two timeout cases cancel a parent context once the fake''s call count reaches its last answer, then assert the matching message (report reports/relay-conformance-timeout/00026f894c50)'
