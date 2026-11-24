@@ -25,7 +25,7 @@ steps:
   - id: x2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -44,50 +44,55 @@ budget:
     steps: 6
   spent:
     runs: 1
-    steps: 1
+    steps: 2
 questions:
   - id: q1
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Flagged: tags are a reserved rule and the session policy is Jeff''s. How the loop creates pre-release and final tags (design D3).'
     options:
       - (a) wf tag through the REST refs API from the cloud session, create-only, at the sha tag-next checked
       - (b) a tag workflow per repository dispatched over REST (CI/release changes, App token and Actions bypass)
       - (c) native sessions push tags
     recommended: (a), if Jeff confirms the session policy allows it; otherwise a return to Design for (b), no fallback in code
+    answer: (a) the REST refs API; Jeff confirms the session policy allows it (2026-11-24, r1)
   - id: q2
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Flagged: departs from FLOW-20''s reserved list as Jeff wrote it. How the list reads merging and tags (design D2).'
     options:
       - (a) merging to a trunk and release tags without a suffix; program-trunk merges and pre-release tags reserved only by effect
       - (b) drop merging and tags from the list
       - (c) unchanged
     recommended: (a)
+    answer: (a) narrow the reserved reading as in D2 (2026-11-24, r1)
   - id: q3
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Flagged: setup on nine repositories, Jeff''s. Program-trunk rulesets require their checks and up-to-date branches, and no approving review (design D1).'
     options:
       - (a) yes
       - '(b) no: rely on the loop''s per-repository serialization'
     recommended: (a)
+    answer: 'yes: program-trunk rulesets require checks and up-to-date branches, no approving review; Jeff sets them up (2026-11-24, r1)'
   - id: q4
     kind: assumed
-    status: open
+    status: confirmed
     question: The loop merge step itself is outside the budget and the runaway hold (design D4).
     options:
       - '(a) yes: every step from Merge on'
       - (b) only confirmations and Close
     recommended: (a)
+    answer: as recommended (batch), Jeff, 2026-11-24
   - id: q5
     kind: assumed
-    status: open
+    status: confirmed
     question: wf-gate-rest and sync-pr-tier1 (design D2).
     options:
       - (a) both stay with Jeff now (the amendment is not on main); wf-gate-rest-like changes take the process test after this merges, sync-pr-tier1-like ones stay his (a relaxed check)
       - (b) re-route wf-gate-rest to the process test on Jeff's word now
     recommended: (a)
+    answer: as recommended (batch), Jeff, 2026-11-24
 history:
   - at: 2026-11-24T17:48:45Z
     by: human/jeff
@@ -107,3 +112,24 @@ history:
   - at: 2026-11-24T17:53:27Z
     by: cloud/20261124T174900Z
     event: entered phase 2 (implement)
+  - at: 2026-11-24T17:56:07Z
+    by: human/jeff
+    event: 'assumed question q1 confirmed: (a) the REST refs API; Jeff confirms the session policy allows it (2026-11-24, r1)'
+  - at: 2026-11-24T17:56:07Z
+    by: human/jeff
+    event: 'assumed question q2 confirmed: (a) narrow the reserved reading as in D2 (2026-11-24, r1)'
+  - at: 2026-11-24T17:56:07Z
+    by: human/jeff
+    event: 'assumed question q3 confirmed: yes: program-trunk rulesets require checks and up-to-date branches, no approving review; Jeff sets them up (2026-11-24, r1)'
+  - at: 2026-11-24T17:56:07Z
+    by: human/jeff
+    event: 'assumed question q4 confirmed: as recommended (batch), Jeff, 2026-11-24'
+  - at: 2026-11-24T17:56:07Z
+    by: human/jeff
+    event: 'assumed question q5 confirmed: as recommended (batch), Jeff, 2026-11-24'
+  - at: 2026-11-24T17:56:07Z
+    by: human/jeff
+    event: claimed x2-design-review until 2026-11-24T19:56:07Z
+  - at: 2026-11-24T17:56:07Z
+    by: human/jeff
+    event: done x2-design-review
