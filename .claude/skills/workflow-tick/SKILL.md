@@ -22,11 +22,16 @@ feature's cloud steps.
   --match-head-commit`, after `wf check` passes (FLOW-08, LINT-03); never
   into a trunk, never a squash or rebase, never with `--admin`, and never
   dismiss a finding. An `f6-merged-<n>` whose work entry is on a program
-  trunk is a loop merge too, under the same gate.
+  trunk is a loop merge too, under the same gate. Never two loop merges
+  into one program trunk at once: `wf next` offers none while another in
+  the same repository holds a claim, and under the claim the merge follows
+  the gate at once.
 - Push `main` or a program trunk, force-push, rewrite pushed history, or
-  delete a remote branch or a tag (FLOW-16, FLOW-17). The tags this skill
-  pushes are the pre-releases `wf tag-next` names, `-dev.N` and `-rc.N`
-  (FLOW-20). Opening a PR
+  delete a remote branch or a tag (FLOW-16, FLOW-17). The cloud creates no
+  tag: it pushes none and calls no tag API. It records each pre-release
+  `wf tag-next` names, `-dev.N` and `-rc.N`, as due (`-due`), and the next
+  native session on a machine that lists the repository creates it
+  (FLOW-17, FLOW-20). Opening a PR
   needs no confirmation (FLOW-08): `f6-open-pr` and a process item's
   `x2-implement` open theirs.
 - Edit `docs/development/`, `.claude/`, or `tools/workflow/` anywhere but on
@@ -112,7 +117,8 @@ prints the branch an item forks from, merges, refreshes against and opens
 its PR to. Before anything else in the run, each program item `wf status`
 marks `first runaway: wf reestimate` gets `dist/wf reestimate -state
 .dev/workflow -worker $W -feature F`, which raises its estimate to its spend
-so far and records it (FLOW-13, FLOW-20); a second runaway, a fifth return
+so far and records it (FLOW-13, FLOW-20); `wf status` marks one only while
+a step before its Merge is pending, since nothing from Merge on is held; a second runaway, a fifth return
 to Design, CI repair exhausted and an unresolved sync conflict are
 escalations, `human` steps, named as escalations in the digest.
 
@@ -204,7 +210,12 @@ by hand on top of `origin/workflow` and committed again. Exit 5 with
 `wf areas -check` lines above again for that repository, then `wf commit` its
 `main.yaml`.
 
-Then repeat while this run has taken fewer than `run_budget.steps` steps:
+Then repeat while this run has taken fewer than `run_budget.steps` budgeted
+steps. A step counts only when it is before its item's Merge phase (feature
+phase 7, process phase 3) and is not an `f6-merged-<n>` or a refresh's
+first claim (FLOW-13); a loop merge, Close and a state step, and the run's
+records and digest, count nothing, so the run takes them whatever it has
+spent:
 
 1. `dist/wf next -state .dev/workflow -worker $W` (attended: add
    `-feature <feature>`). `none` ends the loop; keep the `blocked` lines for
@@ -251,7 +262,9 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
    the workflow checkout path. In Review, a red tier 1 goes to `wf-implement`
    for the fix and back to `wf-review`, inside the same step.
    At a loop merge (`f7-merge`, or an `f6-merged-<n>` on a program trunk)
-   the agent runs `git fetch origin <program trunk>` in each repository it
+   the agent runs the gate under the claim (`wf check -step` fetches the
+   program trunk and checks the branch against its head), merges at once,
+   and runs `git fetch origin <program trunk>` in each repository it
    merged in, between `gh pr merge` and `dist/wf done`, so the merge proof
    reads the merged program trunk and not the ref from before the merge.
    It never names the branch: GitHub deleted it on the merge, and a fetch
@@ -279,7 +292,8 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
      or protected finding, an umbrella or process test, a security note
      read, a question settled as assumed, a departure from a decision of
      his on strategy, a return to Design past the second, a sync, a filed
-     item, relation or area-map change, a tag), and each record the agent
+     item, relation or area-map change; a tag made due is recorded by `wf
+     tag-next -due` itself), and each record the agent
      returned (the agents write none themselves, but the sync record
      `wf sync-program -head` writes, which is committed here too): `dist/wf record -state
      .dev/workflow -worker $W -kind <kind> [-feature F] [-repository R]
@@ -294,10 +308,16 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
      program trunk's head, no other program item in R is open, the head's
      checks (its CI and conformance suites) passed, and every module R
      consumes is pinned at the latest pre-release in its clone; a pin that
-     is behind is moved by a reconciliation item first (LOOP-07). For each
-     tag either prints, `git tag <tag> origin/<program trunk>` and `git
-     push origin <tag>` in that repository, and `wf record -kind tag`. It
-     prints `none` with the reason otherwise. Never move or delete a tag.
+     is behind is moved by a reconciliation item first (LOOP-07). Run each
+     with `-due -worker $W`: for each tag it names it appends a `tag-due`
+     record at the head it checked and prints `due<TAB><repo><TAB><tag>`
+     with the head; commit `program/records.yaml` with the step's state
+     (`dist/wf tag-next -state .dev/workflow -repo . -checkouts
+     .dev/checkouts -repository R -due -worker $W`). It prints `none` with
+     the reason otherwise. A tag already due counts as taken. Never create,
+     push, move or delete a tag here, and never call a tag API: the next
+     native session on a machine that lists R creates it with
+     `native-tag.sh` and records it (FLOW-17).
 6. If the step raised a new blocking question, notify the human now (the
    PushNotification tool when available), naming the feature and question.
 
@@ -328,7 +348,8 @@ order:
   carries the line `wf claim` printed (FLOW-05). A step that changed a specification adds a **Specification
   changes** line under its own, naming each one apart from the code (LOOP-02).
   A review step's line gives tier 1's result and the tier-2 findings counted
-  by severity, with the report's path (LINT-05). Each lead this run set or
+  by severity, with the report's path (LINT-05). Each tag this run made due
+  is a line of its own: the repository, the tag and its commit (FLOW-17). Each lead this run set or
   cleared (`wf new -lead`, `wf lead`) is a line of its own, from the item's
   history line (FLOW-04).
 - **Held**: one line, the items `QUEUE.md` lists under **Held** (FLOW-20);
@@ -361,11 +382,15 @@ order:
   machine (`hosts.yaml`), each led item with its lead (`wf status`'s
   `lead:` line; `wf next` reports a queued one as waiting on its lead's
   step), and any native run already in today's digest.
-- **Spent**: steps this run against `run_budget.steps`, and each open item
+- **Spent**: budgeted steps this run against `run_budget.steps` (from Merge
+  on, nothing counts, FLOW-13), and each open item
   the run touched with its steps and runs spent against estimate, nothing
   flagged as over budget. An item this run closed (`f8-close`, `x4-close`)
   is in **Moved**, not here (FLOW-13).
-- **Notes**: FLOW-18 check result, whether Entire recorded the session.
+- **Notes**: FLOW-18 check result, whether Entire recorded the session,
+  and each tag due for longer than a day (`dist/wf tags-due -state
+  .dev/workflow`, its fifth field), with its repository: a native machine
+  that lists the repository has not run, or could not create it.
 
 `dist/wf commit ... -m "digest: run $W" <the run's file>`, which also commits
 the day's page. End the session with the run's section as the final message,

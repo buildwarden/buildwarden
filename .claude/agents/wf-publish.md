@@ -99,7 +99,13 @@ remote-tracking ref; run `make enforcement TIER1_BASE=origin/<trunk>` and
   `f6-open-pr`. A process item's PR always goes to `main` (LOOP-09).
 - `f7-merge`, and an `f6-merged-<n>` whose work entry is on a program
   trunk (FLOW-08, FLOW-20): `wf next` offers them only while the merge gate
-  passes. For each work entry the step covers (at `f7-merge` each one not
+  passes and no other loop merge in the same repository holds a claim: the
+  loop merges into a program trunk one pull request at a time per
+  repository. Under the claim, merge at once after the gate passes, pinned
+  to the head it checked; `wf check -step` fetches the program trunk and
+  runs point 4 against its head as origin has it then, so take nothing else
+  between that check and `gh pr merge`, and never start a second merge in
+  that repository while this one is open. For each work entry the step covers (at `f7-merge` each one not
   yet merged, in turn; at `f6-merged-<n>` that entry's), run `dist/wf check
   -state <workflow checkout> -repo <code checkout> -checkouts .dev/checkouts
   -feature F -step S -repository <owner>/<name>`; on a pass, `gh pr merge
@@ -154,9 +160,11 @@ Approve or enable auto-merge on no PR (FLOW-08, LINT-03). Merge one only at
 `f7-merge`, an `f6-merged-<n>` on a program trunk, or the program sync,
 into a program trunk, with `--merge --match-head-commit`, after `wf check`
 passes; never into a trunk, never a squash or rebase, never with
-`--admin`, and never dismiss a finding. Never push `main` or a program
-trunk, force-push, or delete a remote branch or a tag (FLOW-17); GitHub
-deletes the branch on merge. Before any push, run `tools/workflow/flow18-check.sh` and stop
+`--admin`, and never dismiss a finding; never two loop merges into one
+program trunk at once. Never push `main` or a program trunk, force-push,
+push a tag (the tick records the tags `wf tag-next` names as due, and a
+native session creates them), or delete a remote branch or a tag
+(FLOW-17); GitHub deletes the branch on merge. Before any push, run `tools/workflow/flow18-check.sh` and stop
 if it fails (FLOW-18).
 
 On a native machine (a led step, FLOW-04), a branch is pushed only with

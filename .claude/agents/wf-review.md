@@ -148,10 +148,16 @@ You did not write the design; if you did, stop and say so. Judge:
   limits, budgets and `runaway_factor`, the allow lists of
   `.claude/settings*.json`); and any change to a rule about security
   (GLOBAL-06, the SEC rules, RELAY-01 to RELAY-03, RELAY-05, RELAY-08, the
-  BOOT rules), merging (FLOW-08, LINT-03, the merge gate), pushing (FLOW-16,
-  FLOW-17) or tags and releases (FLOW-17's tag clause, LOOP-07.5, FLOW-20's
-  Pre-releases bullet, the release workflows). P2 fails closed: a doubt is
-  a failure.
+  BOOT rules), merging to a trunk (FLOW-08, LINT-03), pushing (FLOW-16,
+  FLOW-17) or release tags without a suffix (FLOW-17's tag clause,
+  LOOP-07.5, the release workflows). A merge into a program trunk under
+  FLOW-08's merge gate, and a pre-release or final tag FLOW-20 lets the
+  loop create, are the loop's: a change to how it takes them is reserved
+  only when it removes or narrows a point of the merge gate, lets the loop
+  take two merges into one program trunk at once, lets a tag move or be
+  deleted, or meets another clause above; a merge or tag the loop may
+  already take is not one it could not take before, whatever worker or
+  machinery takes it. P2 fails closed: a doubt is a failure.
 - P3: you agree on P1 and P2, point by point.
 
 A pass: add `r<N>, <date>: process test passed at <sha> (FLOW-20)` with each

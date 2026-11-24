@@ -33,28 +33,28 @@ func TestTagNext(t *testing.T) {
 	g := gateFixture(t, design, nil)
 	git(t, g.work, "tag", "v0.6.0", "origin/main")
 	loopMerge(t, g.work, "relay-a", "relay/a.go")
-	tags, why, err := TagNext(g.env, hereRepo)
+	tags, _, why, err := TagNext(g.env, hereRepo)
 	if err != nil || len(tags) != 1 || tags[0] != "v0.7.0-dev.1" {
 		t.Fatalf("TagNext = %v, %q, %v; want v0.7.0-dev.1", tags, why, err)
 	}
 	git(t, g.work, "tag", tags[0], "origin/"+programTrunk)
-	if tags, why, _ := TagNext(g.env, hereRepo); len(tags) != 0 ||
+	if tags, _, why, _ := TagNext(g.env, hereRepo); len(tags) != 0 ||
 		!strings.Contains(why, "is tagged") {
 		t.Fatalf("a tagged head: %v, %q", tags, why)
 	}
 	loopMerge(t, g.work, "relay-b", "relay/b.go")
-	if tags, _, _ := TagNext(g.env, hereRepo); len(tags) != 1 ||
+	if tags, _, _, _ := TagNext(g.env, hereRepo); len(tags) != 1 ||
 		tags[0] != "v0.7.0-dev.2" {
 		t.Fatalf("after a second merge: %v", tags)
 	}
 	g.gh.runs[0].Conclusion = "failure"
-	if tags, why, _ := TagNext(g.env, hereRepo); len(tags) != 0 ||
+	if tags, _, why, _ := TagNext(g.env, hereRepo); len(tags) != 0 ||
 		!strings.Contains(why, "not green") {
 		t.Fatalf("a failed check: %v, %q", tags, why)
 	}
 	g.gh.runs[0].Conclusion = "success"
 	loopMerge(t, g.work, "docs-c", "docs/guide.md")
-	if tags, why, _ := TagNext(g.env, hereRepo); len(tags) != 0 ||
+	if tags, _, why, _ := TagNext(g.env, hereRepo); len(tags) != 0 ||
 		!strings.Contains(why, "no consumable") {
 		t.Fatalf("a docs-only merge: %v, %q", tags, why)
 	}
@@ -87,7 +87,7 @@ func TestTagNextWaitsForTheSpecsWorkflow(t *testing.T) {
 	s := hereState()
 	s.Config.Repositories = append(s.Config.Repositories, queue.RepositoryEntry{
 		Name: specsRepo, Trunk: "main", ProgramTrunk: programTrunk})
-	tags, why, err := TagNext(Env{State: s}, specsRepo)
+	tags, _, why, err := TagNext(Env{State: s}, specsRepo)
 	if err != nil || len(tags) != 0 || !strings.Contains(why, specsTagsItem) {
 		t.Fatalf("TagNext = %v, %q, %v", tags, why, err)
 	}
@@ -140,21 +140,21 @@ func rcFixture(t *testing.T) *gated {
 // phase not merged gets none (FLOW-20, a17 (a)).
 func TestTagNextRC(t *testing.T) {
 	g := rcFixture(t)
-	tags, why, err := TagNextRC(g.env, hereRepo, "demo")
+	tags, _, why, err := TagNextRC(g.env, hereRepo, "demo")
 	if err != nil || len(tags) != 1 || tags[0] != "v0.7.0-rc.1" {
 		t.Fatalf("TagNextRC = %v, %q, %v; want v0.7.0-rc.1", tags, why, err)
 	}
 	git(t, g.work, "tag", "v0.7.0-rc.1", "origin/"+programTrunk)
-	if tags, why, _ := TagNextRC(g.env, hereRepo, "demo"); len(tags) != 0 ||
+	if tags, _, why, _ := TagNextRC(g.env, hereRepo, "demo"); len(tags) != 0 ||
 		!strings.Contains(why, "is tagged") {
 		t.Fatalf("a tagged head: %v, %q", tags, why)
 	}
 	loopMerge(t, g.work, "relay-b", "relay/b.go")
-	if tags, _, _ := TagNextRC(g.env, hereRepo, "demo"); len(tags) != 1 ||
+	if tags, _, _, _ := TagNextRC(g.env, hereRepo, "demo"); len(tags) != 1 ||
 		tags[0] != "v0.7.0-rc.2" {
 		t.Fatalf("after a second merge: %v", tags)
 	}
-	if _, _, err := TagNextRC(g.env, hereRepo, ""); err == nil {
+	if _, _, _, err := TagNextRC(g.env, hereRepo, ""); err == nil {
 		t.Error("an -rc with no item of the last phase was proposed")
 	}
 
@@ -179,7 +179,7 @@ func TestTagNextRC(t *testing.T) {
 	} {
 		g := rcFixture(t)
 		c.change(t, g)
-		tags, why, err := TagNextRC(g.env, hereRepo, "demo")
+		tags, _, why, err := TagNextRC(g.env, hereRepo, "demo")
 		if len(tags) != 0 || (!strings.Contains(why, c.why) &&
 			(err == nil || !strings.Contains(err.Error(), c.why))) {
 			t.Errorf("%s: %v, %q, %v; want none, %q", name, tags, why, err, c.why)
@@ -206,5 +206,41 @@ func TestVersionOrder(t *testing.T) {
 	}
 	if got := nextPre(tags, "relay-claim/", "rc"); got != "relay-claim/v0.2.0-rc.1" {
 		t.Errorf("nextPre rc = %s", got)
+	}
+}
+
+// TestTagNextCountsDueTags: a tag the records hold as due counts as taken,
+// so the next merge's name is -dev.2 while -dev.1 is due, and a head with a
+// pre-release due gets none; once the tag record closes it, the tag in the
+// clone counts as before (FLOW-17).
+func TestTagNextCountsDueTags(t *testing.T) {
+	g := gateFixture(t, design, nil)
+	git(t, g.work, "tag", "v0.6.0", "origin/main")
+	loopMerge(t, g.work, "relay-a", "relay/a.go")
+	tags, head, why, err := TagNext(g.env, hereRepo)
+	if err != nil || len(tags) != 1 || tags[0] != "v0.7.0-dev.1" {
+		t.Fatalf("TagNext = %v, %q, %v; want v0.7.0-dev.1", tags, why, err)
+	}
+	if want := fullHead(t, g.work, "origin/"+programTrunk); head != want {
+		t.Fatalf("head %s, want the program trunk's %s", head, want)
+	}
+	s := g.env.State
+	s.Records = append(s.Records, queue.Record{Kind: "tag-due", Repo: hereRepo,
+		Head: head, Ref: tags[0]})
+	if tags, _, why, _ := TagNext(g.env, hereRepo); len(tags) != 0 ||
+		!strings.Contains(why, "pre-release due") {
+		t.Fatalf("a head with a pre-release due: %v, %q", tags, why)
+	}
+	loopMerge(t, g.work, "relay-b", "relay/b.go")
+	if tags, _, _, _ := TagNext(g.env, hereRepo); len(tags) != 1 ||
+		tags[0] != "v0.7.0-dev.2" {
+		t.Fatalf("while -dev.1 is due: %v", tags)
+	}
+	git(t, g.work, "tag", "v0.7.0-dev.1", head)
+	s.Records = append(s.Records, queue.Record{Kind: "tag", Repo: hereRepo, Head: head,
+		Ref: "v0.7.0-dev.1"})
+	if tags, _, _, _ := TagNext(g.env, hereRepo); len(tags) != 1 ||
+		tags[0] != "v0.7.0-dev.2" {
+		t.Fatalf("after -dev.1 was created: %v", tags)
 	}
 }
