@@ -4,7 +4,7 @@ priority: 2
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/wf-gate-rest.md
 branch: feat/wf-gate-rest
 areas:
@@ -14,6 +14,10 @@ declared: 692681a
 alters_relationships: null
 design_review: required
 source: 'Jeff, 2026-11-23 attended human session: the program sync PR #140 could not pass wf check -sync in the cloud, because check/merge.go reads the PR with gh pr view (GraphQL), which returns 403 in Claude Code cloud sessions; REST gh api repos/<o>/<r>/pulls/<n> works. Every program-trunk merge (sync, f7-merge, f6-merged-<n>) is blocked on it in the cloud. Folded in on Jeff''s word: tools/workflow/cmd/wf/wf, the built binary main has tracked since #130, is removed and ignored, since a local go build overwrites it on any branch (native-loop-fixes'' implement had to restore it).'
+pr:
+  number: 146
+  ci: green
+  head: 6a3ddd8046f1060dc5facd600718fe66216ab9cc
 steps:
   - id: x1-design
     phase: 1
@@ -46,12 +50,19 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - x2-design-review
     lease:
-      claimed_by: cloud/20261124T191409Z
-      expires: 2026-11-24T21:33:55.897349653Z
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -182,3 +193,9 @@ history:
   - at: 2026-11-24T19:33:55Z
     by: cloud/20261124T191409Z
     event: claimed x2-implement until 2026-11-24T21:33:55Z
+  - at: 2026-11-24T20:08:06Z
+    by: cloud/20261124T191409Z
+    event: done x2-implement
+  - at: 2026-11-24T20:08:06Z
+    by: cloud/20261124T191409Z
+    event: entered phase 3 (merge)
