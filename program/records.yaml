@@ -40,3 +40,11 @@
   head: 2de04f3a1805
   ref: '#7'
   note: Jeff merged the program sync PR buildwarden-specs#7 as 2de04f3; the loop's gate (wf check -sync) cannot run in the cloud until wf-gate-rest lands
+- at: 2026-11-24T19:27:47Z
+  by: cloud/20261124T191409Z
+  kind: process-test
+  feature: wf-gate-rest
+  repo: buildwarden/buildwarden
+  head: 65aee5fbf9ec
+  ref: design
+  note: 'process test not passed at 94dea18: P1 shown; P2 doubted (REST merge drops gh pr merge''s client-side BLOCKED refusal; bypass-capable admin token; other program trunks'' protection unchecked; gate reads rulesets only); sent to Jeff''s review (design_review: required, r3)'

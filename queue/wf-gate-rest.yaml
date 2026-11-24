@@ -12,7 +12,7 @@ areas:
   - build
 declared: 94dea18
 alters_relationships: null
-design_review: process-test
+design_review: required
 source: 'Jeff, 2026-11-23 attended human session: the program sync PR #140 could not pass wf check -sync in the cloud, because check/merge.go reads the PR with gh pr view (GraphQL), which returns 403 in Claude Code cloud sessions; REST gh api repos/<o>/<r>/pulls/<n> works. Every program-trunk merge (sync, f7-merge, f6-merged-<n>) is blocked on it in the cloud. Folded in on Jeff''s word: tools/workflow/cmd/wf/wf, the built binary main has tracked since #130, is removed and ignored, since a local go build overwrites it on any branch (native-loop-fixes'' implement had to restore it).'
 steps:
   - id: x1-design
@@ -29,19 +29,20 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: x2-process-test
+  - id: x2-design-review
     phase: 2
-    affinity: cloud
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261124T191409Z
-      expires: 2026-11-24T21:17:11.386160636Z
+      claimed_by: ""
+      expires: null
+    note: 'P2 doubted (FLOW-20): the REST merge (PUT pulls/<n>/merge) drops gh pr merge''s client-side refusal of a BLOCKED PR, so a caller the base branch''s policy lets bypass (the session''s token is an admin) merges where the loop stopped before; the gate''s Required reads rulesets only, and the other program trunks'' protection is unchecked. P1 shown. Design r3 at 65aee5fbf9ec.'
   - id: x2-implement
     phase: 2
     affinity: cloud
     status: pending
     needs:
-      - x2-process-test
+      - x2-design-review
     lease:
       claimed_by: ""
       expires: null
@@ -134,3 +135,6 @@ history:
   - at: 2026-11-24T19:19:41Z
     by: human/jeff
     event: 'assumed question q2 confirmed: (A) the session routes only (Jeff, 2026-11-24, attended); loop-parallel''s ''elsewhere gh pr ready --undo'' branch is dropped'
+  - at: 2026-11-24T19:27:47Z
+    by: cloud/20261124T191409Z
+    event: 'x2-process-test: to the human''s design review (FLOW-19, FLOW-20): P2 doubted (FLOW-20): the REST merge (PUT pulls/<n>/merge) drops gh pr merge''s client-side refusal of a BLOCKED PR, so a caller the base branch''s policy lets bypass (the session''s token is an admin) merges where the loop stopped before; the gate''s Required reads rulesets only, and the other program trunks'' protection is unchecked. P1 shown. Design r3 at 65aee5fbf9ec.'
