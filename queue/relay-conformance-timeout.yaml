@@ -85,15 +85,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261123T232256Z-3
+      expires: 2026-11-24T02:40:35.071487173Z
 budget:
   estimate:
     runs: 1
     steps: 8
   spent:
     runs: 2
-    steps: 10
+    steps: 11
 questions:
   - id: a1
     kind: assumed
@@ -255,3 +255,6 @@ history:
   - at: 2026-11-24T00:40:32Z
     by: cloud/20261123T232256Z-3
     event: 'back to implement: f6-consolidate (FLOW-10): the tier-2 MUST TEST-04 in buildwarden-specs at 34121cc (conformance/launch/relay_test.go TestContainerPID failure cases at :244, :245, :255, :266 run under a 300 ms wall-clock limit, so ''listed, no process'' and ''run exited'' depend on the fake runtime''s start speed) is plan-covered work beyond wording: give every case a one-minute limit, and for the two timeout cases cancel a parent context once the fake''s call count reaches its last answer, then assert the matching message (report reports/relay-conformance-timeout/00026f894c50)'
+  - at: 2026-11-24T00:40:35Z
+    by: cloud/20261123T232256Z-3
+    event: claimed f3-implement-r2 until 2026-11-24T02:40:35Z
