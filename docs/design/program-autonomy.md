@@ -518,6 +518,18 @@ merge, created by the next native run once Q7's setup is in place.
     the Program payoff's tags line. New: Q6 (the allow entry) and Q7 (the
     machines and rulesets). Everything else is as approved at 8739c23.
 
+- r3, 2026-11-24: approved at f0bddeb. Jeff re-reviewed only r2's delta
+  (D3, q1, the FLOW-17 wording, q6 and q7) in the same sitting.
+  - rule change FLOW-17 approved at f0bddeb, superseding its approval at
+    8739c23. FLOW-08, FLOW-13 and FLOW-20 stand approved at 8739c23.
+  - q1 (c): native sessions create due tags.
+  - q6 (a): `Bash(tools/workflow/native/native-tag.sh:*)` is added to
+    `settings.native.json`'s allow list; no deny changes.
+  - q7 (a): windows-desktop lists all nine repositories and creates every
+    tag; the macbook is unchanged. Jeff clones the added repositories.
+  - read at f0bddeb
+  - sitting: 18:13-18:16 UTC, asks: 5
+
 ## Consolidation
 
 ## Rollback notes
