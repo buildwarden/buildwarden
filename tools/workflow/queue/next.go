@@ -373,7 +373,7 @@ func mergeWait(f *Feature) string {
 
 // unattendedHold returns why an unattended worker, any but a human, must not
 // take the item's step yet: an open blocking question (FLOW-07), a spent
-// runaway budget (FLOW-13), or, for a refresh step, a main that main.yaml
+// runaway budget for a step it counts (Budgeted, FLOW-13), or, for a refresh step, a main that main.yaml
 // records red (FLOW-10), which red reports; a refresh is cloud, so only the
 // cloud meets the last. These are not limits; the limits are Guard's, for
 // every worker.
@@ -388,7 +388,7 @@ func (s *State) unattendedHold(f *Feature, st *Step) (why string, red bool) {
 	if q := f.OpenBlocking(); len(q) > 0 {
 		return fmt.Sprintf("blocking question %s", q[0].ID), false
 	}
-	if s.Runaway(f) {
+	if s.Runaway(f) && Budgeted(f, st) {
 		return fmt.Sprintf("runaway budget (%d of %d estimated steps spent; "+
 			"escalate to human, FLOW-13)",
 			f.Budget.Spent.Steps, f.Budget.Estimate.Steps), false
@@ -460,13 +460,11 @@ func (s *State) leaseLength(worker string) time.Duration {
 	return time.Duration(mins) * time.Minute
 }
 
-// Claim leases the step to worker for its lease length (leaseLength) and counts it
-// against the feature's budget. It counts a run too when the claim is the
-// first of its run on the feature (newRun). The first claim of a refresh step
-// is not counted against the item: other items' merges cause it, and the run
-// that takes it counts it in its own budget. A refresh that is released and claimed again
-// counts like any retried step, so one that keeps failing still ends at the
-// runaway check (FLOW-13). A claim that starts the item (Starts) sets it in
+// Claim leases the step to worker for its lease length (leaseLength) and,
+// for a step Budgeted counts, counts it against the feature's budget: a step
+// before the item's Merge phase, not an f6-merged-<n>, and not the first
+// claim of a refresh (FLOW-13). It counts a run when the claim is the first
+// of its run on the feature (newRun). A claim that starts the item (Starts) sets it in
 // progress and logs the start. When that start is a marked feature's past the
 // waiting limit, the history line says so, and Claim returns it for wf claim
 // to print; otherwise it returns "".
@@ -486,7 +484,7 @@ func (s *State) Claim(
 			f.Log(now, worker, "%s", past)
 		}
 	}
-	if !IsRefresh(st) || f.claimedBefore(st) {
+	if Budgeted(f, st) {
 		f.Budget.Spent.Steps++
 	}
 	if f.newRun(worker) {
