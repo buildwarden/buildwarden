@@ -468,17 +468,70 @@ merge, created by the next native run once Q7's setup is in place.
 
 ## Implementation plan
 
-1. `queue`: `Budgeted`, the claim count and runaway holds (FLOW-13), tests.
-2. `queue/next.go`: per-repository loop-merge serialization (FLOW-08), tests.
-3. `check/merge.go`: the recheck under the claim (FLOW-08), tests.
-4. `queue/records.go`, `check/tags.go`, `cmd/wf`: `tag-due` records,
-   `tag-next -due`, `wf tags-due` (FLOW-17, FLOW-20), tests.
-5. `queue/hosts.go` and `tools/workflow/native/`: the gate's `tag` reason,
-   `native-tag.sh`, the prompt line in `native-tick.sh`, Q6's entry in
-   `settings.native.json` (FLOW-17), tests.
-6. `process.md`: the four amendments, as approved.
-7. `.claude/`: `wf-publish.md`, `wf-review.md` P2, the tick's and the
-   native skill (FLOW-14).
+Done in x2-implement-r2, one commit per task, each pushed green:
+
+1. `queue`: `Budgeted(f, st)` and `MergePhase` (`phases.go`); the claim
+   counts `Spent.Steps` only for a budgeted step (`next.go`); `Runaway` and
+   `NeedsReestimate` hold an item only while it has a pending budgeted step
+   (`queue.go`), and `unattendedHold` holds only a budgeted step, so the
+   waiting-on-human count and `QUEUE.md` drop an item whose only pending
+   steps are from Merge on (FLOW-13). Tests: `budget_test.go`, the summary
+   golden (a runaway before Merge listed, the same spend at the merge step
+   not). 5c475ad.
+2. `queue/next.go`, `queue/commit.go`: `mergeBusy` refuses a loop merge
+   step, in `wf next` (its blocked line names the other merge) and in
+   `MayClaim`, while another loop merge step in one of its unmerged
+   repositories holds a live lease (FLOW-08). Test:
+   `TestLoopMergeOneAtATime`. 01ebc5c.
+3. `check/merge.go`: point 4 fetches the program trunk before it reads it,
+   so `wf check -step` under the claim checks the head the merge goes into
+   (FLOW-08). Test: `TestMergeReadyFetchesTheProgramTrunk`. 4c9d5f8.
+4. `queue/records.go`: the kind `tag-due` (repository, `-head`, `-ref`
+   required), the refusal of a second `tag-due` or `tag` for one
+   repository and tag, and `Due`. `check/tags.go`: `TagNext` and
+   `TagNextRC` return the head they checked, count a due tag as taken and
+   name none for a head with a pre-release due. `cmd/wf`: `tag-next -due
+   -worker W` and `tags-due [-machine M]` (FLOW-17). Tests: `TestTagDue`,
+   `TestTagNextCountsDueTags`, `TestTagNextDue`. 5d4f38c.
+5. `queue/hosts.go`: the gate's `tag` reason; `native/native-tag.sh`;
+   `native-tick.sh`'s "Tags due" in the prompt (`tags_due`);
+   `settings.native.json`'s `Bash(tools/workflow/native/native-tag.sh:*)`,
+   denies unchanged (Q6) (FLOW-17). Tests: `TestGateWakesForADueTag`,
+   `TestNativeTag` (a local bare remote), `TestNativeTickTagsDue`,
+   `TestNativeTagRule`, the matcher cases in `TestNativePushRules`.
+   f83c1a2.
+6. `process.md`: the FLOW-08, FLOW-13, FLOW-17 and FLOW-20 amendments, in
+   the approved wording. bfc647f.
+7. `.claude/`: `wf-publish.md` (one merge at a time, at once under the
+   claim; no tag push), `wf-review.md` P2 (the amended reading), the tick's
+   skill (tags made due, never created; the run budget counts only steps
+   before Merge; Moved and Notes lines for due tags) and the native skill
+   (a **Tags** section before the batch; its Never list) (FLOW-14).
+   a9e4bd5.
+
+Departures, both within D3: `wf tags-due` prints a fifth field, the time
+the tag was recorded due, which `native-tag.sh` puts in the tag's message
+(`due at <record time>`) and the tick's **Notes** reads for a tag due over
+a day; and `native-tag.sh` creates a tag of the queue's own repository from
+the checkout itself, as `native-push.sh`'s one-argument form does, since
+the machine has no clone of it under `.dev/checkouts/`.
+
+## State step
+
+What x4-state does on the `workflow` branch after the merge (q7 (a),
+Jeff's edit of `hosts.yaml`):
+
+- `hosts.yaml`: `windows-desktop` lists all nine repositories under
+  `repositories` (buildwarden, relay, ai-workflow, specs and the five
+  drivers), so it creates every due tag; `macbook` unchanged.
+- Check: `dist/wf validate -state .dev/workflow` passes, and `dist/wf
+  native -state .dev/workflow -repo . -machine windows-desktop -check` on
+  the machine once Jeff has cloned the added repositories there.
+
+Outside the repositories, Jeff's setup: those clones on `windows-desktop`;
+each repository's release-tags ruleset lets his account create `-dev.N`,
+`-rc.N` and the program trunk's final tag (Q7); and the program-trunk
+rulesets of Q3.
 
 ## Design review
 
