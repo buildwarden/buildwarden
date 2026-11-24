@@ -27,15 +27,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261124T191409Z
+      expires: 2026-11-24T21:14:18.329231939Z
 budget:
   estimate:
     runs: 1
     steps: 5
   spent:
-    runs: 1
-    steps: 1
+    runs: 2
+    steps: 2
 questions:
   - id: q1
     kind: assumed
@@ -99,3 +99,6 @@ history:
   - at: 2026-11-24T19:14:09Z
     by: human/jeff
     event: 'back to design: Jeff, 2026-11-24 (attended): the loop''s process test takes this review instead of Jeff, now that program-autonomy (#144) narrowed FLOW-20''s reserved reading (a change to how the loop takes program-trunk merges is reserved only when it weakens the gate); set design_review: process-test, design otherwise unchanged'
+  - at: 2026-11-24T19:14:18Z
+    by: cloud/20261124T191409Z
+    event: claimed x1-design-r2 until 2026-11-24T21:14:18Z
