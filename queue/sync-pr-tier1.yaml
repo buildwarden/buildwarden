@@ -25,7 +25,7 @@ steps:
   - id: x2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -44,52 +44,57 @@ budget:
     steps: 4
   spent:
     runs: 1
-    steps: 1
+    steps: 2
 questions:
   - id: q1
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Flagged: departs from FLOW-01''s label-only exemption, which Jeff applied by hand on #140, and relaxes a check on a PR the loop merges (FLOW-20''s reserved rules). How tier1 judges a program sync PR (design Decision 1).'
     options:
       - '(a) as its merge''s push: full diff, every check, -no-design'
       - (b) only the resolution against the clean merge tree
       - '(c) unchanged: Jeff labels each failing sync no-design'
     recommended: (a)
+    answer: (a) as its merge's push (Jeff, 2026-11-24, r1)
   - id: q2
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Flagged: narrows where FLOW-14''s automated check runs. The main''s enforcement comparison on a sync PR (design Decision 3).'
     options:
       - (a) skipped, as on a push
       - (b) run with the sync's second parent (main's commit) as base
       - (c) run as now, failing on any approved main relaxation
     recommended: (a)
+    answer: (a) skipped, as on a push (Jeff, 2026-11-24, r1)
   - id: q3
     kind: assumed
-    status: open
+    status: confirmed
     question: How CI recognizes a sync PR (design Decision 2).
     options:
       - (a) by its shape, through a stateless wf sync-shape sharing SyncHead's code
       - (b) by the head ref name sync/program-* alone
       - (c) inline shell in main.yml
     recommended: (a)
+    answer: as recommended (batch), Jeff, 2026-11-24
   - id: q4
     kind: assumed
-    status: open
+    status: confirmed
     question: A sync resolution that edits a rule, machinery or rule-running workflow path (design Decision 4).
     options:
       - (a) wf sync-program -head refuses it and the sync escalates (a15 (b))
       - (b) CI judges it as any PR, with no escalation
       - (c) allowed under the tier-2 review of the resolution
     recommended: (a)
+    answer: as recommended (batch), Jeff, 2026-11-24
   - id: q5
     kind: assumed
-    status: open
+    status: confirmed
     question: The rule text (design Decision 5).
     options:
       - (a) amend FLOW-01 and FLOW-14 to name the push and sync exemptions
       - (b) leave the wording, as the push exemption has been
     recommended: (a)
+    answer: as recommended (batch), Jeff, 2026-11-24
 history:
   - at: 2026-11-23T22:11:34Z
     by: human/jeff
@@ -112,3 +117,24 @@ history:
   - at: 2026-11-23T23:33:57Z
     by: cloud/20261123T232256Z-2
     event: entered phase 2 (implement)
+  - at: 2026-11-24T19:26:31Z
+    by: human/jeff
+    event: 'assumed question q1 confirmed: (a) as its merge''s push (Jeff, 2026-11-24, r1)'
+  - at: 2026-11-24T19:26:31Z
+    by: human/jeff
+    event: 'assumed question q2 confirmed: (a) skipped, as on a push (Jeff, 2026-11-24, r1)'
+  - at: 2026-11-24T19:26:31Z
+    by: human/jeff
+    event: 'assumed question q3 confirmed: as recommended (batch), Jeff, 2026-11-24'
+  - at: 2026-11-24T19:26:31Z
+    by: human/jeff
+    event: 'assumed question q4 confirmed: as recommended (batch), Jeff, 2026-11-24'
+  - at: 2026-11-24T19:26:31Z
+    by: human/jeff
+    event: 'assumed question q5 confirmed: as recommended (batch), Jeff, 2026-11-24'
+  - at: 2026-11-24T19:26:32Z
+    by: human/jeff
+    event: claimed x2-design-review until 2026-11-24T21:26:32Z
+  - at: 2026-11-24T19:26:32Z
+    by: human/jeff
+    event: done x2-design-review
