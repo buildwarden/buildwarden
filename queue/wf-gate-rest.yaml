@@ -44,7 +44,7 @@ budget:
     steps: 5
   spent:
     runs: 1
-    steps: 8
+    steps: 1
 questions:
   - id: q1
     kind: assumed
@@ -102,3 +102,6 @@ history:
   - at: 2026-11-23T23:30:52Z
     by: cloud/20261123T232256Z
     event: entered phase 2 (implement)
+  - at: 2026-11-24T00:21:22Z
+    by: cloud/20261123T232256Z
+    event: 'spend corrected from 8 steps to 1: the tick''s claim loop re-claimed x1-design 7 more times under the same worker at 23:23:36-56Z before any work ran (wf next re-offers a worker its own leased step); one design step was taken'
