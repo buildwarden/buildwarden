@@ -39,7 +39,7 @@ steps:
   - id: x2-design-review-r2
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -58,7 +58,7 @@ budget:
     steps: 6
   spent:
     runs: 1
-    steps: 3
+    steps: 4
 questions:
   - id: q1
     kind: assumed
@@ -109,22 +109,24 @@ questions:
     answer: as recommended (batch), Jeff, 2026-11-24
   - id: q6
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Flagged: a new permission in settings.native.json is Jeff''s. The allow entry for native-tag.sh, the native session''s one route for creating a due tag (design D3, Q6).'
     options:
       - (a) add "Bash(tools/workflow/native/native-tag.sh:*)" to allow, every deny unchanged (the script is already inside Bash(tools/workflow/*); the entry names the route)
       - (b) rely on the existing Bash(tools/workflow/*) alone, no change to the file
       - '(c) allow Bash(git -C .dev/checkouts/* push origin refs/tags/*) and narrow the deny Bash(git -C * push*): * spans spaces, so it admits --force, deletes and other refs'
     recommended: (a)
+    answer: (a) add Bash(tools/workflow/native/native-tag.sh:*) to settings.native.json allow; no deny change (2026-11-24, r3)
   - id: q7
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Flagged: setup on Jeff''s machines and rulesets, and hosts.yaml is his to edit. Which machines list which repositories, so a due tag has a clone to be created from (neither lists buildwarden-specs or buildwarden-ai-workflow today), and as whom (design D3, Q7).'
     options:
       - (a) windows-desktop (always on) lists all nine repositories, macbook unchanged
       - (b) both machines list all nine (more backlog sweeps as more trunks move)
       - (c) add only buildwarden-specs and buildwarden-ai-workflow, to windows-desktop
     recommended: (a); in each, Jeff clones the added repositories on the machine and each release-tags ruleset lets his account create -dev.N, -rc.N and the final tag
+    answer: (a) windows-desktop lists all nine repositories and creates every tag; macbook unchanged; Jeff clones the added repositories (2026-11-24, r3)
 history:
   - at: 2026-11-24T17:48:45Z
     by: human/jeff
@@ -180,3 +182,15 @@ history:
   - at: 2026-11-24T18:02:51Z
     by: cloud/20261124T174900Z
     event: entered phase 2 (implement)
+  - at: 2026-11-24T18:03:37Z
+    by: human/jeff
+    event: 'assumed question q6 confirmed: (a) add Bash(tools/workflow/native/native-tag.sh:*) to settings.native.json allow; no deny change (2026-11-24, r3)'
+  - at: 2026-11-24T18:03:37Z
+    by: human/jeff
+    event: 'assumed question q7 confirmed: (a) windows-desktop lists all nine repositories and creates every tag; macbook unchanged; Jeff clones the added repositories (2026-11-24, r3)'
+  - at: 2026-11-24T18:03:37Z
+    by: human/jeff
+    event: claimed x2-design-review-r2 until 2026-11-24T20:03:37Z
+  - at: 2026-11-24T18:03:37Z
+    by: human/jeff
+    event: done x2-design-review-r2
