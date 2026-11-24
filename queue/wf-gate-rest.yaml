@@ -34,15 +34,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261124T191409Z
+      expires: 2026-11-24T21:28:16.695031988Z
 budget:
   estimate:
     runs: 1
     steps: 5
   spent:
     runs: 2
-    steps: 3
+    steps: 4
 questions:
   - id: q1
     kind: assumed
@@ -131,3 +131,6 @@ history:
   - at: 2026-11-24T19:28:03Z
     by: human/jeff
     event: 'back to design: Jeff, 2026-11-24, review after the failed process test: the REST merge must keep gh pr merge''s client-side refusal of a BLOCKED PR. The gate''s PR read over REST refuses the merge unless mergeable_state is clean, unstable or has_hooks (read in wf check''s PR view, gate point added; q1 reopened and answered (b)). A bypass-capable caller (the session''s admin token) must never merge where the loop stopped before (program-north-star Decision 9). Everything else in the design stands; q2 (A) answered.'
+  - at: 2026-11-24T19:28:16Z
+    by: cloud/20261124T191409Z
+    event: claimed x1-design-r3 until 2026-11-24T21:28:16Z
