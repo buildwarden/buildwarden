@@ -63,12 +63,13 @@ questions:
     recommended: (A) keep the gate's points as they are, read over REST
   - id: q2
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Flagged: departs from loop-parallel''s earlier decision ("elsewhere gh pr ready --undo"). The draft and ready conversions name only the session''s ccr/convert_to_draft and ccr/ready_for_review routes, since every step that converts a PR is a cloud step (FLOW-04) and native settings deny gh api (design Decision 3). Proceeding with A.'
     options:
       - (A) the session routes only
       - (B) keep gh pr ready / --undo for a non-cloud session
     recommended: (A) the session routes only
+    answer: (A) the session routes only (Jeff, 2026-11-24, attended); loop-parallel's 'elsewhere gh pr ready --undo' branch is dropped
 history:
   - at: 2026-11-23T22:11:34Z
     by: human/jeff
@@ -130,3 +131,6 @@ history:
   - at: 2026-11-24T19:17:11Z
     by: cloud/20261124T191409Z
     event: claimed x2-process-test until 2026-11-24T21:17:11Z
+  - at: 2026-11-24T19:19:41Z
+    by: human/jeff
+    event: 'assumed question q2 confirmed: (A) the session routes only (Jeff, 2026-11-24, attended); loop-parallel''s ''elsewhere gh pr ready --undo'' branch is dropped'
