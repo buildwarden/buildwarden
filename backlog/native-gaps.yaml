@@ -275,6 +275,11 @@ gaps:
       tools/workflow, so the 2026-11-23 Linux pass stands. The Windows half waits on qemu-windows-guest-package,
       which Jeff deferred on 2026-11-23, so this entry cannot close on its own; Jeff can defer it or split off
       the Windows half.
+      2026-11-25 (host:qemu-any/macbook.20261125T124005Z, unattended, main 66e6f670): not rerun. Since
+      c52926df main changed code only in cmd/relay/ingress_fd.go (#143, no TCP TIME-WAIT in the FD
+      ingress), which only the relay's host mode uses (the vz driver, `--mode=host`), not the qemu relay VM;
+      program/componentization (10d1f99e) has no change of its own over main. The 2026-11-23 Linux pass
+      stands; the Windows half still waits on the deferred qemu-windows-guest-package.
     status: open
   - id: hyperv-eval-image-verify-disks
     host: windows-hyperv
@@ -1213,6 +1218,8 @@ gaps:
       feat/workdir-in-context is still 24376c0 (design only), under the FLOW-20 hold (q1).
       2026-11-24 (host:macos-finch/macbook.20261124T124005Z, unattended, main c52926df): not run, nothing
       changed. feat/workdir-in-context is still 24376c0 (design only), under the FLOW-20 hold (q1).
+      2026-11-25 (host:macos-finch/macbook.20261125T124005Z, unattended, main 66e6f670): not run.
+      feat/workdir-in-context is still 24376c04 (design only), waiting on human step f2-answer-q1.
   - id: loop-native-lead-macos-wrapper
     host: macos-vz
     status: open
@@ -1246,6 +1253,11 @@ gaps:
       under launchd after wf gate found work (native/status/macbook.yaml: 2026-11-23T22:07:40Z worked, "claude
       exited 0"). wf next offered no step to any of this machine's hosts (every item blocked on a human step,
       none led), so native-push.sh is still unexercised, and no run with the session remote unset.
+      2026-11-25 (host:macos-vz/macbook.20261125T124005Z, unattended, main 66e6f670): this 12:40Z run started
+      under launchd after wf gate found work; native/status/macbook.yaml still reads 2026-11-23T22:07:40Z
+      worked (an unchanged outcome is not pushed). wf next offered no step to any of this machine's hosts
+      (seven items blocked on human steps or PR merges, none led), so native-push.sh is still unexercised,
+      and no run with the session remote unset.
   - id: loop-native-lead-windows-wrapper
     host: windows-hyperv
     status: open
@@ -1338,6 +1350,9 @@ gaps:
       2026-11-24 (host:macos-finch/macbook.20261124T124005Z, unattended, main c52926df): not run. main has not
       moved, and the fix is design-only (feat/finch-version-starts-vm e6ef4a70, waiting on human step
       f2-design-review). Case 6 is still outside this session's allowlisted forms.
+      2026-11-25 (host:macos-finch/macbook.20261125T124005Z, unattended, main 66e6f670): not run. Since
+      c52926df main changed no driver/container or container-path code (only the relay's host mode, used
+      by vz); feat/finch-version-starts-vm is still e6ef4a70, waiting on human step f2-design-review.
   - id: native-loop-fixes-macbook
     host: macos-any
     status: open
@@ -1370,6 +1385,13 @@ gaps:
       (23:30Z-00:54Z), so this run's wake does not isolate a program-trunk-only move; (3) no .scratch/
       directory and no gone program branch here (local branches: four old feat/fix branches, none a program
       item's). (5) not checkable: this session cannot read ~/.local/bin (ls blocked outside the checkout).
+      2026-11-25 (host:macos-any/macbook.20261125T124005Z, unattended, main 66e6f670): (5) PASSES.
+      ~/.local/bin/cargo is gone (`test -e` false), and under the wrapper's PATH (native-tick.sh:81,
+      ~/.local/bin first) `which -a cargo` finds only /opt/homebrew/opt/rustup/bin/cargo. (1) not observable:
+      this prompt named no leftover or unfinished run. (2) not isolated: since the 2026-11-24T12:40Z run both
+      program/componentization (10d1f99e, 17:33Z) and main (66e6f670, 18:51Z) moved. (3) .scratch/ is empty
+      and no local branch is a program item's. (4) not rerun (passed as found on 2026-11-23; its open FAIL
+      case would edit an owner's clone). Kept open for (1)-(3) and (4)'s Entire-hooks FAIL.
   - id: native-loop-fixes-windows
     host: windows-any
     status: open
