@@ -48,6 +48,8 @@ None.
 - merge buildwarden/buildwarden #142 at `10d1f99`: Jeff merged the program sync PR buildwarden#142 as 10d1f99; the loop's gate (wf check -sync) cannot run in the cloud until wf-gate-rest lands (human/jeff, 2026-11-24)
 - merge buildwarden/buildwarden-specs #7 at `2de04f3`: Jeff merged the program sync PR buildwarden-specs#7 as 2de04f3; the loop's gate (wf check -sync) cannot run in the cloud until wf-gate-rest lands (human/jeff, 2026-11-24)
 - process-test **wf-gate-rest** buildwarden/buildwarden design at `65aee5f`: process test not passed at 94dea18: P1 shown; P2 doubted (REST merge drops gh pr merge's client-side BLOCKED refusal; bypass-capable admin token; other program trunks' protection unchecked; gate reads rulesets only); sent to Jeff's review (design_review: required, r3) (cloud/20261124T191409Z, 2026-11-24)
+- sync buildwarden/buildwarden sync/program-66e6f6708686 at `f64ef35`: sync/program-66e6f6708686 pushed at f64ef354b657: a clean merge (cloud/20261125T105844Z, 2026-11-25)
+- sync buildwarden/buildwarden-specs sync/program-9ccdfd74824e at `558ec07`: sync/program-9ccdfd74824e pushed at 558ec0799917: a clean merge (cloud/20261125T105844Z, 2026-11-25)
 
 ## Active
 

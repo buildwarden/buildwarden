@@ -48,3 +48,17 @@
   head: 65aee5fbf9ec
   ref: design
   note: 'process test not passed at 94dea18: P1 shown; P2 doubted (REST merge drops gh pr merge''s client-side BLOCKED refusal; bypass-capable admin token; other program trunks'' protection unchecked; gate reads rulesets only); sent to Jeff''s review (design_review: required, r3)'
+- at: 2026-11-25T11:04:29Z
+  by: cloud/20261125T105844Z
+  kind: sync
+  repo: buildwarden/buildwarden
+  head: f64ef354b6576572decd28adeb790d0242fb125e
+  ref: sync/program-66e6f6708686
+  note: 'sync/program-66e6f6708686 pushed at f64ef354b657: a clean merge'
+- at: 2026-11-25T11:04:39Z
+  by: cloud/20261125T105844Z
+  kind: sync
+  repo: buildwarden/buildwarden-specs
+  head: 558ec0799917bfd8242fb41b89912b332a280fe6
+  ref: sync/program-9ccdfd74824e
+  note: 'sync/program-9ccdfd74824e pushed at 558ec0799917: a clean merge'
