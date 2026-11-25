@@ -375,3 +375,38 @@ func TestGateSharedHost(t *testing.T) {
 		}
 	}
 }
+
+// TestGateWakesForADueTag: a tag due in a repository the machine lists wakes
+// it with a tag reason, whatever the stamp; a machine that does not list the
+// repository stays idle, and so does every machine once the tag is recorded
+// created (FLOW-17).
+func TestGateWakesForADueTag(t *testing.T) {
+	repo, _ := gitRepo(t)
+	s := nativeState()
+	s.Machines[0].Repositories = []string{"o/a"}
+	s.Machines[1].Repositories = []string{"o/b"}
+	head := strings.Repeat("a", 40)
+	s.Records = []Record{{Kind: "tag-due", Repo: "o/a", Head: head, Ref: "v0.1.0-dev.1"}}
+	mac, _ := s.Machine("mac")
+	win, _ := s.Machine("win")
+	stamp := func(m *Machine) *GateStamp {
+		g, err := s.Gate(m, repo, nil, 7, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &GateStamp{Print: g.Print, At: now}
+	}
+	g, err := s.Gate(mac, repo, stamp(mac), 7, now)
+	if err != nil || !g.Run || !strings.Contains(strings.Join(g.Reasons, "\n"),
+		"tag\to/a\tv0.1.0-dev.1") {
+		t.Fatalf("mac gate = %+v, %v; want the due tag", g, err)
+	}
+	if g, _ := s.Gate(win, repo, stamp(win), 7, now); g.Run {
+		t.Fatalf("win gate ran for a tag in a repository it does not list: %+v", g)
+	}
+	s.Records = append(s.Records, Record{Kind: "tag", Repo: "o/a", Head: head,
+		Ref: "v0.1.0-dev.1"})
+	if g, _ := s.Gate(mac, repo, stamp(mac), 7, now); g.Run {
+		t.Fatalf("mac gate ran for a tag already created: %+v", g)
+	}
+}

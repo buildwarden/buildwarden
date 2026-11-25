@@ -123,6 +123,14 @@ func TestNativePushRules(t *testing.T) {
 		{"Bash(git -C * push*)", "git -C .scratch/x commit -F ../x.msg", false},
 		{"Bash(git push*)", "tools/workflow/native/native-push.sh x", false},
 		{"Bash(git -C * push*)", "tools/workflow/native/native-push.sh x", false},
+		// The tag script is the session's route for a due tag; its own push
+		// form stays denied.
+		{"Bash(tools/workflow/native/native-tag.sh:*)",
+			"tools/workflow/native/native-tag.sh o/r v0.1.0-dev.1", true},
+		{"Bash(git -C * push*)", "tools/workflow/native/native-tag.sh o/r v0.1.0-dev.1",
+			false},
+		{"Bash(git -C * push*)",
+			"git -C .dev/checkouts/o/r push origin refs/tags/v1:refs/tags/v1", true},
 		{"Bash(git status:*)", "git status --short", true},
 		{"Bash(git status:*)", "git statusx", false},
 	} {
