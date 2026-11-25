@@ -1,5 +1,5 @@
 sha: 66e6f670868620fbc422d960583e8dc5c809422e
-ci: pending
+ci: green
 up_to_date: required
 areas:
   sha: 136be787d4a64112c7afe66f28f9046d713f5403
