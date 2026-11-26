@@ -54,15 +54,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261126T193800Z-3
+      expires: 2026-11-26T21:39:19.085328009Z
     note: 'main at 7535e6c: 15 commits since the branch merged it; both change .claude/agents/wf-publish.md, docs/development/process.md, tools/workflow/check/merge.go, tools/workflow/check/merge_test.go'
 budget:
   estimate:
     runs: 1
     steps: 4
   spent:
-    runs: 2
+    runs: 3
     steps: 3
 questions:
   - id: q1
@@ -169,3 +169,6 @@ history:
   - at: 2026-11-26T19:38:49Z
     by: cloud/20261126T193800Z
     event: 'seeded x2-refresh: main at 7535e6c: 15 commits since the branch merged it; both change .claude/agents/wf-publish.md, docs/development/process.md, tools/workflow/check/merge.go, tools/workflow/check/merge_test.go'
+  - at: 2026-11-26T19:39:19Z
+    by: cloud/20261126T193800Z-3
+    event: claimed x2-refresh until 2026-11-26T21:39:19Z
