@@ -496,6 +496,20 @@ and forbids tag pushes (the `f7-merge` bullet and the closing paragraph; the
 `sync` paragraph, where this design's sentence goes, is unchanged); and the
 sync procedure itself is unchanged, so Decision 6 stands as written.
 
+**2026-11-26, refresh (`x2-refresh`, FLOW-10): merged `origin/main` at
+`7535e6c`** (#146, wf-gate-rest). One conflict, in
+`check/merge_test.go`, where both sides added tests; both sets are kept.
+#146 reads the pull request over REST and adds gate point 10
+(`mergeable_state`) to `MergeReady` and `SyncReady`; `SyncShape`,
+`GuardedResolution` and `syncHead` read git only and are untouched by it,
+and CI's `wf sync-shape` step reads no pull request. In `wf-publish.md`
+this design's sentence on `wf sync-program -head`'s refusal sits in the
+`sync` paragraph before #146's point 10 and REST merge commands, which it
+does not change; in `process.md` the FLOW-01 and FLOW-14 amendments and
+FLOW-08's point 10 are in separate rules. Sweep: `make deadcode` reports
+nothing under `tools/workflow/`; no duplication and no `overview.md`
+change, as the merge brings no component flow.
+
 ## Rollback notes
 
 Revert the PR's merge commit on `main`. Nothing on the `workflow` branch
