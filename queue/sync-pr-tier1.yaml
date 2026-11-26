@@ -1,6 +1,6 @@
 feature: sync-pr-tier1
 title: 'Tier 1 judges a program sync PR as it judges a push: FLOW-01 measured only on the sync''s own resolution'
-priority: 2
+priority: 1
 kind: process
 status: in_progress
 round: process
@@ -16,7 +16,7 @@ design_review: required
 source: 'Jeff, 2026-11-23 attended human session: PR #140 (sync/program-168cf9503d4b, main into program/componentization) failed tier1 with a FLOW-01 MUST on driver/layercache_test.go, which came from #139 where FLOW-01 passed under no-design. main.yml skips FLOW-01 on a push since a push spans merged PRs that already passed it, but judges a sync PR''s diff as new work. #140 was labeled no-design on Jeff''s word as the stopgap.'
 pr:
   number: 145
-  ci: green
+  ci: pending
   head: 3caab947073bb58946c1718cdb32d1b0d8f4642a
 steps:
   - id: x1-design
@@ -49,6 +49,14 @@ steps:
     lease:
       claimed_by: ""
       expires: null
+  - id: x2-refresh
+    phase: 2
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'main at 7535e6c: 15 commits since the branch merged it; both change .claude/agents/wf-publish.md, docs/development/process.md, tools/workflow/check/merge.go, tools/workflow/check/merge_test.go'
 budget:
   estimate:
     runs: 1
@@ -158,3 +166,6 @@ history:
   - at: 2026-11-24T20:18:33Z
     by: cloud/20261124T191409Z-2
     event: entered phase 3 (merge)
+  - at: 2026-11-26T19:38:49Z
+    by: cloud/20261126T193800Z
+    event: 'seeded x2-refresh: main at 7535e6c: 15 commits since the branch merged it; both change .claude/agents/wf-publish.md, docs/development/process.md, tools/workflow/check/merge.go, tools/workflow/check/merge_test.go'

@@ -1,6 +1,6 @@
 feature: relay-release-forms-spec
 title: 'Seam 8: specify the relay''s release forms (form names, file roles, manifest and hash) before M6 adopts a release'
-priority: 9
+priority: 8
 program: true
 trunk: program/componentization
 status: in_progress
