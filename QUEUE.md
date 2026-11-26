@@ -67,8 +67,8 @@ None.
 
 | Machine | Host names | Last run | Leads | Holds |
 |---|---|---|---|---|
-| macbook | macos-vz, macos-qemu, macos-finch, qemu-any, container-any, macos-any | worked, 2026-11-23 22:07: claude exited 0 | - | - |
-| windows-desktop | windows-hyperv, container-any, linux-kvm, windows-any | idle, 2026-11-25 05:10: idle: 5 open gaps, nothing moved since 2026-11-24T23:10:18Z | - | - |
+| macbook | macos-vz, macos-qemu, macos-finch, qemu-any, container-any, macos-any | worked, 2026-11-25 12:40 (since 2026-11-23): claude exited 0 | - | - |
+| windows-desktop | windows-hyperv, container-any, linux-kvm, windows-any | idle, 2026-11-26 05:10 (since 2026-11-25): idle: 5 open gaps, nothing moved since 2026-11-24T23:10:18Z | - | - |
 
 ## Relations
 
