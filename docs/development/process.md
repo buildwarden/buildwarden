@@ -521,7 +521,11 @@ head in point 2 is the one the sync step recorded and point 4 also needs
 the head to contain the trunk, and point 5 on its conflict-resolution
 commit when it had one (FLOW-20). The loop merges with a merge commit,
 never a squash or a rebase, pinned to the head it checked, and records
-the merge (FLOW-20). The loop defers a MUST finding
+the merge (FLOW-20). It merges into a program trunk one pull request at
+a time per repository: no loop merge in a repository is taken while
+another holds its claim, and under the claim the loop reads the program
+trunk's head again, runs the gate on it and merges at once. The loop
+defers a MUST finding
 only after one fix round, and never one under GLOBAL-06, a SEC rule,
 RELAY-01 to RELAY-03 or RELAY-05, or that breaks what FLOW-20 says never
 breaks: such a finding returns the item to Design for a change that
@@ -708,10 +712,15 @@ the run: an open (queued or in-progress) item that spends `runaway_factor` times
 its estimated steps escalates to a `human` step (a program item's first
 time, its estimate is raised to its spend so far instead, and recorded; its
 second escalates, FLOW-20), and no unattended run takes
-more of its steps, nor any step of an item with an open blocking question
-(FLOW-07). Every claim counts against the work budget, whichever worker makes
-it, except the first claim of a refresh (FLOW-10); renewing a lease does not
-(FLOW-04). Runs are counted but never trip it. The
+more of its steps before Merge, nor any step of an item with an open
+blocking question (FLOW-07). Only a step that changes the item's
+repositories counts: every claim of a step before the item's Merge phase
+counts against the work budget and the run's, whichever worker makes it,
+except the first claim of a refresh (FLOW-10); renewing a lease does not
+(FLOW-04). From Merge on (a merge or its confirmation, an
+`f6-merged-<n>`, Close and its state step), and the records and digest a
+run writes, nothing counts against either budget, and the runaway check
+holds none of it. Runs are counted but never trip it. The
 loop posts a periodic
 digest (what moved, what is blocked on a human, what is waiting on a native host,
 what open items spent), and notifies when a new blocking question appears. Done
@@ -872,12 +881,17 @@ Opening the PR to its trunk or program trunk needs no confirmation either
 program trunk other than its creation at its trunk's head on the human's
 word, a force-push, rewriting history that is already on the remote,
 deleting a remote branch (FLOW-16), or a tag, except a pre-release tag or
-a program trunk's final tag FLOW-20 lets the loop push, and a release tag
-an attended session pushes on the human's word; no tag is moved or
-deleted. An unattended
-session on a native machine pushes a
-feature branch only through the loop's push script on trunk, which
-pushes one branch of an item in progress, fast-forward only, and the
+a program trunk's final tag FLOW-20 lets the loop create, and a release
+tag an attended session pushes on the human's word; no tag is moved or
+deleted. The loop creates its tags only on a native machine: a cloud
+session records each tag `wf tag-next` names as due, at the commit it
+checked, and pushes none; the next native session on a machine that
+lists the repository creates it, as an annotated tag at that commit,
+through the loop's tag script on trunk, which only creates a due tag that
+the remote does not have, and records it. An unattended session on a
+native machine pushes a feature branch only through the loop's push
+script on trunk, which pushes one branch of an item in progress,
+fast-forward only, a due tag only through the loop's tag script, and the
 queue state only through the loop's state commit; it runs no other
 push.
 
@@ -1049,7 +1063,15 @@ rule stands:
   of the human's, loosens the umbrella test or the process test, relaxes
   or removes a check that stops the loop, or raises a limit, budget or
   permission of the loop's; and any change to a rule about security,
-  merging, pushing or tags. A process item whose change touches none of
+  merging to a trunk, pushing, or release tags without a suffix. A merge
+  into a program trunk under FLOW-08's merge gate, and a pre-release or
+  final tag this rule lets the loop create, are the loop's: a change to
+  how it takes them is reserved only when it removes or narrows a point
+  of the merge gate, lets the loop take two merges into one program trunk
+  at once, lets a tag move or be deleted, or meets another clause above;
+  a merge or tag the loop may already take is not one it could not take
+  before, whatever worker or machinery takes it. A process item whose
+  change touches none of
   them is settled by the *process test* in place of the human's review
   (LOOP-09, FLOW-14): its Program payoff section shows this bar is met;
   it touches none of the reserved rules; and a review session that did

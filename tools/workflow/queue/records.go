@@ -39,12 +39,15 @@ type Record struct {
 
 // RecordKinds are the decisions FLOW-20 lets the loop take, and
 // security-ack, the human's acknowledgment of a security note at a program
-// trunk's merge (FLOW-08's merge gate, point 7). The first ones listed
-// under Decided for you are firstKinds.
+// trunk's merge (FLOW-08's merge gate, point 7). A tag-due record is a tag
+// wf tag-next named, at the commit it checked, which a native session
+// creates and then records as a tag (FLOW-17). The first ones listed under
+// Decided for you are firstKinds.
 var RecordKinds = []string{
 	"merge", "deferred", "protected", "umbrella", "process-test", "security-note",
 	"assumed", "departure", "return", "re-estimate", "sync", "sync-resolution",
-	"filed", "relation", "area-map", "tag", "resumed", "escalation", "security-ack",
+	"filed", "relation", "area-map", "tag", "tag-due", "resumed", "escalation",
+	"security-ack",
 }
 
 // The refs of a security-note record, which FLOW-08's merge gate reads at
@@ -106,6 +109,9 @@ func AppendRecord(dir string, r Record) error {
 	if err != nil {
 		return err
 	}
+	if err := r.unique(rs); err != nil {
+		return err
+	}
 	r.At = r.At.UTC().Truncate(time.Second)
 	rs = append(rs, r)
 	var buf bytes.Buffer
@@ -121,10 +127,29 @@ func AppendRecord(dir string, r Record) error {
 	return os.WriteFile(p, buf.Bytes(), 0o644)
 }
 
+// unique refuses a second tag-due or tag record for one repository and tag:
+// a tag is named due once and created once (FLOW-17).
+func (r Record) unique(rs []Record) error {
+	if (r.Kind != "tag" && r.Kind != "tag-due") || r.Ref == "" {
+		return nil
+	}
+	if slices.ContainsFunc(rs, func(o Record) bool {
+		return o.Kind == r.Kind && o.Repo == r.Repo && o.Ref == r.Ref
+	}) {
+		return fmt.Errorf("a %s record for %s %s is already recorded (FLOW-17)",
+			r.Kind, r.Repo, r.Ref)
+	}
+	return nil
+}
+
 // refValid checks the ref of the kinds a gate reads it on: a security-note's
-// (merge gate point 7) and an area-map's (wf commit).
+// (merge gate point 7), an area-map's (wf commit) and a tag-due's, which a
+// native session creates (wf tags-due).
 func (r Record) refValid() error {
 	switch {
+	case r.Kind == "tag-due" && (r.Repo == "" || r.Ref == "" || len(r.Head) < 7):
+		return errors.New("a tag-due record names the repository, the tag (-ref) and " +
+			"the commit wf tag-next checked (-head)")
 	case r.Kind == "security-note" && r.Ref != SecurityNoteDesign &&
 		r.Ref != SecurityNoteDiff:
 		return fmt.Errorf("a security-note record says what was read: -ref %s (U4 or "+
@@ -139,6 +164,24 @@ func (r Record) refValid() error {
 			AreaMapEdges)
 	}
 	return nil
+}
+
+// Due returns the tags due in repo, or in every repository when repo is "":
+// each tag-due record with no tag record for the same repository and ref, in
+// the order recorded (FLOW-17).
+func Due(rs []Record, repo string) []Record {
+	var out []Record
+	for _, r := range rs {
+		if r.Kind != "tag-due" || (repo != "" && r.Repo != repo) {
+			continue
+		}
+		if !slices.ContainsFunc(rs, func(o Record) bool {
+			return o.Kind == "tag" && o.Repo == r.Repo && o.Ref == r.Ref
+		}) {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // DecidedForYou orders records for the digest's and QUEUE.md's Decided for

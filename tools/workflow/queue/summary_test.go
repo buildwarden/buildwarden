@@ -40,6 +40,9 @@ func summaryState() *State {
 		{ID: "f6-provision-windows-hyperv", Phase: 6, Affinity: "human",
 			Status: "pending"}}
 	review.History = ev(0)
+	// A runaway before Merge waits on the human; the same spend at the merge
+	// step does not (FLOW-13).
+	review.Budget = Budget{Estimate: Count{Steps: 5}, Spent: Count{Steps: 11}}
 
 	merging := feature("merging", 3, "in_progress")
 	merging.Phase, merging.PR = 7, &PR{Number: 42, CI: "green"}

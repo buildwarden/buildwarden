@@ -27,47 +27,62 @@ const harness = "conformance"
 
 var releaseRe = regexp.MustCompile(`^v(\d+)\.(\d+)\.(\d+)$`)
 
-// TagNext returns the pre-release tags the loop may push on repo's program
-// trunk head (FLOW-20, Decision 15): vX.Y.Z-dev.N, where X.Y.Z is the next
-// minor after the latest release without a suffix (v0.1.0 when there is
-// none) and N counts from 1; in the specifications repository one
-// <directory>/vX.Y.Z-dev.N per specification directory the last merge
-// changed, the harness first. It returns none, with why, when the last
-// merge changed no consumable (a path outside docs/ and Markdown files), the
-// head already carries a pre-release, the head's checks are not green, or
-// the repository is the specifications one and specs-prerelease-tags is not
-// done.
-func TagNext(env Env, repo string) (tags []string, why string, err error) {
+// TagNext returns the pre-release tags the loop may create on repo's
+// program trunk head, and that head (FLOW-20, Decision 15): vX.Y.Z-dev.N,
+// where X.Y.Z is the next minor after the latest release without a suffix
+// (v0.1.0 when there is none) and N counts from 1; in the specifications
+// repository one <directory>/vX.Y.Z-dev.N per specification directory the
+// last merge changed, the harness first. A tag the records hold as due
+// counts as taken (FLOW-17). It returns none, with why, when the last merge
+// changed no consumable (a path outside docs/ and Markdown files), the head
+// already carries a pre-release or has one due, the head's checks are not
+// green, or the repository is the specifications one and
+// specs-prerelease-tags is not done.
+func TagNext(env Env, repo string) (tags []string, head, why string, err error) {
 	c, pt, head, why, err := programHead(env, repo)
 	if c == nil {
-		return nil, why, err
+		return nil, "", why, err
 	}
 	changed, err := c.mergeChanges(head)
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 	dirs := consumables(repo, changed, func(dir string) bool {
 		_, err := c.git("cat-file", "-e", head+":"+dir+"/go.mod")
 		return err == nil
 	})
 	if len(dirs) == 0 {
-		return nil, "the last merge on " + pt + " changed no consumable", nil
+		return nil, "", "the last merge on " + pt + " changed no consumable", nil
 	}
 	if why := c.headGreen(pt, head); why != "" {
-		return nil, why, nil
+		return nil, "", why, nil
 	}
-	all, err := c.git("tag", "-l")
+	all, err := c.taken(repo)
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 	for _, d := range dirs {
-		tags = append(tags, nextPre(strings.Fields(all), d, "dev"))
+		tags = append(tags, nextPre(all, d, "dev"))
 	}
-	return tags, "", nil
+	return tags, head, "", nil
 }
 
-// TagNextRC returns the release candidates the loop may push on repo's
-// program trunk head (FLOW-20, a17 (a)): vX.Y.Z-rc.N, X.Y.Z as for -dev and N
+// taken are the tags of repo's clone and the tags the records hold as due
+// there: a due tag is taken, so no later name repeats it (FLOW-17).
+func (c *checker) taken(repo string) ([]string, error) {
+	all, err := c.git("tag", "-l")
+	if err != nil {
+		return nil, err
+	}
+	tags := strings.Fields(all)
+	for _, r := range queue.Due(c.state().Records, repo) {
+		tags = append(tags, r.Ref)
+	}
+	return tags, nil
+}
+
+// TagNextRC returns the release candidates the loop may create on repo's
+// program trunk head, and that head (FLOW-20, a17 (a)): vX.Y.Z-rc.N, X.Y.Z as for -dev and N
 // counting from 1, once the component's last phase has merged there and its
 // CI and conformance suites pass at the latest pre-releases of what it
 // consumes. feature names the program item of the component's last phase in
@@ -78,40 +93,43 @@ func TagNext(env Env, repo string) (tags []string, why string, err error) {
 // pinned at that repository's latest tag (a pre-release included), read in
 // its clone. In the specifications repository it is one
 // <directory>/vX.Y.Z-rc.N per directory with a -dev tag of its next
-// version, the harness first; until specs-prerelease-tags is done, none.
-func TagNextRC(env Env, repo, feature string) (tags []string, why string, err error) {
+// version, the harness first; until specs-prerelease-tags is done, none. A
+// tag the records hold as due counts as taken, as for TagNext; a pin is read
+// against the tags that exist.
+func TagNextRC(env Env, repo, feature string) (tags []string, head, why string,
+	err error) {
 	f, err := lastPhase(env.State, repo, feature)
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 	c, pt, head, why, err := programHead(env, repo)
 	if c == nil {
-		return nil, why, err
+		return nil, "", why, err
 	}
 	if why, err := lastPhaseMerged(c, repo, f, head); why != "" || err != nil {
-		return nil, why, err
+		return nil, "", why, err
 	}
 	if why := c.headGreen(pt, head); why != "" {
-		return nil, why, nil
+		return nil, "", why, nil
 	}
 	if why, err := pinsLatest(c, repo, head); why != "" || err != nil {
-		return nil, why, err
+		return nil, "", why, err
 	}
-	all, err := c.git("tag", "-l")
+	all, err := c.taken(repo)
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 	dirs := []string{""}
 	if repo == specsRepo {
-		dirs = devDirs(strings.Fields(all))
+		dirs = devDirs(all)
 		if len(dirs) == 0 {
-			return nil, "no specification has a -dev tag of its next version", nil
+			return nil, "", "no specification has a -dev tag of its next version", nil
 		}
 	}
 	for _, d := range dirs {
-		tags = append(tags, nextPre(strings.Fields(all), d, "rc"))
+		tags = append(tags, nextPre(all, d, "rc"))
 	}
-	return tags, "", nil
+	return tags, head, "", nil
 }
 
 // programHead is the checker on repo's program trunk and its head; a nil
@@ -142,6 +160,13 @@ func programHead(env Env, repo string) (c *checker, pt, head, why string, err er
 		strings.Contains(at, "-rc.") {
 		return nil, "", "", "the program trunk's head " + short(head) + " is tagged: " +
 			at, nil
+	}
+	for _, r := range queue.Due(s.Records, repo) {
+		if r.Head == head && (strings.Contains(r.Ref, "-dev.") ||
+			strings.Contains(r.Ref, "-rc.")) {
+			return nil, "", "", "the program trunk's head " + short(head) +
+				" has a pre-release due: " + r.Ref, nil
+		}
 	}
 	return c, pt, head, "", nil
 }
