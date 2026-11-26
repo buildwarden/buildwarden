@@ -69,3 +69,10 @@
   head: e9a9073d3702
   ref: '#147'
   note: 'Jeff merged the program sync PR #147 (main 66e6f67 into program/componentization) as e9a9073; the loop''s gate could not run in the cloud until wf-gate-rest (#146) lands'
+- at: 2026-11-26T19:37:17Z
+  by: human/jeff
+  kind: merge
+  repo: buildwarden/buildwarden-specs
+  head: 286ca6e742e6
+  ref: '#9'
+  note: Jeff merged the program sync PR buildwarden-specs#9 (main 9ccdfd7 into program/componentization) as 286ca6e; the loop's gate could not run in the cloud until wf-gate-rest (#146) lands
