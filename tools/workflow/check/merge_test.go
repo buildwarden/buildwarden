@@ -8,20 +8,38 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/buildwarden/buildwarden/tools/workflow/queue"
 )
 
 const programTrunk = "program/componentization"
 
-// fakeGitHub is what the gate reads from GitHub in the tests.
+// fakeGitHub is what the gate reads from GitHub in the tests. states, when
+// set, are the mergeable_state values its reads of the PR return in turn, the
+// last one repeated; moved, when set, is the head every read after the first
+// returns. reads counts the reads of the PR.
 type fakeGitHub struct {
 	view     PRView
 	runs     []CheckRun
 	required []string
+	states   []string
+	moved    string
+	reads    int
 }
 
-func (g *fakeGitHub) PR(string, int) (PRView, error)               { return g.view, nil }
+func (g *fakeGitHub) PR(string, int) (PRView, error) {
+	v := g.view
+	if len(g.states) > 0 {
+		v.Mergeable = g.states[min(g.reads, len(g.states)-1)]
+	}
+	if g.moved != "" && g.reads > 0 {
+		v.Head = g.moved
+	}
+	g.reads++
+	return v, nil
+}
+
 func (g *fakeGitHub) CheckRuns(string, string) ([]CheckRun, error) { return g.runs, nil }
 func (g *fakeGitHub) Required(string, string) ([]string, error)    { return g.required, nil }
 
@@ -53,7 +71,8 @@ func gateFixture(t *testing.T, designText string, edit func(work string)) *gated
 	s.Config.Repositories[0].ProgramTrunk = programTrunk
 	wf := t.TempDir()
 	report(t, wf, head, nil)
-	gh := &fakeGitHub{view: PRView{Base: programTrunk, Head: head, Branch: "feat/demo"},
+	gh := &fakeGitHub{view: PRView{Base: programTrunk, Head: head, Branch: "feat/demo",
+		Mergeable: "clean"},
 		runs: []CheckRun{{"ci-ok", "completed", "success"},
 			{"sessions-private", "completed", "success"},
 			{"push-only", "completed", "skipped"}},
@@ -383,7 +402,7 @@ func syncFixture(t *testing.T, conflict bool) (Env, *fakeGitHub, string) {
 	git(t, w, "push", "-q", "origin", branch)
 	git(t, w, "fetch", "-q", "origin")
 	head := fullHead(t, w, branch)
-	g.gh.view = PRView{Base: programTrunk, Head: head, Branch: branch}
+	g.gh.view = PRView{Base: programTrunk, Head: head, Branch: branch, Mergeable: "clean"}
 	recordSync(t, g.env, branch, head)
 	return g.env, g.gh, mainSHA
 }
@@ -681,4 +700,91 @@ func TestSyncShapeRefuses(t *testing.T) {
 		t.Errorf("GuardedResolution of a repository that has not adopted: %q, %v", got,
 			err)
 	}
+}
+
+// mergeableCases are point 10's cases: the mergeable_state values GitHub
+// returns in turn, whether a later read returns another head, whether the
+// gate passes, what its message names, and how many reads it takes.
+var mergeableCases = map[string]struct {
+	states []string
+	moved  bool
+	pass   bool
+	names  string
+	reads  int
+}{
+	"clean":     {[]string{"clean"}, false, true, "clean", 1},
+	"unstable":  {[]string{"unstable"}, false, true, "unstable", 1},
+	"has_hooks": {[]string{"has_hooks"}, false, true, "has_hooks", 1},
+	// The bypass case: GitHub reports blocked to any caller, one that could
+	// bypass the branch's protection too, and the gate refuses it.
+	"blocked":               {[]string{"blocked"}, false, false, "blocked", 1},
+	"dirty":                 {[]string{"dirty"}, false, false, "dirty", 1},
+	"behind":                {[]string{"behind"}, false, false, "behind", 1},
+	"draft":                 {[]string{"draft"}, false, false, "draft", 1},
+	"unknown, every read":   {[]string{"unknown"}, false, false, "unknown after 5 reads", 5},
+	"unknown, then clean":   {[]string{"unknown", "clean"}, false, true, "clean", 2},
+	"unknown, then blocked": {[]string{"unknown", "blocked"}, false, false, "blocked", 2},
+	"unknown, then a moved head": {[]string{"unknown", "clean"}, true, false,
+		"head moved", 2},
+}
+
+// checkMergeable runs gate on each of point 10's cases and checks the
+// point's verdict, its message and the number of reads of the PR.
+func checkMergeable(t *testing.T, point string,
+	gate func(t *testing.T) (*fakeGitHub, func() []Result)) {
+	t.Helper()
+	defer func(w time.Duration) { mergeableWait = w }(mergeableWait)
+	mergeableWait = 0
+	for name, tc := range mergeableCases {
+		t.Run(name, func(t *testing.T) {
+			gh, run := gate(t)
+			gh.states = tc.states
+			if tc.moved {
+				gh.moved = strings.Repeat("d", 40)
+			}
+			gh.reads = 0
+			rs := run()
+			var got *Result
+			for i := range rs {
+				if strings.HasPrefix(rs[i].Name, point) {
+					got = &rs[i]
+				}
+			}
+			switch {
+			case got == nil:
+				t.Fatalf("no %s in %v", point, rs)
+			case got.OK != tc.pass:
+				t.Fatalf("%s passed %v, want %v: %s", point, got.OK, tc.pass,
+					got.Info)
+			case !strings.Contains(got.Info, tc.names):
+				t.Fatalf("%s says %q, want it to name %q", point, got.Info,
+					tc.names)
+			case gh.reads != tc.reads:
+				t.Fatalf("%d reads of the PR, want %d", gh.reads, tc.reads)
+			}
+			if tc.pass != OK(rs) {
+				t.Fatalf("the gate passed %v, want %v: %s", OK(rs), tc.pass,
+					failures(rs))
+			}
+		})
+	}
+}
+
+// TestMergeReadyMergeable: point 10 passes the merge gate only on clean,
+// unstable or has_hooks, re-reads an unknown state up to 5 reads, and never
+// passes on unknown or a moved head (FLOW-08).
+func TestMergeReadyMergeable(t *testing.T) {
+	checkMergeable(t, "merge gate 10", func(t *testing.T) (*fakeGitHub, func() []Result) {
+		g := gateFixture(t, design, nil)
+		return g.gh, func() []Result { return MergeReady(g.env, g.f, hereRepo) }
+	})
+}
+
+// TestSyncReadyMergeable: the same point 10 in the sync gate (FLOW-08,
+// FLOW-20).
+func TestSyncReadyMergeable(t *testing.T) {
+	checkMergeable(t, "sync gate 10", func(t *testing.T) (*fakeGitHub, func() []Result) {
+		env, gh, _ := syncFixture(t, false)
+		return gh, func() []Result { return SyncReady(env, hereRepo, 7) }
+	})
 }

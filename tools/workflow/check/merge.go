@@ -12,13 +12,15 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/buildwarden/buildwarden/tools/workflow/queue"
 )
 
-// GitHub is what the merge gate reads from GitHub: a pull request's base and
-// head, the check runs on a commit, and the checks a branch's ruleset
-// requires. Env.GitHub nil reads them with the gh command.
+// GitHub is what the merge gate reads from GitHub: a pull request's base,
+// head and mergeability, the check runs on a commit, and the checks a
+// branch's ruleset requires. Env.GitHub nil reads them with the gh command,
+// each over REST, because GraphQL is refused in Claude Code sessions.
 type GitHub interface {
 	PR(repo string, number int) (PRView, error)
 	CheckRuns(repo, sha string) ([]CheckRun, error)
@@ -26,9 +28,10 @@ type GitHub interface {
 }
 
 // PRView is a pull request as GitHub has it: its base branch, its head
-// commit and its head branch.
+// commit, its head branch, and its mergeable_state, "unknown" while GitHub
+// has not computed it.
 type PRView struct {
-	Base, Head, Branch string
+	Base, Head, Branch, Mergeable string
 }
 
 // CheckRun is one check run on a commit.
@@ -36,11 +39,18 @@ type CheckRun struct {
 	Name, Status, Conclusion string
 }
 
-// ghCLI reads GitHub with the gh command.
-type ghCLI struct{}
+// ghCLI reads GitHub with the gh command. command, nil for the real gh, is
+// how the tests inject its output.
+type ghCLI struct {
+	command func(name string, args ...string) *exec.Cmd
+}
 
-func (ghCLI) run(args ...string) (string, error) {
-	out, err := exec.Command("gh", args...).Output()
+func (g ghCLI) run(args ...string) (string, error) {
+	command := g.command
+	if command == nil {
+		command = exec.Command
+	}
+	out, err := command("gh", args...).Output()
 	if err != nil {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {
@@ -53,17 +63,17 @@ func (ghCLI) run(args ...string) (string, error) {
 }
 
 func (g ghCLI) PR(repo string, number int) (PRView, error) {
-	out, err := g.run("pr", "view", strconv.Itoa(number), "-R", repo, "--json",
-		"baseRefName,headRefOid,headRefName", "--jq",
-		`.baseRefName + " " + .headRefOid + " " + .headRefName`)
+	path := "repos/" + repo + "/pulls/" + strconv.Itoa(number)
+	out, err := g.run("api", path, "--jq", `.base.ref + " " + .head.sha + " " + `+
+		`.head.ref + " " + (.mergeable_state // "unknown")`)
 	if err != nil {
 		return PRView{}, err
 	}
 	f := strings.Fields(out)
-	if len(f) != 3 {
-		return PRView{}, fmt.Errorf("gh pr view %d -R %s: %q", number, repo, out)
+	if len(f) != 4 {
+		return PRView{}, fmt.Errorf("gh api %s: %q", path, out)
 	}
-	return PRView{Base: f[0], Head: f[1], Branch: f[2]}, nil
+	return PRView{Base: f[0], Head: f[1], Branch: f[2], Mergeable: f[3]}, nil
 }
 
 func (g ghCLI) CheckRuns(repo, sha string) ([]CheckRun, error) {
@@ -104,6 +114,18 @@ func (e Env) github() GitHub {
 	return ghCLI{}
 }
 
+// mergeableReads and mergeableWait bound point 10's wait while GitHub
+// computes a pull request's mergeability: at most this many reads in all,
+// this far apart (Q3 of the wf-gate-rest design). A variable so the tests
+// need not wait.
+const mergeableReads = 5
+
+var mergeableWait = 2 * time.Second
+
+// mergeableStates are the mergeable_state values in which gh pr merge
+// without --admin merges; any other, unknown included, refuses the merge.
+var mergeableStates = []string{"clean", "unstable", "has_hooks"}
+
 // protectedRe matches the rules a tier-2 MUST finding is never deferred on
 // and never merged over (Decision 10 of the program-north-star design):
 // GLOBAL-06, the SEC rules, RELAY-01 to RELAY-03 and RELAY-05, and FLOW-20,
@@ -115,9 +137,10 @@ var protectedRe = regexp.MustCompile(`^(GLOBAL-06|SEC-[0-9]+|RELAY-0[1235]|FLOW-
 // MergeReady is the merge gate of a pull request into a program trunk
 // (FLOW-08, FLOW-20): it checks the item's pull request in repo against
 // TrunkFor, and each failure names its point. The loop merges only while
-// every point holds, on the head point 2 read, with --match-head-commit, at
+// every point holds, on the head point 2 read, with the merge's sha, at
 // once after the gate passes under its claim: point 4 fetches the program
-// trunk and reads its head as origin has it then.
+// trunk and reads its head as origin has it then, and point 10 reads
+// GitHub's mergeable_state.
 func MergeReady(env Env, f *queue.Feature, repo string) []Result {
 	c := newChecker(env, f)
 	if !c.ready() {
@@ -144,6 +167,8 @@ func MergeReady(env Env, f *queue.Feature, repo string) []Result {
 	c.gateSecurity(view.Head)
 	c.gateMergedFirst()
 	c.ruleClearance()
+	c.gateMergeable("merge gate 10: GitHub reports the PR mergeable (FLOW-08)",
+		c.pr().Number, view)
 	c.at = c.home
 	return c.out
 }
@@ -252,6 +277,39 @@ func (c *checker) gateHead() (PRView, bool) {
 		"PR head %s, pr.head %s, origin/%s %s", short(view.Head), orNone(pr.Head),
 		c.f.Branch, orNone(short(remote)))
 	return view, base && head
+}
+
+// gateMergeable checks point 10: GitHub reports the pull request mergeable
+// by its base branch's protection for any caller (FLOW-08). The REST merge
+// does not refuse a pull request its caller could merge only by bypassing
+// that protection, as gh pr merge without --admin did on the client, so
+// this point is that refusal. While the state is unknown it reads the pull
+// request again, up to mergeableReads reads counting view's, and never
+// passes on unknown or on a head other than view's.
+func (c *checker) gateMergeable(name string, number int, view PRView) {
+	state := view.Mergeable
+	reads := 1
+	for ; state == "unknown" && reads < mergeableReads; reads++ {
+		time.Sleep(mergeableWait)
+		again, err := c.env.github().PR(c.at.name, number)
+		if err != nil {
+			c.add(name, false, "%v", err)
+			return
+		}
+		if again.Head != view.Head {
+			c.add(name, false, "head moved: read %s, then %s", short(view.Head),
+				short(again.Head))
+			return
+		}
+		state = again.Mergeable
+	}
+	if state == "unknown" {
+		c.add(name, false, "mergeable_state unknown after %d reads: GitHub has not "+
+			"computed mergeability", reads)
+		return
+	}
+	c.add(name, slices.Contains(mergeableStates, state), "mergeable_state %s",
+		orNone(state))
 }
 
 // passed are the conclusions a check run may end with for the gate.
@@ -876,7 +934,8 @@ func ancestorAt(dir, a, b string) (bool, error) {
 // required ones passed; the head contains both the trunk's and the program
 // trunk's heads; and, when the merge's tree is not git's clean merge (a
 // conflict resolution), the tier-2 report of the head, under SyncReportDir,
-// has no open MUST finding (point 5, read as the merge gate reads it).
+// has no open MUST finding (point 5, read as the merge gate reads it); and
+// GitHub reports the pull request mergeable (point 10).
 func SyncReady(env Env, repo string, number int) []Result {
 	f := &queue.Feature{Repos: []string{repo}}
 	c := newChecker(env, f)
@@ -903,6 +962,8 @@ func SyncReady(env Env, repo string, number int) []Result {
 	if !clean {
 		c.syncReport(view.Head)
 	}
+	c.gateMergeable("sync gate 10: GitHub reports the PR mergeable (FLOW-08, FLOW-20)",
+		number, view)
 	return c.out
 }
 

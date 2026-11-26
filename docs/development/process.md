@@ -519,10 +519,15 @@ head:
    accepted; otherwise the human acknowledges its security note before
    the merge;
 8. each pull request its design names to merge first has merged;
-9. the rule-change clearance passes.
+9. the rule-change clearance passes;
+10. GitHub reports the pull request mergeable by its base branch's
+    protection for any caller, read before the merge (`mergeable_state`
+    `clean`, `unstable` or `has_hooks`), never while it is still being
+    computed.
 
 The *program sync* is a pull request whose head merges the trunk into
-the program trunk. The loop merges it once points 1 to 4 pass, where the
+the program trunk. The loop merges it once points 1 to 4 and 10 pass,
+where the
 head in point 2 is the one the sync step recorded and point 4 also needs
 the head to contain the trunk, and point 5 on its conflict-resolution
 commit when it had one (FLOW-20). The loop merges with a merge commit,

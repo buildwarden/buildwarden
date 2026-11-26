@@ -46,10 +46,12 @@ remote-tracking ref; run `make enforcement TIER1_BASE=origin/<trunk>` and
 - `f6-open-pr`: set the design's `status: archived` and fill its Archive
   summary (FLOW-12): what was built, decisions taken and rejected, and what a
   future design touching its `concepts` needs to know. Commit, push, and open
-  the PR to the item's trunk without asking (FLOW-08, `gh pr create --base
-  <trunk>`), and one in each repository
-  whose branch has commits beyond its trunk (`gh pr create -R
-  <owner>/<name>`), recorded in that work entry's `pr`; each body lists the
+  the PR to the item's trunk without asking (FLOW-08, `gh api
+  repos/<owner>/<name>/pulls -f title=<title> -f head=<branch> -f
+  base=<trunk> -F body=@<body file> --jq .number`, the body file written
+  beside the checkout), and one in each repository
+  whose branch has commits beyond its trunk (the same call, that
+  repository in its path), recorded in that work entry's `pr`; each body lists the
   tier-2 MUST findings in its repository and the item's other pull
   requests (FLOW-08). A work entry marked `first` is listed ready like any
   other; the tick's confirmation of its merge completes `f6-merged-<n>`.
@@ -63,7 +65,8 @@ remote-tracking ref; run `make enforcement TIER1_BASE=origin/<trunk>` and
   section lists each queue item that `follows` this one, as "<slug> (follows <feature>)", or says
   none (FLOW-09). Record `pr.number` in the queue file. When the queue
   already records a PR (the item was sent back and is published again),
-  push to it and mark it ready (`gh pr ready`); open no second one. Then repair CI:
+  push to it and mark it ready (`gh api -X POST
+  repos/<owner>/<name>/pulls/<n>/ccr/ready_for_review`); open no second one. Then repair CI:
   at most three attempts per distinct failure, then add a `human` step and
   stop (FLOW-11), for a program item too: its escalation, as FLOW-11 has it. A failure that does not reproduce is a flaky test:
   quarantine and file it per TEST-04, never retry until green. Set `pr.ci:
@@ -85,8 +88,8 @@ remote-tracking ref; run `make enforcement TIER1_BASE=origin/<trunk>` and
   file the fix as the item's follow-up (FLOW-09) unless `main.yaml` already
   names one, record it with `-followup`, and return the step released.
   Work beyond conflict fixes and wording goes back as in `f6-consolidate`;
-  before returning, convert the PR to a draft (`gh pr ready --undo`, or the
-  session's draft route), which keeps it from being taken as ready
+  before returning, convert the PR to a draft (`gh api -X POST
+  repos/<owner>/<name>/pulls/<n>/ccr/convert_to_draft`), which keeps it from being taken as ready
   (FLOW-10). Before the push, with a PR recorded: check that the PR is still
   open and unmerged (`gh api repos/<repo>/pulls/<n>`) and that
   `origin/<branch>` is still the commit you merged onto. If it merged or
@@ -104,12 +107,14 @@ remote-tracking ref; run `make enforcement TIER1_BASE=origin/<trunk>` and
   repository. Under the claim, merge at once after the gate passes, pinned
   to the head it checked; `wf check -step` fetches the program trunk and
   runs point 4 against its head as origin has it then, so take nothing else
-  between that check and `gh pr merge`, and never start a second merge in
+  between that check and the merge's `PUT`, and never start a second merge in
   that repository while this one is open. For each work entry the step covers (at `f7-merge` each one not
   yet merged, in turn; at `f6-merged-<n>` that entry's), run `dist/wf check
   -state <workflow checkout> -repo <code checkout> -checkouts .dev/checkouts
-  -feature F -step S -repository <owner>/<name>`; on a pass, `gh pr merge
-  <n> --merge --match-head-commit <pr.head> -R <owner>/<name>`, then `git
+  -feature F -step S -repository <owner>/<name>`; only on a pass, point 10
+  included, and never on a failed or `unknown` point 10, `gh api -X PUT
+  repos/<owner>/<name>/pulls/<n>/merge -f merge_method=merge -f
+  sha=<pr.head>`, then `git
   fetch origin <program trunk>` in that repository's checkout (never
   naming the branch, which GitHub deleted on the merge: a fetch of a
   missing ref fails whole), so the merge proof reads the merged program
@@ -138,8 +143,9 @@ remote-tracking ref; run `make enforcement TIER1_BASE=origin/<trunk>` and
   report path when the merge resolved a conflict), then push the branch and open its PR to the
   program trunk. A clean merge: once `dist/wf check -state <workflow
   checkout> -repo <code checkout> -checkouts .dev/checkouts -sync
-  -repository R -pr N` passes, merge it with `gh pr merge N --merge
-  --match-head-commit <head> -R R` and `git fetch origin <program trunk>`.
+  -repository R -pr N` passes, point 10 included (never on a failed or
+  `unknown` point 10), merge it with `gh api -X PUT repos/R/pulls/N/merge
+  -f merge_method=merge -f sha=<head>` and `git fetch origin <program trunk>`.
   A resolved conflict: return `review` with the head and the report path
   `wf sync-program` printed (`reports/sync/<head12>.json`); the tick has
   `wf-review` review the resolution and dispatches you again to merge.
@@ -147,7 +153,7 @@ remote-tracking ref; run `make enforcement TIER1_BASE=origin/<trunk>` and
   reads that report and fails while it is missing or has an open MUST
   finding; otherwise stop and return. A conflict you cannot resolve
   escalates (FLOW-20): push nothing, so no sync branch is left on the
-  remote; close the sync PR if one opened (`gh pr close N`, never
+  remote; close the sync PR if one opened (`gh api -X PATCH repos/R/pulls/N -f state=closed`, never
   `--delete-branch`), and if a `sync/program-<main sha>` branch is on the
   remote all the same, delete nothing: put the exact `git push origin
   --delete sync/program-<main sha>` command (`git -C
