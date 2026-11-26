@@ -16,8 +16,8 @@ design_review: required
 source: 'Jeff, 2026-11-23 attended human session: PR #140 (sync/program-168cf9503d4b, main into program/componentization) failed tier1 with a FLOW-01 MUST on driver/layercache_test.go, which came from #139 where FLOW-01 passed under no-design. main.yml skips FLOW-01 on a push since a push spans merged PRs that already passed it, but judges a sync PR''s diff as new work. #140 was labeled no-design on Jeff''s word as the stopgap.'
 pr:
   number: 145
-  ci: pending
-  head: 3caab947073bb58946c1718cdb32d1b0d8f4642a
+  ci: green
+  head: 9869982d32a1b3352f3a3cac635f635e766a0dcb
 steps:
   - id: x1-design
     phase: 1
@@ -52,10 +52,10 @@ steps:
   - id: x2-refresh
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261126T193800Z-3
-      expires: 2026-11-26T21:39:19.085328009Z
+      claimed_by: ""
+      expires: null
     note: 'main at 7535e6c: 15 commits since the branch merged it; both change .claude/agents/wf-publish.md, docs/development/process.md, tools/workflow/check/merge.go, tools/workflow/check/merge_test.go'
 budget:
   estimate:
@@ -172,3 +172,6 @@ history:
   - at: 2026-11-26T19:39:19Z
     by: cloud/20261126T193800Z-3
     event: claimed x2-refresh until 2026-11-26T21:39:19Z
+  - at: 2026-11-26T19:47:25Z
+    by: cloud/20261126T193800Z-3
+    event: done x2-refresh
