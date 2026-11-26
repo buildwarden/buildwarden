@@ -1079,6 +1079,9 @@ gaps:
       2026-11-24 (host:windows-any/windows-desktop.20261124T231002Z, unattended, main 66e6f670): not run.
       main moved (#137 to #144), but feat/prebuilt-artifacts is still 49b513a (design only), under the
       FLOW-20 hold (q1).
+      2026-11-26 (host:windows-any/windows-desktop.20261126T231002Z, unattended, main 7535e6ca): not run.
+      main moved (#146, wf-gate-rest), but feat/prebuilt-artifacts is still 49b513a (design only), under
+      the FLOW-20 hold (q1).
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: deferred
@@ -1200,6 +1203,9 @@ gaps:
       case runs only on the Windows desktop, and container-any woke the macbook's gate for it every night.
       2026-11-24 (host:windows-any/windows-desktop.20261124T231002Z, unattended, main 66e6f670): not run.
       feat/workdir-in-context is still 24376c0 (design only), under the FLOW-20 hold (q1).
+      2026-11-26 (host:windows-any/windows-desktop.20261126T231002Z, unattended, main 7535e6ca): not run.
+      main moved (#146, wf-gate-rest), but feat/workdir-in-context is still 24376c0 (design only), under
+      the FLOW-20 hold (q1).
   - id: workdir-in-context-macos
     host: macos-finch
     status: open
@@ -1416,3 +1422,13 @@ gaps:
       detached worktree was here. Not yet observable from inside a session: the digest check, the stamp and
       the "sweep skipped" reason run after it exits; the next windows-desktop run reads them in this run's
       log (logs/20261124T231002Z.log under ~/.local/state/buildwarden-native) and native/status/windows-desktop.yaml.
+      2026-11-26 (host:windows-any/windows-desktop.20261126T231002Z, unattended, main 7535e6ca, Git Bash):
+      partly observed; kept open. Digest check and stamp PASS under Git Bash: the 2026-11-24T23:10Z run's
+      digest (digest/2026-11-24/20261124T231002Z-host-windows-desktop.md) was found, and the wrapper stamped
+      native/status/windows-desktop.yaml "outcome: worked" (916d9b45), then "idle" stamps on the 2026-11-25
+      and 2026-11-26T05:10Z runs ("idle: 5 open gaps, nothing moved since 2026-11-24T23:10:18Z"). The
+      "sweep skipped" reason is not in the stamp, and the run log is not readable from the session (ls of
+      ~/.local/state/buildwarden-native refused, outside the working directories). Program-trunk fingerprint
+      still not isolated: program/componentization (e9a9073d, #147, 19:36Z) and main (7535e6ca, #146,
+      19:37Z) moved a minute apart. Cleanup: no .scratch/ worktree, no detached worktree (git worktree list:
+      the checkout and .dev/workflow only), no gone program branch, and the prompt named no leftovers.
