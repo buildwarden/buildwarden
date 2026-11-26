@@ -1,6 +1,6 @@
 feature: sync-pr-tier1
 title: 'Tier 1 judges a program sync PR as it judges a push: FLOW-01 measured only on the sync''s own resolution'
-priority: 1
+priority: 2
 kind: process
 status: in_progress
 round: process
