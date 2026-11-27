@@ -16,3 +16,8 @@ out.log
 .scratch/
 # Built Windows binaries (warden.exe, warden-io-*.exe, ...) anywhere in the tree.
 warden*.exe
+
+# wf is built into dist/ (above); a go build in its own directory writes
+# these, which are never committed.
+/tools/workflow/cmd/wf/wf
+/tools/workflow/cmd/wf/wf.exe

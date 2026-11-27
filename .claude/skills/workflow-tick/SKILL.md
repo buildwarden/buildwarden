@@ -265,7 +265,7 @@ spent:
    the agent runs the gate under the claim (`wf check -step` fetches the
    program trunk and checks the branch against its head), merges at once,
    and runs `git fetch origin <program trunk>` in each repository it
-   merged in, between `gh pr merge` and `dist/wf done`, so the merge proof
+   merged in, between the merge's `PUT` and `dist/wf done`, so the merge proof
    reads the merged program trunk and not the ref from before the merge.
    It never names the branch: GitHub deleted it on the merge, and a fetch
    of a missing ref fails whole.
