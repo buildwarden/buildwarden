@@ -1082,6 +1082,8 @@ gaps:
       2026-11-26 (host:windows-any/windows-desktop.20261126T231002Z, unattended, main 7535e6ca): not run.
       main moved (#146, wf-gate-rest), but feat/prebuilt-artifacts is still 49b513a (design only), under
       the FLOW-20 hold (q1).
+      2026-11-27 (host:windows-any/windows-desktop.20261127T111001Z, unattended, main 7535e6ca): not run,
+      nothing changed. feat/prebuilt-artifacts is still 49b513a (design only), under the FLOW-20 hold (q1).
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: deferred
@@ -1206,6 +1208,8 @@ gaps:
       2026-11-26 (host:windows-any/windows-desktop.20261126T231002Z, unattended, main 7535e6ca): not run.
       main moved (#146, wf-gate-rest), but feat/workdir-in-context is still 24376c0 (design only), under
       the FLOW-20 hold (q1).
+      2026-11-27 (host:windows-any/windows-desktop.20261127T111001Z, unattended, main 7535e6ca): not run,
+      nothing changed. feat/workdir-in-context is still 24376c0 (design only), under the FLOW-20 hold (q1).
   - id: workdir-in-context-macos
     host: macos-finch
     status: open
@@ -1432,3 +1436,15 @@ gaps:
       still not isolated: program/componentization (e9a9073d, #147, 19:36Z) and main (7535e6ca, #146,
       19:37Z) moved a minute apart. Cleanup: no .scratch/ worktree, no detached worktree (git worktree list:
       the checkout and .dev/workflow only), no gone program branch, and the prompt named no leftovers.
+      2026-11-27 (host:windows-any/windows-desktop.20261127T111001Z, unattended, main 7535e6ca, Git Bash):
+      partly observed; kept open. Program-trunk fingerprint, nearly isolated: the 05:10Z run stamped "idle:
+      5 open gaps, nothing moved since 2026-11-26T23:10:19Z"; since then main is unchanged (7535e6ca,
+      2026-11-26T19:37Z) and no waiting branch moved (feat/prebuilt-artifacts 49b513a, feat/workdir-in-context
+      24376c0), while program/componentization moved to d88e25fe (#148, merged by the loop at 11:05:50Z),
+      and this 11:10Z run was woken. Not fully isolated: the second repositories' trunks are not readable
+      from the session (git log in an owner's clone is refused), and the cloud recorded
+      buildwarden-specs' program trunk at 286ca6e7 at 10:58Z (f4bec4e9) without its move time; the gate's
+      reason line is in the run log, which the session cannot read. "Sweep skipped" reason: still not in
+      native/status/windows-desktop.yaml (its last stamp, 05:10Z, has outcome, reason and since only).
+      Cleanup: no .scratch/ worktree or leftover run (.scratch/leftover/ empty), no detached worktree, no
+      gone program branch, and the prompt named no leftovers.
