@@ -51,6 +51,8 @@ None.
 - sync buildwarden/buildwarden-specs sync/program-9ccdfd74824e at `558ec07`: sync/program-9ccdfd74824e pushed at 558ec0799917: a clean merge (cloud/20261125T105844Z, 2026-11-25)
 - merge buildwarden/buildwarden #147 at `e9a9073`: Jeff merged the program sync PR #147 (main 66e6f67 into program/componentization) as e9a9073; the loop's gate could not run in the cloud until wf-gate-rest (#146) lands (human/jeff, 2026-11-26)
 - merge buildwarden/buildwarden-specs #9 at `286ca6e`: Jeff merged the program sync PR buildwarden-specs#9 (main 9ccdfd7 into program/componentization) as 286ca6e; the loop's gate could not run in the cloud until wf-gate-rest (#146) lands (human/jeff, 2026-11-26)
+- sync buildwarden/buildwarden sync/program-7535e6ca3d28 at `5cd8eaa`: sync/program-7535e6ca3d28 pushed at 5cd8eaac41af: a clean merge (cloud/20261127T105616Z, 2026-11-27)
+- merge buildwarden/buildwarden #148 at `d88e25f`: loop merge of the program sync #148 (main 7535e6c into program/componentization) by REST PUT pinned to 5cd8eaa after wf check -sync passed every point incl. point 10 (mergeable_state clean); the first loop merge through wf-gate-rest (cloud/20261127T105616Z, 2026-11-27)
 
 ## Active
 
