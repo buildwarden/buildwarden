@@ -57,12 +57,11 @@ None.
 
 | Pri | Item | Kind | Lead | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | sync-pr-tier1 | process | - | buildwarden/buildwarden | - | 4 close | x4-close (cloud, leased to cloud/20261128T164300Z) | - | [#145](https://github.com/buildwarden/buildwarden/pull/145) | 3 / 4 |
-| 4 | finch-version-starts-vm | fix (follows driver-contract) | - | buildwarden/buildwarden | driver/container, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 8 |
-| 5 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
-| 6 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
-| 7 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 2 / 9 |
-| 8 | relay-release-forms-spec | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | designs, specs, conformance, driver-core, driver/container, cli, book | 2 plan | f2-design-review (human) | - | - | 3 / 18 |
+| 3 | finch-version-starts-vm | fix (follows driver-contract) | - | buildwarden/buildwarden | driver/container, book, designs | 2 plan | f2-design-review (human) | - | - | 2 / 8 |
+| 4 | prebuilt-artifacts | feature | - | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
+| 5 | workdir-in-context | feature | - | buildwarden/buildwarden | driver-core, cli, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 3 / 14 |
+| 6 | relay-collector-failure-fails-open | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | relay, executor, specs, book, designs | 2 plan | f2-answer-q1 (human) | - | - | 2 / 9 |
+| 7 | relay-release-forms-spec | feature | - | buildwarden/buildwarden, buildwarden/buildwarden-specs | designs, specs, conformance, driver-core, driver/container, cli, book | 2 plan | f2-design-review (human) | - | - | 3 / 18 |
 
 ## Workers
 
@@ -134,10 +133,10 @@ Open features that are not disjoint. Process items are outside the relations (FL
 
 | Pri | Item | Kind | Repositories | Areas | Est. steps |
 |---|---|---|---|---|---|
-| 2 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
-| 3 | program-land | process | buildwarden/buildwarden | - | 5 |
-| 9 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
-| 10 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
-| 11 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
-| 12 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
-| 13 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |
+| 1 | wf-state-migration-step | process | buildwarden/buildwarden | - | 5 |
+| 2 | program-land | process | buildwarden/buildwarden | - | 5 |
+| 8 | vm-from-host-path | feature | buildwarden/buildwarden | undeclared | 18 |
+| 9 | configuration-bugfixes | feature | buildwarden/buildwarden | undeclared | 9 |
+| 10 | runtime-former-values-removal | feature | buildwarden/buildwarden | undeclared | 7 |
+| 11 | auto-tidy-pull-request | feature | buildwarden/buildwarden | undeclared | 8 |
+| 12 | relay-exit-code-unreadable | feature | buildwarden/buildwarden | relay | 7 |

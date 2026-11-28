@@ -1,6 +1,6 @@
 feature: prebuilt-artifacts
 title: 'warden compiles nothing: it finds its executor, relay and relay VM artifacts on PATH, then in its own directory, at or above a minimum version (security fix, F9)'
-priority: 5
+priority: 4
 status: in_progress
 round: feature
 phase: 2

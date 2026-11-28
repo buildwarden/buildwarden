@@ -1,8 +1,7 @@
 feature: sync-pr-tier1
 title: 'Tier 1 judges a program sync PR as it judges a push: FLOW-01 measured only on the sync''s own resolution'
-priority: 1
 kind: process
-status: in_progress
+status: done
 round: process
 phase: 4
 design: docs/design/sync-pr-tier1.md
@@ -60,10 +59,10 @@ steps:
   - id: x4-close
     phase: 4
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261128T164300Z
-      expires: 2026-11-28T18:43:01.164379852Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -191,3 +190,9 @@ history:
   - at: 2026-11-28T16:43:01Z
     by: cloud/20261128T164300Z
     event: claimed x4-close until 2026-11-28T18:43:01Z
+  - at: 2026-11-28T16:43:04Z
+    by: cloud/20261128T164300Z
+    event: done x4-close
+  - at: 2026-11-28T16:43:04Z
+    by: cloud/20261128T164300Z
+    event: closed; feature done
