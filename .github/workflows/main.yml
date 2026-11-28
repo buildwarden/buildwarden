@@ -93,13 +93,36 @@ jobs:
       - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.2
       - run: go build -o ../../dist/tier1 ./cmd/tier1
         working-directory: tools/tier1
+      - name: program sync
+        id: sync
+        if: >-
+          github.event_name == 'pull_request' &&
+          startsWith(github.event.pull_request.base.ref, 'program/') &&
+          startsWith(github.event.pull_request.head.ref, 'sync/program-') &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          DEFAULT: ${{ github.event.repository.default_branch }}
+        # A sync carries main's merged PRs, each judged on its own PR, and a
+        # conflict-only resolution its tier-2 review judges (FLOW-01, FLOW-20).
+        # Not a sync, or wf cannot say: judged as any PR.
+        run: |
+          (cd tools/workflow && go build -o ../../dist/wf ./cmd/wf)
+          if ./dist/wf sync-shape -repo . -base "$BASE" -branch "$BRANCH" \
+              -head "$HEAD_SHA" -trunk "origin/$DEFAULT" \
+              -profile docs/development/loop-profile.yaml; then
+            echo sync=true >> "$GITHUB_OUTPUT"
+          fi
       - name: tier1
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           # FLOW-01 is judged on the PR, where the no-design label lives. A push
           # to main spans merged PRs that already passed it, and its payload
-          # carries no labels, so it is not judged again there.
-          FLAGS: ${{ (github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'no-design')) && '-no-design' || '' }}
+          # carries no labels, so it is not judged again there; nor is a program
+          # sync's PR, the PR form of its merge's push (the program sync step).
+          FLAGS: ${{ (github.event_name == 'push' || steps.sync.outputs.sync == 'true' || contains(github.event.pull_request.labels.*.name, 'no-design')) && '-no-design' || '' }}
           DEFAULT: ${{ github.event.repository.default_branch }}
         # A push that creates a branch (a program trunk cut at main's head)
         # has an all-zero before; diff it against the default branch instead.
@@ -113,9 +136,11 @@ jobs:
       # FLOW-14: an enforcement change is also checked by tier1 built from the
       # base; a no-op unless the PR changes tools/tier1/ or tools/workflow/check/.
       # PRs only: the approvals it reads name commits on the PR's branch, which
-      # a squash merge leaves off main.
+      # a squash merge leaves off main. A program sync is skipped as a push is:
+      # each enforcement change it carries was compared on its own PR, and its
+      # resolution edits none of these paths (FLOW-14).
       - name: main's enforcement
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.sync.outputs.sync != 'true'
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           FLAGS: ${{ contains(github.event.pull_request.labels.*.name, 'no-design') && '-no-design' || '' }}

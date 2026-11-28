@@ -57,6 +57,7 @@
 //	wf budget   -state DIR [-native]
 //	wf migrate  -state DIR -worker W [-done]
 //	wf drops    -repo DIR [-base REV | -state DIR] -main FILE -branch FILE [-head REV]
+//	wf sync-shape -repo DIR -base SHA -branch REF -head SHA -trunk REF -profile FILE
 //
 // An open item's priority is its position in FLOW-05's order, 1 for the
 // first; a done item has none once queue/done/ exists (FLOW-05). Every
@@ -129,8 +130,12 @@
 // sync/program-<trunk sha>; it waits while a program-sync-<sha> item that
 // works in the repository is open. With -head, once the sync branch's merge
 // is made and before it is pushed, it checks that the head is that merge and
-// nothing more and records it (a sync record), the head the sync gate's
-// point 2 reads. check -sync is the sync's gate (check.SyncReady). new -escalate files an
+// nothing more, and that its resolution edits no path FLOW-14 guards
+// (check.GuardedResolution: a rule or machinery path, or a workflow change
+// that touches a rule-running job), and records it (a sync record), the head
+// the sync gate's point 2 reads. A guarded resolution is refused and nothing
+// is recorded: the sync escalates as a conflict the loop cannot resolve
+// (FLOW-01, FLOW-20). check -sync is the sync's gate (check.SyncReady). new -escalate files an
 // item, such as program-sync-<sha>, whose first step is a human escalation
 // carrying TEXT.
 //
@@ -343,6 +348,16 @@
 // branch's own, both over the diff from REV to -head (default HEAD). It
 // fails when the branch's report drops a finding on a rule no approved
 // rule_changes entry names.
+//
+// sync-shape reads no queue either: it is CI's recognition of a program
+// sync's pull request (FLOW-01, FLOW-14, FLOW-20), run by main.yml's program
+// sync step. -head on -branch must be a merge of two parents, the first an
+// ancestor of -base (the PR's base commit) and the second of -trunk, whose
+// hash the branch, sync/program-<sha>, names, and its resolution (where its
+// tree differs from git's own merge of the two) may edit no path FLOW-14
+// guards under -profile at either parent. Exit 0 prints "sync <head>
+// merges <second> into <first>"; 1 prints each failed condition, and the PR
+// is judged as any PR; 2 is a usage or git error, judged the same.
 package main
 
 import (
@@ -365,7 +380,7 @@ const usage = "usage: wf " +
 	"lead|trunk|" +
 	"state-step|declare|" +
 	"relate|relations|stale|commit|main|digest|areas|gate|tags-due|budget|migrate|" +
-	"drops [flags]"
+	"drops|sync-shape [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
 var errIdle = errors.New("idle")
@@ -405,6 +420,10 @@ func main() {
 			os.Exit(3)
 		}
 		fmt.Fprintln(os.Stderr, "wf:", err)
+		var xe *exitError
+		if errors.As(err, &xe) {
+			os.Exit(xe.code)
+		}
 		var ce *queue.CommitError
 		if errors.As(err, &ce) {
 			os.Exit(ce.Code)
@@ -414,11 +433,11 @@ func main() {
 }
 
 func run(cmd string, args []string, now time.Time) error {
-	if cmd == "main" {
-		return mainCmd(args)
-	}
-	if cmd == "rules" {
-		return rulesCmd(args)
+	// These read no queue and parse their own flags.
+	if own, ok := map[string]func([]string) error{
+		"main": mainCmd, "rules": rulesCmd, "sync-shape": syncShapeCmd,
+	}[cmd]; ok {
+		return own(args)
 	}
 	o := opts{now: now}
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
@@ -920,9 +939,12 @@ func notAncestor(dir, a, b string) (bool, error) {
 
 // recordSync is wf sync-program -head: it checks that the head is the sync's
 // merge, its first parent origin/<program trunk> and its second a commit of
-// the trunk, carrying nothing else, and appends a sync record naming the
-// branch, sync/program-<second parent>, and the head (FLOW-20). The sync gate
-// passes only a PR whose head is the one recorded for its branch.
+// the trunk, carrying nothing else, and that its resolution edits no path
+// FLOW-14 guards (check.GuardedResolution), and appends a sync record naming
+// the branch, sync/program-<second parent>, and the head (FLOW-20). The sync
+// gate passes only a PR whose head is the one recorded for its branch. A
+// guarded resolution is refused, recording nothing: a sync resolution may
+// not edit the checks that stop the loop, so the sync escalates (FLOW-01).
 func recordSync(s *queue.State, o opts, repo string) error {
 	if o.worker == "" {
 		return errors.New("sync-program -head needs -worker")
@@ -939,6 +961,9 @@ func recordSync(s *queue.State, o opts, repo string) error {
 	if err != nil {
 		return err
 	}
+	if err := guardedSync(s, repo, dir, branch, full); err != nil {
+		return err
+	}
 	how := "a clean merge"
 	if !clean {
 		how = fmt.Sprintf("a conflict resolution, whose tier-2 report the gate reads "+
@@ -952,6 +977,35 @@ func recordSync(s *queue.State, o opts, repo string) error {
 	fmt.Printf("recorded\tsync\t%s\t%s\t%s\n", repo, branch, full[:12])
 	if !clean {
 		fmt.Printf("review\t%s\t%s/%s.json\n", repo, check.SyncReportDir, full[:12])
+	}
+	return nil
+}
+
+// guardedSync refuses a sync head whose resolution edits a path FLOW-14
+// guards, or whose resolution wf cannot classify (FLOW-01, FLOW-20).
+func guardedSync(s *queue.State, repo, dir, branch, head string) error {
+	trunk, err := s.Config.Trunk(repo)
+	if err != nil {
+		return err
+	}
+	res, err := check.SyncShape(dir, "origin/"+s.Config.ProgramTrunkOf(repo), branch,
+		head, "origin/"+trunk)
+	if err != nil {
+		return fmt.Errorf("%s is not a sync head: %w (FLOW-20)", short12(head), err)
+	}
+	profile := ""
+	if e := s.Config.Entry(repo); e != nil {
+		profile = e.Profile
+	}
+	guarded, err := check.GuardedResolution(dir, profile, head, res)
+	if err != nil {
+		return fmt.Errorf("%s's resolution cannot be classified: %w; escalate (FLOW-20)",
+			short12(head), err)
+	}
+	if len(guarded) > 0 {
+		return fmt.Errorf("%s resolves %s, which FLOW-14 guards: a sync resolution "+
+			"may not edit them; escalate (FLOW-20)", short12(head),
+			strings.Join(guarded, ", "))
 	}
 	return nil
 }

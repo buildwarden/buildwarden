@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -177,4 +179,118 @@ func TestTagNextRCFlags(t *testing.T) {
 		"-feature", "p")
 	refused(t, dir, "is not a program item", "tag-next", "-repo", work, "-rc",
 		"-feature", "p")
+}
+
+// syncRepo is codeRepo with this repository's profile on main and main
+// pushed as program/componentization, then each side committing one file:
+// main its mainFile, the program trunk its progFile, each with its own text.
+// The sync branch merges origin/main into the program trunk; resolve, when
+// the merge conflicts, is the text it concludes the conflict with. It
+// returns the checkout, the sync branch and its head.
+func syncRepo(t *testing.T, mainFile, progFile, resolve string) (string, string, string) {
+	t.Helper()
+	work := codeRepo(t)
+	profile, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "docs", "development",
+		"loop-profile.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	put := func(p, text string) {
+		full := filepath.Join(work, filepath.FromSlash(p))
+		_ = os.MkdirAll(filepath.Dir(full), 0o755)
+		if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		gitT(t, work, "add", p)
+	}
+	put("docs/development/loop-profile.yaml", string(profile))
+	gitT(t, work, "commit", "-q", "-m", "adopt")
+	gitT(t, work, "push", "-q", "origin", "main", "main:refs/heads/program/componentization")
+	gitT(t, work, "checkout", "-q", "-b", "pt", "origin/main")
+	put(progFile, "p\n")
+	gitT(t, work, "commit", "-q", "-m", "program item")
+	gitT(t, work, "push", "-q", "origin", "pt:program/componentization")
+	gitT(t, work, "checkout", "-q", "main")
+	put(mainFile, "m\n")
+	gitT(t, work, "commit", "-q", "-m", "process item")
+	gitT(t, work, "push", "-q", "origin", "main")
+	gitT(t, work, "fetch", "-q", "origin")
+	head := gitT(t, work, "rev-parse", "origin/main")
+	branch := "sync/program-" + head[:12]
+	gitT(t, work, "checkout", "-q", "-b", branch, "origin/program/componentization")
+	cmd := exec.Command("git", "merge", "-q", "--no-ff", "--no-edit", "origin/main")
+	cmd.Dir = work
+	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+	if cmd.Run() != nil {
+		put(mainFile, resolve)
+		gitT(t, work, "commit", "-q", "--no-edit")
+	}
+	return work, branch, gitT(t, work, "rev-parse", "HEAD")
+}
+
+// TestSyncProgramRefusesGuarded: wf sync-program -head refuses a sync head
+// whose resolution edits a path FLOW-14 guards and records nothing, and
+// records one whose resolution is an ordinary path (FLOW-01, FLOW-20,
+// Decision 4 of sync-pr-tier1).
+func TestSyncProgramRefusesGuarded(t *testing.T) {
+	work, _, sync := syncRepo(t, "tools/tier1/x.go", "tools/tier1/x.go", "mp\n")
+	dir := stateDir(t, programHere)
+	refused(t, dir, "resolves tools/tier1/x.go, which FLOW-14 guards", "sync-program",
+		"-repo", work, "-worker", "cloud/run", "-head", sync)
+	if rs, err := queue.LoadRecords(dir); err != nil || len(rs) != 0 {
+		t.Fatalf("records after a refusal: %+v, %v", rs, err)
+	}
+
+	work, branch, sync := syncRepo(t, "shared.txt", "shared.txt", "mp\n")
+	got := must(t, dir, "sync-program", "-repo", work, "-worker", "cloud/run", "-head", sync)
+	if !strings.HasPrefix(got, "recorded\tsync\to/here\t"+branch+"\t"+sync[:12]+"\n") {
+		t.Fatalf("wf sync-program -head of an ordinary resolution = %q", got)
+	}
+}
+
+// TestSyncShapeCommand: wf sync-shape exits 0 on a sync, 1 on a head that is
+// not one or whose resolution is guarded, each condition printed, and 2 on a
+// usage or git error (FLOW-01, UX-04, Decision 2 of sync-pr-tier1).
+func TestSyncShapeCommand(t *testing.T) {
+	args := func(work, branch, head string) []string {
+		return []string{"-repo", work, "-base", "origin/program/componentization",
+			"-branch", branch, "-head", head, "-trunk", "origin/main",
+			"-profile", "docs/development/loop-profile.yaml"}
+	}
+	code := func(err error) int {
+		var xe *exitError
+		switch {
+		case err == nil:
+			return 0
+		case errors.As(err, &xe):
+			return xe.code
+		}
+		return 1
+	}
+	work, branch, sync := syncRepo(t, "shared.txt", "shared.txt", "mp\n")
+	out, err := wf(t, ".", "sync-shape", args(work, branch, sync)...)
+	if code(err) != 0 || !strings.HasPrefix(out, "sync "+sync[:12]+" merges ") ||
+		!strings.Contains(out, "resolves shared.txt") {
+		t.Fatalf("a sync: %q, %v", out, err)
+	}
+	out, err = wf(t, ".", "sync-shape", args(work, "feat/x", sync)...)
+	if code(err) != 1 || !strings.Contains(out, "not a sync: the branch feat/x") ||
+		!strings.Contains(err.Error(), "judged as any PR") {
+		t.Fatalf("another branch: %q, %v", out, err)
+	}
+	if _, err = wf(t, ".", "sync-shape", args(work, branch,
+		strings.Repeat("d", 40))...); code(err) != 2 {
+		t.Fatalf("an unknown head: %v, want exit 2", err)
+	}
+	if _, err = wf(t, ".", "sync-shape", "-repo", work); code(err) != 2 {
+		t.Fatalf("no flags: %v, want exit 2", err)
+	}
+
+	work, branch, sync = syncRepo(t, ".claude/a.md", ".claude/a.md", "mp\n")
+	out, err = wf(t, ".", "sync-shape", args(work, branch, sync)...)
+	if code(err) != 1 || !strings.Contains(out,
+		"not a sync: the resolution edits .claude/a.md, which FLOW-14 guards") {
+		t.Fatalf("a guarded resolution: %q, %v", out, err)
+	}
 }
