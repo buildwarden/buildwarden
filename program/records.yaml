@@ -90,3 +90,10 @@
   head: d88e25fe2869
   ref: '#148'
   note: 'loop merge of the program sync #148 (main 7535e6c into program/componentization) by REST PUT pinned to 5cd8eaa after wf check -sync passed every point incl. point 10 (mergeable_state clean); the first loop merge through wf-gate-rest'
+- at: 2026-11-28T10:56:40Z
+  by: cloud/20261128T105539Z
+  kind: tag-due
+  repo: buildwarden/buildwarden
+  head: d88e25fe2869564852e2af9f32d9a0bb819b0192
+  ref: v0.7.0-dev.1
+  note: wf tag-next -dev named it at the head it checked; a native session creates it (FLOW-17)

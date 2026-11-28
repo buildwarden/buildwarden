@@ -53,6 +53,7 @@ None.
 - merge buildwarden/buildwarden-specs #9 at `286ca6e`: Jeff merged the program sync PR buildwarden-specs#9 (main 9ccdfd7 into program/componentization) as 286ca6e; the loop's gate could not run in the cloud until wf-gate-rest (#146) lands (human/jeff, 2026-11-26)
 - sync buildwarden/buildwarden sync/program-7535e6ca3d28 at `5cd8eaa`: sync/program-7535e6ca3d28 pushed at 5cd8eaac41af: a clean merge (cloud/20261127T105616Z, 2026-11-27)
 - merge buildwarden/buildwarden #148 at `d88e25f`: loop merge of the program sync #148 (main 7535e6c into program/componentization) by REST PUT pinned to 5cd8eaa after wf check -sync passed every point incl. point 10 (mergeable_state clean); the first loop merge through wf-gate-rest (cloud/20261127T105616Z, 2026-11-27)
+- tag-due buildwarden/buildwarden v0.7.0-dev.1 at `d88e25f`: wf tag-next -dev named it at the head it checked; a native session creates it (FLOW-17) (cloud/20261128T105539Z, 2026-11-28)
 
 ## Active
 
@@ -69,8 +70,8 @@ None.
 
 | Machine | Host names | Last run | Leads | Holds |
 |---|---|---|---|---|
-| macbook | macos-vz, macos-qemu, macos-finch, qemu-any, container-any, macos-any | idle, 2026-11-26 12:40: idle: 5 open gaps, nothing moved since 2026-11-25T12:40:15Z | - | - |
-| windows-desktop | windows-hyperv, container-any, linux-kvm, windows-any | idle, 2026-11-27 05:10: idle: 5 open gaps, nothing moved since 2026-11-26T23:10:19Z | - | - |
+| macbook | macos-vz, macos-qemu, macos-finch, qemu-any, container-any, macos-any | skipped, 2026-11-27 12:51: skip: on battery | - | - |
+| windows-desktop | windows-hyperv, container-any, linux-kvm, windows-any | idle, 2026-11-27 17:10: idle: 5 open gaps, nothing moved since 2026-11-27T11:10:17Z | - | - |
 
 ## Relations
 
