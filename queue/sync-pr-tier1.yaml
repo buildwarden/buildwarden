@@ -4,7 +4,7 @@ priority: 1
 kind: process
 status: in_progress
 round: process
-phase: 3
+phase: 4
 design: docs/design/sync-pr-tier1.md
 branch: feat/sync-pr-tier1
 areas:
@@ -45,7 +45,7 @@ steps:
   - id: x3-merge
     phase: 3
     affinity: cloud
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -57,6 +57,13 @@ steps:
       claimed_by: ""
       expires: null
     note: 'main at 7535e6c: 15 commits since the branch merged it; both change .claude/agents/wf-publish.md, docs/development/process.md, tools/workflow/check/merge.go, tools/workflow/check/merge_test.go'
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -175,3 +182,9 @@ history:
   - at: 2026-11-26T19:47:25Z
     by: cloud/20261126T193800Z-3
     event: done x2-refresh
+  - at: 2026-11-28T16:42:48Z
+    by: cloud/20261128T164300Z
+    event: done x3-merge
+  - at: 2026-11-28T16:42:48Z
+    by: cloud/20261128T164300Z
+    event: entered phase 4 (close)
